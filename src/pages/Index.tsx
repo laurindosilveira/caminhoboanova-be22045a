@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Home, Trophy, Calendar, User, Flame, Star, Heart, Lock, CheckCircle, BookOpen, GraduationCap, Zap, Bell } from "lucide-react";
+import { Home, Trophy, Calendar, User, Flame, Star, Heart, Lock, CheckCircle, Zap, Bell, LogOut } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 type Tab = "jornada" | "conquistas" | "agenda" | "perfil";
 
@@ -22,10 +23,12 @@ const achievements = [
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>("jornada");
   const [missionStarted, setMissionStarted] = useState(false);
+  const { profile, signOut } = useAuth();
   const streakDays = 5;
   const faithPoints = 120;
   const faithLevel = 3;
   const faithEnergy = 4; // out of 5
+  const firstName = profile?.full_name?.split(" ")[0] ?? "Bem-vindo";
 
   return (
     <div className="min-h-screen bg-background flex flex-col max-w-md mx-auto relative">
@@ -41,13 +44,18 @@ export default function Index() {
                 <span className="text-lg">✝️</span>
               </div>
               <div>
-                <p className="text-primary-foreground/70 text-xs font-inter">Olá, Ana!</p>
-                <p className="text-primary-foreground font-montserrat font-bold text-sm">Comunidade Bom Pastor</p>
+                <p className="text-primary-foreground/70 text-xs font-inter">Olá, {firstName}!</p>
+                <p className="text-primary-foreground font-montserrat font-bold text-sm">
+                  {profile?.community ?? "Caminho"}
+                </p>
               </div>
             </div>
-            <button className="relative w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">
-              <Bell className="w-5 h-5 text-primary-foreground" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-secondary rounded-full"></span>
+            <button
+              onClick={signOut}
+              title="Sair"
+              className="relative w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
+            >
+              <LogOut className="w-5 h-5 text-primary-foreground" />
             </button>
           </div>
 
@@ -74,7 +82,7 @@ export default function Index() {
             {/* Level */}
             <div className="bg-white/10 backdrop-blur rounded-2xl p-3 flex flex-col items-center gap-1">
               <div className="flex items-center gap-1">
-                <Heart className="w-5 h-5 text-rose-400 fill-rose-400" />
+                <Heart className="w-5 h-5 text-destructive" style={{ fill: "hsl(0 80% 70%)" }} />
                 <span className="font-montserrat font-black text-primary-foreground text-xl">{faithLevel}</span>
               </div>
               <span className="text-primary-foreground/60 text-xs font-inter">nível da fé</span>
