@@ -80,12 +80,21 @@ export default function Register() {
     setLoading(true);
     const area = getCommunityArea(community as Community);
 
-    // Sign up
-    const { data, error: authError } = await supabase.auth.signUp({
+    // Pass all profile data as user metadata.
+    // A database trigger (handle_new_user) reads this metadata and
+    // auto-creates the profile row — bypassing RLS, no session needed.
+    const { error: authError } = await supabase.auth.signUp({
       email: parsed.data.email,
       password: parsed.data.password,
       options: {
         emailRedirectTo: window.location.origin,
+        data: {
+          full_name: parsed.data.fullName,
+          birth_date: parsed.data.birthDate,
+          phone: parsed.data.phone,
+          community: parsed.data.community,
+          area: area,
+        },
       },
     });
 
@@ -93,39 +102,6 @@ export default function Register() {
       setError("Erro ao criar conta: " + authError.message);
       setLoading(false);
       return;
-    }
-
-    if (data.user) {
-      // Get the session token — may be null if email confirmation is pending
-      // Use the edge function (service role) to bypass RLS on profile insert
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token ?? data.session?.access_token;
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-profile`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token ?? ""}`,
-            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({
-            full_name: parsed.data.fullName,
-            birth_date: parsed.data.birthDate,
-            phone: parsed.data.phone,
-            community: parsed.data.community,
-            area: area,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const err = await response.json();
-        setError("Conta criada! Erro ao salvar perfil: " + (err.error ?? "erro desconhecido"));
-        setLoading(false);
-        return;
-      }
     }
 
     navigate("/verificar-email");
