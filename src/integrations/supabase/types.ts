@@ -140,6 +140,10 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["area_name"]
       }
+      get_my_community: {
+        Args: never
+        Returns: Database["public"]["Enums"]["community_name"]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
