@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      activities: {
+        Row: {
+          created_at: string
+          id: string
+          order_num: number
+          points: number
+          subtitle: string | null
+          title: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          order_num: number
+          points?: number
+          subtitle?: string | null
+          title: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          order_num?: number
+          points?: number
+          subtitle?: string | null
+          title?: string
+          type?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           area: Database["public"]["Enums"]["area_name"]
@@ -50,6 +80,35 @@ export type Database = {
         }
         Relationships: []
       }
+      user_progress: {
+        Row: {
+          activity_id: string
+          completed_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          activity_id: string
+          completed_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          activity_id?: string
+          completed_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_progress_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
@@ -75,6 +134,10 @@ export type Database = {
     Functions: {
       get_community_area: {
         Args: { _community: Database["public"]["Enums"]["community_name"] }
+        Returns: Database["public"]["Enums"]["area_name"]
+      }
+      get_my_area: {
+        Args: never
         Returns: Database["public"]["Enums"]["area_name"]
       }
       has_role: {
