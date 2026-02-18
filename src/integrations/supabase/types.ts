@@ -14,16 +14,88 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          area: Database["public"]["Enums"]["area_name"]
+          birth_date: string
+          community: Database["public"]["Enums"]["community_name"]
+          created_at: string
+          full_name: string
+          id: string
+          phone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          area: Database["public"]["Enums"]["area_name"]
+          birth_date: string
+          community: Database["public"]["Enums"]["community_name"]
+          created_at?: string
+          full_name: string
+          id?: string
+          phone: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          area?: Database["public"]["Enums"]["area_name"]
+          birth_date?: string
+          community?: Database["public"]["Enums"]["community_name"]
+          created_at?: string
+          full_name?: string
+          id?: string
+          phone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_community_area: {
+        Args: { _community: Database["public"]["Enums"]["community_name"] }
+        Returns: Database["public"]["Enums"]["area_name"]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "user" | "admin"
+      area_name: "Área 1" | "Área 2"
+      community_name:
+        | "Martim Lutero"
+        | "Bom Pastor"
+        | "Rincão Fundo"
+        | "Rincão Frente"
+        | "Linha Brasil"
+        | "Iriá Pira 1"
+        | "Iriá Pira 2"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +222,18 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["user", "admin"],
+      area_name: ["Área 1", "Área 2"],
+      community_name: [
+        "Martim Lutero",
+        "Bom Pastor",
+        "Rincão Fundo",
+        "Rincão Frente",
+        "Linha Brasil",
+        "Iriá Pira 1",
+        "Iriá Pira 2",
+      ],
+    },
   },
 } as const
