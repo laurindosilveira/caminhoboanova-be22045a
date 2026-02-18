@@ -96,18 +96,33 @@ export default function Register() {
     }
 
     if (data.user) {
-      // Insert profile
-      const { error: profileError } = await supabase.from("profiles").insert({
-        user_id: data.user.id,
-        full_name: parsed.data.fullName,
-        birth_date: parsed.data.birthDate,
-        phone: parsed.data.phone,
-        community: parsed.data.community,
-        area: area,
-      });
+      // Get the session token — may be null if email confirmation is pending
+      // Use the edge function (service role) to bypass RLS on profile insert
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token ?? data.session?.access_token;
 
-      if (profileError) {
-        setError("Conta criada! Erro ao salvar perfil: " + profileError.message);
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-profile`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token ?? ""}`,
+            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
+            full_name: parsed.data.fullName,
+            birth_date: parsed.data.birthDate,
+            phone: parsed.data.phone,
+            community: parsed.data.community,
+            area: area,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const err = await response.json();
+        setError("Conta criada! Erro ao salvar perfil: " + (err.error ?? "erro desconhecido"));
         setLoading(false);
         return;
       }
