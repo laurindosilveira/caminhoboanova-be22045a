@@ -10,6 +10,7 @@ import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
+import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,9 +36,17 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, role, loading } = useAuth();
   if (loading) return null;
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to={role === "admin" ? "/admin" : "/"} replace />;
+  return <>{children}</>;
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, role, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (role !== "admin") return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -45,6 +54,7 @@ const AppRoutes = () => (
   <Routes>
     {/* Protected routes */}
     <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+    <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
 
     {/* Public auth routes */}
     <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />

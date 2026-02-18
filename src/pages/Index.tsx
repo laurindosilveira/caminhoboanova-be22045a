@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { Home, Trophy, Calendar, User, Flame, Star, Heart, Lock, CheckCircle, Zap, Bell, LogOut } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Home, Trophy, Calendar, User, Flame, Star, Heart, Lock, CheckCircle, Zap, LogOut, BarChart3 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 type Tab = "jornada" | "conquistas" | "agenda" | "perfil";
 
@@ -23,12 +24,18 @@ const achievements = [
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>("jornada");
   const [missionStarted, setMissionStarted] = useState(false);
-  const { profile, signOut } = useAuth();
+  const { profile, role, signOut } = useAuth();
+  const navigate = useNavigate();
   const streakDays = 5;
   const faithPoints = 120;
   const faithLevel = 3;
   const faithEnergy = 4; // out of 5
   const firstName = profile?.full_name?.split(" ")[0] ?? "Bem-vindo";
+
+  // Redirect admins to their dashboard
+  useEffect(() => {
+    if (role === "admin") navigate("/admin", { replace: true });
+  }, [role, navigate]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col max-w-md mx-auto relative">
