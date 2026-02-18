@@ -13,16 +13,16 @@ interface CommunityMember {
 const pastorMessages = [
   {
     id: 1,
-    author: "Padre Marcos",
+    author: "Pastor Laurindo",
     avatar: "✝️",
-    message: "Queridos jovens, lembrem-se: a Crisma é um compromisso de vida! Continuem firmes na jornada. 🙏",
+    message: "Queridos jovens, lembrem-se: o confirmatório é um compromisso de vida! Continuem firmes na jornada. 🙏",
     time: "Hoje",
   },
   {
     id: 2,
-    author: "Catequista Ana",
-    avatar: "📿",
-    message: "Lembrete: próximo encontro no sábado às 14h na paróquia. Tragam seus diários espirituais!",
+    author: "Discipuladora Adriana",
+    avatar: "📖",
+    message: "Lembrete: próximo encontro no sábado às 14h na igreja. Tragam seus diários espirituais!",
     time: "Ontem",
   },
 ];
