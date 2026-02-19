@@ -187,6 +187,54 @@ export type Database = {
         }
         Relationships: []
       }
+      lesson_content: {
+        Row: {
+          audio_link: string
+          bible_texts: string[]
+          created_at: string
+          greeting: string
+          icebreaker: string
+          id: string
+          lesson_id: string
+          practice: string
+          prayer_prompt: string
+          questions: string[]
+          summary: string
+          updated_at: string
+          video_link: string
+        }
+        Insert: {
+          audio_link?: string
+          bible_texts?: string[]
+          created_at?: string
+          greeting?: string
+          icebreaker?: string
+          id?: string
+          lesson_id: string
+          practice?: string
+          prayer_prompt?: string
+          questions?: string[]
+          summary?: string
+          updated_at?: string
+          video_link?: string
+        }
+        Update: {
+          audio_link?: string
+          bible_texts?: string[]
+          created_at?: string
+          greeting?: string
+          icebreaker?: string
+          id?: string
+          lesson_id?: string
+          practice?: string
+          prayer_prompt?: string
+          questions?: string[]
+          summary?: string
+          updated_at?: string
+          video_link?: string
+        }
+        Relationships: []
+      }
       lesson_responses: {
         Row: {
           created_at: string
