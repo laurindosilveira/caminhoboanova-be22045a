@@ -8,6 +8,7 @@ import MissionCard from "@/components/home/MissionCard";
 import JourneyPath from "@/components/home/JourneyPath";
 import AchievementsGrid from "@/components/home/AchievementsGrid";
 import DiscipleProfile from "@/components/home/DiscipleProfile";
+import EditProfileForm from "@/components/home/EditProfileForm";
 import CommunityTab from "@/components/home/CommunityTab";
 import DiscipleshipTab from "@/components/home/DiscipleshipTab";
 import BottomNav, { type Tab } from "@/components/home/BottomNav";
@@ -75,7 +76,7 @@ export default function Index() {
 
         {/* ===== PERFIL ===== */}
         {activeTab === "perfil" && (
-          <div className="pt-5">
+          <div className="pt-5 pb-4">
             <div className="px-5 mb-4">
               <h2 className="font-montserrat font-black text-foreground text-xl">👤 Meu Perfil</h2>
             </div>
@@ -88,9 +89,12 @@ export default function Index() {
               area={profile?.area}
             />
 
+            {/* Edição de dados pessoais */}
+            <EditProfileForm />
+
             {/* Admin access — somente visível para admins */}
             {role === "admin" && (
-              <div className="px-5 mt-2">
+              <div className="px-5 mt-3">
                 <button
                   onClick={() => navigate("/admin")}
                   className="w-full flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm hover:bg-muted/50 transition-colors"
