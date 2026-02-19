@@ -32,6 +32,7 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
   const [loadingData, setLoadingData] = useState(false);
   const [plan, setPlan] = useState<any>(null);
   const [assessment, setAssessment] = useState<any>(null);
+  const [attendanceData, setAttendanceData] = useState<{ present: number; absent: number; justified: number; total: number } | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   const completedIds = new Set(p.completed_activity_ids);
@@ -48,10 +49,11 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
     if (loaded) return;
     setLoadingData(true);
     const now = new Date();
-    const [{ data: planData }, { data: assessData }] = await Promise.all([
+    const [{ data: planData }, { data: assessData }, { data: attendRec }] = await Promise.all([
       supabase.from("discipleship_plans").select("*").eq("user_id", p.user_id).maybeSingle(),
       supabase.from("spiritual_assessments").select("*")
         .eq("user_id", p.user_id).eq("month", now.getMonth() + 1).eq("year", now.getFullYear()).maybeSingle(),
+      supabase.from("attendance").select("status, event_id").eq("user_id", p.user_id),
     ]);
     if (planData) {
       setPlan(planData);
@@ -59,6 +61,12 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
       if (planData.pastor_notes) setObservations(planData.pastor_notes);
     }
     setAssessment(assessData);
+    if (attendRec) {
+      const present = attendRec.filter(a => a.status === "presente").length;
+      const absent = attendRec.filter(a => a.status === "faltou").length;
+      const justified = attendRec.filter(a => a.status === "justificou").length;
+      setAttendanceData({ present, absent, justified, total: attendRec.length });
+    }
     setLoaded(true);
     setLoadingData(false);
   }
@@ -162,6 +170,15 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
       // Participação
       addSection("👥 PARTICIPAÇÃO COMUNITÁRIA");
       addRow("Presença nos encontros", `${doneEnc}/${encontros.length}`);
+      if (attendanceData) {
+        addRow("✅ Presente", `${attendanceData.present} encontro(s)`);
+        addRow("❌ Faltou", `${attendanceData.absent} encontro(s)`);
+        addRow("⏳ Justificou", `${attendanceData.justified} encontro(s)`);
+        const attendPct = attendanceData.total > 0
+          ? Math.round((attendanceData.present / attendanceData.total) * 100)
+          : 0;
+        addRow("Taxa de presença", `${attendPct}%`);
+      }
 
       // Plano pastoral
       if (plan) {
