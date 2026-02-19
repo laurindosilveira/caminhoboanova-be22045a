@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Heart, BookOpen, GraduationCap, Flame, CheckCircle2,
-  Send, Sparkles, AlertCircle, ChevronRight
+  Send, Sparkles, AlertCircle, ChevronRight, ChevronDown
 } from "lucide-react";
 import JourneyLessonView from "@/components/home/JourneyLessonView";
 
@@ -21,6 +21,8 @@ type Plan = {
 };
 type Activity = { id: string; type: string; title: string; points: number };
 type Progress = { activity_id: string };
+type Lesson = { id: string; title: string; order_num: number; objective: string | null; topics: string[] | null; course_id: string };
+type Course = { id: string; order_num: number; title: string; subtitle: string | null; lessons: Lesson[] };
 
 // ─── Emoji scale ─────────────────────────────────────────
 const EMOJIS = ["😔", "😐", "🙂", "😊", "🔥"];
@@ -69,12 +71,12 @@ function computeHealth(a: Assessment | null): string {
 }
 
 // ─── Section card ────────────────────────────────────────
-function SectionCard({ icon, title, children, accent = "primary" }: {
-  icon: React.ReactNode; title: string; children: React.ReactNode; accent?: string;
+function SectionCard({ icon, title, children }: {
+  icon: React.ReactNode; title: string; children: React.ReactNode;
 }) {
   return (
     <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-      <div className={`px-4 py-3 flex items-center gap-2.5 border-b border-border bg-muted/30`}>
+      <div className="px-4 py-3 flex items-center gap-2.5 border-b border-border bg-muted/30">
         {icon}
         <p className="font-montserrat font-bold text-foreground text-sm">{title}</p>
       </div>
@@ -97,9 +99,6 @@ function ProgressRing({ pct, color, size = 64 }: { pct: number; color: string; s
   );
 }
 
-// ─── Types ─────────────────────────────────────────────────
-type Lesson = { id: string; title: string; order_num: number; objective: string | null; topics: string[] | null; course_id: string };
-
 // ─── MAIN COMPONENT ──────────────────────────────────────
 export default function DiscipleshipTab() {
   const { profile } = useAuth();
@@ -111,8 +110,9 @@ export default function DiscipleshipTab() {
   const [loading, setLoading] = useState(true);
   const [showAssessment, setShowAssessment] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     prayer_score: null as number | null,
@@ -134,18 +134,29 @@ export default function DiscipleshipTab() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: lessonsData }] = await Promise.all([
+    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }] = await Promise.all([
       supabase.from("activities").select("id, type, title, points"),
       supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
       supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).eq("month", month).eq("year", year).maybeSingle(),
       supabase.from("discipleship_plans").select("objectives,challenges,recommendations,next_steps,health_status").eq("user_id", user.id).maybeSingle(),
+      supabase.from("courses").select("*").order("order_num"),
       supabase.from("lessons").select("id, title, order_num, objective, topics, course_id").order("order_num"),
     ]);
+
     setActivities(acts ?? []);
     setProgress(prog ?? []);
     setAssessment(assess ?? null);
     setPlan(planData ?? null);
-    setLessons(lessonsData ?? []);
+
+    // Build courses with lessons nested
+    const courseList = (coursesData ?? []).map(c => ({
+      ...c,
+      lessons: (lessonsData ?? []).filter(l => l.course_id === c.id),
+    }));
+    setCourses(courseList);
+    // Auto-expand first course
+    if (courseList.length > 0) setExpandedCourse(courseList[0].id);
+
     setLoading(false);
   }
 
@@ -166,7 +177,6 @@ export default function DiscipleshipTab() {
       notes: form.notes || null,
     }, { onConflict: "user_id,month,year" });
 
-    // Update health status in plan
     await supabase.from("discipleship_plans").upsert({
       user_id: user.id, health_status: health,
     }, { onConflict: "user_id" });
@@ -200,7 +210,6 @@ export default function DiscipleshipTab() {
   const doneEnc = encontros.filter(a => completedIds.has(a.id)).length;
 
   const healthStatus = plan?.health_status ?? computeHealth(assessment);
-
   const MONTH_NAMES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
   // If a lesson is selected, show its full view
@@ -289,7 +298,7 @@ export default function DiscipleshipTab() {
               </div>
             )}
             {assessment.notes && (
-              <p className="font-inter text-xs text-muted-foreground italic mt-1">"{ assessment.notes}"</p>
+              <p className="font-inter text-xs text-muted-foreground italic mt-1">"{assessment.notes}"</p>
             )}
             <button onClick={() => setShowAssessment(true)} className="w-full mt-2 py-2 rounded-xl bg-muted text-muted-foreground font-inter text-xs font-medium">
               Atualizar avaliação
@@ -381,59 +390,76 @@ export default function DiscipleshipTab() {
         )}
       </SectionCard>
 
-      {/* ── CURSOS ─────────────────────────────────── */}
-      <SectionCard icon={<GraduationCap className="w-4 h-4 text-secondary" />} title="Progresso Formativo">
-        <div className="space-y-2">
-          {[
-            { label: "Começando a Vida Cristã", total: 16 },
-            { label: "Crescimento Cristão", total: 16 },
-          ].map((course, i) => {
-            const courseActs = formacoes.slice(i * course.total, (i + 1) * course.total);
-            const done = courseActs.filter(a => completedIds.has(a.id)).length;
-            const p = course.total > 0 ? Math.round((done / course.total) * 100) : 0;
+      {/* ── TRILHA CONFIRMATÓRIA — CURSOS + LIÇÕES ── */}
+      {courses.length > 0 && (
+        <div className="space-y-3">
+          {/* Header */}
+          <div className="bg-secondary/10 rounded-2xl p-4 flex items-start gap-3">
+            <GraduationCap className="w-5 h-5 text-secondary flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-montserrat font-bold text-foreground text-sm">Trilha Confirmatória</p>
+              <p className="text-muted-foreground font-inter text-xs mt-0.5">
+                {courses.reduce((s, c) => s + c.lessons.length, 0)} lições em {courses.length} cursos
+              </p>
+            </div>
+          </div>
+
+          {/* Course accordion */}
+          {courses.map((course) => {
+            const isOpen = expandedCourse === course.id;
             return (
-              <div key={i} className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-secondary/10 flex items-center justify-center flex-shrink-0">
-                  <span className="font-montserrat font-black text-secondary text-xs">{i+1}</span>
-                </div>
-                <div className="flex-1">
-                  <p className="font-inter text-xs text-foreground mb-1">{course.label}</p>
-                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-secondary rounded-full" style={{ width: `${p}%` }} />
+              <div key={course.id} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+                {/* Course header */}
+                <button
+                  onClick={() => setExpandedCourse(isOpen ? null : course.id)}
+                  className="w-full flex items-center gap-3 p-4 text-left"
+                >
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "var(--gradient-hero)" }}>
+                    <span className="font-montserrat font-black text-primary-foreground text-sm">#{course.order_num}</span>
                   </div>
-                </div>
-                <span className="font-montserrat font-bold text-xs text-foreground">{p}%</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-montserrat font-bold text-foreground text-sm">{course.title}</p>
+                    {course.subtitle && <p className="text-muted-foreground font-inter text-xs truncate">{course.subtitle}</p>}
+                    <p className="text-muted-foreground font-inter text-xs mt-0.5">{course.lessons.length} lições</p>
+                  </div>
+                  {isOpen
+                    ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    : <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                  }
+                </button>
+
+                {/* Lessons list */}
+                {isOpen && (
+                  <div className="border-t border-border">
+                    {course.lessons.length === 0 ? (
+                      <p className="px-4 py-3 text-muted-foreground font-inter text-xs text-center">Nenhuma lição cadastrada ainda.</p>
+                    ) : (
+                      course.lessons.map((lesson) => (
+                        <button
+                          key={lesson.id}
+                          onClick={() => setSelectedLesson(lesson)}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border last:border-b-0 hover:bg-primary/5 transition-colors"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-secondary/10 flex items-center justify-center flex-shrink-0">
+                            <span className="font-montserrat font-bold text-secondary text-xs">{lesson.order_num}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-inter text-sm text-foreground">{lesson.title}</p>
+                            {lesson.objective && (
+                              <p className="font-inter text-[10px] text-muted-foreground truncate mt-0.5">{lesson.objective}</p>
+                            )}
+                          </div>
+                          <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
-      </SectionCard>
-
-      {/* ── MINHA JORNADA — LIÇÕES ──────────────────── */}
-      {lessons.length > 0 && (
-        <SectionCard icon={<BookOpen className="w-4 h-4 text-primary" />} title="Minha Jornada — Lições">
-          <p className="font-inter text-xs text-muted-foreground mb-3">Clique em uma lição para ler, refletir e responder as perguntas do encontro.</p>
-          <div className="space-y-2">
-            {lessons.map(lesson => (
-              <button
-                key={lesson.id}
-                onClick={() => setSelectedLesson(lesson)}
-                className="w-full flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-primary/10 border border-border hover:border-primary/30 transition-all text-left"
-              >
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "var(--gradient-hero)" }}>
-                  <span className="font-montserrat font-black text-primary-foreground text-sm">{lesson.order_num}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-inter text-sm font-medium text-foreground truncate">{lesson.title}</p>
-                  {lesson.objective && <p className="font-inter text-[10px] text-muted-foreground truncate mt-0.5">{lesson.objective}</p>}
-                </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              </button>
-            ))}
-          </div>
-        </SectionCard>
       )}
     </div>
   );
 }
-
