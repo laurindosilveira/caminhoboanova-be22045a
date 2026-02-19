@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,6 +22,7 @@ type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
 };
+type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -29,8 +30,11 @@ export default function AdminDashboard() {
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [plans, setPlans] = useState<Record<string, PlanInfo>>({});
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
+  // For navigating from overview to discipleship sheet
+  const [highlightedParticipant, setHighlightedParticipant] = useState<Participant | null>(null);
 
   const areaName = profile?.area ?? "";
   const communities = areaName === "Área 1" ? AREA_1_COMMUNITIES : AREA_2_COMMUNITIES;
@@ -39,6 +43,26 @@ export default function AdminDashboard() {
     if (role !== "admin") { navigate("/"); return; }
     fetchData();
   }, [role]);
+
+  const fetchPlans = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return;
+    const [{ data: plansData }, { data: assessData }] = await Promise.all([
+      supabase.from("discipleship_plans").select("user_id, health_status, is_priority").in("user_id", ids),
+      supabase.from("spiritual_assessments").select("user_id, needs_pastor")
+        .in("user_id", ids)
+        .eq("month", new Date().getMonth() + 1)
+        .eq("year", new Date().getFullYear()),
+    ]);
+    const map: Record<string, PlanInfo> = {};
+    (plansData ?? []).forEach(pl => {
+      map[pl.user_id] = { health_status: pl.health_status, is_priority: pl.is_priority ?? false };
+    });
+    (assessData ?? []).forEach(a => {
+      if (!map[a.user_id]) map[a.user_id] = { health_status: "atencao", is_priority: false };
+      map[a.user_id].needs_pastor = a.needs_pastor;
+    });
+    setPlans(map);
+  }, []);
 
   async function fetchData() {
     setLoading(true);
@@ -50,7 +74,6 @@ export default function AdminDashboard() {
 
     const myId = userResult.data.user?.id ?? "";
     const profilesList = (profilesData ?? []).filter(p => p.user_id !== myId);
-
     const { data: progressData } = await supabase.from("user_progress").select("user_id, activity_id");
 
     const participantList: Participant[] = profilesList.map((p) => {
@@ -60,7 +83,14 @@ export default function AdminDashboard() {
 
     setActivities(activitiesData ?? []);
     setParticipants(participantList);
+    await fetchPlans(participantList.map(p => p.user_id));
     setLoading(false);
+  }
+
+  // Navigate to discipleship tab and highlight a specific participant (from Overview alerts)
+  function handleSelectParticipantFromOverview(participant: Participant) {
+    setHighlightedParticipant(participant);
+    setActiveTab("discipleship");
   }
 
   const stats = {
@@ -87,22 +117,26 @@ export default function AdminDashboard() {
         ) : (
           <>
             {activeTab === "overview" && (
-              <OverviewTab participants={participants} activities={activities} />
+              <OverviewTab
+                participants={participants}
+                activities={activities}
+                plans={plans}
+                onSelectParticipant={handleSelectParticipantFromOverview}
+              />
             )}
             {activeTab === "participants" && (
               <ParticipantsTab participants={participants} activities={activities} communities={communities} />
             )}
-            {activeTab === "courses" && (
-              <CoursesTab />
-            )}
-            {activeTab === "agenda" && (
-              <AgendaTab />
-            )}
-            {activeTab === "messages" && (
-              <MessagesTab />
-            )}
+            {activeTab === "courses" && <CoursesTab />}
+            {activeTab === "agenda" && <AgendaTab />}
+            {activeTab === "messages" && <MessagesTab />}
             {activeTab === "discipleship" && (
-              <AdminDiscipleshipTab participants={participants} activities={activities} />
+              <AdminDiscipleshipTab
+                participants={participants}
+                activities={activities}
+                initialParticipant={highlightedParticipant}
+                onClearInitial={() => setHighlightedParticipant(null)}
+              />
             )}
           </>
         )}

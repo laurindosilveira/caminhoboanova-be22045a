@@ -44,6 +44,38 @@ export type Database = {
         }
         Relationships: []
       }
+      attendance: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       courses: {
         Row: {
           created_at: string
@@ -74,6 +106,8 @@ export type Database = {
           created_at: string
           health_status: string
           id: string
+          is_priority: boolean
+          last_contact_at: string | null
           next_steps: string | null
           objectives: string | null
           pastor_notes: string | null
@@ -86,6 +120,8 @@ export type Database = {
           created_at?: string
           health_status?: string
           id?: string
+          is_priority?: boolean
+          last_contact_at?: string | null
           next_steps?: string | null
           objectives?: string | null
           pastor_notes?: string | null
@@ -98,6 +134,8 @@ export type Database = {
           created_at?: string
           health_status?: string
           id?: string
+          is_priority?: boolean
+          last_contact_at?: string | null
           next_steps?: string | null
           objectives?: string | null
           pastor_notes?: string | null
@@ -211,6 +249,36 @@ export type Database = {
           id?: string
           sent_by?: string | null
           title?: string
+        }
+        Relationships: []
+      }
+      pastoral_notes: {
+        Row: {
+          admin_id: string
+          content: string
+          created_at: string
+          id: string
+          is_private: boolean
+          note_type: string
+          user_id: string
+        }
+        Insert: {
+          admin_id: string
+          content: string
+          created_at?: string
+          id?: string
+          is_private?: boolean
+          note_type?: string
+          user_id: string
+        }
+        Update: {
+          admin_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          is_private?: boolean
+          note_type?: string
+          user_id?: string
         }
         Relationships: []
       }
