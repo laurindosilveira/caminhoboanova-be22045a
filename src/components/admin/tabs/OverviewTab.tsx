@@ -48,18 +48,18 @@ export default function OverviewTab({ participants, activities }: Props) {
       {/* Status cards */}
       <div className="grid grid-cols-2 gap-3">
         {[
-          { label: "Em andamento", value: emAndamento, icon: TrendingUp, color: "text-secondary", bg: "bg-secondary/10" },
-          { label: "Avançados (≥70%)", value: avancados, icon: CheckCircle2, color: "text-brand-green", bg: "bg-brand-green/10" },
-          { label: "Sem atividade", value: semAtividade, icon: AlertTriangle, color: "text-destructive", bg: "bg-destructive/10" },
-          { label: "Total participantes", value: total, icon: Users, color: "text-primary", bg: "bg-primary/10" },
-        ].map(s => (
-          <div key={s.label} className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${s.bg}`}>
-              <s.icon className={`w-5 h-5 ${s.color}`} />
+          { label: "Em andamento", value: emAndamento, Icon: TrendingUp, color: "text-secondary", bg: "bg-secondary/10" },
+          { label: "Avançados (≥70%)", value: avancados, Icon: CheckCircle2, color: "text-brand-green", bg: "bg-brand-green/10" },
+          { label: "Sem atividade", value: semAtividade, Icon: AlertTriangle, color: "text-destructive", bg: "bg-destructive/10" },
+          { label: "Total participantes", value: total, Icon: Users, color: "text-primary", bg: "bg-primary/10" },
+        ].map(({ label, value, Icon, color, bg }) => (
+          <div key={label} className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${bg}`}>
+              <Icon className={`w-5 h-5 ${color}`} />
             </div>
             <div>
-              <p className={`font-montserrat font-black text-2xl leading-none ${s.color}`}>{s.value}</p>
-              <p className="text-muted-foreground font-inter text-xs mt-0.5">{s.label}</p>
+              <p className={`font-montserrat font-black text-2xl leading-none ${color}`}>{value}</p>
+              <p className="text-muted-foreground font-inter text-xs mt-0.5">{label}</p>
             </div>
           </div>
         ))}
