@@ -45,7 +45,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
     ]);
     setProfile(profileRes.data ?? null);
-    setRole((roleRes.data?.role as "user" | "admin") ?? null);
+    // Only update role if we got a valid response (prevents clearing role on temporary failures)
+    if (roleRes.data?.role) {
+      setRole(roleRes.data.role as "user" | "admin");
+    } else if (!roleRes.error) {
+      // No role found and no error means user genuinely has no role
+      setRole(null);
+    }
+    // If there was an error, keep the existing role to avoid UI flicker
   }
 
   useEffect(() => {
@@ -87,8 +94,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function refreshProfile() {
-    if (user?.id) {
-      await fetchProfileAndRole(user.id);
+    const currentUser = user;
+    if (currentUser?.id) {
+      await fetchProfileAndRole(currentUser.id);
     }
   }
 
