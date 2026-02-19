@@ -1,0 +1,396 @@
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  Heart, BookOpen, Users, GraduationCap, Flame, CheckCircle2,
+  ChevronRight, Send, Sparkles, AlertCircle
+} from "lucide-react";
+
+// ─── Types ───────────────────────────────────────────────
+type Assessment = {
+  id: string; month: number; year: number;
+  prayer_score: number | null; presence_score: number | null;
+  struggle_score: number | null; doubt_score: number | null;
+  needs_pastor: boolean; notes: string | null;
+};
+type Plan = {
+  objectives: string | null; challenges: string | null;
+  recommendations: string | null; next_steps: string | null;
+  health_status: string;
+};
+type Activity = { id: string; type: string; title: string; points: number };
+type Progress = { activity_id: string };
+
+// ─── Emoji scale ─────────────────────────────────────────
+const EMOJIS = ["😔", "😐", "🙂", "😊", "🔥"];
+
+function EmojiScale({ value, onChange }: { value: number | null; onChange: (v: number) => void }) {
+  return (
+    <div className="flex gap-2 justify-center">
+      {EMOJIS.map((emoji, i) => (
+        <button
+          key={i}
+          onClick={() => onChange(i + 1)}
+          className={`text-2xl p-1.5 rounded-xl transition-all ${
+            value === i + 1 ? "bg-primary/15 scale-125 ring-2 ring-primary" : "opacity-50 hover:opacity-80 hover:scale-110"
+          }`}
+        >
+          {emoji}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Health status pill ──────────────────────────────────
+function HealthBadge({ status }: { status: string }) {
+  const cfg = {
+    saudavel: { label: "🟢 Saudável", bg: "bg-brand-green/10", text: "text-brand-green" },
+    atencao:  { label: "🟡 Atenção", bg: "bg-accent/20", text: "text-accent-foreground" },
+    critico:  { label: "🔴 Precisa de cuidado", bg: "bg-destructive/10", text: "text-destructive" },
+  }[status] ?? { label: "🟡 Atenção", bg: "bg-accent/20", text: "text-accent-foreground" };
+  return (
+    <span className={`px-3 py-1 rounded-full text-xs font-inter font-semibold ${cfg.bg} ${cfg.text}`}>
+      {cfg.label}
+    </span>
+  );
+}
+
+// ─── Compute health from scores ──────────────────────────
+function computeHealth(a: Assessment | null): string {
+  if (!a) return "atencao";
+  const pos = ((a.prayer_score ?? 3) + (a.presence_score ?? 3)) / 2;
+  const neg = ((a.struggle_score ?? 3) + (a.doubt_score ?? 3)) / 2;
+  const score = pos - (neg - 3) * 0.5;
+  if (score >= 3.8) return "saudavel";
+  if (score >= 2.5) return "atencao";
+  return "critico";
+}
+
+// ─── Section card ────────────────────────────────────────
+function SectionCard({ icon, title, children, accent = "primary" }: {
+  icon: React.ReactNode; title: string; children: React.ReactNode; accent?: string;
+}) {
+  return (
+    <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className={`px-4 py-3 flex items-center gap-2.5 border-b border-border bg-muted/30`}>
+        {icon}
+        <p className="font-montserrat font-bold text-foreground text-sm">{title}</p>
+      </div>
+      <div className="p-4">{children}</div>
+    </div>
+  );
+}
+
+// ─── Progress ring ────────────────────────────────────────
+function ProgressRing({ pct, color, size = 64 }: { pct: number; color: string; size?: number }) {
+  const r = (size - 8) / 2;
+  const circ = 2 * Math.PI * r;
+  const dash = circ * (pct / 100);
+  return (
+    <svg width={size} height={size} className="-rotate-90">
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="hsl(var(--muted))" strokeWidth={6} />
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={6}
+        strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// ─── MAIN COMPONENT ──────────────────────────────────────
+export default function DiscipleshipTab() {
+  const { profile } = useAuth();
+
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [progress, setProgress] = useState<Progress[]>([]);
+  const [assessment, setAssessment] = useState<Assessment | null>(null);
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showAssessment, setShowAssessment] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [form, setForm] = useState({
+    prayer_score: null as number | null,
+    presence_score: null as number | null,
+    struggle_score: null as number | null,
+    doubt_score: null as number | null,
+    needs_pastor: false,
+    notes: "",
+  });
+
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+
+  useEffect(() => { fetchAll(); }, []);
+
+  async function fetchAll() {
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setLoading(false); return; }
+
+    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }] = await Promise.all([
+      supabase.from("activities").select("id, type, title, points"),
+      supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
+      supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).eq("month", month).eq("year", year).maybeSingle(),
+      supabase.from("discipleship_plans").select("objectives,challenges,recommendations,next_steps,health_status").eq("user_id", user.id).maybeSingle(),
+    ]);
+    setActivities(acts ?? []);
+    setProgress(prog ?? []);
+    setAssessment(assess ?? null);
+    setPlan(planData ?? null);
+    setLoading(false);
+  }
+
+  async function handleSaveAssessment() {
+    setSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const health = computeHealth({ ...form, id: "", month, year, created_at: "" } as any);
+
+    await supabase.from("spiritual_assessments").upsert({
+      user_id: user.id, month, year,
+      prayer_score: form.prayer_score,
+      presence_score: form.presence_score,
+      struggle_score: form.struggle_score,
+      doubt_score: form.doubt_score,
+      needs_pastor: form.needs_pastor,
+      notes: form.notes || null,
+    }, { onConflict: "user_id,month,year" });
+
+    // Update health status in plan
+    await supabase.from("discipleship_plans").upsert({
+      user_id: user.id, health_status: health,
+    }, { onConflict: "user_id" });
+
+    setSaving(false);
+    setShowAssessment(false);
+    fetchAll();
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
+          <Heart className="w-6 h-6 text-primary" />
+        </div>
+        <p className="text-muted-foreground font-inter text-sm">Carregando sua caminhada...</p>
+      </div>
+    );
+  }
+
+  const completedIds = new Set(progress.map(p => p.activity_id));
+  const totalActs = activities.length;
+  const completedActs = activities.filter(a => completedIds.has(a.id)).length;
+  const pct = totalActs > 0 ? Math.round((completedActs / totalActs) * 100) : 0;
+
+  const devocionais = activities.filter(a => a.type === "devocional");
+  const formacoes = activities.filter(a => a.type === "formacao");
+  const encontros = activities.filter(a => a.type === "encontro");
+  const doneDev = devocionais.filter(a => completedIds.has(a.id)).length;
+  const doneForm = formacoes.filter(a => completedIds.has(a.id)).length;
+  const doneEnc = encontros.filter(a => completedIds.has(a.id)).length;
+
+  const healthStatus = plan?.health_status ?? computeHealth(assessment);
+
+  const MONTH_NAMES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+  return (
+    <div className="px-5 pt-5 pb-6 space-y-4">
+      {/* Hero */}
+      <div className="rounded-2xl p-5 relative overflow-hidden" style={{ background: "var(--gradient-hero)" }}>
+        <div className="absolute top-0 right-0 w-28 h-28 bg-white/5 rounded-full -translate-y-6 translate-x-6 pointer-events-none" />
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-2xl border border-white/20">
+            🕊️
+          </div>
+          <div>
+            <p className="text-primary-foreground/60 font-inter text-xs">Minha caminhada espiritual</p>
+            <h2 className="font-montserrat font-black text-primary-foreground text-lg leading-tight">
+              {profile?.full_name?.split(" ")[0] ?? "Discípulo"}
+            </h2>
+            <p className="text-primary-foreground/70 text-xs font-inter">{profile?.community}</p>
+          </div>
+        </div>
+        <HealthBadge status={healthStatus} />
+      </div>
+
+      {/* ── SAÚDE ESPIRITUAL ────────────────────── */}
+      <SectionCard icon={<Flame className="w-4 h-4 text-secondary" />} title="Saúde Espiritual">
+        <div className="grid grid-cols-3 gap-3 mb-3">
+          {[
+            { label: "Devocionais", done: doneDev, total: devocionais.length, color: "#2ECC71" },
+            { label: "Formações", done: doneForm, total: formacoes.length, color: "#1F3C88" },
+            { label: "Encontros", done: doneEnc, total: encontros.length, color: "#FF7A00" },
+          ].map(({ label, done, total, color }) => {
+            const p = total > 0 ? Math.round((done / total) * 100) : 0;
+            return (
+              <div key={label} className="flex flex-col items-center gap-1">
+                <div className="relative">
+                  <ProgressRing pct={p} color={color} size={60} />
+                  <span className="absolute inset-0 flex items-center justify-center font-montserrat font-black text-foreground text-xs">{p}%</span>
+                </div>
+                <p className="font-inter text-[10px] text-muted-foreground text-center">{label}</p>
+                <p className="font-montserrat font-bold text-foreground text-xs">{done}/{total}</p>
+              </div>
+            );
+          })}
+        </div>
+        <div className="h-2 bg-muted rounded-full overflow-hidden">
+          <div className="h-full rounded-full transition-all" style={{
+            width: `${pct}%`,
+            background: pct >= 70 ? "var(--gradient-green)" : pct >= 34 ? "var(--gradient-orange)" : "hsl(var(--destructive))",
+          }} />
+        </div>
+        <p className="text-center text-muted-foreground font-inter text-xs mt-1.5">{completedActs}/{totalActs} atividades concluídas · {pct}%</p>
+      </SectionCard>
+
+      {/* ── AUTOAVALIAÇÃO ────────────────────────── */}
+      <SectionCard icon={<Heart className="w-4 h-4 text-primary" />} title={`Autoavaliação — ${MONTH_NAMES[month-1]}`}>
+        {assessment && !showAssessment ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 justify-between">
+              <span className="text-muted-foreground font-inter text-xs">Vida de oração</span>
+              <span className="text-xl">{EMOJIS[(assessment.prayer_score ?? 3) - 1]}</span>
+            </div>
+            <div className="flex items-center gap-2 justify-between">
+              <span className="text-muted-foreground font-inter text-xs">Sentir Deus perto</span>
+              <span className="text-xl">{EMOJIS[(assessment.presence_score ?? 3) - 1]}</span>
+            </div>
+            <div className="flex items-center gap-2 justify-between">
+              <span className="text-muted-foreground font-inter text-xs">Tentações / dificuldades</span>
+              <span className="text-xl">{EMOJIS[(assessment.struggle_score ?? 3) - 1]}</span>
+            </div>
+            <div className="flex items-center gap-2 justify-between">
+              <span className="text-muted-foreground font-inter text-xs">Dúvidas na fé</span>
+              <span className="text-xl">{EMOJIS[(assessment.doubt_score ?? 3) - 1]}</span>
+            </div>
+            {assessment.needs_pastor && (
+              <div className="flex items-center gap-2 mt-2 p-2 bg-primary/10 rounded-xl">
+                <AlertCircle className="w-4 h-4 text-primary flex-shrink-0" />
+                <p className="font-inter text-xs text-primary">Solicitou conversa com o pastor</p>
+              </div>
+            )}
+            {assessment.notes && (
+              <p className="font-inter text-xs text-muted-foreground italic mt-1">"{ assessment.notes}"</p>
+            )}
+            <button onClick={() => setShowAssessment(true)} className="w-full mt-2 py-2 rounded-xl bg-muted text-muted-foreground font-inter text-xs font-medium">
+              Atualizar avaliação
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <p className="font-inter text-sm text-foreground mb-2">Como está sua vida de oração?</p>
+              <EmojiScale value={form.prayer_score} onChange={v => setForm(f => ({ ...f, prayer_score: v }))} />
+            </div>
+            <div>
+              <p className="font-inter text-sm text-foreground mb-2">Você sente Deus perto de você?</p>
+              <EmojiScale value={form.presence_score} onChange={v => setForm(f => ({ ...f, presence_score: v }))} />
+            </div>
+            <div>
+              <p className="font-inter text-sm text-foreground mb-2">Está enfrentando tentações ou dificuldades?</p>
+              <EmojiScale value={form.struggle_score} onChange={v => setForm(f => ({ ...f, struggle_score: v }))} />
+            </div>
+            <div>
+              <p className="font-inter text-sm text-foreground mb-2">Tem dúvidas sobre a fé?</p>
+              <EmojiScale value={form.doubt_score} onChange={v => setForm(f => ({ ...f, doubt_score: v }))} />
+            </div>
+            <div>
+              <p className="font-inter text-sm text-foreground mb-2">Uma palavra sobre sua semana (opcional):</p>
+              <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                rows={2} placeholder="Como você está se sentindo..."
+                className="w-full px-3 py-2 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
+            </div>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" checked={form.needs_pastor} onChange={e => setForm(f => ({ ...f, needs_pastor: e.target.checked }))}
+                className="w-4 h-4 rounded border-border accent-primary" />
+              <span className="font-inter text-sm text-foreground">Preciso conversar com o pastor 🙏</span>
+            </label>
+            <button onClick={handleSaveAssessment} disabled={saving || !form.prayer_score || !form.presence_score || !form.struggle_score || !form.doubt_score}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-inter text-sm font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
+              style={{ background: "var(--gradient-hero)" }}>
+              <Send className="w-4 h-4" /> {saving ? "Salvando..." : "Enviar avaliação"}
+            </button>
+          </div>
+        )}
+      </SectionCard>
+
+      {/* ── PLANO DE CRESCIMENTO ──────────────────── */}
+      <SectionCard icon={<Sparkles className="w-4 h-4 text-accent-foreground" />} title="Plano de Crescimento Espiritual">
+        {plan ? (
+          <div className="space-y-3">
+            {plan.objectives && (
+              <div>
+                <p className="font-inter text-xs font-bold text-foreground mb-1">🎯 Objetivos espirituais</p>
+                <p className="font-inter text-xs text-muted-foreground leading-relaxed">{plan.objectives}</p>
+              </div>
+            )}
+            {plan.next_steps && (
+              <div>
+                <p className="font-inter text-xs font-bold text-foreground mb-1">➡️ Próximos passos</p>
+                <div className="space-y-1">
+                  {plan.next_steps.split("\n").filter(Boolean).map((step, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-brand-green flex-shrink-0 mt-0.5" />
+                      <p className="font-inter text-xs text-foreground">{step}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {plan.challenges && (
+              <div>
+                <p className="font-inter text-xs font-bold text-foreground mb-1">⚡ Desafios propostos</p>
+                <p className="font-inter text-xs text-muted-foreground leading-relaxed">{plan.challenges}</p>
+              </div>
+            )}
+            {plan.recommendations && (
+              <div>
+                <p className="font-inter text-xs font-bold text-foreground mb-1">🙏 Recomendações pastorais</p>
+                <p className="font-inter text-xs text-muted-foreground italic leading-relaxed">{plan.recommendations}</p>
+              </div>
+            )}
+            {!plan.objectives && !plan.next_steps && !plan.challenges && (
+              <p className="text-center text-muted-foreground font-inter text-sm py-2">Seu pastor ainda não criou seu plano. Fique de olho!</p>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-4">
+            <BookOpen className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
+            <p className="font-montserrat font-bold text-foreground text-sm">Plano ainda não criado</p>
+            <p className="text-muted-foreground font-inter text-xs mt-1">Seu pastor irá criar seu plano de discipulado em breve.</p>
+          </div>
+        )}
+      </SectionCard>
+
+      {/* ── CURSOS ─────────────────────────────────── */}
+      <SectionCard icon={<GraduationCap className="w-4 h-4 text-secondary" />} title="Progresso Formativo">
+        <div className="space-y-2">
+          {[
+            { label: "Começando a Vida Cristã", total: 16 },
+            { label: "Crescimento Cristão", total: 16 },
+          ].map((course, i) => {
+            const courseActs = formacoes.slice(i * course.total, (i + 1) * course.total);
+            const done = courseActs.filter(a => completedIds.has(a.id)).length;
+            const p = course.total > 0 ? Math.round((done / course.total) * 100) : 0;
+            return (
+              <div key={i} className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-secondary/10 flex items-center justify-center flex-shrink-0">
+                  <span className="font-montserrat font-black text-secondary text-xs">{i+1}</span>
+                </div>
+                <div className="flex-1">
+                  <p className="font-inter text-xs text-foreground mb-1">{course.label}</p>
+                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full bg-secondary rounded-full" style={{ width: `${p}%` }} />
+                  </div>
+                </div>
+                <span className="font-montserrat font-bold text-xs text-foreground">{p}%</span>
+              </div>
+            );
+          })}
+        </div>
+      </SectionCard>
+    </div>
+  );
+}

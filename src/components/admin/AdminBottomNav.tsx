@@ -1,11 +1,12 @@
-import { BarChart3, Users, BookOpen, CalendarDays, MessageSquare } from "lucide-react";
+import { BarChart3, Users, BookOpen, CalendarDays, MessageSquare, Heart } from "lucide-react";
 
-export type AdminTab = "overview" | "participants" | "courses" | "agenda" | "messages";
+export type AdminTab = "overview" | "participants" | "courses" | "agenda" | "messages" | "discipleship";
 
 const TABS = [
-  { id: "overview" as AdminTab, label: "Visão Geral", icon: BarChart3 },
-  { id: "participants" as AdminTab, label: "Participantes", icon: Users },
+  { id: "overview" as AdminTab, label: "Visão", icon: BarChart3 },
+  { id: "participants" as AdminTab, label: "Pessoas", icon: Users },
   { id: "courses" as AdminTab, label: "Cursos", icon: BookOpen },
+  { id: "discipleship" as AdminTab, label: "Discipulado", icon: Heart },
   { id: "agenda" as AdminTab, label: "Agenda", icon: CalendarDays },
   { id: "messages" as AdminTab, label: "Mensagens", icon: MessageSquare },
 ];
@@ -15,7 +16,7 @@ type Props = { active: AdminTab; onChange: (tab: AdminTab) => void };
 export default function AdminBottomNav({ active, onChange }: Props) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border">
-      <div className="max-w-2xl mx-auto flex">
+      <div className="max-w-2xl mx-auto grid grid-cols-6">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = active === tab.id;

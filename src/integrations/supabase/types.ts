@@ -68,6 +68,45 @@ export type Database = {
         }
         Relationships: []
       }
+      discipleship_plans: {
+        Row: {
+          challenges: string | null
+          created_at: string
+          health_status: string
+          id: string
+          next_steps: string | null
+          objectives: string | null
+          pastor_notes: string | null
+          recommendations: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          challenges?: string | null
+          created_at?: string
+          health_status?: string
+          id?: string
+          next_steps?: string | null
+          objectives?: string | null
+          pastor_notes?: string | null
+          recommendations?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          challenges?: string | null
+          created_at?: string
+          health_status?: string
+          id?: string
+          next_steps?: string | null
+          objectives?: string | null
+          pastor_notes?: string | null
+          recommendations?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       events: {
         Row: {
           area: string | null
@@ -208,6 +247,48 @@ export type Database = {
           phone?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      spiritual_assessments: {
+        Row: {
+          created_at: string
+          doubt_score: number | null
+          id: string
+          month: number
+          needs_pastor: boolean
+          notes: string | null
+          prayer_score: number | null
+          presence_score: number | null
+          struggle_score: number | null
+          user_id: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          doubt_score?: number | null
+          id?: string
+          month: number
+          needs_pastor?: boolean
+          notes?: string | null
+          prayer_score?: number | null
+          presence_score?: number | null
+          struggle_score?: number | null
+          user_id: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          doubt_score?: number | null
+          id?: string
+          month?: number
+          needs_pastor?: boolean
+          notes?: string | null
+          prayer_score?: number | null
+          presence_score?: number | null
+          struggle_score?: number | null
+          user_id?: string
+          year?: number
         }
         Relationships: []
       }

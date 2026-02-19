@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { ShieldCheck } from "lucide-react";
@@ -9,6 +9,7 @@ import JourneyPath from "@/components/home/JourneyPath";
 import AchievementsGrid from "@/components/home/AchievementsGrid";
 import DiscipleProfile from "@/components/home/DiscipleProfile";
 import CommunityTab from "@/components/home/CommunityTab";
+import DiscipleshipTab from "@/components/home/DiscipleshipTab";
 import BottomNav, { type Tab } from "@/components/home/BottomNav";
 
 const streakDays = 5;
@@ -20,7 +21,6 @@ const completedCount = 2;
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>("jornada");
   const { profile, role } = useAuth();
-
   const navigate = useNavigate();
 
   return (
@@ -69,6 +69,9 @@ export default function Index() {
 
         {/* ===== COMUNIDADE ===== */}
         {activeTab === "comunidade" && <CommunityTab />}
+
+        {/* ===== DISCIPULADO ===== */}
+        {activeTab === "discipulado" && <DiscipleshipTab />}
 
         {/* ===== PERFIL ===== */}
         {activeTab === "perfil" && (
