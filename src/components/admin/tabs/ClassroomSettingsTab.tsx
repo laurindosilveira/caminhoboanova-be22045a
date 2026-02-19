@@ -1,0 +1,159 @@
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { BookOpen, Link, Save, GraduationCap } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+
+const COMMUNITIES = [
+  "Martim Lutero", "Bom Pastor", "Rincão Fundo", "Rincão Frente",
+  "Linha Brasil", "Iriá Pira 1", "Iriá Pira 2",
+];
+
+interface Settings {
+  whatsapp_link: string;
+  verse_of_week: string;
+  verse_reference: string;
+}
+
+export default function ClassroomSettingsTab() {
+  const { profile } = useAuth();
+  const { toast } = useToast();
+
+  const [selectedCommunity, setSelectedCommunity] = useState(COMMUNITIES[0]);
+  const [settings, setSettings] = useState<Settings>({ whatsapp_link: "", verse_of_week: "", verse_reference: "" });
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    async function fetchSettings() {
+      setLoading(true);
+      const { data } = await supabase
+        .from("community_settings")
+        .select("whatsapp_link, verse_of_week, verse_reference")
+        .eq("community", selectedCommunity)
+        .maybeSingle();
+      setSettings({
+        whatsapp_link: data?.whatsapp_link ?? "",
+        verse_of_week: data?.verse_of_week ?? "",
+        verse_reference: data?.verse_reference ?? "",
+      });
+      setLoading(false);
+    }
+    fetchSettings();
+  }, [selectedCommunity]);
+
+  async function handleSave() {
+    setSaving(true);
+    const { error } = await supabase
+      .from("community_settings")
+      .upsert({
+        community: selectedCommunity,
+        whatsapp_link: settings.whatsapp_link || null,
+        verse_of_week: settings.verse_of_week || null,
+        verse_reference: settings.verse_reference || null,
+        updated_by: profile?.user_id,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "community" });
+
+    setSaving(false);
+    if (error) {
+      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "✅ Configurações salvas!", description: `Sala da turma "${selectedCommunity}" atualizada.` });
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+          <GraduationCap className="w-5 h-5 text-primary" />
+        </div>
+        <div>
+          <h2 className="font-montserrat font-black text-foreground text-lg">Sala da Turma</h2>
+          <p className="text-muted-foreground text-xs font-inter">Configure o versículo e o grupo por comunidade</p>
+        </div>
+      </div>
+
+      {/* Seletor de comunidade */}
+      <div>
+        <label className="text-xs font-montserrat font-bold text-muted-foreground uppercase tracking-wide mb-2 block">
+          Comunidade
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {COMMUNITIES.map((c) => (
+            <button
+              key={c}
+              onClick={() => setSelectedCommunity(c)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-montserrat font-bold transition-all border ${
+                selectedCommunity === c
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-card text-muted-foreground border-border hover:border-primary/50"
+              }`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => <div key={i} className="bg-muted rounded-2xl h-16 animate-pulse" />)}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Link do WhatsApp */}
+          <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Link className="w-4 h-4 text-primary" />
+              <span className="font-montserrat font-bold text-foreground text-sm">Link do Grupo WhatsApp</span>
+            </div>
+            <Input
+              placeholder="https://chat.whatsapp.com/..."
+              value={settings.whatsapp_link}
+              onChange={(e) => setSettings({ ...settings, whatsapp_link: e.target.value })}
+              className="text-sm border-border rounded-xl"
+            />
+            <p className="text-xs text-muted-foreground font-inter">
+              Cole o link de convite do grupo WhatsApp da turma de {selectedCommunity}.
+            </p>
+          </div>
+
+          {/* Versículo da semana */}
+          <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-primary" />
+              <span className="font-montserrat font-bold text-foreground text-sm">Versículo da Semana</span>
+            </div>
+            <Textarea
+              placeholder="Ex: Porque Deus amou o mundo de tal maneira..."
+              value={settings.verse_of_week}
+              onChange={(e) => setSettings({ ...settings, verse_of_week: e.target.value })}
+              className="text-sm border-border rounded-xl resize-none min-h-[100px]"
+              maxLength={500}
+            />
+            <Input
+              placeholder="Referência (ex: João 3:16)"
+              value={settings.verse_reference}
+              onChange={(e) => setSettings({ ...settings, verse_reference: e.target.value })}
+              className="text-sm border-border rounded-xl"
+            />
+          </div>
+
+          <Button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full rounded-2xl h-11 font-montserrat font-bold"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            {saving ? "Salvando..." : "Salvar Configurações"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}

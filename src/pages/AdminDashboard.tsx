@@ -11,6 +11,7 @@ import CoursesTab from "@/components/admin/tabs/CoursesTab";
 import AgendaTab from "@/components/admin/tabs/AgendaTab";
 import MessagesTab from "@/components/admin/tabs/MessagesTab";
 import AdminDiscipleshipTab from "@/components/admin/tabs/AdminDiscipleshipTab";
+import ClassroomSettingsTab from "@/components/admin/tabs/ClassroomSettingsTab";
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
 const AREA_2_COMMUNITIES = ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"];
@@ -130,6 +131,7 @@ export default function AdminDashboard() {
             {activeTab === "courses" && <CoursesTab />}
             {activeTab === "agenda" && <AgendaTab />}
             {activeTab === "messages" && <MessagesTab />}
+            {activeTab === "sala" && <ClassroomSettingsTab />}
             {activeTab === "discipleship" && (
               <AdminDiscipleshipTab
                 participants={participants}

@@ -76,6 +76,63 @@ export type Database = {
           },
         ]
       }
+      community_chat: {
+        Row: {
+          community: string
+          created_at: string
+          id: string
+          message: string
+          user_id: string
+          user_name: string
+        }
+        Insert: {
+          community: string
+          created_at?: string
+          id?: string
+          message: string
+          user_id: string
+          user_name: string
+        }
+        Update: {
+          community?: string
+          created_at?: string
+          id?: string
+          message?: string
+          user_id?: string
+          user_name?: string
+        }
+        Relationships: []
+      }
+      community_settings: {
+        Row: {
+          community: string
+          id: string
+          updated_at: string
+          updated_by: string | null
+          verse_of_week: string | null
+          verse_reference: string | null
+          whatsapp_link: string | null
+        }
+        Insert: {
+          community: string
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+          verse_of_week?: string | null
+          verse_reference?: string | null
+          whatsapp_link?: string | null
+        }
+        Update: {
+          community?: string
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+          verse_of_week?: string | null
+          verse_reference?: string | null
+          whatsapp_link?: string | null
+        }
+        Relationships: []
+      }
       courses: {
         Row: {
           created_at: string
@@ -360,6 +417,39 @@ export type Database = {
           is_private?: boolean
           note_type?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      prayer_requests: {
+        Row: {
+          amen_count: number
+          community: string
+          content: string
+          created_at: string
+          id: string
+          is_anonymous: boolean
+          user_id: string
+          user_name: string
+        }
+        Insert: {
+          amen_count?: number
+          community: string
+          content: string
+          created_at?: string
+          id?: string
+          is_anonymous?: boolean
+          user_id: string
+          user_name: string
+        }
+        Update: {
+          amen_count?: number
+          community?: string
+          content?: string
+          created_at?: string
+          id?: string
+          is_anonymous?: boolean
+          user_id?: string
+          user_name?: string
         }
         Relationships: []
       }
