@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { ShieldCheck } from "lucide-react";
 
 import HeroHeader from "@/components/home/HeroHeader";
 import MissionCard from "@/components/home/MissionCard";
@@ -21,10 +22,6 @@ export default function Index() {
   const { profile, role } = useAuth();
 
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (role === "admin") navigate("/admin", { replace: true });
-  }, [role, navigate]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col max-w-md mx-auto relative">
@@ -87,6 +84,25 @@ export default function Index() {
               community={profile?.community}
               area={profile?.area}
             />
+
+            {/* Admin access — somente visível para admins */}
+            {role === "admin" && (
+              <div className="px-5 mt-2">
+                <button
+                  onClick={() => navigate("/admin")}
+                  className="w-full flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm hover:bg-muted/50 transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
+                    <ShieldCheck className="w-5 h-5 text-primary-foreground" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-montserrat font-bold text-foreground text-sm">Área do Administrador</p>
+                    <p className="text-muted-foreground text-xs font-inter">Gerenciar participantes e conteúdo</p>
+                  </div>
+                  <span className="ml-auto text-muted-foreground text-xs">→</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </main>
