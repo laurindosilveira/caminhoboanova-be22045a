@@ -497,6 +497,15 @@ export type Database = {
         Args: { _community: Database["public"]["Enums"]["community_name"] }
         Returns: Database["public"]["Enums"]["area_name"]
       }
+      get_community_ranking: {
+        Args: { _community: Database["public"]["Enums"]["community_name"] }
+        Returns: {
+          completed_count: number
+          faith_points: number
+          full_name: string
+          user_id: string
+        }[]
+      }
       get_my_area: {
         Args: never
         Returns: Database["public"]["Enums"]["area_name"]
