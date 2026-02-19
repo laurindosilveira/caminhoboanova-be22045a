@@ -44,6 +44,137 @@ export type Database = {
         }
         Relationships: []
       }
+      courses: {
+        Row: {
+          created_at: string
+          id: string
+          order_num: number
+          subtitle: string | null
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          order_num: number
+          subtitle?: string | null
+          title: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          order_num?: number
+          subtitle?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
+      events: {
+        Row: {
+          area: string | null
+          community: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          event_date: string
+          id: string
+          location: string | null
+          title: string
+          type: string
+        }
+        Insert: {
+          area?: string | null
+          community?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          event_date: string
+          id?: string
+          location?: string | null
+          title: string
+          type?: string
+        }
+        Update: {
+          area?: string | null
+          community?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          event_date?: string
+          id?: string
+          location?: string | null
+          title?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      lessons: {
+        Row: {
+          course_id: string
+          created_at: string
+          id: string
+          objective: string | null
+          order_num: number
+          title: string
+          topics: string[] | null
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          id?: string
+          objective?: string | null
+          order_num: number
+          title: string
+          topics?: string[] | null
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          id?: string
+          objective?: string | null
+          order_num?: number
+          title?: string
+          topics?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lessons_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          area: string | null
+          body: string
+          community: string | null
+          created_at: string
+          id: string
+          sent_by: string | null
+          title: string
+        }
+        Insert: {
+          area?: string | null
+          body: string
+          community?: string | null
+          created_at?: string
+          id?: string
+          sent_by?: string | null
+          title: string
+        }
+        Update: {
+          area?: string | null
+          body?: string
+          community?: string | null
+          created_at?: string
+          id?: string
+          sent_by?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           area: Database["public"]["Enums"]["area_name"]
