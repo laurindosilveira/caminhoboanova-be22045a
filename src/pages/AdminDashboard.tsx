@@ -104,7 +104,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AdminHeader areaName={areaName} stats={stats} onSignOut={signOut} />
+      <AdminHeader areaName={areaName} stats={stats} onSignOut={signOut} onBackToUser={() => navigate("/")} />
 
       <main className="max-w-2xl mx-auto px-4 py-5 pb-24">
         {loading ? (

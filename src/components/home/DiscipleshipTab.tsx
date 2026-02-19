@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  Heart, BookOpen, Users, GraduationCap, Flame, CheckCircle2,
-  ChevronRight, Send, Sparkles, AlertCircle
+  Heart, BookOpen, GraduationCap, Flame, CheckCircle2,
+  Send, Sparkles, AlertCircle, ChevronRight
 } from "lucide-react";
+import JourneyLessonView from "@/components/home/JourneyLessonView";
 
 // ─── Types ───────────────────────────────────────────────
 type Assessment = {
@@ -96,6 +97,9 @@ function ProgressRing({ pct, color, size = 64 }: { pct: number; color: string; s
   );
 }
 
+// ─── Types ─────────────────────────────────────────────────
+type Lesson = { id: string; title: string; order_num: number; objective: string | null; topics: string[] | null; course_id: string };
+
 // ─── MAIN COMPONENT ──────────────────────────────────────
 export default function DiscipleshipTab() {
   const { profile } = useAuth();
@@ -107,6 +111,8 @@ export default function DiscipleshipTab() {
   const [loading, setLoading] = useState(true);
   const [showAssessment, setShowAssessment] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
 
   const [form, setForm] = useState({
     prayer_score: null as number | null,
@@ -128,16 +134,18 @@ export default function DiscipleshipTab() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }] = await Promise.all([
+    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: lessonsData }] = await Promise.all([
       supabase.from("activities").select("id, type, title, points"),
       supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
       supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).eq("month", month).eq("year", year).maybeSingle(),
       supabase.from("discipleship_plans").select("objectives,challenges,recommendations,next_steps,health_status").eq("user_id", user.id).maybeSingle(),
+      supabase.from("lessons").select("id, title, order_num, objective, topics, course_id").order("order_num"),
     ]);
     setActivities(acts ?? []);
     setProgress(prog ?? []);
     setAssessment(assess ?? null);
     setPlan(planData ?? null);
+    setLessons(lessonsData ?? []);
     setLoading(false);
   }
 
@@ -194,6 +202,15 @@ export default function DiscipleshipTab() {
   const healthStatus = plan?.health_status ?? computeHealth(assessment);
 
   const MONTH_NAMES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+  // If a lesson is selected, show its full view
+  if (selectedLesson) {
+    return (
+      <div className="px-5 pt-5 pb-6">
+        <JourneyLessonView lesson={selectedLesson} onBack={() => setSelectedLesson(null)} />
+      </div>
+    );
+  }
 
   return (
     <div className="px-5 pt-5 pb-6 space-y-4">
@@ -391,6 +408,32 @@ export default function DiscipleshipTab() {
           })}
         </div>
       </SectionCard>
+
+      {/* ── MINHA JORNADA — LIÇÕES ──────────────────── */}
+      {lessons.length > 0 && (
+        <SectionCard icon={<BookOpen className="w-4 h-4 text-primary" />} title="Minha Jornada — Lições">
+          <p className="font-inter text-xs text-muted-foreground mb-3">Clique em uma lição para ler, refletir e responder as perguntas do encontro.</p>
+          <div className="space-y-2">
+            {lessons.map(lesson => (
+              <button
+                key={lesson.id}
+                onClick={() => setSelectedLesson(lesson)}
+                className="w-full flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-primary/10 border border-border hover:border-primary/30 transition-all text-left"
+              >
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "var(--gradient-hero)" }}>
+                  <span className="font-montserrat font-black text-primary-foreground text-sm">{lesson.order_num}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-inter text-sm font-medium text-foreground truncate">{lesson.title}</p>
+                  {lesson.objective && <p className="font-inter text-[10px] text-muted-foreground truncate mt-0.5">{lesson.objective}</p>}
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              </button>
+            ))}
+          </div>
+        </SectionCard>
+      )}
     </div>
   );
 }
+

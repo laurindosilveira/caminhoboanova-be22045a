@@ -1,4 +1,5 @@
-import { LogOut } from "lucide-react";
+import { LogOut, ChevronLeft } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 type Stats = {
   total: number;
@@ -11,12 +12,22 @@ type Props = {
   areaName: string;
   stats: Stats;
   onSignOut: () => void;
+  onBackToUser: () => void;
 };
 
-export default function AdminHeader({ areaName, stats, onSignOut }: Props) {
+export default function AdminHeader({ areaName, stats, onSignOut, onBackToUser }: Props) {
   return (
     <header className="px-4 pt-8 pb-5" style={{ background: "var(--gradient-hero)" }}>
       <div className="max-w-2xl mx-auto">
+        {/* Back to user area button */}
+        <button
+          onClick={onBackToUser}
+          className="flex items-center gap-1.5 text-primary-foreground/70 font-inter text-xs mb-3 hover:text-primary-foreground transition-colors"
+        >
+          <ChevronLeft className="w-3.5 h-3.5" />
+          Voltar para área geral
+        </button>
+
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-white/15 border border-white/30 flex items-center justify-center">
