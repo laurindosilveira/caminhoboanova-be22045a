@@ -1,0 +1,56 @@
+import { LogOut } from "lucide-react";
+
+type Stats = {
+  total: number;
+  avancados: number;
+  semAtividade: number;
+  mediaProgresso: number;
+};
+
+type Props = {
+  areaName: string;
+  stats: Stats;
+  onSignOut: () => void;
+};
+
+export default function AdminHeader({ areaName, stats, onSignOut }: Props) {
+  return (
+    <header className="px-4 pt-8 pb-5" style={{ background: "var(--gradient-hero)" }}>
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-white/15 border border-white/30 flex items-center justify-center">
+              <span className="text-xl">✝️</span>
+            </div>
+            <div>
+              <p className="text-primary-foreground/60 font-inter text-xs">Painel do Administrador</p>
+              <h1 className="font-montserrat font-black text-primary-foreground text-lg">{areaName}</h1>
+            </div>
+          </div>
+          <button
+            onClick={onSignOut}
+            className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center"
+            title="Sair"
+          >
+            <LogOut className="w-5 h-5 text-primary-foreground" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-4 gap-2">
+          {[
+            { label: "Participantes", value: stats.total, icon: "👥" },
+            { label: "Avançados", value: stats.avancados, icon: "🏆" },
+            { label: "Sem atividade", value: stats.semAtividade, icon: "⚠️" },
+            { label: "Progresso médio", value: `${stats.mediaProgresso}%`, icon: "📊" },
+          ].map((s) => (
+            <div key={s.label} className="bg-white/10 backdrop-blur rounded-2xl p-2.5 text-center">
+              <span className="text-lg">{s.icon}</span>
+              <p className="font-montserrat font-black text-primary-foreground text-lg leading-none mt-1">{s.value}</p>
+              <p className="text-primary-foreground/50 text-[10px] font-inter mt-0.5 leading-tight">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </header>
+  );
+}
