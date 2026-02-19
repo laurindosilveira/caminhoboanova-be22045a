@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Heart, ChevronLeft, Save, AlertCircle, CheckCircle2, Flame, GraduationCap,
-  Star, MessageSquare, Calendar, FileText, AlertTriangle, Plus, BookOpen
+  Star, MessageSquare, Calendar, FileText, AlertTriangle, Plus, BookOpen, Eye
 } from "lucide-react";
+import PastoralReportPDF from "@/components/admin/PastoralReportPDF";
+import JourneyLessonView from "@/components/home/JourneyLessonView";
 
 type Assessment = {
   prayer_score: number | null; presence_score: number | null;
@@ -28,7 +30,7 @@ type Participant = {
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
 };
 
-type Activity = { id: string; type: string; points: number };
+type Activity = { id: string; type: string; points: number; title: string; order_num: number; subtitle: string | null };
 
 const EMOJIS = ["😔", "😐", "🙂", "😊", "🔥"];
 const HEALTH_CFG = {
@@ -58,6 +60,8 @@ function calcAge(birthDate: string) {
 }
 
 // ─── FULL PARTICIPANT SHEET ─────────────────────────────
+type Lesson = { id: string; title: string; order_num: number; objective: string | null; topics: string[] | null; course_id: string };
+
 function ParticipantSheet({ participant: p, activities, onBack }: {
   participant: Participant; activities: Activity[]; onBack: () => void;
 }) {
@@ -73,7 +77,9 @@ function ParticipantSheet({ participant: p, activities, onBack }: {
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [noteForm, setNoteForm] = useState({ note_type: "acompanhamento", content: "" });
   const [savingNote, setSavingNote] = useState(false);
-  const [activeSection, setActiveSection] = useState<"overview"|"plan"|"notes">("overview");
+  const [activeSection, setActiveSection] = useState<"overview"|"plan"|"notes"|"jornada"|"relatorio">("overview");
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
 
   const now = new Date();
   const month = now.getMonth() + 1;
@@ -82,14 +88,16 @@ function ParticipantSheet({ participant: p, activities, onBack }: {
 
   useEffect(() => {
     async function load() {
-      const [{ data: ass }, { data: planData }, { data: notesData }] = await Promise.all([
+      const [{ data: ass }, { data: planData }, { data: notesData }, { data: lessonsData }] = await Promise.all([
         supabase.from("spiritual_assessments").select("*").eq("user_id", p.user_id).eq("month", month).eq("year", year).maybeSingle(),
         supabase.from("discipleship_plans").select("*").eq("user_id", p.user_id).maybeSingle(),
         supabase.from("pastoral_notes").select("*").eq("user_id", p.user_id).order("created_at", { ascending: false }),
+        supabase.from("lessons").select("id, title, order_num, objective, topics, course_id").order("order_num"),
       ]);
       setAssessment(ass ?? null);
       if (planData) setPlan(prev => ({ ...prev, ...planData }));
       setNotes(notesData ?? []);
+      setLessons(lessonsData ?? []);
       setLoading(false);
     }
     load();
@@ -147,10 +155,24 @@ function ParticipantSheet({ participant: p, activities, onBack }: {
 
   if (loading) return <div className="py-20 text-center text-muted-foreground font-inter text-sm">Carregando ficha...</div>;
 
+  // If admin is viewing a lesson's responses
+  if (selectedLesson) {
+    return (
+      <JourneyLessonView
+        lesson={selectedLesson}
+        onBack={() => setSelectedLesson(null)}
+        isAdmin={true}
+        targetUserId={p.user_id}
+      />
+    );
+  }
+
   const SECTIONS = [
     { id: "overview" as const, label: "Visão Geral" },
-    { id: "plan" as const, label: "Plano Pastoral" },
+    { id: "plan" as const, label: "Plano" },
     { id: "notes" as const, label: `Notas (${notes.length})` },
+    { id: "jornada" as const, label: "Jornada" },
+    { id: "relatorio" as const, label: "Relatório" },
   ];
 
   return (
@@ -200,11 +222,11 @@ function ParticipantSheet({ participant: p, activities, onBack }: {
         ))}
       </div>
 
-      {/* Section tabs */}
-      <div className="flex gap-1 bg-muted rounded-xl p-1">
+      {/* Section tabs - scrollable for 5 tabs */}
+      <div className="flex gap-1 bg-muted rounded-xl p-1 overflow-x-auto">
         {SECTIONS.map(s => (
           <button key={s.id} onClick={() => setActiveSection(s.id)}
-            className={`flex-1 py-2 rounded-lg text-xs font-inter font-medium transition-all ${activeSection === s.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
+            className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-inter font-medium transition-all ${activeSection === s.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
             {s.label}
           </button>
         ))}
@@ -417,6 +439,45 @@ function ParticipantSheet({ participant: p, activities, onBack }: {
             </div>
           )}
         </div>
+      )}
+
+      {/* JORNADA SECTION — view youth lesson responses */}
+      {activeSection === "jornada" && (
+        <div className="space-y-3">
+          <div className="bg-primary/5 border border-primary/20 rounded-2xl p-3 flex items-start gap-2">
+            <Eye className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+            <p className="font-inter text-xs text-primary leading-relaxed">
+              Visualize as respostas de <strong>{p.full_name}</strong> para cada lição da Minha Jornada. Use no encontro presencial.
+            </p>
+          </div>
+          {lessons.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground font-inter text-sm">
+              <BookOpen className="w-10 h-10 mx-auto mb-2 opacity-40" />
+              <p>Nenhuma lição cadastrada ainda.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {lessons.map(lesson => (
+                <button key={lesson.id} onClick={() => setSelectedLesson(lesson)}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl bg-card border border-border hover:border-primary/30 transition-all text-left">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "var(--gradient-hero)" }}>
+                    <span className="font-montserrat font-black text-primary-foreground text-sm">{lesson.order_num}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-inter text-sm font-medium text-foreground truncate">{lesson.title}</p>
+                    {lesson.objective && <p className="font-inter text-[10px] text-muted-foreground truncate mt-0.5">{lesson.objective}</p>}
+                  </div>
+                  <Eye className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* RELATÓRIO SECTION */}
+      {activeSection === "relatorio" && (
+        <PastoralReportPDF participant={p} activities={activities} />
       )}
     </div>
   );

@@ -102,6 +102,7 @@ export type Database = {
       }
       discipleship_plans: {
         Row: {
+          aptidao: string | null
           challenges: string | null
           created_at: string
           health_status: string
@@ -116,6 +117,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          aptidao?: string | null
           challenges?: string | null
           created_at?: string
           health_status?: string
@@ -130,6 +132,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          aptidao?: string | null
           challenges?: string | null
           created_at?: string
           health_status?: string
@@ -181,6 +184,36 @@ export type Database = {
           location?: string | null
           title?: string
           type?: string
+        }
+        Relationships: []
+      }
+      lesson_responses: {
+        Row: {
+          created_at: string
+          id: string
+          lesson_id: string
+          question_key: string
+          response: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lesson_id: string
+          question_key: string
+          response?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lesson_id?: string
+          question_key?: string
+          response?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
