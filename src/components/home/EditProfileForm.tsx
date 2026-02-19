@@ -26,12 +26,8 @@ const profileSchema = z.object({
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
-interface EditProfileFormProps {
-  onUpdated?: () => void;
-}
-
-export default function EditProfileForm({ onUpdated }: EditProfileFormProps) {
-  const { profile, user } = useAuth();
+export default function EditProfileForm() {
+  const { profile, user, refreshProfile } = useAuth();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -69,23 +65,30 @@ export default function EditProfileForm({ onUpdated }: EditProfileFormProps) {
         ? "Área 1"
         : "Área 2";
 
+      // Use upsert so it works whether or not a profile row exists yet
       const { error } = await supabase
         .from("profiles")
-        .update({
-          full_name: values.full_name,
-          phone: values.phone,
-          birth_date: values.birth_date,
-          community: values.community,
-          area: areaVal as "Área 1" | "Área 2",
-        })
-        .eq("user_id", user.id);
+        .upsert(
+          {
+            user_id: user.id,
+            full_name: values.full_name,
+            phone: values.phone,
+            birth_date: values.birth_date,
+            community: values.community,
+            area: areaVal as "Área 1" | "Área 2",
+          },
+          { onConflict: "user_id" }
+        );
 
       if (error) throw error;
 
+      // Refresh the profile in context so the header name updates
+      await refreshProfile();
+
       toast({ title: "Perfil atualizado!", description: "Suas informações foram salvas com sucesso." });
       setIsEditing(false);
-      onUpdated?.();
     } catch (err: unknown) {
+      console.error("Erro ao salvar perfil:", err);
       toast({ title: "Erro ao salvar", description: "Tente novamente.", variant: "destructive" });
     } finally {
       setSaving(false);
@@ -153,34 +156,41 @@ export default function EditProfileForm({ onUpdated }: EditProfileFormProps) {
 
         <div className="p-4 space-y-4">
           {/* Nome */}
-          <Field label="Nome completo" error={errors.full_name?.message}>
+          <div className="space-y-1.5">
+            <label className="text-xs font-inter font-medium text-muted-foreground">Nome completo</label>
             <input
               {...register("full_name")}
               placeholder="Seu nome completo"
               className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
-          </Field>
+            {errors.full_name && <p className="text-xs text-destructive font-inter">{errors.full_name.message}</p>}
+          </div>
 
           {/* Telefone */}
-          <Field label="Telefone / WhatsApp" error={errors.phone?.message}>
+          <div className="space-y-1.5">
+            <label className="text-xs font-inter font-medium text-muted-foreground">Telefone / WhatsApp</label>
             <input
               {...register("phone")}
               placeholder="(00) 00000-0000"
               className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
-          </Field>
+            {errors.phone && <p className="text-xs text-destructive font-inter">{errors.phone.message}</p>}
+          </div>
 
           {/* Data de nascimento */}
-          <Field label="Data de nascimento" error={errors.birth_date?.message}>
+          <div className="space-y-1.5">
+            <label className="text-xs font-inter font-medium text-muted-foreground">Data de nascimento</label>
             <input
               type="date"
               {...register("birth_date")}
               className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
-          </Field>
+            {errors.birth_date && <p className="text-xs text-destructive font-inter">{errors.birth_date.message}</p>}
+          </div>
 
           {/* Comunidade */}
-          <Field label="Comunidade" error={errors.community?.message}>
+          <div className="space-y-1.5">
+            <label className="text-xs font-inter font-medium text-muted-foreground">Comunidade</label>
             <div className="relative">
               <select
                 {...register("community")}
@@ -193,7 +203,8 @@ export default function EditProfileForm({ onUpdated }: EditProfileFormProps) {
               </select>
               <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             </div>
-          </Field>
+            {errors.community && <p className="text-xs text-destructive font-inter">{errors.community.message}</p>}
+          </div>
 
           {/* Save button */}
           <button
@@ -223,16 +234,6 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
         <p className="text-muted-foreground text-xs font-inter">{label}</p>
         <p className="text-foreground text-sm font-inter font-medium truncate">{value}</p>
       </div>
-    </div>
-  );
-}
-
-function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <label className="text-xs font-inter font-medium text-muted-foreground">{label}</label>
-      {children}
-      {error && <p className="text-xs text-destructive font-inter">{error}</p>}
     </div>
   );
 }
