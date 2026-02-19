@@ -40,17 +40,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   async function fetchProfileAndRole(userId: string) {
-    const [profileRes, roleRes] = await Promise.all([
+    const [profileRes, isAdminRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
-      supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
+      supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
     ]);
     setProfile(profileRes.data ?? null);
-    // Only update role if we got a valid response (prevents clearing role on temporary failures)
-    if (roleRes.data?.role) {
-      setRole(roleRes.data.role as "user" | "admin");
-    } else if (!roleRes.error) {
-      // No role found and no error means user genuinely has no role
-      setRole(null);
+    if (!isAdminRes.error) {
+      setRole(isAdminRes.data === true ? "admin" : "user");
     }
     // If there was an error, keep the existing role to avoid UI flicker
   }
