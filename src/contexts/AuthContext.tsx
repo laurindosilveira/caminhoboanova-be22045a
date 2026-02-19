@@ -19,6 +19,7 @@ interface AuthContextType {
   role: "user" | "admin" | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -28,6 +29,7 @@ const AuthContext = createContext<AuthContextType>({
   role: null,
   loading: true,
   signOut: async () => {},
+  refreshProfile: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -84,8 +86,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRole(null);
   }
 
+  async function refreshProfile() {
+    if (user?.id) {
+      await fetchProfileAndRole(user.id);
+    }
+  }
+
   return (
-    <AuthContext.Provider value={{ user, session, profile, role, loading, signOut }}>
+    <AuthContext.Provider value={{ user, session, profile, role, loading, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
