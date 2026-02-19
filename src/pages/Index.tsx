@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { ShieldCheck } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 import HeroHeader from "@/components/home/HeroHeader";
 import MissionCard from "@/components/home/MissionCard";
@@ -11,27 +12,35 @@ import DiscipleProfile from "@/components/home/DiscipleProfile";
 import EditProfileForm from "@/components/home/EditProfileForm";
 import CommunityTab from "@/components/home/CommunityTab";
 import DiscipleshipTab from "@/components/home/DiscipleshipTab";
+import UserAgendaTab from "@/components/home/UserAgendaTab";
 import BottomNav, { type Tab } from "@/components/home/BottomNav";
-
-const streakDays = 5;
-const faithPoints = 120;
-const faithLevel = 3;
-const faithEnergy = 4;
-const completedCount = 2;
+import { useUserStats } from "@/hooks/useUserStats";
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>("jornada");
   const { profile, role } = useAuth();
   const navigate = useNavigate();
+  const stats = useUserStats();
+
+  async function handleCompleteActivity(activityId: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from("user_progress").insert({
+      user_id: user.id,
+      activity_id: activityId,
+    });
+    // Reload stats
+    window.location.reload();
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col max-w-md mx-auto relative">
       {/* Hero header — always visible */}
       <HeroHeader
-        streakDays={streakDays}
-        faithPoints={faithPoints}
-        faithLevel={faithLevel}
-        faithEnergy={faithEnergy}
+        streakDays={stats.streakDays}
+        faithPoints={stats.faithPoints}
+        faithLevel={stats.faithLevel}
+        faithEnergy={stats.faithEnergy}
       />
 
       {/* Scrollable content */}
@@ -40,7 +49,12 @@ export default function Index() {
         {/* ===== JORNADA ===== */}
         {activeTab === "jornada" && (
           <>
-            <MissionCard />
+            <MissionCard
+              nextActivity={stats.nextActivity}
+              completedCount={stats.completedCount}
+              totalActivities={stats.totalActivities}
+              onComplete={handleCompleteActivity}
+            />
             <JourneyPath />
           </>
         )}
@@ -48,25 +62,16 @@ export default function Index() {
         {/* ===== CONQUISTAS ===== */}
         {activeTab === "conquistas" && (
           <div className="pt-4">
-            <div className="px-5 mb-4">
-              <h2 className="font-montserrat font-black text-foreground text-xl">🏆 Conquistas</h2>
-              <p className="text-muted-foreground text-sm font-inter mt-1">Suas medalhas da fé</p>
-            </div>
-            <AchievementsGrid />
+            <AchievementsGrid
+              faithPoints={stats.faithPoints}
+              streakDays={stats.streakDays}
+              completedCount={stats.completedCount}
+            />
           </div>
         )}
 
         {/* ===== AGENDA ===== */}
-        {activeTab === "agenda" && (
-          <div className="px-5 pt-5">
-            <h2 className="font-montserrat font-black text-foreground text-xl mb-4">📅 Agenda</h2>
-            <div className="bg-card rounded-2xl border border-border p-6 text-center shadow-sm">
-              <span className="text-4xl block mb-3">📅</span>
-              <p className="font-montserrat font-bold text-card-foreground text-base mb-1">Em breve</p>
-              <p className="text-muted-foreground text-sm font-inter">Os próximos encontros e eventos aparecerão aqui.</p>
-            </div>
-          </div>
-        )}
+        {activeTab === "agenda" && <UserAgendaTab />}
 
         {/* ===== COMUNIDADE ===== */}
         {activeTab === "comunidade" && <CommunityTab />}
@@ -81,10 +86,10 @@ export default function Index() {
               <h2 className="font-montserrat font-black text-foreground text-xl">👤 Meu Perfil</h2>
             </div>
             <DiscipleProfile
-              faithPoints={faithPoints}
-              faithLevel={faithLevel}
-              streakDays={streakDays}
-              completedCount={completedCount}
+              faithPoints={stats.faithPoints}
+              faithLevel={stats.faithLevel}
+              streakDays={stats.streakDays}
+              completedCount={stats.completedCount}
               community={profile?.community}
               area={profile?.area}
             />

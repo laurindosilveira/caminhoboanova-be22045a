@@ -113,6 +113,8 @@ export default function DiscipleshipTab() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
+  // Lesson IDs that have at least one saved response
+  const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
 
   const [form, setForm] = useState({
     prayer_score: null as number | null,
@@ -134,19 +136,24 @@ export default function DiscipleshipTab() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }] = await Promise.all([
+    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }, { data: responsesData }] = await Promise.all([
       supabase.from("activities").select("id, type, title, points"),
       supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
       supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).eq("month", month).eq("year", year).maybeSingle(),
       supabase.from("discipleship_plans").select("objectives,challenges,recommendations,next_steps,health_status").eq("user_id", user.id).maybeSingle(),
       supabase.from("courses").select("*").order("order_num"),
       supabase.from("lessons").select("id, title, order_num, objective, topics, course_id").order("order_num"),
+      supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
     ]);
 
     setActivities(acts ?? []);
     setProgress(prog ?? []);
     setAssessment(assess ?? null);
     setPlan(planData ?? null);
+
+    // Track which lessons have at least one response
+    const lessonIdsWithResponses = new Set((responsesData ?? []).map(r => r.lesson_id));
+    setCompletedLessonIds(lessonIdsWithResponses);
 
     // Build courses with lessons nested
     const courseList = (coursesData ?? []).map(c => ({
@@ -434,24 +441,33 @@ export default function DiscipleshipTab() {
                     {course.lessons.length === 0 ? (
                       <p className="px-4 py-3 text-muted-foreground font-inter text-xs text-center">Nenhuma lição cadastrada ainda.</p>
                     ) : (
-                      course.lessons.map((lesson) => (
-                        <button
-                          key={lesson.id}
-                          onClick={() => setSelectedLesson(lesson)}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border last:border-b-0 hover:bg-primary/5 transition-colors"
-                        >
-                          <div className="w-8 h-8 rounded-lg bg-secondary/10 flex items-center justify-center flex-shrink-0">
-                            <span className="font-montserrat font-bold text-secondary text-xs">{lesson.order_num}</span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-inter text-sm text-foreground">{lesson.title}</p>
-                            {lesson.objective && (
-                              <p className="font-inter text-[10px] text-muted-foreground truncate mt-0.5">{lesson.objective}</p>
-                            )}
-                          </div>
-                          <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                        </button>
-                      ))
+                      course.lessons.map((lesson) => {
+                        const isDone = completedLessonIds.has(lesson.id);
+                        return (
+                          <button
+                            key={lesson.id}
+                            onClick={() => setSelectedLesson(lesson)}
+                            className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border last:border-b-0 hover:bg-primary/5 transition-colors ${isDone ? "bg-brand-green/5" : ""}`}
+                          >
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isDone ? "bg-brand-green/15" : "bg-secondary/10"}`}>
+                              {isDone
+                                ? <CheckCircle2 className="w-4 h-4 text-brand-green" />
+                                : <span className="font-montserrat font-bold text-secondary text-xs">{lesson.order_num}</span>
+                              }
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={`font-inter text-sm ${isDone ? "text-muted-foreground line-through" : "text-foreground"}`}>{lesson.title}</p>
+                              {lesson.objective && (
+                                <p className="font-inter text-[10px] text-muted-foreground truncate mt-0.5">{lesson.objective}</p>
+                              )}
+                            </div>
+                            {isDone
+                              ? <span className="text-brand-green text-[10px] font-inter font-bold flex-shrink-0">Concluída</span>
+                              : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                            }
+                          </button>
+                        );
+                      })
                     )}
                   </div>
                 )}

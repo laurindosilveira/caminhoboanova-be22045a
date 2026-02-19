@@ -4,58 +4,66 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Users, MessageCircle, Flame } from "lucide-react";
 
 interface CommunityMember {
-  id: string;
+  user_id: string;
   full_name: string;
-  community: string;
-  area: string;
+  completed_count: number;
+  faith_points: number;
 }
 
-const pastorMessages = [
-  {
-    id: 1,
-    author: "Pastor Laurindo",
-    avatar: "✝️",
-    message: "Queridos jovens, lembrem-se: o confirmatório é um compromisso de vida! Continuem firmes na jornada. 🙏",
-    time: "Hoje",
-  },
-  {
-    id: 2,
-    author: "Discipuladora Adriana",
-    avatar: "📖",
-    message: "Lembrete: próximo encontro no sábado às 14h na igreja. Tragam seus diários espirituais!",
-    time: "Ontem",
-  },
-];
-
-const highlights = [
-  { name: "Maria Silva", feat: "7 dias seguidos", icon: "🔥" },
-  { name: "Lucas Alves", feat: "3 módulos concluídos", icon: "🎓" },
-  { name: "Júlia Costa", feat: "50 pontos conquistados", icon: "⭐" },
-];
+interface Message {
+  id: string;
+  title: string;
+  body: string;
+  created_at: string;
+}
 
 export default function CommunityTab() {
-  const [members, setMembers] = useState<CommunityMember[]>([]);
-  const [loading, setLoading] = useState(true);
   const { profile } = useAuth();
+  const [members, setMembers] = useState<CommunityMember[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(true);
 
   useEffect(() => {
-    const fetchMembers = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, community, area")
-        .order("full_name");
+    if (!profile) return;
 
-      if (!error && data) setMembers(data);
-      setLoading(false);
-    };
+    // Fetch messages for area/community
+    async function fetchMessages() {
+      setLoadingMessages(true);
+      const { data } = await supabase
+        .from("messages")
+        .select("id, title, body, created_at")
+        .order("created_at", { ascending: false })
+        .limit(5);
+      setMessages(data ?? []);
+      setLoadingMessages(false);
+    }
 
-    fetchMembers();
-  }, []);
+    // Fetch community ranking via DB function (bypasses RLS safely)
+    async function fetchRanking() {
+      setLoadingMembers(true);
+      const { data } = await supabase.rpc("get_community_ranking", {
+        _community: profile.community as any,
+      });
+      setMembers((data ?? []) as CommunityMember[]);
+      setLoadingMembers(false);
+    }
 
-  const myCommunityMembers = members.filter(
-    (m) => profile?.community && m.community === profile.community
-  );
+    fetchMessages();
+    fetchRanking();
+  }, [profile]);
+
+  function timeAgo(dateStr: string): string {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const d = Math.floor(diff / 86400000);
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor(diff / 60000);
+    if (d > 0) return `${d}d atrás`;
+    if (h > 0) return `${h}h atrás`;
+    return `${m}min atrás`;
+  }
+
+  const myUserId = profile?.user_id;
 
   return (
     <div className="px-5 pt-5 pb-4 space-y-5">
@@ -75,90 +83,79 @@ export default function CommunityTab() {
           <MessageCircle className="w-4 h-4 text-primary" />
           <span className="font-montserrat font-bold text-foreground text-sm">Mensagens do Pastor</span>
         </div>
-        <div className="space-y-3">
-          {pastorMessages.map((msg) => (
-            <div key={msg.id} className="bg-card rounded-2xl p-4 border border-border shadow-sm">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xl">{msg.avatar}</span>
-                <div>
-                  <p className="font-montserrat font-bold text-card-foreground text-sm">{msg.author}</p>
-                  <p className="text-muted-foreground text-xs font-inter">{msg.time}</p>
+
+        {loadingMessages ? (
+          <div className="space-y-2">
+            {[1, 2].map(i => <div key={i} className="bg-muted rounded-2xl h-20 animate-pulse" />)}
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="bg-card rounded-2xl border border-border p-4 text-center">
+            <p className="text-muted-foreground text-sm font-inter">Nenhuma mensagem ainda.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {messages.map((msg) => (
+              <div key={msg.id} className="bg-card rounded-2xl p-4 border border-border shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xl">✝️</span>
+                  <div>
+                    <p className="font-montserrat font-bold text-card-foreground text-sm">{msg.title}</p>
+                    <p className="text-muted-foreground text-xs font-inter">{timeAgo(msg.created_at)}</p>
+                  </div>
                 </div>
+                <p className="text-card-foreground text-sm font-inter leading-relaxed">{msg.body}</p>
               </div>
-              <p className="text-card-foreground text-sm font-inter leading-relaxed">{msg.message}</p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Weekly highlights */}
+      {/* Ranking */}
       <div>
         <div className="flex items-center gap-2 mb-3">
           <Flame className="w-4 h-4 text-secondary" />
-          <span className="font-montserrat font-bold text-foreground text-sm">Em destaque esta semana</span>
-        </div>
-        <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
-          {highlights.map((h, i) => (
-            <div
-              key={i}
-              className={`flex items-center gap-3 px-4 py-3 ${i < highlights.length - 1 ? "border-b border-border" : ""}`}
-            >
-              <div className="w-8 h-8 rounded-full bg-gradient-orange flex items-center justify-center text-sm flex-shrink-0">
-                {h.icon}
-              </div>
-              <div className="flex-1">
-                <p className="font-montserrat font-bold text-card-foreground text-sm">{h.name}</p>
-                <p className="text-muted-foreground text-xs font-inter">{h.feat}</p>
-              </div>
-              <span className="text-accent font-montserrat font-black text-sm">#{i + 1}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Participants */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <Users className="w-4 h-4 text-primary" />
-          <span className="font-montserrat font-bold text-foreground text-sm">
-            Participantes da sua comunidade
-          </span>
+          <span className="font-montserrat font-bold text-foreground text-sm">Ranking da comunidade</span>
         </div>
 
-        {loading ? (
+        {loadingMembers ? (
           <div className="space-y-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-muted rounded-2xl h-16 animate-pulse" />
-            ))}
+            {[1, 2, 3].map(i => <div key={i} className="bg-muted rounded-2xl h-16 animate-pulse" />)}
           </div>
-        ) : myCommunityMembers.length === 0 ? (
+        ) : members.length === 0 ? (
           <div className="bg-card rounded-2xl border border-border p-6 text-center">
             <p className="text-muted-foreground text-sm font-inter">Nenhum participante encontrado.</p>
           </div>
         ) : (
           <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
-            {myCommunityMembers.map((m, i) => {
-              const isMe = m.id === profile?.id;
-              const initials = m.full_name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
+            {members.map((m, i) => {
+              const isMe = m.user_id === myUserId;
+              const initials = m.full_name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
+              const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : null;
               return (
                 <div
-                  key={m.id}
+                  key={m.user_id}
                   className={`flex items-center gap-3 px-4 py-3 ${
-                    i < myCommunityMembers.length - 1 ? "border-b border-border" : ""
+                    i < members.length - 1 ? "border-b border-border" : ""
                   } ${isMe ? "bg-primary/5" : ""}`}
                 >
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-montserrat font-black text-sm text-primary-foreground flex-shrink-0 ${isMe ? "bg-gradient-orange" : "bg-primary"}`}>
+                  <div className="w-7 flex-shrink-0 text-center">
+                    {medal ? (
+                      <span className="text-lg">{medal}</span>
+                    ) : (
+                      <span className="font-montserrat font-black text-muted-foreground text-sm">#{i + 1}</span>
+                    )}
+                  </div>
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center font-montserrat font-black text-sm text-primary-foreground flex-shrink-0 ${isMe ? "bg-gradient-orange" : "bg-primary"}`}>
                     {initials}
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <p className="font-montserrat font-bold text-card-foreground text-sm">
                       {m.full_name} {isMe && <span className="text-secondary text-xs font-inter">(você)</span>}
                     </p>
-                    <p className="text-muted-foreground text-xs font-inter">{m.area}</p>
+                    <p className="text-muted-foreground text-xs font-inter">{Number(m.completed_count)} atividades · {Number(m.faith_points)} pts</p>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs">❤️</span>
-                    <span className="text-muted-foreground text-xs font-inter">Nível 3</span>
+                  <div className="text-right flex-shrink-0">
+                    <span className="font-montserrat font-black text-accent text-sm">{Number(m.faith_points)} pts</span>
                   </div>
                 </div>
               );

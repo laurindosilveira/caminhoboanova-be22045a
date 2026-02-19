@@ -1,16 +1,72 @@
-const achievements = [
-  { id: 1, icon: "🔥", title: "7 dias seguidos", desc: "Sequência de fé incrível!", unlocked: true },
-  { id: 2, icon: "📖", title: "10 Devocionais", desc: "Palavra no coração!", unlocked: true },
-  { id: 3, icon: "🎓", title: "Primeiro módulo", desc: "Completo com louvor!", unlocked: false },
-  { id: 4, icon: "⭐", title: "100 pontos da fé", desc: "Crescendo sempre!", unlocked: false },
-];
+interface AchievementsGridProps {
+  faithPoints: number;
+  streakDays: number;
+  completedCount: number;
+}
 
-export default function AchievementsGrid() {
+type Achievement = {
+  id: number;
+  icon: string;
+  title: string;
+  desc: string;
+  unlocked: boolean;
+};
+
+export default function AchievementsGrid({ faithPoints, streakDays, completedCount }: AchievementsGridProps) {
+  const achievements: Achievement[] = [
+    {
+      id: 1,
+      icon: "🔥",
+      title: "7 dias seguidos",
+      desc: "Sequência de fé incrível!",
+      unlocked: streakDays >= 7,
+    },
+    {
+      id: 2,
+      icon: "📖",
+      title: "Primeiros passos",
+      desc: "Completou sua 1ª atividade!",
+      unlocked: completedCount >= 1,
+    },
+    {
+      id: 3,
+      icon: "🎓",
+      title: "5 atividades",
+      desc: "Comprometido com a jornada!",
+      unlocked: completedCount >= 5,
+    },
+    {
+      id: 4,
+      icon: "⭐",
+      title: "100 pontos da fé",
+      desc: "Crescendo sempre!",
+      unlocked: faithPoints >= 100,
+    },
+    {
+      id: 5,
+      icon: "🏆",
+      title: "10 atividades",
+      desc: "Dedicação exemplar!",
+      unlocked: completedCount >= 10,
+    },
+    {
+      id: 6,
+      icon: "💎",
+      title: "200 pontos",
+      desc: "Nível máximo de fé!",
+      unlocked: faithPoints >= 200,
+    },
+  ];
+
+  const unlockedCount = achievements.filter(a => a.unlocked).length;
+
   return (
     <div className="px-5 pt-2 pb-4">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-montserrat font-black text-foreground text-xl">🏆 Conquistas</h2>
-        <button className="text-secondary text-sm font-inter font-medium">Ver todas</button>
+        <span className="text-xs font-inter text-muted-foreground bg-muted rounded-full px-3 py-1">
+          {unlockedCount}/{achievements.length} desbloqueadas
+        </span>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
