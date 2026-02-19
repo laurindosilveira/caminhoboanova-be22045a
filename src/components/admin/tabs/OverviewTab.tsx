@@ -1,12 +1,15 @@
-import { BookOpen, GraduationCap, CalendarDays, Zap, Users, TrendingUp, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { useState } from "react";
+import {
+  BookOpen, GraduationCap, CalendarDays, Zap, Users,
+  AlertTriangle, CheckCircle2, Flame, Heart, Star, ChevronRight
+} from "lucide-react";
 
 type Activity = { id: string; type: string; title: string; points: number; order_num: number; subtitle: string | null };
 type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
 };
-
-type Props = { participants: Participant[]; activities: Activity[] };
+type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
 
 const COMMUNITY_COLORS: Record<string, string> = {
   "Rincão Frente": "bg-primary/10 text-primary",
@@ -18,109 +21,243 @@ const COMMUNITY_COLORS: Record<string, string> = {
   "Iriá Pira 2": "bg-brand-green/10 text-brand-green",
 };
 
-export default function OverviewTab({ participants, activities }: Props) {
-  const total = participants.length;
-  const avancados = participants.filter(p => activities.length > 0 && p.completed_count / activities.length >= 0.7).length;
-  const semAtividade = participants.filter(p => p.completed_count === 0).length;
-  const emAndamento = participants.filter(p => {
-    const pct = activities.length > 0 ? p.completed_count / activities.length : 0;
-    return pct > 0 && pct < 0.7;
-  }).length;
+const HEALTH_CFG = {
+  saudavel: { label: "🟢 Saudável", color: "text-brand-green", bg: "bg-brand-green/10", dot: "bg-brand-green" },
+  atencao:  { label: "🟡 Atenção", color: "text-accent-foreground", bg: "bg-accent/20", dot: "bg-accent" },
+  critico:  { label: "🔴 Cuidado", color: "text-destructive", bg: "bg-destructive/10", dot: "bg-destructive" },
+};
 
+type Props = {
+  participants: Participant[];
+  activities: Activity[];
+  plans: Record<string, PlanInfo>;
+  onSelectParticipant: (p: Participant) => void;
+};
+
+function MiniBar({ pct, color }: { pct: number; color: string }) {
+  return (
+    <div className="h-1.5 bg-muted rounded-full overflow-hidden flex-1">
+      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
+    </div>
+  );
+}
+
+export default function OverviewTab({ participants, activities, plans, onSelectParticipant }: Props) {
+  const [communityFilter, setCommunityFilter] = useState("todas");
+
+  const total = participants.length;
+  const ativos = participants.filter(p => p.completed_count > 0).length;
+  const saudaveis = participants.filter(p => plans[p.user_id]?.health_status === "saudavel").length;
+  const criticos = participants.filter(p => plans[p.user_id]?.health_status === "critico").length;
+  const priorities = participants.filter(p => plans[p.user_id]?.is_priority).length;
+  const needsPastor = participants.filter(p => plans[p.user_id]?.needs_pastor).length;
+  const mediaProgresso = total > 0
+    ? Math.round(participants.reduce((s, p) => s + (activities.length > 0 ? (p.completed_count / activities.length) * 100 : 0), 0) / total)
+    : 0;
+
+  // Type breakdown
   const byType = (type: string) => activities.filter(a => a.type === type).length;
   const completedByType = (type: string) => {
     const ids = new Set(activities.filter(a => a.type === type).map(a => a.id));
     return participants.reduce((sum, p) => sum + p.completed_activity_ids.filter(id => ids.has(id)).length, 0);
   };
 
-  // Community breakdown
   const communities = [...new Set(participants.map(p => p.community))];
   const byComm = communities.map(c => {
     const group = participants.filter(p => p.community === c);
     const avgPct = group.length > 0 && activities.length > 0
       ? Math.round(group.reduce((s, p) => s + (p.completed_count / activities.length) * 100, 0) / group.length)
       : 0;
-    return { name: c, count: group.length, avgPct };
+    const cSaudaveis = group.filter(p => plans[p.user_id]?.health_status === "saudavel").length;
+    const cCriticos = group.filter(p => plans[p.user_id]?.health_status === "critico").length;
+    return { name: c, count: group.length, avgPct, saudaveis: cSaudaveis, criticos: cCriticos };
   }).sort((a, b) => b.avgPct - a.avgPct);
+
+  // Filtered participants for quick list
+  const alertParticipants = participants.filter(p =>
+    plans[p.user_id]?.health_status === "critico" || plans[p.user_id]?.is_priority || plans[p.user_id]?.needs_pastor
+  );
+
+  const filteredParticipants = communityFilter === "todas"
+    ? participants
+    : participants.filter(p => p.community === communityFilter);
 
   return (
     <div className="space-y-4 pb-4">
-      {/* Status cards */}
-      <div className="grid grid-cols-2 gap-3">
+
+      {/* ── HERO ESPIRITUAL ─── */}
+      <div className="rounded-2xl p-4 relative overflow-hidden" style={{ background: "var(--gradient-hero)" }}>
+        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle at 80% 20%, white 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
+        <p className="text-primary-foreground/60 font-inter text-xs mb-1">✝️ Situação Espiritual da Turma</p>
+        <h2 className="font-montserrat font-black text-primary-foreground text-xl mb-3">Painel do Pastor</h2>
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label: "Jovens ativos", value: ativos, icon: "🔥" },
+            { label: "Saudáveis", value: saudaveis, icon: "🟢" },
+            { label: "Precisam cuidado", value: criticos, icon: "🔴" },
+          ].map(s => (
+            <div key={s.label} className="bg-white/10 backdrop-blur rounded-xl p-2.5 text-center">
+              <span className="text-lg">{s.icon}</span>
+              <p className="font-montserrat font-black text-primary-foreground text-xl leading-none mt-0.5">{s.value}</p>
+              <p className="text-primary-foreground/50 text-[9px] font-inter mt-0.5 leading-tight">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── ALERTAS PASTORAIS ─── */}
+      {(priorities > 0 || needsPastor > 0 || criticos > 0) && (
+        <div className="bg-destructive/5 border border-destructive/20 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="w-4 h-4 text-destructive" />
+            <p className="font-montserrat font-bold text-destructive text-sm">Alertas Pastorais</p>
+          </div>
+          <div className="space-y-1.5">
+            {alertParticipants.map(p => {
+              const info = plans[p.user_id];
+              const pct = activities.length > 0 ? Math.round((p.completed_count / activities.length) * 100) : 0;
+              return (
+                <button key={p.user_id} onClick={() => onSelectParticipant(p)}
+                  className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-destructive/10 transition-colors text-left">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <span className="font-montserrat font-black text-primary text-sm">{p.full_name.charAt(0)}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-inter text-sm font-medium text-foreground truncate">{p.full_name}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {info?.is_priority && <span className="text-[10px] font-inter text-secondary font-bold">⭐ Prioridade</span>}
+                      {info?.needs_pastor && <span className="text-[10px] font-inter text-primary font-bold">🙏 Pediu conversa</span>}
+                      {info?.health_status === "critico" && <span className="text-[10px] font-inter text-destructive font-bold">🔴 Crítico</span>}
+                      <span className="text-[10px] font-inter text-muted-foreground">· {pct}%</span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── INDICADORES ─── */}
+      <div className="grid grid-cols-2 gap-2">
         {[
-          { label: "Em andamento", value: emAndamento, Icon: TrendingUp, color: "text-secondary", bg: "bg-secondary/10" },
-          { label: "Avançados (≥70%)", value: avancados, Icon: CheckCircle2, color: "text-brand-green", bg: "bg-brand-green/10" },
-          { label: "Sem atividade", value: semAtividade, Icon: AlertTriangle, color: "text-destructive", bg: "bg-destructive/10" },
-          { label: "Total participantes", value: total, Icon: Users, color: "text-primary", bg: "bg-primary/10" },
+          { label: "Total confirmandos", value: total, Icon: Users, color: "text-primary", bg: "bg-primary/10" },
+          { label: "Progresso médio", value: `${mediaProgresso}%`, Icon: Star, color: "text-accent-foreground", bg: "bg-accent/20" },
+          { label: "Prioridade pastoral", value: priorities, Icon: Heart, color: "text-secondary", bg: "bg-secondary/10" },
+          { label: "Sem nenhuma atividade", value: total - ativos, Icon: AlertTriangle, color: "text-destructive", bg: "bg-destructive/10" },
         ].map(({ label, value, Icon, color, bg }) => (
-          <div key={label} className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${bg}`}>
-              <Icon className={`w-5 h-5 ${color}`} />
+          <div key={label} className="bg-card rounded-2xl border border-border p-3.5 flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${bg}`}>
+              <Icon className={`w-4.5 h-4.5 ${color}`} style={{ width: 18, height: 18 }} />
             </div>
             <div>
-              <p className={`font-montserrat font-black text-2xl leading-none ${color}`}>{value}</p>
-              <p className="text-muted-foreground font-inter text-xs mt-0.5">{label}</p>
+              <p className={`font-montserrat font-black text-xl leading-none ${color}`}>{value}</p>
+              <p className="text-muted-foreground font-inter text-[10px] mt-0.5 leading-tight">{label}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Activity type breakdown */}
+      {/* ── PROGRESSO POR TIPO ─── */}
       <div className="bg-card rounded-2xl border border-border p-4">
-        <p className="font-montserrat font-bold text-foreground text-sm mb-3">Atividades por tipo</p>
+        <p className="font-montserrat font-bold text-foreground text-sm mb-3">📊 Atividades — visão pastoral</p>
         <div className="space-y-3">
           {[
-            { type: "devocional", label: "Devocionais", icon: BookOpen, color: "text-brand-green" },
-            { type: "formacao", label: "Formações", icon: GraduationCap, color: "text-secondary" },
-            { type: "encontro", label: "Encontros", icon: CalendarDays, color: "text-primary" },
-            { type: "desafio", label: "Desafios", icon: Zap, color: "text-accent-foreground" },
-          ].map(({ type, label, icon: Icon, color }) => {
-            const total = byType(type);
+            { type: "devocional", label: "📖 Devocionais", color: "var(--gradient-green)" },
+            { type: "formacao", label: "🎓 Formações", color: "hsl(var(--secondary))" },
+            { type: "encontro", label: "📅 Encontros", color: "hsl(var(--primary))" },
+            { type: "desafio", label: "✨ Desafios", color: "hsl(var(--accent))" },
+          ].map(({ type, label, color }) => {
+            const t = byType(type);
             const done = completedByType(type);
-            const pct = total * participants.length > 0 ? Math.round((done / (total * participants.length)) * 100) : 0;
+            const maxPossible = t * participants.length;
+            const pct = maxPossible > 0 ? Math.round((done / maxPossible) * 100) : 0;
             return (
               <div key={type} className="flex items-center gap-3">
-                <Icon className={`w-4 h-4 flex-shrink-0 ${color}`} />
-                <div className="flex-1">
-                  <div className="flex justify-between mb-1">
-                    <span className="font-inter text-xs text-foreground">{label}</span>
-                    <span className="font-inter text-xs text-muted-foreground">{total} atividades · {pct}% concluído</span>
-                  </div>
-                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-gradient-to-r from-primary to-secondary" style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
+                <span className="font-inter text-xs text-foreground w-24 flex-shrink-0">{label}</span>
+                <MiniBar pct={pct} color={color} />
+                <span className="font-montserrat font-bold text-xs text-foreground w-8 text-right">{pct}%</span>
+                <span className="text-muted-foreground font-inter text-[10px] w-12 text-right">{t} ativ.</span>
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Community breakdown */}
+      {/* ── PROGRESSO POR COMUNIDADE ─── */}
       <div className="bg-card rounded-2xl border border-border p-4">
-        <p className="font-montserrat font-bold text-foreground text-sm mb-3">Progresso por comunidade</p>
-        <div className="space-y-2.5">
+        <p className="font-montserrat font-bold text-foreground text-sm mb-3">🏡 Por comunidade</p>
+        <div className="space-y-3">
           {byComm.map(c => (
-            <div key={c.name} className="flex items-center gap-3">
-              <div className={`px-2 py-0.5 rounded-lg text-[10px] font-inter font-medium w-28 text-center flex-shrink-0 ${COMMUNITY_COLORS[c.name] ?? "bg-muted text-foreground"}`}>
-                {c.name}
-              </div>
-              <div className="flex-1">
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{
-                      width: `${c.avgPct}%`,
-                      background: c.avgPct >= 70 ? "var(--gradient-green)" : c.avgPct >= 34 ? "var(--gradient-orange)" : "hsl(var(--destructive))",
-                    }}
-                  />
+            <div key={c.name}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className={`px-2 py-0.5 rounded-lg text-[10px] font-inter font-medium flex-shrink-0 ${COMMUNITY_COLORS[c.name] ?? "bg-muted text-foreground"}`}>
+                  {c.name}
                 </div>
+                <MiniBar pct={c.avgPct} color={c.avgPct >= 70 ? "var(--gradient-green)" : c.avgPct >= 34 ? "var(--gradient-orange)" : "hsl(var(--destructive))"} />
+                <span className="font-montserrat font-bold text-xs text-foreground w-8 text-right">{c.avgPct}%</span>
               </div>
-              <span className="font-montserrat font-bold text-xs text-foreground w-8 text-right">{c.avgPct}%</span>
-              <span className="text-muted-foreground font-inter text-[10px] w-12 text-right">{c.count} pessoas</span>
+              <div className="flex gap-2 ml-1 flex-wrap">
+                <span className="text-[10px] font-inter text-muted-foreground">{c.count} jovens</span>
+                <span className="text-[10px] font-inter text-brand-green">🟢 {c.saudaveis}</span>
+                <span className="text-[10px] font-inter text-destructive">🔴 {c.criticos}</span>
+              </div>
             </div>
           ))}
-          {byComm.length === 0 && <p className="text-muted-foreground font-inter text-sm text-center py-4">Nenhum dado disponível.</p>}
+        </div>
+      </div>
+
+      {/* ── LISTA RÁPIDA ─── */}
+      <div className="bg-card rounded-2xl border border-border overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+          <p className="font-montserrat font-bold text-foreground text-sm">👥 Lista dos confirmandos</p>
+          <select value={communityFilter} onChange={e => setCommunityFilter(e.target.value)}
+            className="text-[10px] font-inter border border-border rounded-lg px-2 py-1 bg-background text-foreground focus:outline-none appearance-none">
+            <option value="todas">Todas as comunidades</option>
+            {communities.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="divide-y divide-border">
+          {filteredParticipants.slice(0, 20).map(p => {
+            const pct = activities.length > 0 ? Math.round((p.completed_count / activities.length) * 100) : 0;
+            const info = plans[p.user_id];
+            const status = info?.health_status ?? "atencao";
+            const cfg = HEALTH_CFG[status as keyof typeof HEALTH_CFG] ?? HEALTH_CFG.atencao;
+            return (
+              <button key={p.user_id} onClick={() => onSelectParticipant(p)}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/30 transition-colors">
+                <div className="relative">
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <span className="font-montserrat font-black text-primary text-sm">{p.full_name.charAt(0)}</span>
+                  </div>
+                  <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card ${cfg.dot}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-inter text-sm font-medium text-foreground truncate">{p.full_name}</p>
+                    {info?.is_priority && <Star className="w-3 h-3 text-accent flex-shrink-0" style={{ fill: "hsl(var(--accent))" }} />}
+                  </div>
+                  <p className="text-muted-foreground font-inter text-[10px]">{p.community}</p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="font-montserrat font-bold text-xs text-foreground">{pct}%</p>
+                  <div className="w-12 h-1 bg-muted rounded-full mt-1 overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: pct >= 70 ? "var(--gradient-green)" : "var(--gradient-orange)" }} />
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              </button>
+            );
+          })}
+          {filteredParticipants.length > 20 && (
+            <p className="text-center text-muted-foreground font-inter text-xs py-3">
+              +{filteredParticipants.length - 20} mais — use a aba Participantes para ver todos
+            </p>
+          )}
+          {filteredParticipants.length === 0 && (
+            <p className="text-center text-muted-foreground font-inter text-sm py-8">Nenhum participante encontrado.</p>
+          )}
         </div>
       </div>
     </div>
