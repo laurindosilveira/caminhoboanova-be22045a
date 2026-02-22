@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ChevronLeft, BookOpen, MessageCircle, Target,
-  Pen, Heart, CheckCircle2, Save, Play, Link, Volume2
+  Pen, Heart, CheckCircle2, Save, Play, Link, Volume2, Download
 } from "lucide-react";
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
+import { saveAs } from "file-saver";
 
 type Lesson = {
   id: string;
@@ -137,6 +139,58 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
   function updateResponse(key: string, value: string) {
     if (isAdmin) return;
     setResponses(prev => ({ ...prev, [key]: value }));
+  }
+
+  async function handleDownloadWord() {
+    const sections: Paragraph[] = [];
+
+    // Title
+    sections.push(new Paragraph({
+      children: [new TextRun({ text: `Lição ${lesson.order_num} — ${lesson.title}`, bold: true, size: 32, font: "Calibri" })],
+      heading: HeadingLevel.HEADING_1,
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 300 },
+    }));
+
+    if (lesson.objective) {
+      sections.push(new Paragraph({
+        children: [new TextRun({ text: `Objetivo: ${lesson.objective}`, italics: true, size: 22, font: "Calibri" })],
+        spacing: { after: 200 },
+      }));
+    }
+
+    // Icebreaker
+    if (responses["icebreaker"]) {
+      sections.push(new Paragraph({ children: [new TextRun({ text: "🔗 Quebra-gelo", bold: true, size: 26, font: "Calibri" })], spacing: { before: 300, after: 100 } }));
+      sections.push(new Paragraph({ children: [new TextRun({ text: content.icebreaker, size: 22, font: "Calibri" })], spacing: { after: 50 } }));
+      sections.push(new Paragraph({ children: [new TextRun({ text: `Resposta: ${responses["icebreaker"]}`, size: 22, font: "Calibri", color: "2563EB" })], spacing: { after: 200 } }));
+    }
+
+    // Questions
+    if (content.questions.length > 0) {
+      sections.push(new Paragraph({ children: [new TextRun({ text: "💬 Perguntas para Diálogo", bold: true, size: 26, font: "Calibri" })], spacing: { before: 300, after: 100 } }));
+      content.questions.forEach((q, i) => {
+        sections.push(new Paragraph({ children: [new TextRun({ text: `${i + 1}. ${q}`, bold: true, size: 22, font: "Calibri" })], spacing: { after: 50 } }));
+        const answer = responses[`q${i}`];
+        sections.push(new Paragraph({ children: [new TextRun({ text: answer ? `Resposta: ${answer}` : "(Sem resposta)", size: 22, font: "Calibri", color: answer ? "2563EB" : "999999" })], spacing: { after: 150 } }));
+      });
+    }
+
+    // Practice
+    if (responses["practice"]) {
+      sections.push(new Paragraph({ children: [new TextRun({ text: "🧭 Prática da Semana", bold: true, size: 26, font: "Calibri" })], spacing: { before: 300, after: 100 } }));
+      sections.push(new Paragraph({ children: [new TextRun({ text: `Resposta: ${responses["practice"]}`, size: 22, font: "Calibri", color: "2563EB" })], spacing: { after: 200 } }));
+    }
+
+    // Prayer
+    if (responses["prayer"]) {
+      sections.push(new Paragraph({ children: [new TextRun({ text: "🙏 Oração Final", bold: true, size: 26, font: "Calibri" })], spacing: { before: 300, after: 100 } }));
+      sections.push(new Paragraph({ children: [new TextRun({ text: responses["prayer"], size: 22, font: "Calibri", color: "2563EB" })], spacing: { after: 200 } }));
+    }
+
+    const doc = new Document({ sections: [{ children: sections }] });
+    const blob = await Packer.toBlob(doc);
+    saveAs(blob, `Licao_${lesson.order_num}_${lesson.title.replace(/\s+/g, "_")}.docx`);
   }
 
   const ResponseField = ({ qKey, placeholder }: { qKey: string; placeholder: string }) => (
@@ -351,15 +405,27 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
 
       {/* Save button (only for users) */}
       {!isAdmin && (
-        <button
-          onClick={handleSaveAll}
-          disabled={saving}
-          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-inter text-sm font-medium text-primary-foreground disabled:opacity-70 transition-opacity"
-          style={{ background: "var(--gradient-hero)" }}
-        >
-          <Save className="w-4 h-4" />
-          {saving ? "Salvando..." : lastSaved ? `✅ Salvo às ${lastSaved.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "Salvar respostas"}
-        </button>
+        <div className="space-y-2">
+          <button
+            onClick={handleSaveAll}
+            disabled={saving}
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-inter text-sm font-medium text-primary-foreground disabled:opacity-70 transition-opacity"
+            style={{ background: "var(--gradient-hero)" }}
+          >
+            <Save className="w-4 h-4" />
+            {saving ? "Salvando..." : lastSaved ? `✅ Salvo às ${lastSaved.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "Salvar respostas"}
+          </button>
+
+          {Object.keys(responses).length > 0 && (
+            <button
+              onClick={handleDownloadWord}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-inter text-sm font-medium border border-border bg-card text-foreground hover:bg-muted/50 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Baixar respostas (.docx)
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
