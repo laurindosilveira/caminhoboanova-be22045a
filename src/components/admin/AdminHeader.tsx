@@ -1,5 +1,4 @@
-import { LogOut, ChevronLeft } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { LogOut, ChevronLeft, RefreshCw } from "lucide-react";
 
 type Stats = {
   total: number;
@@ -13,9 +12,11 @@ type Props = {
   stats: Stats;
   onSignOut: () => void;
   onBackToUser: () => void;
+  selectedCommunity?: string | null;
+  onChangeCommunity?: () => void;
 };
 
-export default function AdminHeader({ areaName, stats, onSignOut, onBackToUser }: Props) {
+export default function AdminHeader({ areaName, stats, onSignOut, onBackToUser, selectedCommunity, onChangeCommunity }: Props) {
   return (
     <header className="px-4 pt-8 pb-5" style={{ background: "var(--gradient-hero)" }}>
       <div className="max-w-2xl mx-auto">
@@ -38,13 +39,24 @@ export default function AdminHeader({ areaName, stats, onSignOut, onBackToUser }
               <h1 className="font-montserrat font-black text-primary-foreground text-lg">{areaName}</h1>
             </div>
           </div>
-          <button
-            onClick={onSignOut}
-            className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center"
-            title="Sair"
-          >
-            <LogOut className="w-5 h-5 text-primary-foreground" />
-          </button>
+          <div className="flex items-center gap-2">
+            {selectedCommunity && onChangeCommunity && (
+              <button
+                onClick={onChangeCommunity}
+                className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center"
+                title="Trocar turma"
+              >
+                <RefreshCw className="w-4.5 h-4.5 text-primary-foreground" style={{ width: 18, height: 18 }} />
+              </button>
+            )}
+            <button
+              onClick={onSignOut}
+              className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center"
+              title="Sair"
+            >
+              <LogOut className="w-5 h-5 text-primary-foreground" />
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-4 gap-2">
