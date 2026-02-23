@@ -8,7 +8,7 @@ import AdminBottomNav, { AdminTab } from "@/components/admin/AdminBottomNav";
 import OverviewTab from "@/components/admin/tabs/OverviewTab";
 import ParticipantsTab from "@/components/admin/tabs/ParticipantsTab";
 import CoursesTab from "@/components/admin/tabs/CoursesTab";
-import AgendaTab from "@/components/admin/tabs/AgendaTab";
+// AgendaTab merged into AttendanceTab
 import MessagesTab from "@/components/admin/tabs/MessagesTab";
 import AdminDiscipleshipTab from "@/components/admin/tabs/AdminDiscipleshipTab";
 import ClassroomSettingsTab from "@/components/admin/tabs/ClassroomSettingsTab";
@@ -249,7 +249,7 @@ export default function AdminDashboard() {
               <ParticipantsTab participants={displayParticipants} activities={activities} communities={communities} />
             )}
             {activeTab === "courses" && <CoursesTab />}
-            {activeTab === "agenda" && <AgendaTab />}
+            {/* AgendaTab merged into AttendanceTab */}
             {activeTab === "messages" && <MessagesTab />}
             {activeTab === "sala" && <ClassroomSettingsTab />}
             {activeTab === "attendance" && <AttendanceTab participants={displayParticipants} activities={activities} />}
