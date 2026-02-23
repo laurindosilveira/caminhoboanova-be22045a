@@ -39,7 +39,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, role, loading } = useAuth();
   if (loading) return null;
-  if (user) return <Navigate to={role === "admin" ? "/admin" : "/"} replace />;
+  if (user) return <Navigate to={(role === "admin" || role === "lider") ? "/admin" : "/"} replace />;
   return <>{children}</>;
 }
 

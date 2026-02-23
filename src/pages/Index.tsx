@@ -138,8 +138,8 @@ export default function Index() {
               </button>
             </div>
 
-            {/* Admin access — somente visível para admins */}
-            {role === "admin" && (
+            {/* Admin/Líder access */}
+            {(role === "admin" || role === "lider") && (
               <div className="px-5 mt-3">
                 <button
                   onClick={() => navigate("/admin")}
@@ -149,8 +149,12 @@ export default function Index() {
                     <ShieldCheck className="w-5 h-5 text-primary-foreground" />
                   </div>
                   <div className="text-left">
-                    <p className="font-montserrat font-bold text-foreground text-sm">Área do Administrador</p>
-                    <p className="text-muted-foreground text-xs font-inter">Gerenciar participantes e conteúdo</p>
+                    <p className="font-montserrat font-bold text-foreground text-sm">
+                      {role === "admin" ? "Área do Administrador" : "Área do Líder"}
+                    </p>
+                    <p className="text-muted-foreground text-xs font-inter">
+                      {role === "admin" ? "Gerenciar participantes e conteúdo" : "Gerenciar cursos e usuários"}
+                    </p>
                   </div>
                   <span className="ml-auto text-muted-foreground text-xs">→</span>
                 </button>

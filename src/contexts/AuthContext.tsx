@@ -21,7 +21,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
-  role: "user" | "admin" | null;
+  role: "user" | "admin" | "lider" | null;
   loading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -41,19 +41,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [role, setRole] = useState<"user" | "admin" | null>(null);
+  const [role, setRole] = useState<"user" | "admin" | "lider" | null>(null);
   const [loading, setLoading] = useState(true);
 
   async function fetchProfileAndRole(userId: string) {
-    const [profileRes, isAdminRes] = await Promise.all([
+    const [profileRes, isAdminRes, isLiderRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
       supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
+      supabase.rpc("has_role", { _user_id: userId, _role: "lider" }),
     ]);
     setProfile(profileRes.data ?? null);
-    if (!isAdminRes.error) {
-      setRole(isAdminRes.data === true ? "admin" : "user");
+    if (!isAdminRes.error && !isLiderRes.error) {
+      if (isAdminRes.data === true) setRole("admin");
+      else if (isLiderRes.data === true) setRole("lider");
+      else setRole("user");
     }
-    // If there was an error, keep the existing role to avoid UI flicker
   }
 
   useEffect(() => {

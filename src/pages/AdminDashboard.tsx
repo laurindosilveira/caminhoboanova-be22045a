@@ -39,9 +39,9 @@ export default function AdminDashboard() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [plans, setPlans] = useState<Record<string, PlanInfo>>({});
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<AdminTab>("overview");
+  const [activeTab, setActiveTab] = useState<AdminTab>(role === "lider" ? "courses" : "overview");
   const [highlightedParticipant, setHighlightedParticipant] = useState<Participant | null>(null);
-  const [selectedCommunity, setSelectedCommunity] = useState<string | null>("todas");
+  const [selectedCommunity, setSelectedCommunity] = useState<string | null>(role === "lider" ? "todas" : "todas");
 
   const areaName = profile?.area ?? "";
   const areaNumber = areaName === "Área 1" ? "1" : "2";
@@ -50,7 +50,7 @@ export default function AdminDashboard() {
   const communities = areaName === "Área 1" ? AREA_1_COMMUNITIES : AREA_2_COMMUNITIES;
 
   useEffect(() => {
-    if (role !== "admin") { navigate("/"); return; }
+    if (role !== "admin" && role !== "lider") { navigate("/"); return; }
     fetchData();
   }, [role]);
 
@@ -259,7 +259,7 @@ export default function AdminDashboard() {
         )}
       </main>
 
-      <AdminBottomNav active={activeTab} onChange={setActiveTab} />
+      <AdminBottomNav active={activeTab} onChange={setActiveTab} userRole={role as "admin" | "lider" | null} />
     </div>
   );
 }
