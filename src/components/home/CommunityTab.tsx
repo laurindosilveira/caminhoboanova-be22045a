@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageCircle, Flame, GraduationCap } from "lucide-react";
+import { MessageCircle, Flame, GraduationCap, Cake } from "lucide-react";
 import ClassroomTab from "./ClassroomTab";
 
 interface CommunityMember {
@@ -18,6 +18,12 @@ interface Message {
   created_at: string;
 }
 
+interface BirthdayPerson {
+  full_name: string;
+  birth_date: string;
+  day: number;
+}
+
 type SubTab = "comunidade" | "sala";
 
 export default function CommunityTab() {
@@ -27,6 +33,7 @@ export default function CommunityTab() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(true);
+  const [birthdays, setBirthdays] = useState<BirthdayPerson[]>([]);
   const myUserId = profile?.user_id;
 
   useEffect(() => {
@@ -52,8 +59,29 @@ export default function CommunityTab() {
       setLoadingMembers(false);
     }
 
+    async function fetchBirthdays() {
+      const currentMonth = new Date().getMonth() + 1;
+      const { data } = await supabase
+        .from("profiles")
+        .select("full_name, birth_date")
+        .eq("community", profile.community as any);
+      const bdays: BirthdayPerson[] = (data ?? [])
+        .filter(p => {
+          const month = new Date(p.birth_date + "T00:00:00").getMonth() + 1;
+          return month === currentMonth;
+        })
+        .map(p => ({
+          full_name: p.full_name,
+          birth_date: p.birth_date,
+          day: new Date(p.birth_date + "T00:00:00").getDate(),
+        }))
+        .sort((a, b) => a.day - b.day);
+      setBirthdays(bdays);
+    }
+
     fetchMessages();
     fetchRanking();
+    fetchBirthdays();
   }, [profile]);
 
   function timeAgo(dateStr: string): string {
@@ -141,6 +169,42 @@ export default function CommunityTab() {
                     <p className="text-card-foreground text-sm font-inter leading-relaxed">{msg.body}</p>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Aniversariantes do mês */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Cake className="w-4 h-4 text-secondary" />
+              <span className="font-montserrat font-bold text-foreground text-sm">
+                🎂 Aniversariantes de {new Date().toLocaleString("pt-BR", { month: "long" })}
+              </span>
+            </div>
+            {birthdays.length === 0 ? (
+              <div className="bg-card rounded-2xl border border-border p-4 text-center">
+                <p className="text-muted-foreground text-sm font-inter">Nenhum aniversariante este mês.</p>
+              </div>
+            ) : (
+              <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+                {birthdays.map((b, i) => {
+                  const isToday = b.day === new Date().getDate();
+                  return (
+                    <div
+                      key={b.full_name + b.birth_date}
+                      className={`flex items-center gap-3 px-4 py-3 ${i < birthdays.length - 1 ? "border-b border-border" : ""} ${isToday ? "bg-secondary/5" : ""}`}
+                    >
+                      <span className="text-lg">{isToday ? "🎉" : "🎂"}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-montserrat font-bold text-card-foreground text-sm truncate">
+                          {b.full_name}
+                          {isToday && <span className="text-secondary text-xs font-inter ml-1">(hoje!)</span>}
+                        </p>
+                      </div>
+                      <span className="text-muted-foreground text-xs font-inter flex-shrink-0">dia {b.day}</span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
