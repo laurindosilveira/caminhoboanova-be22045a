@@ -621,6 +621,47 @@ export type Database = {
         }
         Relationships: []
       }
+      ranking_seasons: {
+        Row: {
+          closed_at: string
+          closed_by: string
+          community: string
+          course_id: string
+          created_at: string
+          id: string
+          total_participants: number
+          winners: Json
+        }
+        Insert: {
+          closed_at?: string
+          closed_by: string
+          community: string
+          course_id: string
+          created_at?: string
+          id?: string
+          total_participants?: number
+          winners?: Json
+        }
+        Update: {
+          closed_at?: string
+          closed_by?: string
+          community?: string
+          course_id?: string
+          created_at?: string
+          id?: string
+          total_participants?: number
+          winners?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ranking_seasons_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       spiritual_assessments: {
         Row: {
           created_at: string

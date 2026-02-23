@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageCircle, Flame, GraduationCap } from "lucide-react";
+import { MessageCircle, Flame, GraduationCap, Trophy, Lock } from "lucide-react";
 import ClassroomTab from "./ClassroomTab";
 
 interface CommunityMember {
@@ -18,6 +18,9 @@ interface Message {
   created_at: string;
 }
 
+type Winner = { position: number; user_id: string; full_name: string; faith_points: number; medal: string };
+type RankingSeason = { id: string; course_id: string; community: string; closed_at: string; winners: Winner[]; total_participants: number };
+
 type SubTab = "comunidade" | "sala";
 
 export default function CommunityTab() {
@@ -27,6 +30,7 @@ export default function CommunityTab() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(true);
+  const [seasons, setSeasons] = useState<RankingSeason[]>([]);
 
   useEffect(() => {
     if (!profile) return;
@@ -53,6 +57,16 @@ export default function CommunityTab() {
 
     fetchMessages();
     fetchRanking();
+
+    // Fetch seasons for this community
+    async function fetchSeasons() {
+      const { data } = await supabase
+        .from("ranking_seasons")
+        .select("*")
+        .eq("community", profile.community as string);
+      setSeasons((data ?? []) as unknown as RankingSeason[]);
+    }
+    fetchSeasons();
   }, [profile]);
 
   function timeAgo(dateStr: string): string {
@@ -113,6 +127,31 @@ export default function CommunityTab() {
       {/* ===== COMUNIDADE ===== */}
       {subTab === "comunidade" && (
         <div className="px-5 space-y-5">
+          {/* Winner Banner — if user is a winner */}
+          {seasons.length > 0 && (() => {
+            const myWins = seasons.flatMap(s =>
+              ((s.winners ?? []) as Winner[]).filter(w => w.user_id === myUserId).map(w => ({ ...w, season: s }))
+            );
+            if (myWins.length === 0) return null;
+            return (
+              <div>
+                {myWins.map((win, idx) => (
+                  <div key={idx} className="rounded-2xl p-5 text-center border border-accent/30 shadow-lg mb-3"
+                    style={{ background: "var(--gradient-gold)" }}>
+                    <span className="text-5xl block mb-2">{win.medal}</span>
+                    <p className="font-montserrat font-black text-foreground text-lg">Parabéns, Campeão!</p>
+                    <p className="font-inter text-sm text-foreground/80 mt-1">
+                      Você ficou em <strong>{win.position}º lugar</strong> com <strong>{win.faith_points} pontos</strong>!
+                    </p>
+                    <p className="font-inter text-xs text-muted-foreground mt-2">
+                      Ranking encerrado em {new Date(win.season.closed_at).toLocaleDateString("pt-BR")}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
           {/* Pastor messages */}
           <div>
             <div className="flex items-center gap-2 mb-3">
@@ -146,11 +185,51 @@ export default function CommunityTab() {
             )}
           </div>
 
-          {/* Ranking */}
+          {/* Closed Season Podiums */}
+          {seasons.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Trophy className="w-4 h-4 text-accent-foreground" />
+                <span className="font-montserrat font-bold text-foreground text-sm">🏆 Pódio Final</span>
+              </div>
+              {seasons.map(s => (
+                <div key={s.id} className="bg-card rounded-2xl border border-accent/20 overflow-hidden shadow-sm mb-3">
+                  <div className="px-4 py-2.5 bg-accent/10 flex items-center gap-2">
+                    <Lock className="w-3.5 h-3.5 text-accent-foreground" />
+                    <span className="font-montserrat font-bold text-foreground text-xs">Ranking encerrado</span>
+                    <span className="text-[10px] font-inter text-muted-foreground ml-auto">
+                      {new Date(s.closed_at).toLocaleDateString("pt-BR")}
+                    </span>
+                  </div>
+                  <div className="p-4 space-y-2">
+                    {((s.winners ?? []) as Winner[]).map(w => (
+                      <div key={w.user_id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl ${w.user_id === myUserId ? "bg-accent/10 ring-1 ring-accent/30" : "bg-muted/30"}`}>
+                        <span className="text-2xl">{w.medal}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-montserrat font-bold text-foreground text-sm">
+                            {w.full_name} {w.user_id === myUserId && <span className="text-accent-foreground text-xs font-inter">(você!)</span>}
+                          </p>
+                        </div>
+                        <span className="font-montserrat font-black text-accent-foreground text-sm">{w.faith_points} pts</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="px-4 py-2 border-t border-border">
+                    <p className="text-muted-foreground font-inter text-[10px]">{s.total_participants} participantes</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Active Ranking */}
           <div>
             <div className="flex items-center gap-2 mb-3">
               <Flame className="w-4 h-4 text-secondary" />
               <span className="font-montserrat font-bold text-foreground text-sm">Ranking da comunidade</span>
+              {seasons.length > 0 && (
+                <span className="text-[10px] font-inter text-muted-foreground bg-muted rounded-full px-2 py-0.5 ml-auto">em andamento</span>
+              )}
             </div>
 
             {loadingMembers ? (
