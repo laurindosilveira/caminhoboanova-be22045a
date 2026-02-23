@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle, Lock, Star, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
+import { CheckCircle, Lock, Star, BookOpen, ChevronDown, ChevronUp, GraduationCap, CalendarDays, Heart } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import DevotionalView from "@/components/home/DevotionalView";
 
@@ -11,6 +11,16 @@ type Activity = {
   subtitle: string | null;
   order_num: number;
   points: number;
+};
+
+type IntegratedStats = {
+  lessonsStudied: number;
+  totalLessons: number;
+  devotionalsCompleted: number;
+  totalDevotionals: number;
+  attendancePresent: number;
+  totalEvents: number;
+  worshipApproved: number;
 };
 
 const typeColors: Record<string, string> = {
@@ -34,6 +44,19 @@ const typeIcons: Record<string, string> = {
   desafio: "✨",
 };
 
+function ProgressRing({ pct, color, size = 56 }: { pct: number; color: string; size?: number }) {
+  const r = (size - 8) / 2;
+  const circ = 2 * Math.PI * r;
+  const dash = circ * (pct / 100);
+  return (
+    <svg width={size} height={size} className="-rotate-90">
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="hsl(var(--muted))" strokeWidth={5} />
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={5}
+        strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function JourneyPath() {
   const { profile } = useAuth();
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -42,6 +65,12 @@ export default function JourneyPath() {
   const [completing, setCompleting] = useState<string | null>(null);
   const [viewingDevotional, setViewingDevotional] = useState<Activity | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [integrated, setIntegrated] = useState<IntegratedStats>({
+    lessonsStudied: 0, totalLessons: 0,
+    devotionalsCompleted: 0, totalDevotionals: 0,
+    attendancePresent: 0, totalEvents: 0,
+    worshipApproved: 0,
+  });
 
   useEffect(() => {
     fetchData();
@@ -51,13 +80,33 @@ export default function JourneyPath() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [{ data: acts }, { data: prog }] = await Promise.all([
+    const [{ data: acts }, { data: prog }, { data: lessons }, { data: lessonResponses }, { data: devContent }, { data: devProgress }, { data: events }, { data: attendance }, { data: worship }] = await Promise.all([
       supabase.from("activities").select("*").order("order_num"),
       supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
+      supabase.from("lessons").select("id"),
+      supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
+      supabase.from("devotional_content").select("id"),
+      supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
+      supabase.from("events").select("id").gte("event_date", new Date(Date.now() - 90 * 86400000).toISOString()),
+      supabase.from("attendance").select("event_id, status").eq("user_id", user.id),
+      supabase.from("worship_attendance").select("id, status").eq("user_id", user.id).eq("status", "aprovado"),
     ]);
 
     setActivities(acts ?? []);
     setCompletedIds(new Set((prog ?? []).map(p => p.activity_id)));
+
+    const uniqueLessonIds = new Set((lessonResponses ?? []).map(r => r.lesson_id));
+
+    setIntegrated({
+      lessonsStudied: uniqueLessonIds.size,
+      totalLessons: (lessons ?? []).length,
+      devotionalsCompleted: (devProgress ?? []).length,
+      totalDevotionals: (devContent ?? []).length,
+      attendancePresent: (attendance ?? []).filter(a => a.status === "presente").length,
+      totalEvents: (events ?? []).length,
+      worshipApproved: (worship ?? []).length,
+    });
+
     setLoading(false);
   }
 
@@ -136,34 +185,77 @@ export default function JourneyPath() {
 
   const nextStep = stepsWithStatus.find(s => s.status === "available");
 
-  const pct = activities.length > 0 ? Math.round((doneCount / activities.length) * 100) : 0;
+  // Overall progress: combine activities + lessons + devotionals
+  const totalItems = activities.length + integrated.totalLessons + integrated.totalDevotionals;
+  const doneItems = doneCount + integrated.lessonsStudied + integrated.devotionalsCompleted;
+  const overallPct = totalItems > 0 ? Math.round((doneItems / totalItems) * 100) : 0;
+
+  // Individual category percentages
+  const actPct = activities.length > 0 ? Math.round((doneCount / activities.length) * 100) : 0;
+  const lessonPct = integrated.totalLessons > 0 ? Math.round((integrated.lessonsStudied / integrated.totalLessons) * 100) : 0;
+  const devPct = integrated.totalDevotionals > 0 ? Math.round((integrated.devotionalsCompleted / integrated.totalDevotionals) * 100) : 0;
 
   return (
     <div className="px-5 pt-6">
-      {/* Summary header with progress bar */}
+      {/* Summary header with overall progress */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-montserrat font-black text-foreground text-xl">🛤️ Minha Jornada</h2>
           <span className="text-muted-foreground text-xs font-inter bg-muted rounded-full px-3 py-1">
-            {doneCount}/{activities.length}
+            {overallPct}% completo
           </span>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-orange rounded-full transition-all duration-700"
-              style={{ width: `${pct}%` }}
+              className="h-full rounded-full transition-all duration-700"
+              style={{
+                width: `${overallPct}%`,
+                background: overallPct >= 70 ? "var(--gradient-green)" : overallPct >= 34 ? "var(--gradient-orange)" : "hsl(var(--destructive))",
+              }}
             />
           </div>
-          <span className="text-xs font-montserrat font-bold text-secondary flex-shrink-0">{pct}%</span>
+          <span className="text-xs font-montserrat font-bold text-secondary flex-shrink-0">{doneItems}/{totalItems}</span>
         </div>
         <p className="text-muted-foreground font-inter text-[11px] mt-1.5">
-          {doneCount === 0
-            ? "Comece sua jornada completando a primeira atividade!"
-            : doneCount === activities.length
-            ? "🎉 Parabéns! Você completou toda a jornada!"
-            : `Faltam ${activities.length - doneCount} atividade${activities.length - doneCount > 1 ? "s" : ""} para concluir`}
+          Progresso geral: atividades, lições e devocionais combinados
         </p>
+      </div>
+
+      {/* Integrated progress cards */}
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        {[
+          { label: "Lições", done: integrated.lessonsStudied, total: integrated.totalLessons, pct: lessonPct, color: "#1F3C88", icon: "🎓" },
+          { label: "Devocionais", done: integrated.devotionalsCompleted, total: integrated.totalDevotionals, pct: devPct, color: "#2ECC71", icon: "📖" },
+          { label: "Atividades", done: doneCount, total: activities.length, pct: actPct, color: "#FF7A00", icon: "✨" },
+        ].map(({ label, done, total, pct, color, icon }) => (
+          <div key={label} className="bg-card rounded-xl border border-border p-3 flex flex-col items-center gap-1.5">
+            <div className="relative">
+              <ProgressRing pct={pct} color={color} size={52} />
+              <span className="absolute inset-0 flex items-center justify-center text-sm">{icon}</span>
+            </div>
+            <p className="font-inter text-[10px] text-muted-foreground">{label}</p>
+            <p className="font-montserrat font-bold text-foreground text-xs">{done}/{total}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Extra stats row */}
+      <div className="flex gap-2 mb-4">
+        <div className="flex-1 bg-card rounded-xl border border-border p-3 flex items-center gap-2.5">
+          <CalendarDays className="w-4 h-4 text-primary flex-shrink-0" />
+          <div>
+            <p className="font-montserrat font-bold text-foreground text-xs">{integrated.attendancePresent} presença{integrated.attendancePresent !== 1 ? "s" : ""}</p>
+            <p className="font-inter text-[10px] text-muted-foreground">em {integrated.totalEvents} encontros</p>
+          </div>
+        </div>
+        <div className="flex-1 bg-card rounded-xl border border-border p-3 flex items-center gap-2.5">
+          <Heart className="w-4 h-4 text-brand-green flex-shrink-0" />
+          <div>
+            <p className="font-montserrat font-bold text-foreground text-xs">{integrated.worshipApproved} culto{integrated.worshipApproved !== 1 ? "s" : ""}</p>
+            <p className="font-inter text-[10px] text-muted-foreground">confirmados</p>
+          </div>
+        </div>
       </div>
 
       {/* Continue banner */}
@@ -201,7 +293,7 @@ export default function JourneyPath() {
           onClick={() => setExpanded(!expanded)}
           className="w-full flex items-center justify-center gap-2 py-2.5 mb-3 rounded-xl bg-muted/50 hover:bg-muted text-muted-foreground font-inter text-xs font-medium transition-colors"
         >
-          {expanded ? "Ocultar detalhes" : "Ver todas as atividades"}
+          {expanded ? "Ocultar atividades" : "Ver lista de atividades"}
           {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         </button>
       )}
