@@ -5,7 +5,7 @@ export type AdminTab = "overview" | "participants" | "courses" | "agenda" | "mes
 const TABS = [
   { id: "overview" as AdminTab, label: "Visão", icon: BarChart3 },
   { id: "participants" as AdminTab, label: "Pessoas", icon: Users },
-  { id: "attendance" as AdminTab, label: "Presença", icon: UserCheck },
+  { id: "attendance" as AdminTab, label: "Encontros", icon: UserCheck },
   { id: "discipleship" as AdminTab, label: "Discipu.", icon: Heart },
   { id: "courses" as AdminTab, label: "Cursos", icon: BookOpen },
   { id: "agenda" as AdminTab, label: "Agenda", icon: CalendarDays },
