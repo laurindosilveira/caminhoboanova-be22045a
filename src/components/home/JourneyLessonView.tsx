@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ChevronLeft, BookOpen, MessageCircle, Target,
-  Pen, Heart, CheckCircle2, Save, Play, Link, Volume2, Download, FileText
+  Pen, Heart, CheckCircle2, Save, Play, Link, Volume2, Download, FileText, Share2
 } from "lucide-react";
+import { toast } from "sonner";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
 import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
@@ -306,6 +307,50 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     pdf.save(`Licao_${lesson.order_num}_${lesson.title.replace(/\s+/g, "_")}_completo.pdf`);
   }
 
+  async function handleShareWhatsApp() {
+    // Build a text summary for sharing
+    const lines: string[] = [];
+    lines.push(`📖 *Lição ${lesson.order_num} — ${lesson.title}*`);
+    if (lesson.objective) lines.push(`_${lesson.objective}_`);
+    lines.push("");
+    lines.push("*📝 Minhas Respostas:*");
+
+    if (responses["icebreaker"]) {
+      lines.push(`\n🔗 *Quebra-gelo:*\n${responses["icebreaker"]}`);
+    }
+    content.questions.forEach((q, i) => {
+      const answer = responses[`q${i}`];
+      if (answer) lines.push(`\n${i + 1}. *${q}*\n${answer}`);
+    });
+    if (responses["practice"]) {
+      lines.push(`\n🧭 *Prática da Semana:*\n${responses["practice"]}`);
+    }
+    if (responses["prayer"]) {
+      lines.push(`\n🙏 *Oração:*\n${responses["prayer"]}`);
+    }
+    lines.push(`\n— _Caminho Boa Nova · ${new Date().toLocaleDateString("pt-BR")}_`);
+
+    const text = lines.join("\n");
+
+    // Try Web Share API first (works on mobile with file sharing)
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Lição ${lesson.order_num} — ${lesson.title}`,
+          text,
+        });
+        return;
+      } catch (err: any) {
+        if (err.name === "AbortError") return; // User cancelled
+      }
+    }
+
+    // Fallback: open WhatsApp with text
+    const encoded = encodeURIComponent(text);
+    window.open(`https://wa.me/?text=${encoded}`, "_blank");
+    toast.success("Abrindo WhatsApp para compartilhar!");
+  }
+
   async function handleDownloadWord() {
     const sections: Paragraph[] = [];
 
@@ -582,20 +627,29 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
           </button>
 
           {Object.keys(responses).length > 0 && (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={handleDownloadWord}
+                  className="flex items-center justify-center gap-2 py-3 rounded-2xl font-inter text-xs font-medium border border-border bg-card text-foreground hover:bg-muted/50 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Word (.docx)
+                </button>
+                <button
+                  onClick={handleDownloadPDF}
+                  className="flex items-center justify-center gap-2 py-3 rounded-2xl font-inter text-xs font-medium border border-border bg-card text-foreground hover:bg-muted/50 transition-colors"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  PDF completo
+                </button>
+              </div>
               <button
-                onClick={handleDownloadWord}
-                className="flex items-center justify-center gap-2 py-3 rounded-2xl font-inter text-xs font-medium border border-border bg-card text-foreground hover:bg-muted/50 transition-colors"
+                onClick={handleShareWhatsApp}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-inter text-xs font-bold border border-brand-green/30 bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors"
               >
-                <Download className="w-3.5 h-3.5" />
-                Word (.docx)
-              </button>
-              <button
-                onClick={handleDownloadPDF}
-                className="flex items-center justify-center gap-2 py-3 rounded-2xl font-inter text-xs font-medium border border-border bg-card text-foreground hover:bg-muted/50 transition-colors"
-              >
-                <FileText className="w-3.5 h-3.5" />
-                PDF completo
+                <Share2 className="w-3.5 h-3.5" />
+                Compartilhar via WhatsApp
               </button>
             </div>
           )}
