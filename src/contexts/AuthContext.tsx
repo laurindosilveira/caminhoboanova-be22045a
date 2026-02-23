@@ -10,6 +10,11 @@ interface Profile {
   phone: string;
   community: string;
   area: string;
+  father_name?: string;
+  mother_name?: string;
+  father_phone?: string;
+  mother_phone?: string;
+  address?: string;
 }
 
 interface AuthContextType {

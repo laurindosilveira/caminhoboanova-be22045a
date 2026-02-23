@@ -587,34 +587,49 @@ export type Database = {
       }
       profiles: {
         Row: {
+          address: string | null
           area: Database["public"]["Enums"]["area_name"]
           birth_date: string
           community: Database["public"]["Enums"]["community_name"]
           created_at: string
+          father_name: string | null
+          father_phone: string | null
           full_name: string
           id: string
+          mother_name: string | null
+          mother_phone: string | null
           phone: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          address?: string | null
           area: Database["public"]["Enums"]["area_name"]
           birth_date: string
           community: Database["public"]["Enums"]["community_name"]
           created_at?: string
+          father_name?: string | null
+          father_phone?: string | null
           full_name: string
           id?: string
+          mother_name?: string | null
+          mother_phone?: string | null
           phone: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          address?: string | null
           area?: Database["public"]["Enums"]["area_name"]
           birth_date?: string
           community?: Database["public"]["Enums"]["community_name"]
           created_at?: string
+          father_name?: string | null
+          father_phone?: string | null
           full_name?: string
           id?: string
+          mother_name?: string | null
+          mother_phone?: string | null
           phone?: string
           updated_at?: string
           user_id?: string
