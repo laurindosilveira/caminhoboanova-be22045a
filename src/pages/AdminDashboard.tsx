@@ -160,28 +160,51 @@ export default function AdminDashboard() {
               </div>
 
               {/* All communities option */}
-              <button
-                onClick={() => setSelectedCommunity("todas")}
-                className="w-full flex items-center gap-4 p-4 bg-card rounded-2xl border-2 border-primary/20 shadow-sm hover:border-primary/50 hover:bg-primary/5 transition-all"
-              >
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
-                  <span className="text-2xl">👥</span>
-                </div>
-                <div className="text-left flex-1">
-                  <p className="font-montserrat font-bold text-foreground text-sm">{turmaName} — Todas</p>
-                  <p className="text-muted-foreground font-inter text-xs mt-0.5">
-                    {participants.length} participante{participants.length !== 1 ? "s" : ""} · Visão geral
-                  </p>
-                </div>
-                <span className="text-muted-foreground text-sm">→</span>
-              </button>
+              {(() => {
+                const totalAlerts = participants.filter(p => plans[p.user_id]?.is_priority || plans[p.user_id]?.needs_pastor).length;
+                const noActivity = participants.filter(p => p.completed_count === 0).length;
+                return (
+                  <button
+                    onClick={() => setSelectedCommunity("todas")}
+                    className="w-full flex items-center gap-4 p-4 bg-card rounded-2xl border-2 border-primary/20 shadow-sm hover:border-primary/50 hover:bg-primary/5 transition-all"
+                  >
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
+                      <span className="text-2xl">👥</span>
+                    </div>
+                    <div className="text-left flex-1">
+                      <p className="font-montserrat font-bold text-foreground text-sm">{turmaName} — Todas</p>
+                      <p className="text-muted-foreground font-inter text-xs mt-0.5">
+                        {participants.length} participante{participants.length !== 1 ? "s" : ""} · Visão geral
+                      </p>
+                      {(totalAlerts > 0 || noActivity > 0) && (
+                        <div className="flex gap-2 mt-1">
+                          {totalAlerts > 0 && (
+                            <span className="text-[10px] font-inter font-medium text-destructive bg-destructive/10 rounded-full px-2 py-0.5">
+                              ⚠️ {totalAlerts} alerta{totalAlerts !== 1 ? "s" : ""}
+                            </span>
+                          )}
+                          {noActivity > 0 && (
+                            <span className="text-[10px] font-inter font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+                              😴 {noActivity} sem atividade
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-muted-foreground text-sm">→</span>
+                  </button>
+                );
+              })()}
 
               <div className="border-b border-border" />
 
               {/* Individual communities */}
               <div className="space-y-2">
                 {communities.map(comm => {
-                  const count = participants.filter(p => p.community === comm).length;
+                  const commParticipants = participants.filter(p => p.community === comm);
+                  const count = commParticipants.length;
+                  const alerts = commParticipants.filter(p => plans[p.user_id]?.is_priority || plans[p.user_id]?.needs_pastor).length;
+                  const noActivity = commParticipants.filter(p => p.completed_count === 0).length;
                   const icon = COMMUNITY_ICONS[comm] || "⛪";
                   return (
                     <button
@@ -189,14 +212,33 @@ export default function AdminDashboard() {
                       onClick={() => setSelectedCommunity(comm)}
                       className="w-full flex items-center gap-4 p-4 bg-card rounded-2xl border border-border shadow-sm hover:border-primary/30 hover:bg-muted/30 transition-all"
                     >
-                      <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <div className="relative w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
                         <span className="text-2xl">{icon}</span>
+                        {alerts > 0 && (
+                          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
+                            {alerts}
+                          </span>
+                        )}
                       </div>
                       <div className="text-left flex-1">
                         <p className="font-montserrat font-bold text-foreground text-sm">{comm}</p>
                         <p className="text-muted-foreground font-inter text-xs mt-0.5">
                           {count} participante{count !== 1 ? "s" : ""}
                         </p>
+                        {(alerts > 0 || noActivity > 0) && (
+                          <div className="flex gap-2 mt-1">
+                            {alerts > 0 && (
+                              <span className="text-[10px] font-inter font-medium text-destructive bg-destructive/10 rounded-full px-2 py-0.5">
+                                ⚠️ {alerts}
+                              </span>
+                            )}
+                            {noActivity > 0 && (
+                              <span className="text-[10px] font-inter font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+                                😴 {noActivity}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <span className="text-muted-foreground text-sm">→</span>
                     </button>
