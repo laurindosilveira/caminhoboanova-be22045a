@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle, Lock, Star, BookOpen } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import DevotionalView from "@/components/home/DevotionalView";
 
 type Activity = {
   id: string;
@@ -39,6 +40,7 @@ export default function JourneyPath() {
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState<string | null>(null);
+  const [viewingDevotional, setViewingDevotional] = useState<Activity | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -72,6 +74,30 @@ export default function JourneyPath() {
     setCompleting(null);
   }
 
+  function handleActivityClick(activity: Activity, status: "done" | "available" | "locked") {
+    if (status === "locked") return;
+    if (activity.type === "devocional") {
+      setViewingDevotional(activity);
+    } else if (status === "available") {
+      handleComplete(activity.id);
+    }
+  }
+
+  // Show devotional view
+  if (viewingDevotional) {
+    return (
+      <DevotionalView
+        activity={viewingDevotional}
+        onBack={() => setViewingDevotional(null)}
+        onComplete={async (id) => {
+          await handleComplete(id);
+          setViewingDevotional(null);
+        }}
+        isCompleted={completedIds.has(viewingDevotional.id)}
+      />
+    );
+  }
+
   if (loading) {
     return (
       <div className="px-5 pt-6">
@@ -96,8 +122,6 @@ export default function JourneyPath() {
 
   const doneCount = [...completedIds].filter(id => activities.some(a => a.id === id)).length;
 
-  // Determine status for each activity:
-  // done = completed, available = next uncompleted (only first one), locked = rest
   let foundAvailable = false;
   const stepsWithStatus = activities.map(act => {
     const isDone = completedIds.has(act.id);
@@ -109,7 +133,6 @@ export default function JourneyPath() {
     return { ...act, status: "locked" as const };
   });
 
-  // Find the next available step for the "continue" button
   const nextStep = stepsWithStatus.find(s => s.status === "available");
 
   return (
@@ -132,12 +155,12 @@ export default function JourneyPath() {
             <p className="font-montserrat font-bold text-foreground text-sm truncate">{nextStep.title}</p>
           </div>
           <button
-            onClick={() => handleComplete(nextStep.id)}
+            onClick={() => handleActivityClick(nextStep, "available")}
             disabled={completing === nextStep.id}
             className="px-3 py-1.5 rounded-xl text-primary-foreground font-inter text-xs font-bold flex-shrink-0 transition-opacity disabled:opacity-60"
             style={{ background: "var(--gradient-hero)" }}
           >
-            {completing === nextStep.id ? "..." : "Continuar →"}
+            {completing === nextStep.id ? "..." : nextStep.type === "devocional" ? "Abrir →" : "Continuar →"}
           </button>
         </div>
       )}
@@ -155,11 +178,13 @@ export default function JourneyPath() {
           <div key={step.id} className="flex gap-4 mb-1">
             {/* Timeline */}
             <div className="flex flex-col items-center">
-              <div
+              <button
+                onClick={() => handleActivityClick(step, step.status)}
+                disabled={step.status === "locked"}
                 className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl flex-shrink-0 relative transition-all
                   ${step.status === "done" ? "bg-brand-green shadow-lg shadow-brand-green/40" : ""}
                   ${step.status === "available" ? "bg-gradient-orange shadow-2xl shadow-secondary/50 animate-float ring-4 ring-secondary/30" : ""}
-                  ${step.status === "locked" ? "bg-muted opacity-50" : ""}
+                  ${step.status === "locked" ? "bg-muted opacity-50 cursor-not-allowed" : "cursor-pointer"}
                 `}
               >
                 {step.status === "done" && (
@@ -176,9 +201,8 @@ export default function JourneyPath() {
                 {step.status === "locked" && (
                   <Lock className="w-6 h-6 text-muted-foreground" />
                 )}
-              </div>
+              </button>
 
-              {/* Connector line */}
               {index < stepsWithStatus.length - 1 && (
                 <div
                   className={`w-0.5 h-8 mt-1 rounded-full transition-all ${
@@ -193,7 +217,10 @@ export default function JourneyPath() {
             </div>
 
             {/* Content */}
-            <div className={`flex-1 pt-2.5 pb-5 ${step.status === "locked" ? "opacity-40" : ""}`}>
+            <div
+              className={`flex-1 pt-2.5 pb-5 ${step.status === "locked" ? "opacity-40" : "cursor-pointer"}`}
+              onClick={() => handleActivityClick(step, step.status)}
+            >
               <div className="flex items-center gap-2 mb-0.5">
                 <span className={`text-xs font-montserrat font-bold uppercase tracking-wide ${typeColors[step.type] ?? "text-muted-foreground"}`}>
                   {typeLabels[step.type] ?? step.type}
@@ -207,13 +234,31 @@ export default function JourneyPath() {
               <h3 className="font-montserrat font-bold text-card-foreground text-base">{step.title}</h3>
               <p className="text-muted-foreground text-sm font-inter">{step.subtitle ?? ""}</p>
 
-              {step.status === "available" && (
+              {step.status === "available" && step.type !== "devocional" && (
                 <button
-                  onClick={() => handleComplete(step.id)}
+                  onClick={(e) => { e.stopPropagation(); handleComplete(step.id); }}
                   disabled={completing === step.id}
                   className="mt-3 px-5 py-2.5 bg-gradient-orange rounded-2xl text-primary-foreground text-sm font-montserrat font-bold shadow-lg shadow-secondary/30 active:scale-95 transition-all disabled:opacity-60"
                 >
                   {completing === step.id ? "Marcando..." : doneCount === 0 ? "Iniciar →" : "Continuar →"}
+                </button>
+              )}
+
+              {step.status === "available" && step.type === "devocional" && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setViewingDevotional(step); }}
+                  className="mt-3 px-5 py-2.5 bg-gradient-orange rounded-2xl text-primary-foreground text-sm font-montserrat font-bold shadow-lg shadow-secondary/30 active:scale-95 transition-all"
+                >
+                  {doneCount === 0 ? "Abrir Devocional →" : "Ler Devocional →"}
+                </button>
+              )}
+
+              {step.status === "done" && step.type === "devocional" && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setViewingDevotional(step); }}
+                  className="mt-2 px-4 py-1.5 rounded-xl border border-brand-green/30 text-brand-green text-xs font-inter font-medium hover:bg-brand-green/5 transition-colors"
+                >
+                  📖 Reler devocional
                 </button>
               )}
             </div>

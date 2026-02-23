@@ -157,6 +157,45 @@ export type Database = {
         }
         Relationships: []
       }
+      devotional_content: {
+        Row: {
+          activity_id: string
+          bible_reference: string
+          bible_text: string
+          created_at: string
+          id: string
+          practice: string
+          prayer: string
+          questions: string[]
+          reflection: string
+          updated_at: string
+        }
+        Insert: {
+          activity_id: string
+          bible_reference?: string
+          bible_text?: string
+          created_at?: string
+          id?: string
+          practice?: string
+          prayer?: string
+          questions?: string[]
+          reflection?: string
+          updated_at?: string
+        }
+        Update: {
+          activity_id?: string
+          bible_reference?: string
+          bible_text?: string
+          created_at?: string
+          id?: string
+          practice?: string
+          prayer?: string
+          questions?: string[]
+          reflection?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       discipleship_plans: {
         Row: {
           aptidao: string | null
