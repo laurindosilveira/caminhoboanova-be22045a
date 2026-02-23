@@ -6,7 +6,7 @@ const TABS = [
   { id: "overview" as AdminTab, label: "Visão", icon: BarChart3 },
   { id: "attendance" as AdminTab, label: "Encontros", icon: UserCheck },
   { id: "courses" as AdminTab, label: "Cursos", icon: BookOpen },
-  { id: "messages" as AdminTab, label: "Msgs", icon: MessageSquare },
+  { id: "messages" as AdminTab, label: "Avisos", icon: MessageSquare },
   { id: "users" as AdminTab, label: "Usuários", icon: Shield },
 ];
 
