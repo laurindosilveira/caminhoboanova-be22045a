@@ -43,7 +43,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [highlightedParticipant, setHighlightedParticipant] = useState<Participant | null>(null);
-  const [selectedCommunity, setSelectedCommunity] = useState<string | null>(null);
+  const [selectedCommunity, setSelectedCommunity] = useState<string | null>("todas");
 
   const areaName = profile?.area ?? "";
   const areaNumber = areaName === "Área 1" ? "1" : "2";
@@ -204,64 +204,6 @@ export default function AdminDashboard() {
                 );
               })()}
 
-              <div className="border-b border-border" />
-
-              {/* Individual communities */}
-              <div className="space-y-2">
-                {communities.map(comm => {
-                  const commParticipants = participants.filter(p => p.community === comm);
-                  const count = commParticipants.length;
-                  const alerts = commParticipants.filter(p => plans[p.user_id]?.is_priority || plans[p.user_id]?.needs_pastor).length;
-                  const noActivity = commParticipants.filter(p => p.completed_count === 0).length;
-                  const icon = COMMUNITY_ICONS[comm] || "⛪";
-                  const commProgress = count > 0 && activities.length > 0
-                    ? Math.round(commParticipants.reduce((s, p) => s + (p.completed_count / activities.length) * 100, 0) / count)
-                    : 0;
-                  return (
-                    <button
-                      key={comm}
-                      onClick={() => setSelectedCommunity(comm)}
-                      className="w-full flex items-center gap-4 p-4 bg-card rounded-2xl border border-border shadow-sm hover:border-primary/30 hover:bg-muted/30 transition-all"
-                    >
-                      <div className="relative w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <span className="text-2xl">{icon}</span>
-                        {alerts > 0 && (
-                          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
-                            {alerts}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-left flex-1">
-                        <p className="font-montserrat font-bold text-foreground text-sm">{comm}</p>
-                        <p className="text-muted-foreground font-inter text-xs mt-0.5">
-                          {count} participante{count !== 1 ? "s" : ""}
-                        </p>
-                        <div className="mt-1.5 flex items-center gap-2">
-                          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full rounded-full transition-all" style={{ width: `${commProgress}%`, background: "var(--gradient-hero)" }} />
-                          </div>
-                          <span className="text-[10px] font-montserrat font-bold text-primary">{commProgress}%</span>
-                        </div>
-                        {(alerts > 0 || noActivity > 0) && (
-                          <div className="flex gap-2 mt-1">
-                            {alerts > 0 && (
-                              <span className="text-[10px] font-inter font-medium text-destructive bg-destructive/10 rounded-full px-2 py-0.5">
-                                ⚠️ {alerts}
-                              </span>
-                            )}
-                            {noActivity > 0 && (
-                              <span className="text-[10px] font-inter font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5">
-                                😴 {noActivity}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <span className="text-muted-foreground text-sm">→</span>
-                    </button>
-                  );
-                })}
-              </div>
             </div>
           )}
         </main>
