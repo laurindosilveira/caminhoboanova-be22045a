@@ -34,6 +34,9 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
   const [assessment, setAssessment] = useState<any>(null);
   const [attendanceData, setAttendanceData] = useState<{ present: number; absent: number; justified: number; total: number } | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [pastoralNotes, setPastoralNotes] = useState<any[]>([]);
+  const [meetingEvals, setMeetingEvals] = useState<any[]>([]);
+  const [attendanceDetails, setAttendanceDetails] = useState<any[]>([]);
 
   const completedIds = new Set(p.completed_activity_ids);
   const formacoes = activities.filter(a => a.type === "formacao");
@@ -49,11 +52,13 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
     if (loaded) return;
     setLoadingData(true);
     const now = new Date();
-    const [{ data: planData }, { data: assessData }, { data: attendRec }] = await Promise.all([
+    const [{ data: planData }, { data: assessData }, { data: attendRec }, { data: notesData }, { data: evalsData }] = await Promise.all([
       supabase.from("discipleship_plans").select("*").eq("user_id", p.user_id).maybeSingle(),
       supabase.from("spiritual_assessments").select("*")
         .eq("user_id", p.user_id).eq("month", now.getMonth() + 1).eq("year", now.getFullYear()).maybeSingle(),
       supabase.from("attendance").select("status, event_id").eq("user_id", p.user_id),
+      supabase.from("pastoral_notes").select("*").eq("user_id", p.user_id).order("created_at", { ascending: false }),
+      supabase.from("meeting_evaluations").select("*").eq("user_id", p.user_id),
     ]);
     if (planData) {
       setPlan(planData);
@@ -61,12 +66,38 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
       if (planData.pastor_notes) setObservations(planData.pastor_notes);
     }
     setAssessment(assessData);
-    if (attendRec) {
-      const present = attendRec.filter(a => a.status === "presente").length;
-      const absent = attendRec.filter(a => a.status === "faltou").length;
-      const justified = attendRec.filter(a => a.status === "justificou").length;
-      setAttendanceData({ present, absent, justified, total: attendRec.length });
+    setPastoralNotes(notesData ?? []);
+
+    // Enrich attendance with event details
+    const attArr = attendRec ?? [];
+    if (attArr.length > 0) {
+      const present = attArr.filter(a => a.status === "presente").length;
+      const absent = attArr.filter(a => a.status === "faltou").length;
+      const justified = attArr.filter(a => a.status === "justificou").length;
+      setAttendanceData({ present, absent, justified, total: attArr.length });
+
+      const eventIds = [...new Set(attArr.map(a => a.event_id))];
+      const { data: eventsData } = await supabase.from("events").select("id, title, event_date").in("id", eventIds);
+      const evMap = new Map((eventsData ?? []).map(e => [e.id, e]));
+      setAttendanceDetails(attArr.map(a => ({
+        ...a,
+        event_title: evMap.get(a.event_id)?.title ?? "Evento",
+        event_date: evMap.get(a.event_id)?.event_date ?? "",
+      })).sort((a: any, b: any) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime()));
     }
+
+    // Enrich meeting evaluations with event details
+    if ((evalsData ?? []).length > 0) {
+      const evalEventIds = [...new Set((evalsData ?? []).map(e => e.event_id))];
+      const { data: evalEventsData } = await supabase.from("events").select("id, title, event_date").in("id", evalEventIds);
+      const evMap = new Map((evalEventsData ?? []).map(e => [e.id, e]));
+      setMeetingEvals((evalsData ?? []).map(e => ({
+        ...e,
+        event_title: evMap.get(e.event_id)?.title ?? "Encontro",
+        event_date: evMap.get(e.event_id)?.event_date ?? "",
+      })).sort((a: any, b: any) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime()));
+    }
+
     setLoaded(true);
     setLoadingData(false);
   }
@@ -89,6 +120,14 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
       const W = 210;
       const margin = 16;
       let y = 20;
+      const pageH = 297;
+
+      const checkPage = (needed: number) => {
+        if (y + needed > pageH - 20) {
+          doc.addPage();
+          y = 20;
+        }
+      };
 
       const addText = (text: string, x: number, yPos: number, size: number, bold = false, color = "#1a1a1a") => {
         doc.setFontSize(size);
@@ -98,6 +137,7 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
       };
 
       const addSection = (title: string) => {
+        checkPage(20);
         y += 5;
         doc.setFillColor(245, 247, 255);
         doc.roundedRect(margin, y, W - margin * 2, 8, 2, 2, "F");
@@ -106,9 +146,14 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
       };
 
       const addRow = (label: string, value: string) => {
+        checkPage(8);
         addText(`${label}:`, margin, y, 9, true, "#555");
-        addText(value || "—", margin + 45, y, 9, false, "#111");
-        y += 6;
+        const lines = doc.splitTextToSize(value || "—", W - margin * 2 - 48);
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor("#111");
+        doc.text(lines, margin + 45, y);
+        y += Math.max(6, lines.length * 4.5);
       };
 
       // Header
@@ -117,25 +162,25 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(255, 255, 255);
-      doc.text("Relatório Confirmatório", margin, 16);
+      doc.text("Relatorio Confirmatorio Completo", margin, 16);
       doc.setFontSize(11);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(200, 210, 255);
-      doc.text(`✝️ ${p.full_name}`, margin, 26);
+      doc.text(`${p.full_name}`, margin, 26);
       doc.text(`Gerado em ${new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}`, margin, 33);
       y = 48;
 
-      // Dados pessoais
-      addSection("👤 DADOS PESSOAIS");
+      // 1. Dados pessoais
+      addSection("DADOS PESSOAIS");
       addRow("Nome completo", p.full_name);
       addRow("Comunidade", p.community);
-      addRow("Área", p.area);
+      addRow("Area", p.area);
       addRow("Idade", age ? `${age} anos` : "—");
       addRow("Telefone", p.phone);
       addRow("Data de nascimento", p.birth_date ? new Date(p.birth_date).toLocaleDateString("pt-BR") : "—");
 
-      // Aptidão
-      addSection("🏁 APTIDÃO PARA A PROFISSÃO DE FÉ");
+      // 2. Aptidão
+      addSection("APTIDAO PARA A PROFISSAO DE FE");
       const aptCfg = APTIDAO_CFG[aptidao];
       doc.setFillColor(aptidao === "apto" ? 209 : aptidao === "acompanhamento" ? 254 : 254,
         aptidao === "apto" ? 250 : aptidao === "acompanhamento" ? 243 : 226,
@@ -145,71 +190,152 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
         aptidao === "apto" ? "#065F46" : aptidao === "acompanhamento" ? "#92400E" : "#991B1B");
       y += 14;
 
-      // Formação
-      addSection("🎓 FORMAÇÃO");
-      const course1 = formacoes.slice(0, 16);
-      const course2 = formacoes.slice(16, 32);
-      const done1 = course1.filter(a => completedIds.has(a.id)).length;
-      const done2 = course2.filter(a => completedIds.has(a.id)).length;
-      addRow("Curso 1 — Começando a Vida Cristã", `${done1}/16 lições (${Math.round((done1/16)*100)}%)`);
-      addRow("Curso 2 — Crescimento Cristão", `${done2}/16 lições (${Math.round((done2/16)*100)}%)`);
-      addRow("Total de atividades concluídas", `${p.completed_count}/${activities.length} (${pct}%)`);
+      // 3. Progresso da Jornada
+      addSection("PROGRESSO DA JORNADA");
+      addRow("Progresso geral", `${p.completed_count}/${activities.length} (${pct}%)`);
+      addRow("Devocionais", `${doneDev}/${devocionais.length}`);
+      addRow("Formacoes", `${doneForm}/${formacoes.length}`);
+      addRow("Encontros (app)", `${doneEnc}/${encontros.length}`);
 
-      // Vida Espiritual
-      addSection("❤️ VIDA ESPIRITUAL");
-      addRow("Devocionais realizados", `${doneDev}/${devocionais.length}`);
-      addRow("Formações concluídas", `${doneForm}/${formacoes.length}`);
+      // Activity checklist
+      checkPage(10);
+      y += 2;
+      addText("Atividades concluidas:", margin, y, 9, true, "#555");
+      y += 5;
+      for (const act of activities) {
+        checkPage(6);
+        const done = completedIds.has(act.id);
+        addText(`${done ? "[X]" : "[ ]"} ${act.title}`, margin + 4, y, 8, false, done ? "#065F46" : "#999");
+        y += 4.5;
+      }
+
+      // 4. Vida Espiritual
+      addSection("VIDA ESPIRITUAL");
       if (assessment) {
-        const EMOJIS = ["😔", "😐", "🙂", "😊", "🔥"];
-        addRow("Vida de oração (autoav.)", assessment.prayer_score ? `${EMOJIS[assessment.prayer_score-1]} (${assessment.prayer_score}/5)` : "Não avaliado");
-        addRow("Sente Deus perto (autoav.)", assessment.presence_score ? `${EMOJIS[assessment.presence_score-1]} (${assessment.presence_score}/5)` : "Não avaliado");
-        addRow("Pediu conversa pastoral", assessment.needs_pastor ? "Sim" : "Não");
-        if (assessment.notes) addRow("Observação pessoal", assessment.notes);
+        const EMOJIS_TEXT = ["Fraco", "Regular", "Bom", "Muito bom", "Excelente"];
+        addRow("Vida de oracao", assessment.prayer_score ? `${EMOJIS_TEXT[assessment.prayer_score-1]} (${assessment.prayer_score}/5)` : "Nao avaliado");
+        addRow("Sente Deus perto", assessment.presence_score ? `${EMOJIS_TEXT[assessment.presence_score-1]} (${assessment.presence_score}/5)` : "Nao avaliado");
+        addRow("Lutas espirituais", assessment.struggle_score ? `${EMOJIS_TEXT[assessment.struggle_score-1]} (${assessment.struggle_score}/5)` : "Nao avaliado");
+        addRow("Duvidas de fe", assessment.doubt_score ? `${EMOJIS_TEXT[assessment.doubt_score-1]} (${assessment.doubt_score}/5)` : "Nao avaliado");
+        addRow("Pediu conversa pastoral", assessment.needs_pastor ? "Sim" : "Nao");
+        if (assessment.notes) addRow("Observacao pessoal", assessment.notes);
+      } else {
+        addText("Nenhuma autoavaliacao registrada neste mes.", margin, y, 9, false, "#999");
+        y += 6;
       }
 
-      // Participação
-      addSection("👥 PARTICIPAÇÃO COMUNITÁRIA");
-      addRow("Presença nos encontros", `${doneEnc}/${encontros.length}`);
+      // 5. Presença nos encontros
+      addSection("PRESENCA NOS ENCONTROS");
       if (attendanceData) {
-        addRow("✅ Presente", `${attendanceData.present} encontro(s)`);
-        addRow("❌ Faltou", `${attendanceData.absent} encontro(s)`);
-        addRow("⏳ Justificou", `${attendanceData.justified} encontro(s)`);
-        const attendPct = attendanceData.total > 0
-          ? Math.round((attendanceData.present / attendanceData.total) * 100)
-          : 0;
-        addRow("Taxa de presença", `${attendPct}%`);
+        addRow("Presente", `${attendanceData.present} encontro(s)`);
+        addRow("Faltou", `${attendanceData.absent} encontro(s)`);
+        addRow("Justificou", `${attendanceData.justified} encontro(s)`);
+        const attendPct = attendanceData.total > 0 ? Math.round((attendanceData.present / attendanceData.total) * 100) : 0;
+        addRow("Taxa de presenca", `${attendPct}%`);
+
+        // Detail per event
+        if (attendanceDetails.length > 0) {
+          y += 2;
+          addText("Historico detalhado:", margin, y, 9, true, "#555");
+          y += 5;
+          for (const att of attendanceDetails) {
+            checkPage(6);
+            const statusTxt = att.status === "presente" ? "Presente" : att.status === "faltou" ? "Faltou" : "Justificou";
+            const dateStr = att.event_date ? new Date(att.event_date).toLocaleDateString("pt-BR") : "";
+            addText(`${dateStr} - ${att.event_title}: ${statusTxt}`, margin + 4, y, 8, false, 
+              att.status === "presente" ? "#065F46" : att.status === "faltou" ? "#991B1B" : "#92400E");
+            y += 4.5;
+          }
+        }
+      } else {
+        addText("Nenhum registro de presenca.", margin, y, 9, false, "#999");
+        y += 6;
       }
 
-      // Plano pastoral
+      // 6. Avaliações dos encontros presenciais
+      if (meetingEvals.length > 0) {
+        addSection("AVALIACOES DOS ENCONTROS PRESENCIAIS");
+        const SCORE_LABELS = ["", "Fraco", "Regular", "Bom", "Muito bom", "Excelente"];
+        for (const ev of meetingEvals) {
+          checkPage(25);
+          const dateStr = ev.event_date ? new Date(ev.event_date).toLocaleDateString("pt-BR") : "";
+          addText(`${ev.event_title} (${dateStr})`, margin, y, 9, true, "#333");
+          y += 5;
+          if (ev.participation_score) addRow("  Participacao", `${SCORE_LABELS[ev.participation_score]} (${ev.participation_score}/5)`);
+          if (ev.understanding_score) addRow("  Compreensao", `${SCORE_LABELS[ev.understanding_score]} (${ev.understanding_score}/5)`);
+          if (ev.engagement_score) addRow("  Engajamento", `${SCORE_LABELS[ev.engagement_score]} (${ev.engagement_score}/5)`);
+          if (ev.notes) addRow("  Observacoes", ev.notes);
+          y += 2;
+        }
+      }
+
+      // 7. Plano de discipulado
       if (plan) {
-        addSection("🧭 PLANO DE DISCIPULADO");
-        if (plan.objectives) { addText(`Objetivos: ${plan.objectives}`, margin, y, 9); y += 5; }
-        if (plan.next_steps) { addText(`Próximos passos: ${plan.next_steps}`, margin, y, 9); y += 5; }
-        if (plan.challenges) { addText(`Desafios: ${plan.challenges}`, margin, y, 9); y += 5; }
-        if (plan.recommendations) { addText(`Recomendações: ${plan.recommendations}`, margin, y, 9); y += 5; }
+        addSection("PLANO DE DISCIPULADO");
+        const healthLabels: Record<string,string> = { saudavel: "Saudavel", atencao: "Atencao", critico: "Critico" };
+        addRow("Status de saude", healthLabels[plan.health_status] ?? plan.health_status);
+        addRow("Prioridade pastoral", plan.is_priority ? "Sim" : "Nao");
+        if (plan.objectives) addRow("Objetivos", plan.objectives);
+        if (plan.next_steps) addRow("Proximos passos", plan.next_steps);
+        if (plan.challenges) addRow("Desafios", plan.challenges);
+        if (plan.recommendations) addRow("Recomendacoes", plan.recommendations);
+        if (plan.last_contact_at) addRow("Ultimo contato", new Date(plan.last_contact_at).toLocaleDateString("pt-BR"));
       }
 
-      // Observações pastorais
+      // 8. Notas pastorais
+      if (pastoralNotes.length > 0) {
+        addSection("NOTAS PASTORAIS");
+        const NOTE_LABELS: Record<string,string> = {
+          acompanhamento: "Acompanhamento", conversa: "Conversa pastoral",
+          encontro_individual: "Encontro individual", observacao: "Observacao",
+        };
+        for (const note of pastoralNotes) {
+          checkPage(12);
+          const dateStr = new Date(note.created_at).toLocaleDateString("pt-BR");
+          const typeLabel = NOTE_LABELS[note.note_type] ?? note.note_type;
+          addText(`${dateStr} - ${typeLabel}`, margin, y, 8, true, "#555");
+          y += 4;
+          const lines = doc.splitTextToSize(note.content, W - margin * 2 - 8);
+          doc.setFontSize(8);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor("#333");
+          for (const line of lines) {
+            checkPage(5);
+            doc.text(line, margin + 4, y);
+            y += 3.5;
+          }
+          y += 3;
+        }
+      }
+
+      // 9. Observações pastorais finais
       if (observations) {
-        addSection("📝 OBSERVAÇÕES PASTORAIS");
+        addSection("OBSERVACOES FINAIS DO DISCIPULADOR");
         const lines = doc.splitTextToSize(observations, W - margin * 2 - 6);
         doc.setFontSize(9);
         doc.setFont("helvetica", "italic");
         doc.setTextColor("#444");
-        doc.text(lines, margin + 3, y);
-        y += lines.length * 5 + 2;
+        for (const line of lines) {
+          checkPage(5);
+          doc.text(line, margin + 3, y);
+          y += 4.5;
+        }
       }
 
-      // Footer
-      doc.setFillColor(31, 60, 136);
-      doc.rect(0, 285, W, 12, "F");
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(200, 210, 255);
-      doc.text("Caminho Boa Nova — Sistema de Acompanhamento Confirmatório", margin, 292);
-      doc.text(`✝️ ${new Date().getFullYear()}`, W - margin - 10, 292);
+      // Footer on each page
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFillColor(31, 60, 136);
+        doc.rect(0, 285, W, 12, "F");
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(200, 210, 255);
+        doc.text("Caminho Boa Nova — Relatorio Confirmatorio Completo", margin, 292);
+        doc.text(`Pag. ${i}/${pageCount}`, W - margin - 20, 292);
+      }
 
-      doc.save(`Relatorio_Confirmatorio_${p.full_name.replace(/\s+/g, "_")}.pdf`);
+      doc.save(`Relatorio_${p.full_name.replace(/\s+/g, "_")}.pdf`);
     } catch (err) {
       console.error("PDF generation error:", err);
     }
@@ -220,16 +346,31 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
     <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
       <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
         <FileText className="w-4 h-4 text-primary" />
-        <p className="font-montserrat font-bold text-foreground text-sm">📄 Relatório Confirmatório</p>
+        <p className="font-montserrat font-bold text-foreground text-sm">📄 Relatório Confirmatório Completo</p>
       </div>
       <div className="p-4 space-y-4">
         {!loaded ? (
           <button onClick={loadData} disabled={loadingData}
             className="w-full py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm font-medium hover:bg-muted/70 transition-colors">
-            {loadingData ? "Carregando..." : "Carregar dados do relatório"}
+            {loadingData ? "Carregando dados..." : "Carregar dados do relatório"}
           </button>
         ) : (
           <>
+            {/* Resumo do que será incluído */}
+            <div className="bg-muted/30 rounded-xl p-3 space-y-1">
+              <p className="font-inter text-xs font-medium text-foreground">O relatório incluirá:</p>
+              <div className="grid grid-cols-2 gap-1 text-xs font-inter text-muted-foreground">
+                <span>✅ Dados pessoais</span>
+                <span>✅ Progresso ({pct}%)</span>
+                <span>✅ Presença ({attendanceData ? `${attendanceData.present}/${attendanceData.total}` : "—"})</span>
+                <span>✅ Autoavaliação</span>
+                <span>✅ {meetingEvals.length} avaliação(ões) de encontro</span>
+                <span>✅ {pastoralNotes.length} nota(s) pastoral(is)</span>
+                <span>✅ Plano de discipulado</span>
+                <span>✅ Checklist de atividades</span>
+              </div>
+            </div>
+
             {/* Aptidão selector */}
             <div>
               <p className="font-inter text-xs font-medium text-foreground mb-2">🏁 Aptidão para a Profissão de Fé</p>
@@ -256,7 +397,7 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
 
             {/* Observações pastorais */}
             <div>
-              <p className="font-inter text-xs font-medium text-foreground mb-1.5">📝 Observações pastorais (incluídas no relatório)</p>
+              <p className="font-inter text-xs font-medium text-foreground mb-1.5">📝 Observações finais (incluídas no relatório)</p>
               <textarea
                 value={observations}
                 onChange={e => setObservations(e.target.value)}
@@ -274,7 +415,7 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
               style={{ background: "var(--gradient-hero)" }}
             >
               <Download className="w-4 h-4" />
-              {loading ? "Gerando PDF..." : "📄 Baixar Relatório Confirmatório"}
+              {loading ? "Gerando PDF..." : "📄 Baixar Relatório Completo"}
             </button>
           </>
         )}
