@@ -470,6 +470,9 @@ export default function DiscipleshipTab() {
           {/* Course accordion */}
           {courses.map((course) => {
             const isOpen = expandedCourse === course.id;
+            const doneLessons = course.lessons.filter(l => completedLessonIds.has(l.id)).length;
+            const totalLessons = course.lessons.length;
+            const coursePct = totalLessons > 0 ? Math.round((doneLessons / totalLessons) * 100) : 0;
             return (
               <div key={course.id} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
                 {/* Course header */}
@@ -483,7 +486,20 @@ export default function DiscipleshipTab() {
                   <div className="flex-1 min-w-0">
                     <p className="font-montserrat font-bold text-foreground text-sm">{course.title}</p>
                     {course.subtitle && <p className="text-muted-foreground font-inter text-xs truncate">{course.subtitle}</p>}
-                    <p className="text-muted-foreground font-inter text-xs mt-0.5">{course.lessons.length} lições</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${coursePct}%`,
+                            background: coursePct === 100 ? "var(--gradient-green)" : "var(--gradient-hero)",
+                          }}
+                        />
+                      </div>
+                      <span className={`font-inter text-[10px] font-semibold flex-shrink-0 ${coursePct === 100 ? "text-brand-green" : "text-muted-foreground"}`}>
+                        {doneLessons}/{totalLessons}
+                      </span>
+                    </div>
                   </div>
                   {isOpen
                     ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
