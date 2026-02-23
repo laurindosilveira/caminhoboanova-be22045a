@@ -56,7 +56,7 @@ const SCORE_LABELS = ["", "Fraco", "Regular", "Bom", "Muito bom", "Excelente"];
 
 type WorshipRequest = {
   id: string; user_id: string; worship_date: string; worship_time: string;
-  preacher_name: string; status: string; created_at: string;
+  preacher_name: string; status: string; event_type: string; created_at: string;
   full_name?: string; community?: string;
 };
 
@@ -334,72 +334,87 @@ export default function AttendanceTab({ participants, activities }: { participan
         ))}
       </div>
 
-      {/* Worship attendance requests */}
-      {(filterType === null || filterType === "culto") && worshipRequests.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Church className="w-4 h-4 text-primary" />
-            <p className="font-montserrat font-bold text-foreground text-sm">
-              Confirmações de Cultos
-              {(() => {
-                const pending = worshipRequests.filter(w => w.status === "pendente").length;
-                return pending > 0 ? (
+      {/* Event attendance requests - filtered by event type */}
+      {(() => {
+        const TYPE_EMOJI: Record<string, string> = {
+          encontro: "📅", culto: "⛪", jemiac: "✝️", retiro: "🏕️", evento: "🎉",
+        };
+        const TYPE_LABEL: Record<string, string> = {
+          encontro: "Encontros", culto: "Cultos", jemiac: "JEMIAC", retiro: "Retiros", evento: "Eventos",
+        };
+        const filtered = filterType
+          ? worshipRequests.filter(w => w.event_type === filterType)
+          : worshipRequests;
+        if (filtered.length === 0) return null;
+        const pending = filtered.filter(w => w.status === "pendente").length;
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Church className="w-4 h-4 text-primary" />
+              <p className="font-montserrat font-bold text-foreground text-sm">
+                Confirmações de Presença
+                {pending > 0 && (
                   <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-inter font-bold bg-accent/20 text-accent-foreground">
                     {pending} pendente{pending !== 1 ? "s" : ""}
                   </span>
-                ) : null;
-              })()}
-            </p>
-          </div>
-          {worshipRequests.map(w => {
-            const isPending = w.status === "pendente";
-            const isSaving = savingWorship === w.id;
-            return (
-              <div key={w.id} className={`bg-card rounded-2xl border ${isPending ? "border-accent/50" : "border-border"} p-4 shadow-sm space-y-2`}>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <span className="text-lg">⛪</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-montserrat font-bold text-foreground text-sm">{w.full_name}</p>
-                    <p className="text-muted-foreground font-inter text-xs">{w.community}</p>
-                  </div>
-                  {!isPending && (
-                    <span className={`text-xs font-inter font-medium px-2 py-0.5 rounded-full ${
-                      w.status === "aprovado" ? "bg-brand-green/10 text-brand-green" : "bg-destructive/10 text-destructive"
-                    }`}>
-                      {w.status === "aprovado" ? "✅ Aprovado" : "❌ Rejeitado"}
+                )}
+              </p>
+            </div>
+            {filtered.map(w => {
+              const isPending = w.status === "pendente";
+              const isSaving = savingWorship === w.id;
+              const emoji = TYPE_EMOJI[w.event_type] ?? "📅";
+              const typeLabel = TYPE_LABEL[w.event_type] ?? w.event_type;
+              return (
+                <div key={w.id} className={`bg-card rounded-2xl border ${isPending ? "border-accent/50" : "border-border"} p-4 shadow-sm space-y-2`}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <span className="text-lg">{emoji}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-montserrat font-bold text-foreground text-sm">{w.full_name}</p>
+                      <p className="text-muted-foreground font-inter text-xs">{w.community}</p>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-inter font-medium bg-muted text-muted-foreground">
+                      {typeLabel}
                     </span>
+                    {!isPending && (
+                      <span className={`text-xs font-inter font-medium px-2 py-0.5 rounded-full ${
+                        w.status === "aprovado" ? "bg-brand-green/10 text-brand-green" : "bg-destructive/10 text-destructive"
+                      }`}>
+                        {w.status === "aprovado" ? "✅ Aprovado" : "❌ Rejeitado"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4 text-xs font-inter text-muted-foreground">
+                    <span>📅 {new Date(w.worship_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                    <span>🕐 {w.worship_time}</span>
+                    <span>🎤 {w.preacher_name}</span>
+                  </div>
+                  {isPending && (
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        onClick={() => handleWorshipAction(w.id, "aprovado")}
+                        disabled={isSaving}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-green/10 text-brand-green font-inter text-xs font-medium border border-brand-green/30 hover:bg-brand-green/20 transition-colors disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Aprovar
+                      </button>
+                      <button
+                        onClick={() => handleWorshipAction(w.id, "rejeitado")}
+                        disabled={isSaving}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-destructive/10 text-destructive font-inter text-xs font-medium border border-destructive/30 hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                      >
+                        <XCircle className="w-3.5 h-3.5" /> Rejeitar
+                      </button>
+                    </div>
                   )}
                 </div>
-                <div className="flex items-center gap-4 text-xs font-inter text-muted-foreground">
-                  <span>📅 {new Date(w.worship_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}</span>
-                  <span>🕐 {w.worship_time}</span>
-                  <span>🎤 {w.preacher_name}</span>
-                </div>
-                {isPending && (
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      onClick={() => handleWorshipAction(w.id, "aprovado")}
-                      disabled={isSaving}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-green/10 text-brand-green font-inter text-xs font-medium border border-brand-green/30 hover:bg-brand-green/20 transition-colors disabled:opacity-50"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Aprovar
-                    </button>
-                    <button
-                      onClick={() => handleWorshipAction(w.id, "rejeitado")}
-                      disabled={isSaving}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-destructive/10 text-destructive font-inter text-xs font-medium border border-destructive/30 hover:bg-destructive/20 transition-colors disabled:opacity-50"
-                    >
-                      <XCircle className="w-3.5 h-3.5" /> Rejeitar
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        );
+      })()}
 
       <div className="space-y-3">
         {filteredEvents.map(event => {

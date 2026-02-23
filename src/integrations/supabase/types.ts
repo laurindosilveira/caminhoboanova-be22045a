@@ -757,6 +757,7 @@ export type Database = {
       worship_attendance: {
         Row: {
           created_at: string
+          event_type: string
           id: string
           preacher_name: string
           reviewed_at: string | null
@@ -768,6 +769,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          event_type?: string
           id?: string
           preacher_name: string
           reviewed_at?: string | null
@@ -779,6 +781,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          event_type?: string
           id?: string
           preacher_name?: string
           reviewed_at?: string | null

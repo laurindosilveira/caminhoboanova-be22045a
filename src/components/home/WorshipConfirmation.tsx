@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Church, Calendar, Clock, User, Send, CheckCircle2, XCircle, Clock as ClockIcon } from "lucide-react";
+import { Calendar, Clock, User, Send, CheckCircle2, XCircle, Clock as ClockIcon, CalendarDays } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
@@ -14,8 +14,17 @@ type WorshipRecord = {
   worship_time: string;
   preacher_name: string;
   status: string;
+  event_type: string;
   created_at: string;
 };
+
+const EVENT_TYPE_OPTIONS = [
+  { value: "encontro", label: "Encontro", emoji: "📅" },
+  { value: "culto", label: "Culto", emoji: "⛪" },
+  { value: "jemiac", label: "JEMIAC", emoji: "✝️" },
+  { value: "retiro", label: "Retiro", emoji: "🏕️" },
+  { value: "evento", label: "Evento", emoji: "🎉" },
+];
 
 const TIME_OPTIONS = [
   "08:00", "08:30", "09:00", "09:30", "10:00", "10:30",
@@ -25,6 +34,7 @@ const TIME_OPTIONS = [
 export default function WorshipConfirmation() {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
+  const [eventType, setEventType] = useState("");
   const [date, setDate] = useState<Date | undefined>();
   const [time, setTime] = useState("");
   const [preacher, setPreacher] = useState("");
@@ -41,7 +51,7 @@ export default function WorshipConfirmation() {
     if (!user) return;
     const { data } = await supabase
       .from("worship_attendance")
-      .select("id, worship_date, worship_time, preacher_name, status, created_at")
+      .select("id, worship_date, worship_time, preacher_name, status, event_type, created_at")
       .eq("user_id", user.id)
       .order("worship_date", { ascending: false })
       .limit(20);
@@ -50,7 +60,7 @@ export default function WorshipConfirmation() {
   }
 
   async function handleSubmit() {
-    if (!date || !time || !preacher.trim()) {
+    if (!eventType || !date || !time || !preacher.trim()) {
       toast({ title: "Preencha todos os campos", variant: "destructive" });
       return;
     }
@@ -63,16 +73,18 @@ export default function WorshipConfirmation() {
       worship_date: format(date, "yyyy-MM-dd"),
       worship_time: time,
       preacher_name: preacher.trim(),
+      event_type: eventType,
     });
 
     if (error) {
       toast({ title: "Erro ao enviar", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Presença enviada! ⛪", description: "Aguarde a confirmação do líder da turma." });
+      toast({ title: "Presença enviada! 🙌", description: "Aguarde a confirmação do líder da turma." });
       setShowForm(false);
       setDate(undefined);
       setTime("");
       setPreacher("");
+      setEventType("");
       fetchRecords();
     }
     setSubmitting(false);
@@ -84,15 +96,17 @@ export default function WorshipConfirmation() {
     rejeitado: { label: "Rejeitado", color: "text-destructive", bg: "bg-destructive/10", icon: <XCircle className="w-3 h-3" /> },
   };
 
+  const getTypeInfo = (type: string) => EVENT_TYPE_OPTIONS.find(e => e.value === type) ?? EVENT_TYPE_OPTIONS[0];
+
   return (
     <div className="px-5 py-4 space-y-4">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
-          <span className="text-xl">⛪</span>
+          <CalendarDays className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <h3 className="font-montserrat font-black text-foreground text-base">Presença em Cultos</h3>
-          <p className="text-muted-foreground text-xs font-inter">Confirme sua participação nos cultos</p>
+          <h3 className="font-montserrat font-black text-foreground text-base">Presença em Eventos</h3>
+          <p className="text-muted-foreground text-xs font-inter">Confirme sua participação em eventos</p>
         </div>
       </div>
 
@@ -102,19 +116,41 @@ export default function WorshipConfirmation() {
         className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-montserrat font-bold text-sm text-primary-foreground transition-all hover:opacity-90"
         style={{ background: "var(--gradient-hero)" }}
       >
-        <Church className="w-4 h-4" />
-        {showForm ? "Cancelar" : "Confirmar participação no culto"}
+        <CalendarDays className="w-4 h-4" />
+        {showForm ? "Cancelar" : "Confirmar presença em evento"}
       </button>
 
       {/* Form */}
       {showForm && (
         <div className="bg-card rounded-2xl border border-border p-4 space-y-4 shadow-sm">
-          <p className="font-montserrat font-bold text-foreground text-sm">📋 Dados do Culto</p>
+          <p className="font-montserrat font-bold text-foreground text-sm">📋 Dados do Evento</p>
+
+          {/* Event type selector */}
+          <div className="space-y-1.5">
+            <label className="font-inter text-xs font-medium text-foreground flex items-center gap-1.5">
+              <CalendarDays className="w-3.5 h-3.5 text-primary" /> Tipo de evento
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {EVENT_TYPE_OPTIONS.map(t => (
+                <button
+                  key={t.value}
+                  onClick={() => setEventType(t.value)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-inter font-medium border transition-all ${
+                    eventType === t.value
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border bg-background text-foreground hover:border-primary/50"
+                  }`}
+                >
+                  {t.emoji} {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Date picker */}
           <div className="space-y-1.5">
             <label className="font-inter text-xs font-medium text-foreground flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-primary" /> Data do culto
+              <Calendar className="w-3.5 h-3.5 text-primary" /> Data do evento
             </label>
             <Popover>
               <PopoverTrigger asChild>
@@ -141,7 +177,7 @@ export default function WorshipConfirmation() {
           {/* Time selector */}
           <div className="space-y-1.5">
             <label className="font-inter text-xs font-medium text-foreground flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-primary" /> Horário do culto
+              <Clock className="w-3.5 h-3.5 text-primary" /> Horário
             </label>
             <div className="flex flex-wrap gap-1.5">
               {TIME_OPTIONS.map(t => (
@@ -160,10 +196,10 @@ export default function WorshipConfirmation() {
             </div>
           </div>
 
-          {/* Preacher name */}
+          {/* Preacher/leader name */}
           <div className="space-y-1.5">
             <label className="font-inter text-xs font-medium text-foreground flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5 text-primary" /> Nome do pregador
+              <User className="w-3.5 h-3.5 text-primary" /> Pregador / Líder do evento
             </label>
             <input
               value={preacher}
@@ -177,7 +213,7 @@ export default function WorshipConfirmation() {
           {/* Submit */}
           <button
             onClick={handleSubmit}
-            disabled={submitting || !date || !time || !preacher.trim()}
+            disabled={submitting || !eventType || !date || !time || !preacher.trim()}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-montserrat font-bold text-sm text-primary-foreground disabled:opacity-50 transition-all"
             style={{ background: "var(--gradient-hero)" }}
           >
@@ -193,12 +229,13 @@ export default function WorshipConfirmation() {
           <p className="font-montserrat font-bold text-foreground text-sm">Histórico</p>
           {records.map(r => {
             const cfg = STATUS_CFG[r.status] ?? STATUS_CFG.pendente;
+            const typeInfo = getTypeInfo(r.event_type);
             return (
               <div key={r.id} className="bg-card rounded-xl border border-border p-3 flex items-center gap-3">
-                <span className="text-lg">⛪</span>
+                <span className="text-lg">{typeInfo.emoji}</span>
                 <div className="flex-1 min-w-0">
                   <p className="font-inter text-sm font-medium text-foreground">
-                    {new Date(r.worship_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })} · {r.worship_time}
+                    {typeInfo.label} · {new Date(r.worship_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })} · {r.worship_time}
                   </p>
                   <p className="font-inter text-[10px] text-muted-foreground">Pregador: {r.preacher_name}</p>
                 </div>
@@ -213,8 +250,8 @@ export default function WorshipConfirmation() {
 
       {!loading && records.length === 0 && !showForm && (
         <div className="text-center py-6 text-muted-foreground font-inter text-sm">
-          <span className="text-3xl block mb-2">⛪</span>
-          <p>Nenhuma confirmação de culto registrada.</p>
+          <span className="text-3xl block mb-2">📅</span>
+          <p>Nenhuma confirmação de evento registrada.</p>
           <p className="text-xs mt-1">Clique acima para confirmar sua presença!</p>
         </div>
       )}
