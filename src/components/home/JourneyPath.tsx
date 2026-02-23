@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle, Lock, Star, BookOpen } from "lucide-react";
+import { CheckCircle, Lock, Star, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import DevotionalView from "@/components/home/DevotionalView";
 
@@ -24,7 +24,7 @@ const typeLabels: Record<string, string> = {
   devocional: "📖 Devocional",
   formacao: "🎓 Formação",
   encontro: "📅 Encontro",
-  desafio: "✨ Desafio",
+  desafio: "✨ Atividade",
 };
 
 const typeIcons: Record<string, string> = {
@@ -41,6 +41,7 @@ export default function JourneyPath() {
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState<string | null>(null);
   const [viewingDevotional, setViewingDevotional] = useState<Activity | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -135,18 +136,39 @@ export default function JourneyPath() {
 
   const nextStep = stepsWithStatus.find(s => s.status === "available");
 
+  const pct = activities.length > 0 ? Math.round((doneCount / activities.length) * 100) : 0;
+
   return (
     <div className="px-5 pt-6">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-montserrat font-black text-foreground text-xl">🛤️ Minha Jornada</h2>
-        <span className="text-muted-foreground text-xs font-inter bg-muted rounded-full px-3 py-1">
-          {doneCount}/{activities.length} concluídos
-        </span>
+      {/* Summary header with progress bar */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="font-montserrat font-black text-foreground text-xl">🛤️ Minha Jornada</h2>
+          <span className="text-muted-foreground text-xs font-inter bg-muted rounded-full px-3 py-1">
+            {doneCount}/{activities.length}
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-orange rounded-full transition-all duration-700"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <span className="text-xs font-montserrat font-bold text-secondary flex-shrink-0">{pct}%</span>
+        </div>
+        <p className="text-muted-foreground font-inter text-[11px] mt-1.5">
+          {doneCount === 0
+            ? "Comece sua jornada completando a primeira atividade!"
+            : doneCount === activities.length
+            ? "🎉 Parabéns! Você completou toda a jornada!"
+            : `Faltam ${activities.length - doneCount} atividade${activities.length - doneCount > 1 ? "s" : ""} para concluir`}
+        </p>
       </div>
 
       {/* Continue banner */}
       {nextStep && doneCount > 0 && (
-        <div className="mb-5 p-3.5 rounded-2xl border border-secondary/30 bg-secondary/5 flex items-center gap-3">
+        <div className="mb-4 p-3.5 rounded-2xl border border-secondary/30 bg-secondary/5 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-secondary/15 flex items-center justify-center flex-shrink-0 text-lg">
             {typeIcons[nextStep.type] ?? "📌"}
           </div>
@@ -173,98 +195,111 @@ export default function JourneyPath() {
         </div>
       )}
 
-      <div className="relative">
-        {stepsWithStatus.map((step, index) => (
-          <div key={step.id} className="flex gap-4 mb-1">
-            {/* Timeline */}
-            <div className="flex flex-col items-center">
-              <button
-                onClick={() => handleActivityClick(step, step.status)}
-                disabled={step.status === "locked"}
-                className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl flex-shrink-0 relative transition-all
-                  ${step.status === "done" ? "bg-brand-green shadow-lg shadow-brand-green/40" : ""}
-                  ${step.status === "available" ? "bg-gradient-orange shadow-2xl shadow-secondary/50 animate-float ring-4 ring-secondary/30" : ""}
-                  ${step.status === "locked" ? "bg-muted opacity-50 cursor-not-allowed" : "cursor-pointer"}
-                `}
-              >
-                {step.status === "done" && (
-                  <CheckCircle className="w-7 h-7 text-primary-foreground fill-primary-foreground" />
-                )}
-                {step.status === "available" && (
-                  <>
-                    <span className="text-2xl">{typeIcons[step.type] ?? "📌"}</span>
-                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-accent rounded-full flex items-center justify-center shadow-md">
-                      <Star className="w-3 h-3 text-accent-foreground fill-accent-foreground" />
-                    </span>
-                  </>
-                )}
-                {step.status === "locked" && (
-                  <Lock className="w-6 h-6 text-muted-foreground" />
-                )}
-              </button>
+      {/* Expandable detail toggle */}
+      {activities.length > 0 && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full flex items-center justify-center gap-2 py-2.5 mb-3 rounded-xl bg-muted/50 hover:bg-muted text-muted-foreground font-inter text-xs font-medium transition-colors"
+        >
+          {expanded ? "Ocultar detalhes" : "Ver todas as atividades"}
+          {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        </button>
+      )}
 
-              {index < stepsWithStatus.length - 1 && (
-                <div
-                  className={`w-0.5 h-8 mt-1 rounded-full transition-all ${
-                    step.status === "done"
-                      ? "bg-brand-green/60"
-                      : step.status === "available"
-                      ? "bg-secondary/30"
-                      : "bg-border"
-                  }`}
-                />
-              )}
-            </div>
+      {expanded && (
+        <div className="relative animate-in fade-in slide-in-from-top-2 duration-300">
+          {stepsWithStatus.map((step, index) => (
+            <div key={step.id} className="flex gap-4 mb-1">
+              {/* Timeline */}
+              <div className="flex flex-col items-center">
+                <button
+                  onClick={() => handleActivityClick(step, step.status)}
+                  disabled={step.status === "locked"}
+                  className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl flex-shrink-0 relative transition-all
+                    ${step.status === "done" ? "bg-brand-green shadow-lg shadow-brand-green/40" : ""}
+                    ${step.status === "available" ? "bg-gradient-orange shadow-2xl shadow-secondary/50 animate-float ring-4 ring-secondary/30" : ""}
+                    ${step.status === "locked" ? "bg-muted opacity-50 cursor-not-allowed" : "cursor-pointer"}
+                  `}
+                >
+                  {step.status === "done" && (
+                    <CheckCircle className="w-7 h-7 text-primary-foreground fill-primary-foreground" />
+                  )}
+                  {step.status === "available" && (
+                    <>
+                      <span className="text-2xl">{typeIcons[step.type] ?? "📌"}</span>
+                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-accent rounded-full flex items-center justify-center shadow-md">
+                        <Star className="w-3 h-3 text-accent-foreground fill-accent-foreground" />
+                      </span>
+                    </>
+                  )}
+                  {step.status === "locked" && (
+                    <Lock className="w-6 h-6 text-muted-foreground" />
+                  )}
+                </button>
 
-            {/* Content */}
-            <div
-              className={`flex-1 pt-2.5 pb-5 ${step.status === "locked" ? "opacity-40" : "cursor-pointer"}`}
-              onClick={() => handleActivityClick(step, step.status)}
-            >
-              <div className="flex items-center gap-2 mb-0.5">
-                <span className={`text-xs font-montserrat font-bold uppercase tracking-wide ${typeColors[step.type] ?? "text-muted-foreground"}`}>
-                  {typeLabels[step.type] ?? step.type}
-                </span>
-                {step.status === "done" && (
-                  <span className="text-xs text-brand-green font-inter font-medium bg-brand-green/10 rounded-full px-2 py-0.5">
-                    ✔ Concluído
-                  </span>
+                {index < stepsWithStatus.length - 1 && (
+                  <div
+                    className={`w-0.5 h-8 mt-1 rounded-full transition-all ${
+                      step.status === "done"
+                        ? "bg-brand-green/60"
+                        : step.status === "available"
+                        ? "bg-secondary/30"
+                        : "bg-border"
+                    }`}
+                  />
                 )}
               </div>
-              <h3 className="font-montserrat font-bold text-card-foreground text-base">{step.title}</h3>
-              <p className="text-muted-foreground text-sm font-inter">{step.subtitle ?? ""}</p>
 
-              {step.status === "available" && step.type !== "devocional" && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleComplete(step.id); }}
-                  disabled={completing === step.id}
-                  className="mt-3 px-5 py-2.5 bg-gradient-orange rounded-2xl text-primary-foreground text-sm font-montserrat font-bold shadow-lg shadow-secondary/30 active:scale-95 transition-all disabled:opacity-60"
-                >
-                  {completing === step.id ? "Marcando..." : doneCount === 0 ? "Iniciar →" : "Continuar →"}
-                </button>
-              )}
+              {/* Content */}
+              <div
+                className={`flex-1 pt-2.5 pb-5 ${step.status === "locked" ? "opacity-40" : "cursor-pointer"}`}
+                onClick={() => handleActivityClick(step, step.status)}
+              >
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className={`text-xs font-montserrat font-bold uppercase tracking-wide ${typeColors[step.type] ?? "text-muted-foreground"}`}>
+                    {typeLabels[step.type] ?? step.type}
+                  </span>
+                  {step.status === "done" && (
+                    <span className="text-xs text-brand-green font-inter font-medium bg-brand-green/10 rounded-full px-2 py-0.5">
+                      ✔ Concluído
+                    </span>
+                  )}
+                </div>
+                <h3 className="font-montserrat font-bold text-card-foreground text-base">{step.title}</h3>
+                <p className="text-muted-foreground text-sm font-inter">{step.subtitle ?? ""}</p>
 
-              {step.status === "available" && step.type === "devocional" && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setViewingDevotional(step); }}
-                  className="mt-3 px-5 py-2.5 bg-gradient-orange rounded-2xl text-primary-foreground text-sm font-montserrat font-bold shadow-lg shadow-secondary/30 active:scale-95 transition-all"
-                >
-                  {doneCount === 0 ? "Abrir Devocional →" : "Ler Devocional →"}
-                </button>
-              )}
+                {step.status === "available" && step.type !== "devocional" && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleComplete(step.id); }}
+                    disabled={completing === step.id}
+                    className="mt-3 px-5 py-2.5 bg-gradient-orange rounded-2xl text-primary-foreground text-sm font-montserrat font-bold shadow-lg shadow-secondary/30 active:scale-95 transition-all disabled:opacity-60"
+                  >
+                    {completing === step.id ? "Marcando..." : doneCount === 0 ? "Iniciar →" : "Continuar →"}
+                  </button>
+                )}
 
-              {step.status === "done" && step.type === "devocional" && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setViewingDevotional(step); }}
-                  className="mt-2 px-4 py-1.5 rounded-xl border border-brand-green/30 text-brand-green text-xs font-inter font-medium hover:bg-brand-green/5 transition-colors"
-                >
-                  📖 Reler devocional
-                </button>
-              )}
+                {step.status === "available" && step.type === "devocional" && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setViewingDevotional(step); }}
+                    className="mt-3 px-5 py-2.5 bg-gradient-orange rounded-2xl text-primary-foreground text-sm font-montserrat font-bold shadow-lg shadow-secondary/30 active:scale-95 transition-all"
+                  >
+                    {doneCount === 0 ? "Abrir Devocional →" : "Ler Devocional →"}
+                  </button>
+                )}
+
+                {step.status === "done" && step.type === "devocional" && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setViewingDevotional(step); }}
+                    className="mt-2 px-4 py-1.5 rounded-xl border border-brand-green/30 text-brand-green text-xs font-inter font-medium hover:bg-brand-green/5 transition-colors"
+                  >
+                    📖 Reler devocional
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
