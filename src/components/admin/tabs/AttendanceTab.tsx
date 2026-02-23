@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   CalendarDays, Users, CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp,
   Star, BookOpen, FileText, Save, Church, Plus, MapPin, X as XIcon,
-  Heart, GraduationCap,
+  Heart, GraduationCap, MessageSquare,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -13,8 +13,9 @@ import { Textarea } from "@/components/ui/textarea";
 import ParticipantsTab from "./ParticipantsTab";
 import AdminDiscipleshipTab from "./AdminDiscipleshipTab";
 import ClassroomSettingsTab from "./ClassroomSettingsTab";
+import MessagesTab from "./MessagesTab";
 
-type SubTab = "presenca" | "pessoas" | "discipulado" | "sala";
+type SubTab = "presenca" | "pessoas" | "discipulado" | "sala" | "avisos";
 
 type Event = {
   id: string; title: string; event_date: string; type: string;
@@ -367,6 +368,7 @@ export default function AttendanceTab({ participants, activities, communities, i
     { id: "pessoas" as SubTab, label: "Pessoas", icon: Users },
     { id: "discipulado" as SubTab, label: "Discipulado", icon: Heart },
     { id: "sala" as SubTab, label: "Sala", icon: GraduationCap },
+    { id: "avisos" as SubTab, label: "Avisos", icon: MessageSquare },
   ];
 
   // Sub-tab navigation header (shared across all states)
@@ -412,6 +414,7 @@ export default function AttendanceTab({ participants, activities, communities, i
           />
         )}
         {activeSubTab === "sala" && <ClassroomSettingsTab />}
+        {activeSubTab === "avisos" && <MessagesTab />}
       </div>
     );
   }

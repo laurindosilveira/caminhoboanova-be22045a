@@ -1,12 +1,11 @@
-import { BarChart3, BookOpen, MessageSquare, UserCheck, Shield } from "lucide-react";
+import { BarChart3, BookOpen, UserCheck, Shield } from "lucide-react";
 
-export type AdminTab = "overview" | "attendance" | "courses" | "messages" | "users";
+export type AdminTab = "overview" | "attendance" | "courses" | "users";
 
 const TABS = [
   { id: "overview" as AdminTab, label: "Visão", icon: BarChart3 },
   { id: "attendance" as AdminTab, label: "Encontros", icon: UserCheck },
   { id: "courses" as AdminTab, label: "Cursos", icon: BookOpen },
-  { id: "messages" as AdminTab, label: "Avisos", icon: MessageSquare },
   { id: "users" as AdminTab, label: "Usuários", icon: Shield },
 ];
 

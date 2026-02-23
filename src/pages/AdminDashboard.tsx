@@ -8,7 +8,7 @@ import AdminBottomNav, { AdminTab } from "@/components/admin/AdminBottomNav";
 import OverviewTab from "@/components/admin/tabs/OverviewTab";
 import ParticipantsTab from "@/components/admin/tabs/ParticipantsTab";
 import CoursesTab from "@/components/admin/tabs/CoursesTab";
-import MessagesTab from "@/components/admin/tabs/MessagesTab";
+// MessagesTab moved into AttendanceTab as "Avisos" sub-tab
 import AdminDiscipleshipTab from "@/components/admin/tabs/AdminDiscipleshipTab";
 import ClassroomSettingsTab from "@/components/admin/tabs/ClassroomSettingsTab";
 import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
@@ -253,7 +253,7 @@ export default function AdminDashboard() {
               />
             )}
             {activeTab === "courses" && <CoursesTab />}
-            {activeTab === "messages" && <MessagesTab />}
+            {/* messages tab removed — now inside AttendanceTab as "Avisos" sub-tab */}
             {activeTab === "users" && <UsersTab />}
           </>
         )}
