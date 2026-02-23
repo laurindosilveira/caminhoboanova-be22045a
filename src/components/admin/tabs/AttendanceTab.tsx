@@ -1,20 +1,32 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { CalendarDays, Users, CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  CalendarDays, Users, CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp,
+  Star, BookOpen, FileText, Save,
+} from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
 
 type Event = {
-  id: string; title: string; event_date: string; type: string; location: string | null; community: string | null; area: string | null;
+  id: string; title: string; event_date: string; type: string;
+  location: string | null; community: string | null; area: string | null;
 };
-
 type Participant = {
   user_id: string; full_name: string; community: string;
 };
-
+type Activity = {
+  id: string; title: string; type: string; order_num: number;
+};
 type AttendanceStatus = "presente" | "faltou" | "justificou";
+type Evaluation = {
+  participation_score: number | null;
+  understanding_score: number | null;
+  engagement_score: number | null;
+  notes: string;
+};
 
 const STATUS_CFG: Record<AttendanceStatus, { label: string; icon: React.ReactNode; btn: string; active: string }> = {
   presente: {
@@ -40,15 +52,22 @@ const STATUS_CFG: Record<AttendanceStatus, { label: string; icon: React.ReactNod
 const TYPE_EMOJI: Record<string, string> = {
   encontro: "📅", culto: "⛪", retiro: "🏕️", evento: "🎉",
 };
+const SCORE_LABELS = ["", "Fraco", "Regular", "Bom", "Muito bom", "Excelente"];
 
-export default function AttendanceTab({ participants }: { participants: Participant[] }) {
+export default function AttendanceTab({ participants, activities }: { participants: Participant[]; activities: Activity[] }) {
   const { profile } = useAuth();
   const { toast } = useToast();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
   const [attendance, setAttendance] = useState<Record<string, Record<string, AttendanceStatus>>>({});
-  const [saving, setSaving] = useState<string | null>(null);
+  const [savingAtt, setSavingAtt] = useState<string | null>(null);
+
+  // Meetings-specific state
+  const [evaluations, setEvaluations] = useState<Record<string, Record<string, Evaluation>>>({});
+  const [prepReport, setPrepReport] = useState<Record<string, string[]>>({});
+  const [selectedParticipant, setSelectedParticipant] = useState<string | null>(null);
+  const [savingEval, setSavingEval] = useState(false);
 
   useEffect(() => { fetchEvents(); }, []);
 
@@ -58,40 +77,70 @@ export default function AttendanceTab({ participants }: { participants: Particip
       .from("events")
       .select("id, title, event_date, type, location, community, area")
       .order("event_date", { ascending: false })
-      .limit(20);
+      .limit(30);
     setEvents(data ?? []);
     setLoading(false);
   }
 
-  async function loadAttendanceForEvent(eventId: string) {
-    const { data } = await supabase
-      .from("attendance")
-      .select("user_id, status")
-      .eq("event_id", eventId);
-    const map: Record<string, AttendanceStatus> = {};
-    (data ?? []).forEach(r => { map[r.user_id] = r.status as AttendanceStatus; });
-    setAttendance(prev => ({ ...prev, [eventId]: map }));
+  async function loadEventData(eventId: string, eventDate: string, isEncontro: boolean) {
+    const eventParticipants = getParticipantsForEvent(events.find(e => e.id === eventId)!);
+    const userIds = eventParticipants.map(p => p.user_id);
+
+    // Always load attendance
+    const { data: attData } = await supabase.from("attendance").select("user_id, status").eq("event_id", eventId);
+
+    const attMap: Record<string, AttendanceStatus> = {};
+    (attData ?? []).forEach((r: any) => { attMap[r.user_id] = r.status as AttendanceStatus; });
+    setAttendance(prev => ({ ...prev, [eventId]: attMap }));
+
+    // For encontros, also load evaluations + progress
+    if (isEncontro && userIds.length > 0) {
+      const [{ data: evalData }, { data: progressData }] = await Promise.all([
+        supabase.from("meeting_evaluations").select("*").eq("event_id", eventId),
+        supabase.from("user_progress").select("user_id, activity_id, completed_at").in("user_id", userIds),
+      ]);
+
+      const evalMap: Record<string, Evaluation> = {};
+      (evalData ?? []).forEach((e: any) => {
+        evalMap[e.user_id] = {
+          participation_score: e.participation_score,
+          understanding_score: e.understanding_score,
+          engagement_score: e.engagement_score,
+          notes: e.notes ?? "",
+        };
+      });
+      setEvaluations(prev => ({ ...prev, [eventId]: evalMap }));
+
+      const eventDateObj = new Date(eventDate);
+      const prepMap: Record<string, string[]> = {};
+      (progressData ?? []).forEach((pr: any) => {
+        if (new Date(pr.completed_at) <= eventDateObj) {
+          if (!prepMap[pr.user_id]) prepMap[pr.user_id] = [];
+          prepMap[pr.user_id].push(pr.activity_id);
+        }
+      });
+      setPrepReport(prepMap);
+    }
   }
+
 
   async function toggleEvent(eventId: string) {
     if (expandedEvent === eventId) {
       setExpandedEvent(null);
+      setSelectedParticipant(null);
       return;
     }
     setExpandedEvent(eventId);
-    if (!attendance[eventId]) {
-      await loadAttendanceForEvent(eventId);
-    }
+    setSelectedParticipant(null);
+    const event = events.find(e => e.id === eventId);
+    if (event) await loadEventData(eventId, event.event_date, event.type === "encontro");
   }
 
   async function markAttendance(eventId: string, userId: string, status: AttendanceStatus) {
-    setSaving(`${eventId}-${userId}`);
+    setSavingAtt(`${eventId}-${userId}`);
     const current = attendance[eventId]?.[userId];
-
-    // Toggle off if same status
     if (current === status) {
-      await supabase.from("attendance").delete()
-        .eq("event_id", eventId).eq("user_id", userId);
+      await supabase.from("attendance").delete().eq("event_id", eventId).eq("user_id", userId);
       setAttendance(prev => {
         const updated = { ...prev[eventId] };
         delete updated[userId];
@@ -99,23 +148,52 @@ export default function AttendanceTab({ participants }: { participants: Particip
       });
     } else {
       await supabase.from("attendance").upsert({
-        event_id: eventId,
-        user_id: userId,
-        status,
+        event_id: eventId, user_id: userId, status,
       }, { onConflict: "event_id,user_id" });
       setAttendance(prev => ({
         ...prev,
         [eventId]: { ...(prev[eventId] ?? {}), [userId]: status },
       }));
     }
-    setSaving(null);
+    setSavingAtt(null);
   }
 
-  // Filter participants for this event's community/area
+  function updateLocalEval(eventId: string, userId: string, field: keyof Evaluation, value: any) {
+    setEvaluations(prev => ({
+      ...prev,
+      [eventId]: {
+        ...(prev[eventId] ?? {}),
+        [userId]: {
+          ...(prev[eventId]?.[userId] ?? { participation_score: null, understanding_score: null, engagement_score: null, notes: "" }),
+          [field]: value,
+        },
+      },
+    }));
+  }
+
+  async function saveEvaluation(eventId: string, userId: string) {
+    setSavingEval(true);
+    const ev = evaluations[eventId]?.[userId];
+    if (!ev) { setSavingEval(false); return; }
+    const { error } = await supabase.from("meeting_evaluations").upsert({
+      event_id: eventId, user_id: userId, admin_id: profile?.user_id ?? "",
+      participation_score: ev.participation_score,
+      understanding_score: ev.understanding_score,
+      engagement_score: ev.engagement_score,
+      notes: ev.notes,
+    }, { onConflict: "event_id,user_id" });
+    if (error) {
+      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Avaliação salva ✅" });
+    }
+    setSavingEval(false);
+  }
+
   function getParticipantsForEvent(event: Event) {
     return participants.filter(p => {
       if (event.community) return p.community === event.community;
-      return true; // area-wide or global
+      return true;
     });
   }
 
@@ -127,6 +205,31 @@ export default function AttendanceTab({ participants }: { participants: Particip
     const justified = Object.values(map).filter(s => s === "justificou").length;
     const unmarked = total - present - absent - justified;
     return { total, present, absent, justified, unmarked };
+  }
+
+  function ScoreSelector({ value, onChange, label }: { value: number | null; onChange: (v: number) => void; label: string }) {
+    return (
+      <div className="space-y-1">
+        <p className="text-xs font-inter font-medium text-muted-foreground">{label}</p>
+        <div className="flex gap-1">
+          {[1, 2, 3, 4, 5].map(n => (
+            <button
+              key={n}
+              onClick={() => onChange(n)}
+              title={SCORE_LABELS[n]}
+              className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
+                value === n
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted text-muted-foreground hover:bg-primary/20"
+              }`}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+        {value && <p className="text-[10px] text-primary font-inter">{SCORE_LABELS[value]}</p>}
+      </div>
+    );
   }
 
   if (loading) {
@@ -154,21 +257,24 @@ export default function AttendanceTab({ participants }: { participants: Particip
           <Users className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <h2 className="font-montserrat font-black text-foreground text-lg">Controle de Presença</h2>
-          <p className="text-muted-foreground text-xs font-inter">Marque presença por evento</p>
+          <h2 className="font-montserrat font-black text-foreground text-lg">Presença & Encontros</h2>
+          <p className="text-muted-foreground text-xs font-inter">Presença, avaliação e preparação</p>
         </div>
       </div>
 
       <div className="space-y-3">
         {events.map(event => {
           const isExpanded = expandedEvent === event.id;
+          const isEncontro = event.type === "encontro";
           const eventParticipants = getParticipantsForEvent(event);
           const summary = isExpanded ? getAttendanceSummary(event.id, eventParticipants) : null;
           const dateObj = new Date(event.event_date);
+          const evalMap = evaluations[event.id] ?? {};
+          const evaluatedCount = isEncontro ? Object.keys(evalMap).filter(uid => evalMap[uid]?.participation_score).length : 0;
 
           return (
             <div key={event.id} className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-              {/* Event header — clickable */}
+              {/* Event header */}
               <button
                 onClick={() => toggleEvent(event.id)}
                 className="w-full flex items-center gap-3 p-4 text-left hover:bg-muted/30 transition-colors"
@@ -180,7 +286,12 @@ export default function AttendanceTab({ participants }: { participants: Particip
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-montserrat font-bold text-foreground text-sm">{event.title}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-montserrat font-bold text-foreground text-sm">{event.title}</p>
+                    {isEncontro && (
+                      <span className="text-[10px] font-inter font-medium text-primary bg-primary/10 rounded-full px-2 py-0.5">Encontro</span>
+                    )}
+                  </div>
                   <p className="text-muted-foreground font-inter text-xs">
                     {format(dateObj, "d 'de' MMMM yyyy", { locale: ptBR })}
                     {event.community && ` · ${event.community}`}
@@ -198,6 +309,11 @@ export default function AttendanceTab({ participants }: { participants: Particip
                       </span>
                       {summary.unmarked > 0 && (
                         <span className="text-xs font-inter text-muted-foreground">{summary.unmarked} sem registro</span>
+                      )}
+                      {isEncontro && evaluatedCount > 0 && (
+                        <span className="flex items-center gap-1 text-xs font-inter text-primary font-medium ml-1">
+                          <Star className="w-3 h-3" />{evaluatedCount} avaliados
+                        </span>
                       )}
                     </div>
                   )}
@@ -221,40 +337,144 @@ export default function AttendanceTab({ participants }: { participants: Particip
                       {eventParticipants.map((p, i) => {
                         const current = attendance[event.id]?.[p.user_id];
                         const isLast = i === eventParticipants.length - 1;
-                        const isSaving = saving === `${event.id}-${p.user_id}`;
+                        const isSavingThis = savingAtt === `${event.id}-${p.user_id}`;
                         const initials = p.full_name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
+                        const isSelected = isEncontro && selectedParticipant === p.user_id;
+                        const ev = isEncontro ? (evalMap[p.user_id] ?? { participation_score: null, understanding_score: null, engagement_score: null, notes: "" }) : null;
+                        const hasEval = isEncontro && !!ev?.participation_score;
+                        const userPrep = isEncontro ? (prepReport[p.user_id] ?? []) : [];
 
                         return (
-                          <div
-                            key={p.user_id}
-                            className={`flex items-center gap-3 px-4 py-3 ${!isLast ? "border-b border-border" : ""} ${isSaving ? "opacity-60" : ""}`}
-                          >
-                            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                              <span className="text-xs font-montserrat font-black text-primary-foreground">{initials}</span>
+                          <div key={p.user_id} className={`${!isLast ? "border-b border-border" : ""}`}>
+                            <div className={`flex items-center gap-3 px-4 py-3 ${isSavingThis ? "opacity-60" : ""}`}>
+                              {/* Avatar */}
+                              <div
+                                className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                  hasEval ? "bg-primary" : "bg-muted"
+                                } ${isEncontro ? "cursor-pointer" : ""}`}
+                                onClick={() => isEncontro && setSelectedParticipant(isSelected ? null : p.user_id)}
+                              >
+                                <span className={`text-xs font-montserrat font-black ${hasEval ? "text-primary-foreground" : "text-muted-foreground"}`}>
+                                  {initials}
+                                </span>
+                              </div>
+
+                              {/* Name + info */}
+                              <div
+                                className={`flex-1 min-w-0 ${isEncontro ? "cursor-pointer" : ""}`}
+                                onClick={() => isEncontro && setSelectedParticipant(isSelected ? null : p.user_id)}
+                              >
+                                <p className="font-montserrat font-bold text-foreground text-sm truncate">{p.full_name}</p>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-muted-foreground text-xs font-inter">{p.community}</span>
+                                  {isEncontro && hasEval && (
+                                    <Star className="w-3 h-3 text-primary fill-primary" />
+                                  )}
+                                  {isEncontro && (
+                                    <span className="text-xs font-inter text-muted-foreground">
+                                      {userPrep.length}/{activities.length}
+                                      <BookOpen className="w-3 h-3 inline ml-0.5 -mt-0.5" />
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Attendance buttons */}
+                              <div className="flex gap-1.5 flex-shrink-0">
+                                {(["presente", "faltou", "justificou"] as AttendanceStatus[]).map(status => {
+                                  const cfg = STATUS_CFG[status];
+                                  const isActive = current === status;
+                                  return (
+                                    <button
+                                      key={status}
+                                      onClick={() => markAttendance(event.id, p.user_id, status)}
+                                      disabled={isSavingThis}
+                                      title={cfg.label}
+                                      className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all ${
+                                        isActive ? cfg.active : `border-border bg-card ${cfg.btn}`
+                                      }`}
+                                    >
+                                      {cfg.icon}
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-montserrat font-bold text-foreground text-sm truncate">{p.full_name}</p>
-                              <p className="text-muted-foreground text-xs font-inter">{p.community}</p>
-                            </div>
-                            <div className="flex gap-1.5 flex-shrink-0">
-                              {(["presente", "faltou", "justificou"] as AttendanceStatus[]).map(status => {
-                                const cfg = STATUS_CFG[status];
-                                const isActive = current === status;
-                                return (
+
+                            {/* Encontro: expanded evaluation + prep report */}
+                            {isEncontro && isSelected && ev && (
+                              <div className="px-4 pb-4 space-y-4 bg-muted/10">
+                                {/* Preparation Report */}
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <FileText className="w-4 h-4 text-primary" />
+                                    <p className="font-montserrat font-bold text-foreground text-sm">Relatório de Preparação</p>
+                                  </div>
+                                  <div className="bg-card rounded-xl border border-border p-3 space-y-1.5">
+                                    <p className="text-xs font-inter text-muted-foreground mb-2">
+                                      Atividades concluídas antes do encontro ({userPrep.length}/{activities.length}):
+                                    </p>
+                                    {activities.map(act => {
+                                      const done = userPrep.includes(act.id);
+                                      return (
+                                        <div key={act.id} className="flex items-center gap-2">
+                                          {done ? (
+                                            <CheckCircle2 className="w-4 h-4 text-brand-green flex-shrink-0" />
+                                          ) : (
+                                            <XCircle className="w-4 h-4 text-destructive/50 flex-shrink-0" />
+                                          )}
+                                          <span className={`text-xs font-inter ${done ? "text-foreground" : "text-muted-foreground line-through"}`}>
+                                            {act.title}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                {/* Evaluation form */}
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-2">
+                                    <Star className="w-4 h-4 text-primary" />
+                                    <p className="font-montserrat font-bold text-foreground text-sm">Avaliação do Encontro</p>
+                                  </div>
+                                  <div className="grid grid-cols-1 gap-3">
+                                    <ScoreSelector
+                                      label="Participação"
+                                      value={ev.participation_score}
+                                      onChange={v => updateLocalEval(event.id, p.user_id, "participation_score", v)}
+                                    />
+                                    <ScoreSelector
+                                      label="Compreensão"
+                                      value={ev.understanding_score}
+                                      onChange={v => updateLocalEval(event.id, p.user_id, "understanding_score", v)}
+                                    />
+                                    <ScoreSelector
+                                      label="Engajamento"
+                                      value={ev.engagement_score}
+                                      onChange={v => updateLocalEval(event.id, p.user_id, "engagement_score", v)}
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <p className="text-xs font-inter font-medium text-muted-foreground">Observações</p>
+                                    <Textarea
+                                      value={ev.notes}
+                                      onChange={e => updateLocalEval(event.id, p.user_id, "notes", e.target.value)}
+                                      placeholder="Anotações sobre o participante neste encontro..."
+                                      className="text-sm min-h-[60px]"
+                                    />
+                                  </div>
                                   <button
-                                    key={status}
-                                    onClick={() => markAttendance(event.id, p.user_id, status)}
-                                    disabled={isSaving}
-                                    title={cfg.label}
-                                    className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all ${
-                                      isActive ? cfg.active : `border-border bg-card ${cfg.btn}`
-                                    }`}
+                                    onClick={() => saveEvaluation(event.id, p.user_id)}
+                                    disabled={savingEval}
+                                    className="flex items-center gap-2 bg-primary text-primary-foreground rounded-xl px-4 py-2.5 text-sm font-montserrat font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 w-full justify-center"
                                   >
-                                    {cfg.icon}
+                                    <Save className="w-4 h-4" />
+                                    {savingEval ? "Salvando..." : "Salvar Avaliação"}
                                   </button>
-                                );
-                              })}
-                            </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}

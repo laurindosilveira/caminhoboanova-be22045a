@@ -14,8 +14,7 @@ import AdminDiscipleshipTab from "@/components/admin/tabs/AdminDiscipleshipTab";
 import ClassroomSettingsTab from "@/components/admin/tabs/ClassroomSettingsTab";
 import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
 import UsersTab from "@/components/admin/tabs/UsersTab";
-import MeetingsTab from "@/components/admin/tabs/MeetingsTab";
-// DevotionalsTab removed - devotionals are now managed within CoursesTab
+// MeetingsTab merged into AttendanceTab
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
 const AREA_2_COMMUNITIES = ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"];
@@ -293,8 +292,8 @@ export default function AdminDashboard() {
             {activeTab === "agenda" && <AgendaTab />}
             {activeTab === "messages" && <MessagesTab />}
             {activeTab === "sala" && <ClassroomSettingsTab />}
-            {activeTab === "attendance" && <AttendanceTab participants={displayParticipants} />}
-            {activeTab === "meetings" && <MeetingsTab participants={displayParticipants} activities={activities} />}
+            {activeTab === "attendance" && <AttendanceTab participants={displayParticipants} activities={activities} />}
+            {activeTab === "users" && <UsersTab />}
             {activeTab === "users" && <UsersTab />}
             {activeTab === "discipleship" && (
               <AdminDiscipleshipTab
