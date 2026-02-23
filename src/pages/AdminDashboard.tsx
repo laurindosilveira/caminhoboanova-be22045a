@@ -162,6 +162,9 @@ export default function AdminDashboard() {
               {(() => {
                 const totalAlerts = participants.filter(p => plans[p.user_id]?.is_priority || plans[p.user_id]?.needs_pastor).length;
                 const noActivity = participants.filter(p => p.completed_count === 0).length;
+                const avgProgress = participants.length > 0 && activities.length > 0
+                  ? Math.round(participants.reduce((s, p) => s + (p.completed_count / activities.length) * 100, 0) / participants.length)
+                  : 0;
                 return (
                   <button
                     onClick={() => setSelectedCommunity("todas")}
@@ -175,6 +178,12 @@ export default function AdminDashboard() {
                       <p className="text-muted-foreground font-inter text-xs mt-0.5">
                         {participants.length} participante{participants.length !== 1 ? "s" : ""} · Visão geral
                       </p>
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${avgProgress}%`, background: "var(--gradient-hero)" }} />
+                        </div>
+                        <span className="text-[10px] font-montserrat font-bold text-primary">{avgProgress}%</span>
+                      </div>
                       {(totalAlerts > 0 || noActivity > 0) && (
                         <div className="flex gap-2 mt-1">
                           {totalAlerts > 0 && (
@@ -205,6 +214,9 @@ export default function AdminDashboard() {
                   const alerts = commParticipants.filter(p => plans[p.user_id]?.is_priority || plans[p.user_id]?.needs_pastor).length;
                   const noActivity = commParticipants.filter(p => p.completed_count === 0).length;
                   const icon = COMMUNITY_ICONS[comm] || "⛪";
+                  const commProgress = count > 0 && activities.length > 0
+                    ? Math.round(commParticipants.reduce((s, p) => s + (p.completed_count / activities.length) * 100, 0) / count)
+                    : 0;
                   return (
                     <button
                       key={comm}
@@ -224,6 +236,12 @@ export default function AdminDashboard() {
                         <p className="text-muted-foreground font-inter text-xs mt-0.5">
                           {count} participante{count !== 1 ? "s" : ""}
                         </p>
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full rounded-full transition-all" style={{ width: `${commProgress}%`, background: "var(--gradient-hero)" }} />
+                          </div>
+                          <span className="text-[10px] font-montserrat font-bold text-primary">{commProgress}%</span>
+                        </div>
                         {(alerts > 0 || noActivity > 0) && (
                           <div className="flex gap-2 mt-1">
                             {alerts > 0 && (
