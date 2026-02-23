@@ -298,6 +298,7 @@ export default function AttendanceTab({ participants, activities }: { participan
     { value: null, label: "Todos" },
     { value: "encontro", label: "📅 Encontros" },
     { value: "culto", label: "⛪ Cultos" },
+    { value: "jemiac", label: "✝️ JEMIAC" },
     { value: "retiro", label: "🏕️ Retiros" },
     { value: "evento", label: "🎉 Eventos" },
   ];
