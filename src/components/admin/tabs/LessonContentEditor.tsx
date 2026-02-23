@@ -26,17 +26,23 @@ type LessonContent = {
   audio_link: string;
 };
 
-const EMPTY: LessonContent = {
-  greeting: "",
-  icebreaker: "",
-  summary: "",
-  bible_texts: [""],
-  questions: ["", "", ""],
-  practice: "",
-  prayer_prompt: "",
-  video_link: "",
-  audio_link: "",
-};
+function getDefaultContent(lessonNum: number): LessonContent {
+  return {
+    greeting: `Bem-vindo à lição ${lessonNum}! Que este tempo seja de crescimento e encontro com Deus.`,
+    icebreaker: "Pergunta inicial: O que você mais aprendeu na lição anterior?",
+    summary: "Conteúdo desta lição em preparação pelo seu pastor. Fique atento às próximas atualizações!",
+    bible_texts: ["Salmos 119:105", "2 Timóteo 3:16-17"],
+    questions: [
+      "Como você está aplicando o que aprendeu na última lição?",
+      "O que mais te desafia na sua caminhada com Deus?",
+      "Que oração você tem feito ultimamente?",
+    ],
+    practice: "Esta semana: Aplique algo aprendido nesta lição em uma situação real do seu dia a dia.",
+    prayer_prompt: "Escreva uma oração sobre o que você aprendeu hoje e como deseja crescer.",
+    video_link: "",
+    audio_link: "",
+  };
+}
 
 type Props = {
   lesson: Lesson;
@@ -44,10 +50,12 @@ type Props = {
 };
 
 export default function LessonContentEditor({ lesson, onBack }: Props) {
-  const [content, setContent] = useState<LessonContent>(EMPTY);
+  const defaults = getDefaultContent(lesson.order_num);
+  const [content, setContent] = useState<LessonContent>(defaults);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isPublished, setIsPublished] = useState(false);
 
   useEffect(() => {
     loadContent();
@@ -62,14 +70,15 @@ export default function LessonContentEditor({ lesson, onBack }: Props) {
       .maybeSingle();
 
     if (data) {
+      setIsPublished(true);
       setContent({
-        greeting: data.greeting ?? "",
-        icebreaker: data.icebreaker ?? "",
-        summary: data.summary ?? "",
-        bible_texts: data.bible_texts?.length ? data.bible_texts : [""],
-        questions: data.questions?.length ? data.questions : ["", "", ""],
-        practice: data.practice ?? "",
-        prayer_prompt: data.prayer_prompt ?? "",
+        greeting: data.greeting || defaults.greeting,
+        icebreaker: data.icebreaker || defaults.icebreaker,
+        summary: data.summary || defaults.summary,
+        bible_texts: data.bible_texts?.length ? data.bible_texts : defaults.bible_texts,
+        questions: data.questions?.length ? data.questions : defaults.questions,
+        practice: data.practice || defaults.practice,
+        prayer_prompt: data.prayer_prompt || defaults.prayer_prompt,
         video_link: data.video_link ?? "",
         audio_link: data.audio_link ?? "",
       });
@@ -93,6 +102,7 @@ export default function LessonContentEditor({ lesson, onBack }: Props) {
     }, { onConflict: "lesson_id" });
     setSaving(false);
     setSaved(true);
+    setIsPublished(true);
     setTimeout(() => setSaved(false), 3000);
   }
 
@@ -165,10 +175,22 @@ export default function LessonContentEditor({ lesson, onBack }: Props) {
       </div>
 
       <div className="rounded-2xl p-4" style={{ background: "var(--gradient-hero)" }}>
-        <p className="text-primary-foreground/60 font-inter text-xs mb-1">Editando conteúdo · Lição {lesson.order_num}</p>
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-primary-foreground/60 font-inter text-xs">Editando conteúdo · Lição {lesson.order_num}</p>
+          {isPublished ? (
+            <span className="px-2 py-0.5 rounded-full bg-white/20 text-primary-foreground text-[10px] font-inter font-bold">✅ Publicado</span>
+          ) : (
+            <span className="px-2 py-0.5 rounded-full bg-white/10 text-primary-foreground/60 text-[10px] font-inter font-bold">📝 Rascunho</span>
+          )}
+        </div>
         <h2 className="font-montserrat font-black text-primary-foreground text-lg leading-tight">{lesson.title}</h2>
         {lesson.objective && (
           <p className="text-primary-foreground/70 font-inter text-xs mt-1">{lesson.objective}</p>
+        )}
+        {!isPublished && (
+          <p className="text-primary-foreground/50 font-inter text-[10px] mt-2 italic">
+            ⚠️ Este conteúdo usa valores padrão. Edite e salve para publicar.
+          </p>
         )}
       </div>
 
