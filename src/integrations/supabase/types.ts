@@ -360,6 +360,53 @@ export type Database = {
           },
         ]
       }
+      meeting_evaluations: {
+        Row: {
+          admin_id: string
+          created_at: string
+          engagement_score: number | null
+          event_id: string
+          id: string
+          notes: string | null
+          participation_score: number | null
+          understanding_score: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_id: string
+          created_at?: string
+          engagement_score?: number | null
+          event_id: string
+          id?: string
+          notes?: string | null
+          participation_score?: number | null
+          understanding_score?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_id?: string
+          created_at?: string
+          engagement_score?: number | null
+          event_id?: string
+          id?: string
+          notes?: string | null
+          participation_score?: number | null
+          understanding_score?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_evaluations_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           area: string | null
