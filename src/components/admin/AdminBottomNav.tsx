@@ -2,20 +2,26 @@ import { BarChart3, BookOpen, UserCheck, Shield } from "lucide-react";
 
 export type AdminTab = "overview" | "attendance" | "courses" | "users";
 
-const TABS = [
-  { id: "overview" as AdminTab, label: "Visão", icon: BarChart3 },
-  { id: "attendance" as AdminTab, label: "Encontros", icon: UserCheck },
-  { id: "courses" as AdminTab, label: "Cursos", icon: BookOpen },
-  { id: "users" as AdminTab, label: "Usuários", icon: Shield },
+type TabDef = { id: AdminTab; label: string; icon: typeof BarChart3 };
+
+const ALL_TABS: TabDef[] = [
+  { id: "overview", label: "Visão", icon: BarChart3 },
+  { id: "attendance", label: "Encontros", icon: UserCheck },
+  { id: "courses", label: "Cursos", icon: BookOpen },
+  { id: "users", label: "Usuários", icon: Shield },
 ];
 
-type Props = { active: AdminTab; onChange: (tab: AdminTab) => void };
+const LIDER_TABS: AdminTab[] = ["courses", "users"];
 
-export default function AdminBottomNav({ active, onChange }: Props) {
+type Props = { active: AdminTab; onChange: (tab: AdminTab) => void; userRole?: "admin" | "lider" | null };
+
+export default function AdminBottomNav({ active, onChange, userRole }: Props) {
+  const tabs = userRole === "lider" ? ALL_TABS.filter(t => LIDER_TABS.includes(t.id)) : ALL_TABS;
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border">
       <div className="max-w-2xl mx-auto flex">
-        {TABS.map((tab) => {
+        {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = active === tab.id;
           return (

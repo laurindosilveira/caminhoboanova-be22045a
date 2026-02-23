@@ -16,7 +16,7 @@ type UserEntry = {
   father_phone: string;
   mother_phone: string;
   address: string;
-  role: "admin" | "user";
+  role: "admin" | "lider" | "user";
   admin_area: string | null;
   created_year: number;
 };
@@ -26,6 +26,11 @@ const ROLE_CFG = {
     label: "Administrador",
     icon: <ShieldCheck className="w-4 h-4" />,
     badge: "bg-primary/10 text-primary border-primary/30",
+  },
+  lider: {
+    label: "Líder",
+    icon: <ShieldCheck className="w-4 h-4" />,
+    badge: "bg-accent/20 text-accent-foreground border-accent/30",
   },
   user: {
     label: "Participante",
@@ -50,6 +55,7 @@ export default function UsersTab() {
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [saving, setSaving] = useState<string | null>(null);
   const [promotingUser, setPromotingUser] = useState<UserEntry | null>(null);
+  const [promotingRole, setPromotingRole] = useState<"admin" | "lider" | null>(null);
   const [editingUser, setEditingUser] = useState<UserEntry | null>(null);
   const [editForm, setEditForm] = useState({ full_name: "", phone: "", birth_date: "", community: "", area: "", father_name: "", mother_name: "", father_phone: "", mother_phone: "", address: "" });
   const [savingEdit, setSavingEdit] = useState(false);
@@ -67,9 +73,13 @@ export default function UsersTab() {
       .from("user_roles")
       .select("user_id, role, admin_area");
 
-    const roleMap: Record<string, { role: "admin" | "user"; admin_area: string | null }> = {};
+    const roleMap: Record<string, { role: "admin" | "lider" | "user"; admin_area: string | null }> = {};
     (roles ?? []).forEach(r => {
-      roleMap[r.user_id] = { role: r.role as "admin" | "user", admin_area: r.admin_area ?? null };
+      // Prioritize admin over lider
+      const existing = roleMap[r.user_id];
+      if (!existing || (r.role === "admin" && existing.role !== "admin")) {
+        roleMap[r.user_id] = { role: r.role as "admin" | "lider" | "user", admin_area: r.admin_area ?? null };
+      }
     });
 
     const combined: UserEntry[] = (profiles ?? []).map(p => ({
@@ -90,27 +100,38 @@ export default function UsersTab() {
     setLoading(false);
   }
 
-  async function promoteToAdmin(u: UserEntry, area: string) {
+  async function promoteToRole(u: UserEntry, targetRole: "admin" | "lider", area: string | null) {
     setSaving(u.user_id);
     const { error } = await supabase.from("user_roles").upsert({
-      user_id: u.user_id, role: "admin", admin_area: area,
+      user_id: u.user_id, role: targetRole, admin_area: area,
     }, { onConflict: "user_id,role" });
 
     if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
-      setUsers(prev => prev.map(p => p.user_id === u.user_id ? { ...p, role: "admin", admin_area: area } : p));
-      toast({ title: "✅ Administrador ativado", description: `${u.full_name} agora lidera ${area}.` });
+      // If conflict because user already has a different role row, update it
+      const { error: err2 } = await supabase.from("user_roles")
+        .update({ role: targetRole, admin_area: area })
+        .eq("user_id", u.user_id);
+      if (err2) {
+        toast({ title: "Erro", description: err2.message, variant: "destructive" });
+        setSaving(null);
+        setPromotingUser(null);
+        setPromotingRole(null);
+        return;
+      }
     }
+    setUsers(prev => prev.map(p => p.user_id === u.user_id ? { ...p, role: targetRole, admin_area: area } : p));
+    const roleLabel = targetRole === "admin" ? "Administrador" : "Líder";
+    toast({ title: `✅ ${roleLabel} ativado`, description: `${u.full_name} agora é ${roleLabel}${area ? ` de ${area}` : ""}.` });
     setSaving(null);
     setPromotingUser(null);
+    setPromotingRole(null);
   }
 
   async function demoteToUser(u: UserEntry) {
     setSaving(u.user_id);
     const { error } = await supabase.from("user_roles")
       .update({ role: "user", admin_area: null })
-      .eq("user_id", u.user_id).eq("role", "admin");
+      .eq("user_id", u.user_id);
 
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -122,7 +143,7 @@ export default function UsersTab() {
   }
 
   function handleToggle(u: UserEntry) {
-    if (u.role === "admin") demoteToUser(u);
+    if (u.role === "admin" || u.role === "lider") demoteToUser(u);
     else setPromotingUser(u);
   }
 
@@ -186,6 +207,7 @@ export default function UsersTab() {
   });
 
   const admins = filtered.filter(u => u.role === "admin");
+  const lideres = filtered.filter(u => u.role === "lider");
   const regular = filtered.filter(u => u.role === "user");
 
   // Get communities for the selected area in edit form
@@ -228,8 +250,33 @@ export default function UsersTab() {
         </div>
       )}
 
-      {/* Area selection modal for promoting */}
-      {promotingUser && (
+      {/* Role selection modal for promoting */}
+      {promotingUser && !promotingRole && (
+        <div className="bg-card border-2 border-primary/30 rounded-2xl p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+          <p className="font-montserrat font-bold text-foreground text-sm">
+            Definir função de <span className="text-primary">{promotingUser.full_name}</span>
+          </p>
+          <p className="text-muted-foreground font-inter text-xs">Qual função atribuir?</p>
+          <div className="flex gap-2">
+            <button onClick={() => setPromotingRole("lider")}
+              className="flex-1 flex flex-col items-center gap-1 px-4 py-3 bg-accent/10 hover:bg-accent/20 border border-accent/30 rounded-xl text-sm font-montserrat font-bold text-accent-foreground transition-all">
+              <ShieldCheck className="w-5 h-5" />
+              Líder
+              <span className="text-[10px] font-inter font-normal text-muted-foreground">Acesso: Cursos e Usuários</span>
+            </button>
+            <button onClick={() => setPromotingRole("admin")}
+              className="flex-1 flex flex-col items-center gap-1 px-4 py-3 bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded-xl text-sm font-montserrat font-bold text-primary transition-all">
+              <ShieldCheck className="w-5 h-5" />
+              Admin
+              <span className="text-[10px] font-inter font-normal text-muted-foreground">Acesso completo</span>
+            </button>
+          </div>
+          <button onClick={() => { setPromotingUser(null); setPromotingRole(null); }} className="w-full text-center text-xs font-inter text-muted-foreground hover:text-foreground transition-colors py-1">Cancelar</button>
+        </div>
+      )}
+
+      {/* Area selection for admin role */}
+      {promotingUser && promotingRole === "admin" && (
         <div className="bg-card border-2 border-primary/30 rounded-2xl p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
           <p className="font-montserrat font-bold text-foreground text-sm">
             Selecione a turma para <span className="text-primary">{promotingUser.full_name}</span>
@@ -237,13 +284,32 @@ export default function UsersTab() {
           <p className="text-muted-foreground font-inter text-xs">Qual área este administrador vai liderar?</p>
           <div className="flex gap-2">
             {AREAS.map(area => (
-              <button key={area} onClick={() => promoteToAdmin(promotingUser, area)} disabled={saving === promotingUser.user_id}
+              <button key={area} onClick={() => promoteToRole(promotingUser, "admin", area)} disabled={saving === promotingUser.user_id}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded-xl text-sm font-montserrat font-bold text-primary transition-all disabled:opacity-50">
                 <MapPin className="w-4 h-4" />{area}
               </button>
             ))}
           </div>
-          <button onClick={() => setPromotingUser(null)} className="w-full text-center text-xs font-inter text-muted-foreground hover:text-foreground transition-colors py-1">Cancelar</button>
+          <button onClick={() => setPromotingRole(null)} className="w-full text-center text-xs font-inter text-muted-foreground hover:text-foreground transition-colors py-1">Voltar</button>
+        </div>
+      )}
+
+      {/* Area selection for lider role */}
+      {promotingUser && promotingRole === "lider" && (
+        <div className="bg-card border-2 border-accent/30 rounded-2xl p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+          <p className="font-montserrat font-bold text-foreground text-sm">
+            Selecione a turma para <span className="text-accent-foreground">{promotingUser.full_name}</span>
+          </p>
+          <p className="text-muted-foreground font-inter text-xs">Qual área este líder vai acompanhar?</p>
+          <div className="flex gap-2">
+            {AREAS.map(area => (
+              <button key={area} onClick={() => promoteToRole(promotingUser, "lider", area)} disabled={saving === promotingUser.user_id}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-accent/10 hover:bg-accent/20 border border-accent/30 rounded-xl text-sm font-montserrat font-bold text-accent-foreground transition-all disabled:opacity-50">
+                <MapPin className="w-4 h-4" />{area}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => setPromotingRole(null)} className="w-full text-center text-xs font-inter text-muted-foreground hover:text-foreground transition-colors py-1">Voltar</button>
         </div>
       )}
 
@@ -360,6 +426,21 @@ export default function UsersTab() {
             </div>
           )}
 
+          {lideres.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <ShieldCheck className="w-3.5 h-3.5 text-accent-foreground" />
+                <span className="text-xs font-montserrat font-bold text-muted-foreground uppercase tracking-wide">Líderes ({lideres.length})</span>
+              </div>
+              <div className="bg-card border border-border rounded-2xl overflow-hidden">
+                {lideres.map((u, i) => (
+                  <UserRow key={u.user_id} user={u} isLast={i === lideres.length - 1} isSaving={saving === u.user_id}
+                    onToggle={() => handleToggle(u)} onEdit={() => openEditUser(u)} />
+                ))}
+              </div>
+            </div>
+          )}
+
           {regular.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-2">
@@ -395,7 +476,7 @@ function UserRow({
   return (
     <div className={`flex items-center gap-3 px-4 py-3 ${!isLast ? "border-b border-border" : ""} ${isSaving ? "opacity-60" : ""}`}>
       <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 font-montserrat font-black text-sm ${
-        u.role === "admin" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+        u.role === "admin" ? "bg-primary text-primary-foreground" : u.role === "lider" ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground"
       }`}>
         {initials}
       </div>
@@ -406,6 +487,9 @@ function UserRow({
           {u.role === "admin" && u.admin_area && (
             <span className="text-primary font-medium"> · Lidera {u.admin_area}</span>
           )}
+          {u.role === "lider" && u.admin_area && (
+            <span className="text-accent-foreground font-medium"> · Líder {u.admin_area}</span>
+          )}
         </p>
       </div>
       <button onClick={onEdit} className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center hover:bg-muted/80 flex-shrink-0 mr-1" title="Editar">
@@ -413,8 +497,8 @@ function UserRow({
       </button>
       <button onClick={onToggle} disabled={isSaving}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-montserrat font-bold transition-all disabled:opacity-50 ${cfg.badge}`}>
-        {u.role === "admin" ? <ShieldOff className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-        {u.role === "admin" ? "Remover" : "Admin"}
+        {(u.role === "admin" || u.role === "lider") ? <ShieldOff className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+        {u.role === "admin" ? "Remover" : u.role === "lider" ? "Remover" : "Promover"}
       </button>
     </div>
   );
