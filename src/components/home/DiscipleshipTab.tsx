@@ -6,6 +6,7 @@ import {
   Send, Sparkles, AlertCircle, ChevronRight, ChevronDown, CalendarDays
 } from "lucide-react";
 import JourneyLessonView from "@/components/home/JourneyLessonView";
+import LessonChoiceView from "@/components/home/LessonChoiceView";
 
 // ─── Types ───────────────────────────────────────────────
 type Assessment = {
@@ -114,6 +115,7 @@ export default function DiscipleshipTab() {
   const [saving, setSaving] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  const [selectedLessonMode, setSelectedLessonMode] = useState<"choice" | "study">("choice");
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
   // Lesson IDs that have at least one saved response
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
@@ -234,12 +236,21 @@ export default function DiscipleshipTab() {
   const healthStatus = plan?.health_status ?? computeHealth(assessment);
   const MONTH_NAMES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
-  // If a lesson is selected, show its full view
+  // If a lesson is selected
   if (selectedLesson) {
+    if (selectedLessonMode === "study") {
+      return (
+        <div className="px-5 pt-5 pb-6">
+          <JourneyLessonView lesson={selectedLesson} onBack={() => { setSelectedLesson(null); setSelectedLessonMode("choice"); }} />
+        </div>
+      );
+    }
     return (
-      <div className="px-5 pt-5 pb-6">
-        <JourneyLessonView lesson={selectedLesson} onBack={() => setSelectedLesson(null)} />
-      </div>
+      <LessonChoiceView
+        lesson={selectedLesson}
+        onBack={() => { setSelectedLesson(null); setSelectedLessonMode("choice"); }}
+        onOpenStudy={() => setSelectedLessonMode("study")}
+      />
     );
   }
 
@@ -598,7 +609,7 @@ export default function DiscipleshipTab() {
                         return (
                           <button
                             key={lesson.id}
-                            onClick={() => setSelectedLesson(lesson)}
+                            onClick={() => { setSelectedLesson(lesson); setSelectedLessonMode("choice"); }}
                             className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border last:border-b-0 hover:bg-primary/5 transition-colors ${isDone ? "bg-brand-green/5" : ""}`}
                           >
                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isDone ? "bg-brand-green/15" : "bg-secondary/10"}`}>

@@ -159,42 +159,59 @@ export type Database = {
       }
       devotional_content: {
         Row: {
-          activity_id: string
+          activity_id: string | null
           bible_reference: string
           bible_text: string
           created_at: string
+          day_number: number
           id: string
+          lesson_id: string | null
           practice: string
           prayer: string
           questions: string[]
           reflection: string
+          title: string
           updated_at: string
         }
         Insert: {
-          activity_id: string
+          activity_id?: string | null
           bible_reference?: string
           bible_text?: string
           created_at?: string
+          day_number?: number
           id?: string
+          lesson_id?: string | null
           practice?: string
           prayer?: string
           questions?: string[]
           reflection?: string
+          title?: string
           updated_at?: string
         }
         Update: {
-          activity_id?: string
+          activity_id?: string | null
           bible_reference?: string
           bible_text?: string
           created_at?: string
+          day_number?: number
           id?: string
+          lesson_id?: string | null
           practice?: string
           prayer?: string
           questions?: string[]
           reflection?: string
+          title?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "devotional_content_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       discipleship_plans: {
         Row: {
