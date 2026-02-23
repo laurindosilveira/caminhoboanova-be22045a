@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   CalendarDays, Users, CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp,
-  Star, BookOpen, FileText, Save, Church,
+  Star, BookOpen, FileText, Save, Church, Plus, MapPin, X as XIcon,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -50,8 +50,13 @@ const STATUS_CFG: Record<AttendanceStatus, { label: string; icon: React.ReactNod
 };
 
 const TYPE_EMOJI: Record<string, string> = {
-  encontro: "📅", culto: "⛪", retiro: "🏕️", evento: "🎉",
+  culto: "⛪", jemiac: "✝️", retiro: "🏕️",
 };
+const AGENDA_EVENT_TYPES = [
+  { value: "culto", label: "Culto" },
+  { value: "jemiac", label: "JEMIAC" },
+  { value: "retiro", label: "Retiro" },
+];
 const SCORE_LABELS = ["", "Fraco", "Regular", "Bom", "Muito bom", "Excelente"];
 
 type WorshipRequest = {
@@ -79,6 +84,13 @@ export default function AttendanceTab({ participants, activities }: { participan
   // Worship attendance requests
   const [worshipRequests, setWorshipRequests] = useState<WorshipRequest[]>([]);
   const [savingWorship, setSavingWorship] = useState<string | null>(null);
+
+  // Event creation (merged from AgendaTab)
+  const [showEventForm, setShowEventForm] = useState(false);
+  const [savingEvent, setSavingEvent] = useState(false);
+  const [eventForm, setEventForm] = useState({
+    title: "", description: "", event_date: "", location: "", type: "culto", area: "", community: "",
+  });
 
   useEffect(() => { fetchEvents(); fetchWorshipRequests(); }, []);
 
@@ -166,7 +178,30 @@ export default function AttendanceTab({ participants, activities }: { participan
       setPrepReport(prepMap);
     }
   }
+  async function handleSaveEvent() {
+    if (!eventForm.title || !eventForm.event_date) return;
+    setSavingEvent(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from("events").insert({
+      title: eventForm.title,
+      description: eventForm.description || null,
+      event_date: eventForm.event_date,
+      location: eventForm.location || null,
+      type: eventForm.type,
+      area: eventForm.area || null,
+      community: eventForm.community || null,
+      created_by: user?.id,
+    });
+    setEventForm({ title: "", description: "", event_date: "", location: "", type: "culto", area: "", community: "" });
+    setShowEventForm(false);
+    setSavingEvent(false);
+    fetchEvents();
+  }
 
+  async function handleDeleteEvent(id: string) {
+    await supabase.from("events").delete().eq("id", id);
+    fetchEvents();
+  }
 
   async function toggleEvent(eventId: string) {
     if (expandedEvent === eventId) {
@@ -276,6 +311,41 @@ export default function AttendanceTab({ participants, activities }: { participan
     );
   }
 
+  function renderEventForm() {
+    return (
+      <div className="bg-card rounded-2xl border border-border p-4 space-y-3 shadow-sm">
+        <p className="font-montserrat font-bold text-foreground text-sm">Novo evento</p>
+        <input value={eventForm.title} onChange={e => setEventForm(f => ({ ...f, title: e.target.value }))}
+          placeholder="Título do evento *"
+          className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+        <input value={eventForm.description} onChange={e => setEventForm(f => ({ ...f, description: e.target.value }))}
+          placeholder="Descrição (opcional)"
+          className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+        <div className="grid grid-cols-2 gap-2">
+          <input type="datetime-local" value={eventForm.event_date} onChange={e => setEventForm(f => ({ ...f, event_date: e.target.value }))}
+            className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+          <input value={eventForm.location} onChange={e => setEventForm(f => ({ ...f, location: e.target.value }))}
+            placeholder="Local (opcional)"
+            className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+        </div>
+        <select value={eventForm.type} onChange={e => setEventForm(f => ({ ...f, type: e.target.value }))}
+          className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+          {AGENDA_EVENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+        </select>
+        <div className="flex gap-2">
+          <button onClick={handleSaveEvent} disabled={savingEvent || !eventForm.title || !eventForm.event_date}
+            className="flex-1 py-2.5 rounded-xl text-sm font-inter font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
+            style={{ background: "var(--gradient-hero)" }}>
+            {savingEvent ? "Salvando..." : "Salvar evento"}
+          </button>
+          <button onClick={() => setShowEventForm(false)} className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="space-y-3">
@@ -284,12 +354,23 @@ export default function AttendanceTab({ participants, activities }: { participan
     );
   }
 
-  if (events.length === 0) {
+  if (events.length === 0 && worshipRequests.length === 0) {
     return (
-      <div className="text-center py-16">
-        <CalendarDays className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-        <p className="font-montserrat font-bold text-foreground">Nenhum evento encontrado</p>
-        <p className="text-muted-foreground font-inter text-sm mt-1">Crie eventos na aba Agenda primeiro.</p>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="font-montserrat font-bold text-foreground text-base">Encontros & Presença</p>
+          <button onClick={() => setShowEventForm(!showEventForm)}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-inter font-medium text-primary-foreground"
+            style={{ background: "var(--gradient-hero)" }}>
+            <Plus className="w-3.5 h-3.5" /> Novo evento
+          </button>
+        </div>
+        {showEventForm && renderEventForm()}
+        <div className="text-center py-16">
+          <CalendarDays className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+          <p className="font-montserrat font-bold text-foreground">Nenhum evento encontrado</p>
+          <p className="text-muted-foreground font-inter text-sm mt-1">Clique em "Novo evento" para adicionar.</p>
+        </div>
       </div>
     );
   }
@@ -305,15 +386,24 @@ export default function AttendanceTab({ participants, activities }: { participan
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
-          <Users className="w-5 h-5 text-primary" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+            <Users className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="font-montserrat font-black text-foreground text-lg">Encontros</h2>
+            <p className="text-muted-foreground text-xs font-inter">Eventos, presença e avaliação</p>
+          </div>
         </div>
-        <div>
-          <h2 className="font-montserrat font-black text-foreground text-lg">Presença & Encontros</h2>
-          <p className="text-muted-foreground text-xs font-inter">Presença, avaliação e preparação</p>
-        </div>
+        <button onClick={() => setShowEventForm(!showEventForm)}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-inter font-medium text-primary-foreground"
+          style={{ background: "var(--gradient-hero)" }}>
+          <Plus className="w-3.5 h-3.5" /> Novo evento
+        </button>
       </div>
+
+      {showEventForm && renderEventForm()}
 
       {/* Type filter */}
       <div className="flex gap-1.5 overflow-x-auto pb-1">
@@ -470,11 +560,20 @@ export default function AttendanceTab({ participants, activities }: { participan
                     </div>
                   )}
                 </div>
-                {isExpanded ? (
-                  <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                ) : (
-                  <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                )}
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
+                    className="w-7 h-7 rounded-lg bg-destructive/10 flex items-center justify-center hover:bg-destructive/20 transition-colors"
+                    title="Excluir evento"
+                  >
+                    <XIcon className="w-3.5 h-3.5 text-destructive" />
+                  </button>
+                  {isExpanded ? (
+                    <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                  )}
+                </div>
               </button>
 
               {/* Participants list */}
