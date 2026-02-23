@@ -296,11 +296,9 @@ export default function AttendanceTab({ participants, activities }: { participan
 
   const EVENT_TYPES = [
     { value: null, label: "Todos" },
-    { value: "encontro", label: "📅 Encontros" },
     { value: "culto", label: "⛪ Cultos" },
     { value: "jemiac", label: "✝️ JEMIAC" },
     { value: "retiro", label: "🏕️ Retiros" },
-    { value: "evento", label: "🎉 Eventos" },
   ];
 
   const filteredEvents = filterType ? events.filter(e => e.type === filterType) : events;
