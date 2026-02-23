@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ChevronLeft, BookOpen, MessageCircle, Target,
-  Pen, Heart, CheckCircle2, Save, Play, Link, Volume2, Download
+  Pen, Heart, CheckCircle2, Save, Play, Link, Volume2, Download, FileText
 } from "lucide-react";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
 import { saveAs } from "file-saver";
+import jsPDF from "jspdf";
 
 type Lesson = {
   id: string;
@@ -139,6 +140,170 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
   function updateResponse(key: string, value: string) {
     if (isAdmin) return;
     setResponses(prev => ({ ...prev, [key]: value }));
+  }
+
+  async function handleDownloadPDF() {
+    // Fetch devotionals for this lesson
+    const { data: devs } = await supabase
+      .from("devotional_content")
+      .select("*")
+      .eq("lesson_id", lesson.id)
+      .order("day_number");
+
+    // Fetch completed devotional IDs
+    const { data: { user } } = await supabase.auth.getUser();
+    let completedDevIds = new Set<string>();
+    if (user) {
+      const { data: prog } = await supabase
+        .from("devotional_progress")
+        .select("devotional_id")
+        .eq("user_id", user.id);
+      completedDevIds = new Set((prog ?? []).map((p: any) => p.devotional_id));
+    }
+
+    const completedDevs = (devs ?? []).filter(d => completedDevIds.has(d.id));
+
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const margin = 15;
+    const maxW = pageW - margin * 2;
+    let y = 20;
+
+    function checkPage(needed: number) {
+      if (y + needed > pdf.internal.pageSize.getHeight() - 15) {
+        pdf.addPage();
+        y = 20;
+      }
+    }
+
+    function addTitle(text: string) {
+      checkPage(14);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(16);
+      pdf.text(text, pageW / 2, y, { align: "center" });
+      y += 10;
+    }
+
+    function addSectionTitle(text: string) {
+      checkPage(12);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(12);
+      pdf.text(text, margin, y);
+      y += 7;
+    }
+
+    function addBody(text: string, indent = 0) {
+      if (!text) return;
+      checkPage(8);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(10);
+      const lines = pdf.splitTextToSize(text, maxW - indent);
+      for (const line of lines) {
+        checkPage(6);
+        pdf.text(line, margin + indent, y);
+        y += 5;
+      }
+      y += 2;
+    }
+
+    function addLabel(label: string, value: string) {
+      checkPage(12);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10);
+      pdf.text(label, margin, y);
+      y += 5;
+      pdf.setFont("helvetica", "normal");
+      const lines = pdf.splitTextToSize(value, maxW);
+      for (const line of lines) {
+        checkPage(6);
+        pdf.text(line, margin, y);
+        y += 5;
+      }
+      y += 3;
+    }
+
+    // === HEADER ===
+    addTitle(`Licao ${lesson.order_num} - ${lesson.title}`);
+    if (lesson.objective) {
+      pdf.setFont("helvetica", "italic");
+      pdf.setFontSize(10);
+      const objLines = pdf.splitTextToSize(`Objetivo: ${lesson.objective}`, maxW);
+      for (const line of objLines) { checkPage(6); pdf.text(line, margin, y); y += 5; }
+      y += 3;
+    }
+
+    // Separator
+    pdf.setDrawColor(200); pdf.line(margin, y, pageW - margin, y); y += 6;
+
+    // === STUDY RESPONSES ===
+    addSectionTitle("RESPOSTAS DO ESTUDO");
+    y += 2;
+
+    if (responses["icebreaker"]) {
+      addLabel("Quebra-gelo:", responses["icebreaker"]);
+    }
+
+    content.questions.forEach((q, i) => {
+      const answer = responses[`q${i}`];
+      if (answer) {
+        addLabel(`${i + 1}. ${q}`, answer);
+      }
+    });
+
+    if (responses["practice"]) {
+      addLabel("Pratica da Semana:", responses["practice"]);
+    }
+
+    if (responses["prayer"]) {
+      addLabel("Oracao Final:", responses["prayer"]);
+    }
+
+    // === DEVOTIONALS SECTION ===
+    if (completedDevs.length > 0) {
+      y += 4;
+      pdf.setDrawColor(200); pdf.line(margin, y, pageW - margin, y); y += 6;
+      addSectionTitle(`DEVOCIONAIS CONCLUIDOS (${completedDevs.length}/${(devs ?? []).length})`);
+      y += 2;
+
+      completedDevs.forEach((dev: any) => {
+        checkPage(20);
+        addSectionTitle(`Dia ${dev.day_number} - ${dev.title || ""}`);
+
+        if (dev.bible_reference) {
+          addLabel("Texto Biblico:", `${dev.bible_reference}`);
+        }
+        if (dev.bible_text) {
+          addBody(`"${dev.bible_text}"`, 3);
+        }
+        if (dev.reflection) {
+          addLabel("Reflexao:", dev.reflection);
+        }
+        if (dev.questions && dev.questions.length > 0) {
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(10);
+          checkPage(6);
+          pdf.text("Perguntas:", margin, y);
+          y += 5;
+          dev.questions.filter((q: string) => q.trim()).forEach((q: string, i: number) => {
+            addBody(`${i + 1}. ${q}`, 3);
+          });
+        }
+        if (dev.practice) {
+          addLabel("Pratica:", dev.practice);
+        }
+        y += 3;
+      });
+    }
+
+    // Footer
+    checkPage(10);
+    y += 4;
+    pdf.setFont("helvetica", "italic");
+    pdf.setFontSize(8);
+    pdf.setTextColor(150);
+    pdf.text(`Gerado em ${new Date().toLocaleDateString("pt-BR")} - Caminho Boa Nova`, pageW / 2, y, { align: "center" });
+
+    pdf.save(`Licao_${lesson.order_num}_${lesson.title.replace(/\s+/g, "_")}_completo.pdf`);
   }
 
   async function handleDownloadWord() {
@@ -417,13 +582,22 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
           </button>
 
           {Object.keys(responses).length > 0 && (
-            <button
-              onClick={handleDownloadWord}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-inter text-sm font-medium border border-border bg-card text-foreground hover:bg-muted/50 transition-colors"
-            >
-              <Download className="w-4 h-4" />
-              Baixar respostas (.docx)
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={handleDownloadWord}
+                className="flex items-center justify-center gap-2 py-3 rounded-2xl font-inter text-xs font-medium border border-border bg-card text-foreground hover:bg-muted/50 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Word (.docx)
+              </button>
+              <button
+                onClick={handleDownloadPDF}
+                className="flex items-center justify-center gap-2 py-3 rounded-2xl font-inter text-xs font-medium border border-border bg-card text-foreground hover:bg-muted/50 transition-colors"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                PDF completo
+              </button>
+            </div>
           )}
         </div>
       )}
