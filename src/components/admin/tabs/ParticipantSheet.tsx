@@ -27,12 +27,19 @@ type PastoralNote = {
 
 type AttendanceRecord = {
   id: string; event_id: string; status: string; created_at: string;
+  event_title?: string; event_date?: string; event_type?: string;
+};
+
+type MeetingEval = {
+  event_id: string; participation_score: number | null;
+  understanding_score: number | null; engagement_score: number | null;
+  notes: string | null; created_at: string;
   event_title?: string; event_date?: string;
 };
 
 type TimelineItem = {
   date: string;
-  type: "activity" | "note" | "assessment" | "attendance";
+  type: "activity" | "note" | "assessment" | "attendance" | "evaluation";
   title: string;
   detail?: string;
   icon: string;
@@ -94,7 +101,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
-
+  const [meetingEvals, setMeetingEvals] = useState<MeetingEval[]>([]);
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
@@ -102,7 +109,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
 
   useEffect(() => {
     async function load() {
-      const [{ data: ass }, { data: planData }, { data: notesData }, { data: lessonsData }, { data: attendanceData }, { data: progressData }, { data: allAssessments }] = await Promise.all([
+      const [{ data: ass }, { data: planData }, { data: notesData }, { data: lessonsData }, { data: attendanceData }, { data: progressData }, { data: allAssessments }, { data: evalData }] = await Promise.all([
         supabase.from("spiritual_assessments").select("*").eq("user_id", p.user_id).eq("month", month).eq("year", year).maybeSingle(),
         supabase.from("discipleship_plans").select("*").eq("user_id", p.user_id).maybeSingle(),
         supabase.from("pastoral_notes").select("*").eq("user_id", p.user_id).order("created_at", { ascending: false }),
@@ -110,6 +117,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         supabase.from("attendance").select("id, event_id, status, created_at").eq("user_id", p.user_id),
         supabase.from("user_progress").select("activity_id, completed_at").eq("user_id", p.user_id),
         supabase.from("spiritual_assessments").select("month, year, prayer_score, presence_score, created_at").eq("user_id", p.user_id),
+        supabase.from("meeting_evaluations").select("event_id, participation_score, understanding_score, engagement_score, notes, created_at").eq("user_id", p.user_id),
       ]);
 
       setAssessment(ass ?? null);
@@ -164,6 +172,34 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           const ev = eventsMap.get(a.event_id);
           const statusEmoji = a.status === "presente" ? "🟢" : a.status === "faltou" ? "🔴" : "🟡";
           tl.push({ date: ev?.event_date ?? a.created_at, type: "attendance", title: `${statusEmoji} ${ev?.title ?? "Evento"}`, detail: a.status === "presente" ? "Presente" : a.status === "faltou" ? "Faltou" : "Justificou", icon: statusEmoji });
+        });
+      }
+
+      // Meeting evaluations
+      const evalsArr = evalData ?? [];
+      if (evalsArr.length > 0) {
+        const evalEventIds = [...new Set(evalsArr.map(e => e.event_id))];
+        const { data: evalEventsData } = await supabase.from("events").select("id, title, event_date").in("id", evalEventIds);
+        const evalEventsMap = new Map((evalEventsData ?? []).map(e => [e.id, e]));
+        const enrichedEvals: MeetingEval[] = evalsArr.map(e => ({
+          ...e,
+          event_title: evalEventsMap.get(e.event_id)?.title ?? "Encontro",
+          event_date: evalEventsMap.get(e.event_id)?.event_date ?? e.created_at,
+        }));
+        enrichedEvals.sort((a, b) => new Date(b.event_date!).getTime() - new Date(a.event_date!).getTime());
+        setMeetingEvals(enrichedEvals);
+
+        // Add to timeline
+        enrichedEvals.forEach(ev => {
+          const scores = [ev.participation_score, ev.understanding_score, ev.engagement_score].filter(Boolean);
+          const avg = scores.length > 0 ? (scores.reduce((s, v) => s + (v ?? 0), 0) / scores.length).toFixed(1) : "—";
+          tl.push({
+            date: ev.event_date ?? ev.created_at,
+            type: "evaluation",
+            title: `⭐ Avaliação: ${ev.event_title}`,
+            detail: `Média: ${avg}/5${ev.notes ? ` · ${ev.notes.slice(0, 50)}` : ""}`,
+            icon: "⭐",
+          });
         });
       }
 
@@ -576,6 +612,51 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Meeting Evaluations */}
+          {meetingEvals.length > 0 && (
+            <div className="mt-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Star className="w-4 h-4 text-primary" />
+                <p className="font-montserrat font-bold text-foreground text-sm">Avaliações de Encontros</p>
+              </div>
+              <div className="space-y-2">
+                {meetingEvals.map((ev, i) => {
+                  const scores = [
+                    { label: "Participação", value: ev.participation_score },
+                    { label: "Compreensão", value: ev.understanding_score },
+                    { label: "Engajamento", value: ev.engagement_score },
+                  ];
+                  const validScores = scores.filter(s => s.value);
+                  const avg = validScores.length > 0 ? (validScores.reduce((s, v) => s + (v.value ?? 0), 0) / validScores.length).toFixed(1) : "—";
+                  return (
+                    <div key={i} className="bg-card rounded-xl border border-border p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-inter text-sm font-medium text-foreground">{ev.event_title}</p>
+                          <p className="font-inter text-[10px] text-muted-foreground">
+                            {new Date(ev.event_date!).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
+                          </p>
+                        </div>
+                        <span className="font-montserrat font-black text-primary text-lg">{avg}<span className="text-xs font-normal text-muted-foreground">/5</span></span>
+                      </div>
+                      <div className="flex gap-3">
+                        {scores.map(s => (
+                          <div key={s.label} className="flex-1 text-center">
+                            <p className="font-montserrat font-bold text-foreground text-sm">{s.value ?? "—"}</p>
+                            <p className="font-inter text-[9px] text-muted-foreground">{s.label}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {ev.notes && (
+                        <p className="font-inter text-xs text-muted-foreground bg-muted/50 rounded-lg px-2 py-1.5">📝 {ev.notes}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
