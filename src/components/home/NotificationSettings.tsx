@@ -52,12 +52,13 @@ export default function NotificationSettings() {
       localStorage.setItem("caminho_notifications_enabled", "false");
       setExpanded(false);
     } else {
-      const granted = await requestNotificationPermission();
-      setMasterOn(granted);
-      if (granted) {
-        scheduleDailyReminder();
-        setExpanded(true);
-      }
+      setMasterOn(true);
+      localStorage.setItem("caminho_notifications_enabled", "true");
+      setExpanded(true);
+      try {
+        const granted = await requestNotificationPermission();
+        if (granted) scheduleDailyReminder();
+      } catch {}
     }
   }
 
