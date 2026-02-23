@@ -4,21 +4,28 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   CalendarDays, Users, CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp,
   Star, BookOpen, FileText, Save, Church, Plus, MapPin, X as XIcon,
+  Heart, GraduationCap,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
+import ParticipantsTab from "./ParticipantsTab";
+import AdminDiscipleshipTab from "./AdminDiscipleshipTab";
+import ClassroomSettingsTab from "./ClassroomSettingsTab";
+
+type SubTab = "presenca" | "pessoas" | "discipulado" | "sala";
 
 type Event = {
   id: string; title: string; event_date: string; type: string;
   location: string | null; community: string | null; area: string | null;
 };
 type Participant = {
-  user_id: string; full_name: string; community: string;
+  user_id: string; full_name: string; community: string; area: string;
+  birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
 };
 type Activity = {
-  id: string; title: string; type: string; order_num: number;
+  id: string; title: string; type: string; order_num: number; points: number; subtitle: string | null;
 };
 type AttendanceStatus = "presente" | "faltou" | "justificou";
 type Evaluation = {
@@ -65,7 +72,16 @@ type WorshipRequest = {
   full_name?: string; community?: string;
 };
 
-export default function AttendanceTab({ participants, activities }: { participants: Participant[]; activities: Activity[] }) {
+type AttendanceProps = {
+  participants: Participant[];
+  activities: Activity[];
+  communities?: string[];
+  initialParticipant?: Participant | null;
+  onClearInitial?: () => void;
+};
+
+export default function AttendanceTab({ participants, activities, communities, initialParticipant, onClearInitial }: AttendanceProps) {
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>(initialParticipant ? "discipulado" : "presenca");
   const { profile } = useAuth();
   const { toast } = useToast();
   const [events, setEvents] = useState<Event[]>([]);
@@ -346,9 +362,64 @@ export default function AttendanceTab({ participants, activities }: { participan
     );
   }
 
+  const SUB_TABS = [
+    { id: "presenca" as SubTab, label: "Presença", icon: CheckCircle2 },
+    { id: "pessoas" as SubTab, label: "Pessoas", icon: Users },
+    { id: "discipulado" as SubTab, label: "Discipulado", icon: Heart },
+    { id: "sala" as SubTab, label: "Sala", icon: GraduationCap },
+  ];
+
+  // Sub-tab navigation header (shared across all states)
+  function renderSubTabs() {
+    return (
+      <div className="flex gap-1 bg-muted/50 rounded-xl p-1 mb-4">
+        {SUB_TABS.map(tab => {
+          const Icon = tab.icon;
+          const isActive = activeSubTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveSubTab(tab.id)}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-inter font-medium transition-all ${
+                isActive
+                  ? "bg-card text-primary shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Non-presenca sub-tabs
+  if (activeSubTab !== "presenca") {
+    return (
+      <div className="space-y-4">
+        {renderSubTabs()}
+        {activeSubTab === "pessoas" && (
+          <ParticipantsTab participants={participants} activities={activities} communities={communities ?? []} />
+        )}
+        {activeSubTab === "discipulado" && (
+          <AdminDiscipleshipTab
+            participants={participants}
+            activities={activities}
+            initialParticipant={initialParticipant}
+            onClearInitial={onClearInitial}
+          />
+        )}
+        {activeSubTab === "sala" && <ClassroomSettingsTab />}
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="space-y-3">
+        {renderSubTabs()}
         {[1, 2, 3].map(i => <div key={i} className="bg-muted rounded-2xl h-20 animate-pulse" />)}
       </div>
     );
@@ -357,6 +428,7 @@ export default function AttendanceTab({ participants, activities }: { participan
   if (events.length === 0 && worshipRequests.length === 0) {
     return (
       <div className="space-y-4">
+        {renderSubTabs()}
         <div className="flex items-center justify-between">
           <p className="font-montserrat font-bold text-foreground text-base">Encontros & Presença</p>
           <button onClick={() => setShowEventForm(!showEventForm)}
@@ -386,6 +458,7 @@ export default function AttendanceTab({ participants, activities }: { participan
 
   return (
     <div className="space-y-4">
+      {renderSubTabs()}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
