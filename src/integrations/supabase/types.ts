@@ -213,6 +213,35 @@ export type Database = {
           },
         ]
       }
+      devotional_progress: {
+        Row: {
+          completed_at: string
+          devotional_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string
+          devotional_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string
+          devotional_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "devotional_progress_devotional_id_fkey"
+            columns: ["devotional_id"]
+            isOneToOne: false
+            referencedRelation: "devotional_content"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       discipleship_plans: {
         Row: {
           aptidao: string | null
