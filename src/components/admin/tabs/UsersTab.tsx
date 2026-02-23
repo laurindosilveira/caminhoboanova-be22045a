@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Shield, User, Search, ShieldCheck, ShieldOff, CalendarDays } from "lucide-react";
+import { Shield, User, Search, ShieldCheck, ShieldOff, CalendarDays, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 
@@ -11,6 +11,7 @@ type UserEntry = {
   area: string;
   phone: string;
   role: "admin" | "user";
+  admin_area: string | null;
   created_year: number;
 };
 
@@ -27,6 +28,8 @@ const ROLE_CFG = {
   },
 };
 
+const AREAS = ["Área 1", "Área 2"];
+
 export default function UsersTab() {
   const { toast } = useToast();
   const [users, setUsers] = useState<UserEntry[]>([]);
@@ -35,12 +38,12 @@ export default function UsersTab() {
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [saving, setSaving] = useState<string | null>(null);
+  const [promotingUser, setPromotingUser] = useState<UserEntry | null>(null);
 
   useEffect(() => { fetchUsers(); }, []);
 
   async function fetchUsers() {
     setLoading(true);
-    // Fetch all profiles + their roles
     const { data: profiles } = await supabase
       .from("profiles")
       .select("user_id, full_name, community, area, phone, created_at")
@@ -48,60 +51,76 @@ export default function UsersTab() {
 
     const { data: roles } = await supabase
       .from("user_roles")
-      .select("user_id, role");
+      .select("user_id, role, admin_area");
 
-    const roleMap: Record<string, "admin" | "user"> = {};
-    (roles ?? []).forEach(r => { roleMap[r.user_id] = r.role as "admin" | "user"; });
+    const roleMap: Record<string, { role: "admin" | "user"; admin_area: string | null }> = {};
+    (roles ?? []).forEach(r => {
+      roleMap[r.user_id] = { role: r.role as "admin" | "user", admin_area: r.admin_area ?? null };
+    });
 
     const combined: UserEntry[] = (profiles ?? []).map(p => ({
       ...p,
-      role: roleMap[p.user_id] ?? "user",
+      role: roleMap[p.user_id]?.role ?? "user",
+      admin_area: roleMap[p.user_id]?.admin_area ?? null,
       created_year: new Date(p.created_at).getFullYear(),
     }));
 
     const years = [...new Set(combined.map(u => u.created_year))].sort((a, b) => b - a);
     setAvailableYears(years);
-
     setUsers(combined);
     setLoading(false);
   }
 
-  async function toggleRole(u: UserEntry) {
-    const newRole = u.role === "admin" ? "user" : "admin";
+  async function promoteToAdmin(u: UserEntry, area: string) {
     setSaving(u.user_id);
+    const { error } = await supabase.from("user_roles").upsert({
+      user_id: u.user_id,
+      role: "admin",
+      admin_area: area,
+    }, { onConflict: "user_id,role" });
 
-    if (newRole === "admin") {
-      // Insert admin role (upsert)
-      const { error } = await supabase.from("user_roles").upsert({
-        user_id: u.user_id,
-        role: "admin",
-      }, { onConflict: "user_id,role" });
-      if (error) {
-        toast({ title: "Erro", description: error.message, variant: "destructive" });
-        setSaving(null);
-        return;
-      }
+    if (error) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
-      // Change back to user
-      const { error } = await supabase.from("user_roles")
-        .update({ role: "user" })
-        .eq("user_id", u.user_id)
-        .eq("role", "admin");
-      if (error) {
-        toast({ title: "Erro", description: error.message, variant: "destructive" });
-        setSaving(null);
-        return;
-      }
+      setUsers(prev =>
+        prev.map(p => p.user_id === u.user_id ? { ...p, role: "admin", admin_area: area } : p)
+      );
+      toast({
+        title: "✅ Administrador ativado",
+        description: `${u.full_name} agora lidera ${area}.`,
+      });
     }
-
-    setUsers(prev =>
-      prev.map(p => p.user_id === u.user_id ? { ...p, role: newRole } : p)
-    );
-    toast({
-      title: newRole === "admin" ? "✅ Administrador ativado" : "✅ Voltou a participante",
-      description: `${u.full_name} agora é ${ROLE_CFG[newRole].label}.`,
-    });
     setSaving(null);
+    setPromotingUser(null);
+  }
+
+  async function demoteToUser(u: UserEntry) {
+    setSaving(u.user_id);
+    const { error } = await supabase.from("user_roles")
+      .update({ role: "user", admin_area: null })
+      .eq("user_id", u.user_id)
+      .eq("role", "admin");
+
+    if (error) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } else {
+      setUsers(prev =>
+        prev.map(p => p.user_id === u.user_id ? { ...p, role: "user", admin_area: null } : p)
+      );
+      toast({
+        title: "✅ Voltou a participante",
+        description: `${u.full_name} agora é Participante.`,
+      });
+    }
+    setSaving(null);
+  }
+
+  function handleToggle(u: UserEntry) {
+    if (u.role === "admin") {
+      demoteToUser(u);
+    } else {
+      setPromotingUser(u);
+    }
   }
 
   const filtered = users.filter(u => {
@@ -165,6 +184,37 @@ export default function UsersTab() {
         </div>
       )}
 
+      {/* Area selection modal */}
+      {promotingUser && (
+        <div className="bg-card border-2 border-primary/30 rounded-2xl p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+          <p className="font-montserrat font-bold text-foreground text-sm">
+            Selecione a turma para <span className="text-primary">{promotingUser.full_name}</span>
+          </p>
+          <p className="text-muted-foreground font-inter text-xs">
+            Qual área este administrador vai liderar?
+          </p>
+          <div className="flex gap-2">
+            {AREAS.map(area => (
+              <button
+                key={area}
+                onClick={() => promoteToAdmin(promotingUser, area)}
+                disabled={saving === promotingUser.user_id}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded-xl text-sm font-montserrat font-bold text-primary transition-all disabled:opacity-50"
+              >
+                <MapPin className="w-4 h-4" />
+                {area}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setPromotingUser(null)}
+            className="w-full text-center text-xs font-inter text-muted-foreground hover:text-foreground transition-colors py-1"
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="space-y-2">
           {[1, 2, 3, 4].map(i => <div key={i} className="bg-muted rounded-2xl h-16 animate-pulse" />)}
@@ -187,7 +237,7 @@ export default function UsersTab() {
                     user={u}
                     isLast={i === admins.length - 1}
                     isSaving={saving === u.user_id}
-                    onToggle={() => toggleRole(u)}
+                    onToggle={() => handleToggle(u)}
                   />
                 ))}
               </div>
@@ -210,7 +260,7 @@ export default function UsersTab() {
                     user={u}
                     isLast={i === regular.length - 1}
                     isSaving={saving === u.user_id}
-                    onToggle={() => toggleRole(u)}
+                    onToggle={() => handleToggle(u)}
                   />
                 ))}
               </div>
@@ -251,7 +301,12 @@ function UserRow({
       </div>
       <div className="flex-1 min-w-0">
         <p className="font-montserrat font-bold text-foreground text-sm truncate">{u.full_name}</p>
-        <p className="text-muted-foreground text-xs font-inter">{u.community} · {u.area}</p>
+        <p className="text-muted-foreground text-xs font-inter">
+          {u.community} · {u.area}
+          {u.role === "admin" && u.admin_area && (
+            <span className="text-primary font-medium"> · Lidera {u.admin_area}</span>
+          )}
+        </p>
       </div>
       <button
         onClick={onToggle}
