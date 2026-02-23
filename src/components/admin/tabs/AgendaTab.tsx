@@ -19,12 +19,13 @@ type Event = {
 const EVENT_TYPES = [
   { value: "encontro", label: "Encontro", color: "bg-primary/10 text-primary" },
   { value: "culto", label: "Culto", color: "bg-brand-green/10 text-brand-green" },
+  { value: "jemiac", label: "JEMIAC", color: "bg-secondary/10 text-secondary" },
   { value: "retiro", label: "Retiro", color: "bg-secondary/10 text-secondary" },
   { value: "evento", label: "Evento", color: "bg-accent/20 text-accent-foreground" },
 ];
 
 const TYPE_EMOJI: Record<string, string> = {
-  encontro: "📅", culto: "⛪", retiro: "🏕️", evento: "🎉",
+  encontro: "📅", culto: "⛪", jemiac: "✝️", retiro: "🏕️", evento: "🎉",
 };
 
 export default function AgendaTab() {

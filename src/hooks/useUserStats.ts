@@ -84,14 +84,14 @@ export function useUserStats(): UserStats {
         ...devProg.map(p => p.completed_at),
       ];
 
-      // New formula: Activity pts + Lesson study (20pts) + Devotionals (5pts) + Attendance (10pts) + Worship (10pts)
+      // New formula: Activity pts + Lesson study (20pts) + Devotionals (5pts) + Attendance (10pts) + Events (5pts)
       const activityPoints = acts
         .filter(a => completedIds.has(a.id))
         .reduce((sum, a) => sum + (a.points ?? 0), 0);
       const devotionalPoints = devProg.length * 5;
       const lessonStudyPoints = new Set((lessonResponses ?? []).map(r => r.lesson_id)).size * 20;
       const attendancePoints = (attendance ?? []).filter(a => a.status === "presente").length * 10;
-      const worshipPoints = (worshipData ?? []).length * 10;
+      const worshipPoints = (worshipData ?? []).length * 5;
       const faithPoints = activityPoints + devotionalPoints + lessonStudyPoints + attendancePoints + worshipPoints;
 
       const faithLevel = calculateLevel(faithPoints);
