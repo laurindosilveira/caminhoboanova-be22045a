@@ -261,6 +261,13 @@ export default function DiscipleshipTab() {
           </div>
         </div>
         <HealthBadge status={healthStatus} />
+        <p className="text-primary-foreground/80 font-inter text-xs mt-2 italic">
+          {healthStatus === "saudavel"
+            ? "🔥 Continue firme! Sua caminhada está inspirando outros!"
+            : healthStatus === "atencao"
+            ? "💛 Deus está com você. Um passo de cada vez!"
+            : "🙏 Não desista. O Senhor é sua força nos dias difíceis."}
+        </p>
       </div>
 
       {/* ── SAÚDE ESPIRITUAL ────────────────────── */}
@@ -601,13 +608,13 @@ export default function DiscipleshipTab() {
                               }
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className={`font-inter text-sm ${isDone ? "text-muted-foreground line-through" : "text-foreground"}`}>{lesson.title}</p>
+                              <p className={`font-inter text-sm ${isDone ? "text-brand-green font-medium" : "text-foreground"}`}>{lesson.title}</p>
                               {lesson.objective && (
                                 <p className="font-inter text-[10px] text-muted-foreground truncate mt-0.5">{lesson.objective}</p>
                               )}
                             </div>
                             {isDone
-                              ? <span className="text-brand-green text-[10px] font-inter font-bold flex-shrink-0">Concluída</span>
+                              ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-brand-green/15 text-brand-green px-2 py-0.5 rounded-full">✓ Feita</span>
                               : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                             }
                           </button>
