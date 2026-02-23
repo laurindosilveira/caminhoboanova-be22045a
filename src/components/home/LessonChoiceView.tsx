@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ChevronLeft, BookOpen, GraduationCap, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, BookOpen, GraduationCap, CheckCircle2, Star } from "lucide-react";
 import DevotionalView from "@/components/home/DevotionalView";
+import { toast } from "sonner";
 
 type Lesson = {
   id: string;
@@ -62,6 +63,10 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
       devotional_id: devotionalId,
     });
     setCompletedIds(prev => new Set([...prev, devotionalId]));
+    toast.success("Devocional concluído! +5 pontos de fé ⭐", {
+      description: "Continue firme na sua caminhada!",
+      duration: 3000,
+    });
   }
 
   const completedCount = devotionals.filter(d => completedIds.has(d.id)).length;

@@ -66,23 +66,31 @@ export function useUserStats(): UserStats {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setStats(s => ({ ...s, loading: false })); return; }
 
-      const [{ data: activities }, { data: progress }] = await Promise.all([
+      const [{ data: activities }, { data: progress }, { data: devProgress }] = await Promise.all([
         supabase.from("activities").select("id, type, title, subtitle, order_num, points").order("order_num"),
         supabase.from("user_progress").select("activity_id, completed_at").eq("user_id", user.id),
+        supabase.from("devotional_progress").select("devotional_id, completed_at").eq("user_id", user.id),
       ]);
 
       const acts = activities ?? [];
       const prog = progress ?? [];
+      const devProg = devProgress ?? [];
       const completedIds = new Set(prog.map(p => p.activity_id));
-      const completedDates = prog.map(p => p.completed_at);
+      const allDates = [
+        ...prog.map(p => p.completed_at),
+        ...devProg.map(p => p.completed_at),
+      ];
 
-      const faithPoints = acts
+      // Faith points: activity points + 5 per devotional completed
+      const activityPoints = acts
         .filter(a => completedIds.has(a.id))
         .reduce((sum, a) => sum + (a.points ?? 0), 0);
+      const devotionalPoints = devProg.length * 5;
+      const faithPoints = activityPoints + devotionalPoints;
 
       const faithLevel = calculateLevel(faithPoints);
-      const streakDays = calculateStreak(completedDates);
-      const faithEnergy = calculateEnergy(completedDates);
+      const streakDays = calculateStreak(allDates);
+      const faithEnergy = calculateEnergy(allDates);
       const completedCount = completedIds.size;
 
       // Next uncompleted activity in order
