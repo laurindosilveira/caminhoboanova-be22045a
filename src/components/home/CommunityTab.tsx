@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
+import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { MessageCircle, Flame, GraduationCap, Trophy, Lock } from "lucide-react";
@@ -31,6 +32,41 @@ export default function CommunityTab() {
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [seasons, setSeasons] = useState<RankingSeason[]>([]);
+  const [celebrationFired, setCelebrationFired] = useState(false);
+  const winnerBannerRef = useRef<HTMLDivElement>(null);
+  const myUserId = profile?.user_id;
+
+  const fireCelebration = useCallback(() => {
+    if (celebrationFired) return;
+    const seasonIds = seasons.map(s => s.id).sort().join(",");
+    const storageKey = `celebration_seen_${myUserId}_${seasonIds}`;
+    if (localStorage.getItem(storageKey)) return;
+
+    setCelebrationFired(true);
+    localStorage.setItem(storageKey, "true");
+
+    // Fire confetti burst
+    const end = Date.now() + 2500;
+    const colors = ["#FFD700", "#FFA500", "#FF6347", "#9b59b6", "#3498db"];
+
+    (function frame() {
+      confetti({
+        particleCount: 3,
+        angle: 60,
+        spread: 55,
+        origin: { x: 0, y: 0.7 },
+        colors,
+      });
+      confetti({
+        particleCount: 3,
+        angle: 120,
+        spread: 55,
+        origin: { x: 1, y: 0.7 },
+        colors,
+      });
+      if (Date.now() < end) requestAnimationFrame(frame);
+    })();
+  }, [celebrationFired, seasons, myUserId]);
 
   useEffect(() => {
     if (!profile) return;
@@ -79,7 +115,6 @@ export default function CommunityTab() {
     return `${m}min atrás`;
   }
 
-  const myUserId = profile?.user_id;
 
   return (
     <div className="pt-5 pb-4 space-y-5">
@@ -134,12 +169,14 @@ export default function CommunityTab() {
             );
             if (myWins.length === 0) return null;
             return (
-              <div>
+              <div ref={winnerBannerRef}>
                 {myWins.map((win, idx) => (
-                  <div key={idx} className="rounded-2xl p-5 text-center border border-accent/30 shadow-lg mb-3"
-                    style={{ background: "var(--gradient-gold)" }}>
-                    <span className="text-5xl block mb-2">{win.medal}</span>
-                    <p className="font-montserrat font-black text-foreground text-lg">Parabéns, Campeão!</p>
+                  <div key={idx} className="rounded-2xl p-5 text-center border border-accent/30 shadow-lg mb-3 animate-scale-in relative overflow-hidden"
+                    style={{ background: "var(--gradient-gold)" }}
+                    onAnimationEnd={() => fireCelebration()}>
+                    <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)", backgroundSize: "200% 100%", animation: "shimmer 2s ease-in-out infinite" }} />
+                    <span className="text-5xl block mb-2 drop-shadow-lg animate-float">{win.medal}</span>
+                    <p className="font-montserrat font-black text-foreground text-lg">🎉 Parabéns, Campeão! 🎉</p>
                     <p className="font-inter text-sm text-foreground/80 mt-1">
                       Você ficou em <strong>{win.position}º lugar</strong> com <strong>{win.faith_points} pontos</strong>!
                     </p>
