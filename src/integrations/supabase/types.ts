@@ -754,6 +754,42 @@ export type Database = {
         }
         Relationships: []
       }
+      worship_attendance: {
+        Row: {
+          created_at: string
+          id: string
+          preacher_name: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          user_id: string
+          worship_date: string
+          worship_time: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          preacher_name: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          user_id: string
+          worship_date: string
+          worship_time: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          preacher_name?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          user_id?: string
+          worship_date?: string
+          worship_time?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

@@ -66,12 +66,13 @@ export function useUserStats(): UserStats {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setStats(s => ({ ...s, loading: false })); return; }
 
-      const [{ data: activities }, { data: progress }, { data: devProgress }, { data: lessonResponses }, { data: attendance }] = await Promise.all([
+      const [{ data: activities }, { data: progress }, { data: devProgress }, { data: lessonResponses }, { data: attendance }, { data: worshipData }] = await Promise.all([
         supabase.from("activities").select("id, type, title, subtitle, order_num, points").order("order_num"),
         supabase.from("user_progress").select("activity_id, completed_at").eq("user_id", user.id),
         supabase.from("devotional_progress").select("devotional_id, completed_at").eq("user_id", user.id),
         supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
         supabase.from("attendance").select("event_id, status").eq("user_id", user.id),
+        supabase.from("worship_attendance").select("id, status").eq("user_id", user.id).eq("status", "aprovado"),
       ]);
 
       const acts = activities ?? [];
@@ -83,14 +84,15 @@ export function useUserStats(): UserStats {
         ...devProg.map(p => p.completed_at),
       ];
 
-      // New formula: Activity pts + Lesson study (20pts) + Devotionals (5pts) + Attendance (10pts)
+      // New formula: Activity pts + Lesson study (20pts) + Devotionals (5pts) + Attendance (10pts) + Worship (10pts)
       const activityPoints = acts
         .filter(a => completedIds.has(a.id))
         .reduce((sum, a) => sum + (a.points ?? 0), 0);
       const devotionalPoints = devProg.length * 5;
       const lessonStudyPoints = new Set((lessonResponses ?? []).map(r => r.lesson_id)).size * 20;
       const attendancePoints = (attendance ?? []).filter(a => a.status === "presente").length * 10;
-      const faithPoints = activityPoints + devotionalPoints + lessonStudyPoints + attendancePoints;
+      const worshipPoints = (worshipData ?? []).length * 10;
+      const faithPoints = activityPoints + devotionalPoints + lessonStudyPoints + attendancePoints + worshipPoints;
 
       const faithLevel = calculateLevel(faithPoints);
       const streakDays = calculateStreak(allDates);
