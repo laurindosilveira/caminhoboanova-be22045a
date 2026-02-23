@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ChevronLeft, BookOpen, MessageCircle, Target,
-  Pen, Heart, CheckCircle2, Save, Play, Link, Volume2, Download, FileText, Share2
+  Pen, Heart, CheckCircle2, Save, Play, Link, Volume2, Download, FileText, Share2, AlertCircle
 } from "lucide-react";
 import { toast } from "sonner";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
@@ -63,6 +63,9 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [contentLoaded, setContentLoaded] = useState(false);
+  const [videoWatched, setVideoWatched] = useState(false);
+  const [audioListened, setAudioListened] = useState(false);
+  const [saveAttempted, setSaveAttempted] = useState(false);
 
   // Load lesson content from DB (set by admin)
   useEffect(() => {
@@ -124,7 +127,29 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     setLastSaved(new Date());
   }, [lesson.id, isAdmin]);
 
+  // Validation: check all required fields
+  const requiredKeys = ["icebreaker", ...content.questions.map((_, i) => `q${i}`), "practice", "prayer"];
+  const allResponsesFilled = requiredKeys.every(k => (responses[k] ?? "").trim().length > 0);
+  const videoRequired = !!content.video_link;
+  const audioRequired = !!content.audio_link;
+  const videoOk = !videoRequired || videoWatched;
+  const audioOk = !audioRequired || audioListened;
+  const canSave = allResponsesFilled && videoOk && audioOk;
+
+  const missingItems: string[] = [];
+  if (!allResponsesFilled) missingItems.push("responder todas as perguntas");
+  if (!videoOk) missingItems.push("assistir o vídeo");
+  if (!audioOk) missingItems.push("ouvir o áudio");
+
   async function handleSaveAll() {
+    setSaveAttempted(true);
+    if (!isAdmin && !canSave) {
+      toast.error("Complete todas as tarefas antes de salvar!", {
+        description: `Falta: ${missingItems.join(", ")}.`,
+        duration: 5000,
+      });
+      return;
+    }
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSaving(false); return; }
@@ -136,6 +161,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     }
     setSaving(false);
     setLastSaved(new Date());
+    toast.success("Respostas salvas com sucesso! +20 pontos de fé ⭐");
   }
 
   function updateResponse(key: string, value: string) {
@@ -480,11 +506,18 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
           </div>
           <div className="p-4">
             <a href={content.video_link} target="_blank" rel="noopener noreferrer"
+              onClick={() => setVideoWatched(true)}
               className="flex items-center gap-3 p-3 bg-primary/10 rounded-xl text-primary hover:bg-primary/20 transition-colors">
               <Play className="w-5 h-5" />
               <span className="font-inter text-sm font-medium">Assistir episódio</span>
-              <Link className="w-4 h-4 ml-auto" />
+              {videoWatched && <CheckCircle2 className="w-4 h-4 text-brand-green ml-auto" />}
+              {!videoWatched && <Link className="w-4 h-4 ml-auto" />}
             </a>
+            {saveAttempted && !videoWatched && (
+              <p className="text-destructive font-inter text-[10px] mt-1.5 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> Assista o vídeo antes de salvar
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -498,11 +531,18 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
           </div>
           <div className="p-4">
             <a href={content.audio_link} target="_blank" rel="noopener noreferrer"
+              onClick={() => setAudioListened(true)}
               className="flex items-center gap-3 p-3 bg-secondary/10 rounded-xl text-secondary hover:bg-secondary/20 transition-colors">
               <Volume2 className="w-5 h-5" />
               <span className="font-inter text-sm font-medium">Ouvir áudio</span>
-              <Link className="w-4 h-4 ml-auto" />
+              {audioListened && <CheckCircle2 className="w-4 h-4 text-brand-green ml-auto" />}
+              {!audioListened && <Link className="w-4 h-4 ml-auto" />}
             </a>
+            {saveAttempted && !audioListened && (
+              <p className="text-destructive font-inter text-[10px] mt-1.5 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> Ouça o áudio antes de salvar
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -613,13 +653,25 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
         </div>
       </div>
 
+      {/* Validation warning */}
+      {!isAdmin && saveAttempted && !canSave && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-destructive/10 border border-destructive/20">
+          <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
+          <p className="font-inter text-xs text-destructive">
+            Para salvar, falta: {missingItems.join(", ")}.
+          </p>
+        </div>
+      )}
+
       {/* Save button (only for users) */}
       {!isAdmin && (
         <div className="space-y-2">
           <button
             onClick={handleSaveAll}
             disabled={saving}
-            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-inter text-sm font-medium text-primary-foreground disabled:opacity-70 transition-opacity"
+            className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-inter text-sm font-medium text-primary-foreground disabled:opacity-70 transition-opacity ${
+              !canSave && saveAttempted ? "opacity-70" : ""
+            }`}
             style={{ background: "var(--gradient-hero)" }}
           >
             <Save className="w-4 h-4" />
