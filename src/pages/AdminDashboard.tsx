@@ -47,6 +47,9 @@ export default function AdminDashboard() {
   const [selectedCommunity, setSelectedCommunity] = useState<string | null>(null);
 
   const areaName = profile?.area ?? "";
+  const areaNumber = areaName === "Área 1" ? "1" : "2";
+  const currentYear = new Date().getFullYear();
+  const turmaName = `Área ${areaNumber} · ${currentYear}`;
   const communities = areaName === "Área 1" ? AREA_1_COMMUNITIES : AREA_2_COMMUNITIES;
 
   useEffect(() => {
@@ -135,7 +138,7 @@ export default function AdminDashboard() {
               </div>
               <div>
                 <p className="text-primary-foreground/60 font-inter text-xs">Painel do Administrador</p>
-                <h1 className="font-montserrat font-black text-primary-foreground text-lg">{areaName}</h1>
+                <h1 className="font-montserrat font-black text-primary-foreground text-lg">{turmaName}</h1>
               </div>
             </div>
           </div>
@@ -153,7 +156,7 @@ export default function AdminDashboard() {
             <div className="space-y-4">
               <div className="text-center mb-2">
                 <p className="font-montserrat font-bold text-foreground text-base">Selecione a turma</p>
-                <p className="text-muted-foreground font-inter text-xs mt-1">Escolha uma comunidade para visualizar os dados</p>
+                <p className="text-muted-foreground font-inter text-xs mt-1">Escolha uma comunidade da <strong>{turmaName}</strong></p>
               </div>
 
               {/* All communities option */}
@@ -165,9 +168,9 @@ export default function AdminDashboard() {
                   <span className="text-2xl">👥</span>
                 </div>
                 <div className="text-left flex-1">
-                  <p className="font-montserrat font-bold text-foreground text-sm">Todas as comunidades</p>
+                  <p className="font-montserrat font-bold text-foreground text-sm">{turmaName} — Todas</p>
                   <p className="text-muted-foreground font-inter text-xs mt-0.5">
-                    {participants.length} participante{participants.length !== 1 ? "s" : ""} · Visão geral da {areaName}
+                    {participants.length} participante{participants.length !== 1 ? "s" : ""} · Visão geral
                   </p>
                 </div>
                 <span className="text-muted-foreground text-sm">→</span>
@@ -207,7 +210,7 @@ export default function AdminDashboard() {
     );
   }
 
-  const displayCommunity = selectedCommunity === "todas" ? areaName : selectedCommunity;
+  const displayCommunity = selectedCommunity === "todas" ? turmaName : `${turmaName} — ${selectedCommunity}`;
   const displayParticipants = selectedCommunity === "todas" ? participants : filteredParticipants;
 
   return (
