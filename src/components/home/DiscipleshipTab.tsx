@@ -3,10 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Heart, BookOpen, GraduationCap, Flame, CheckCircle2,
-  Send, Sparkles, AlertCircle, ChevronRight, ChevronDown, CalendarDays
+  Send, Sparkles, AlertCircle, ChevronRight, ChevronDown, CalendarDays, Lock
 } from "lucide-react";
 import JourneyLessonView from "@/components/home/JourneyLessonView";
 import LessonChoiceView from "@/components/home/LessonChoiceView";
+import { toast } from "sonner";
 
 // ─── Types ───────────────────────────────────────────────
 type Assessment = {
@@ -119,6 +120,8 @@ export default function DiscipleshipTab() {
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
   // Lesson IDs that have at least one saved response
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
+  // Track full lesson completion: study done + all devotionals done
+  const [fullyCompletedLessonIds, setFullyCompletedLessonIds] = useState<Set<string>>(new Set());
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [recentEvents, setRecentEvents] = useState<EventRecord[]>([]);
   const [allAssessments, setAllAssessments] = useState<Assessment[]>([]);
@@ -143,7 +146,7 @@ export default function DiscipleshipTab() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }, { data: responsesData }, { data: eventsData }, { data: attendanceData }, { data: allAssess }] = await Promise.all([
+    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }, { data: responsesData }, { data: eventsData }, { data: attendanceData }, { data: allAssess }, { data: devContentData }, { data: devProgressData }] = await Promise.all([
       supabase.from("activities").select("id, type, title, points"),
       supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
       supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).eq("month", month).eq("year", year).maybeSingle(),
@@ -154,6 +157,8 @@ export default function DiscipleshipTab() {
       supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false }).limit(10),
       supabase.from("attendance").select("event_id, status").eq("user_id", user.id),
       supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).order("year", { ascending: true }).order("month", { ascending: true }),
+      supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null),
+      supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
     ]);
 
     setActivities(acts ?? []);
@@ -164,6 +169,27 @@ export default function DiscipleshipTab() {
     // Track which lessons have at least one response
     const lessonIdsWithResponses = new Set((responsesData ?? []).map(r => r.lesson_id));
     setCompletedLessonIds(lessonIdsWithResponses);
+
+    // Compute fully completed lessons: has responses + all devotionals done
+    const devsByLesson: Record<string, string[]> = {};
+    (devContentData ?? []).forEach((d: any) => {
+      if (d.lesson_id) {
+        if (!devsByLesson[d.lesson_id]) devsByLesson[d.lesson_id] = [];
+        devsByLesson[d.lesson_id].push(d.id);
+      }
+    });
+    const completedDevIds = new Set((devProgressData ?? []).map((p: any) => p.devotional_id));
+    const fullyDone = new Set<string>();
+    // A lesson is fully complete if: has study responses AND all its devotionals are completed
+    (lessonsData ?? []).forEach((l: any) => {
+      const hasStudy = lessonIdsWithResponses.has(l.id);
+      const lessonDevs = devsByLesson[l.id] ?? [];
+      const allDevsDone = lessonDevs.length === 0 || lessonDevs.every(devId => completedDevIds.has(devId));
+      if (hasStudy && allDevsDone) {
+        fullyDone.add(l.id);
+      }
+    });
+    setFullyCompletedLessonIds(fullyDone);
 
     // Build courses with lessons nested
     const courseList = (coursesData ?? []).map(c => ({
@@ -561,7 +587,7 @@ export default function DiscipleshipTab() {
           {/* Course accordion */}
           {courses.map((course) => {
             const isOpen = expandedCourse === course.id;
-            const doneLessons = course.lessons.filter(l => completedLessonIds.has(l.id)).length;
+            const doneLessons = course.lessons.filter(l => fullyCompletedLessonIds.has(l.id)).length;
             const totalLessons = course.lessons.length;
             const coursePct = totalLessons > 0 ? Math.round((doneLessons / totalLessons) * 100) : 0;
             return (
@@ -604,28 +630,58 @@ export default function DiscipleshipTab() {
                     {course.lessons.length === 0 ? (
                       <p className="px-4 py-3 text-muted-foreground font-inter text-xs text-center">Nenhuma lição cadastrada ainda.</p>
                     ) : (
-                      course.lessons.map((lesson) => {
+                      course.lessons.map((lesson, lessonIndex) => {
                         const isDone = completedLessonIds.has(lesson.id);
+                        const isFullyDone = fullyCompletedLessonIds.has(lesson.id);
+                        // First lesson is always unlocked; subsequent ones require previous to be fully completed
+                        const prevLesson = lessonIndex > 0 ? course.lessons[lessonIndex - 1] : null;
+                        const isLocked = prevLesson ? !fullyCompletedLessonIds.has(prevLesson.id) : false;
                         return (
                           <button
                             key={lesson.id}
-                            onClick={() => { setSelectedLesson(lesson); setSelectedLessonMode("choice"); }}
-                            className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border last:border-b-0 hover:bg-primary/5 transition-colors ${isDone ? "bg-brand-green/5" : ""}`}
+                            onClick={() => {
+                              if (isLocked) {
+                                toast.info("🔒 Complete todas as tarefas da lição anterior primeiro!", {
+                                  description: "Termine o estudo e todos os devocionais para desbloquear.",
+                                  duration: 3000,
+                                });
+                                return;
+                              }
+                              setSelectedLesson(lesson);
+                              setSelectedLessonMode("choice");
+                            }}
+                            className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border last:border-b-0 transition-colors ${
+                              isLocked ? "opacity-50 cursor-not-allowed" : "hover:bg-primary/5"
+                            } ${isFullyDone ? "bg-brand-green/5" : isDone ? "bg-secondary/5" : ""}`}
                           >
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isDone ? "bg-brand-green/15" : "bg-secondary/10"}`}>
-                              {isDone
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                              isFullyDone ? "bg-brand-green/15" : isLocked ? "bg-muted" : "bg-secondary/10"
+                            }`}>
+                              {isFullyDone
                                 ? <CheckCircle2 className="w-4 h-4 text-brand-green" />
+                                : isLocked
+                                ? <Lock className="w-3.5 h-3.5 text-muted-foreground" />
                                 : <span className="font-montserrat font-bold text-secondary text-xs">{lesson.order_num}</span>
                               }
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className={`font-inter text-sm ${isDone ? "text-brand-green font-medium" : "text-foreground"}`}>{lesson.title}</p>
+                              <p className={`font-inter text-sm ${isFullyDone ? "text-brand-green font-medium" : isLocked ? "text-muted-foreground" : "text-foreground"}`}>{lesson.title}</p>
                               {lesson.objective && (
                                 <p className="font-inter text-[10px] text-muted-foreground truncate mt-0.5">{lesson.objective}</p>
                               )}
+                              {isLocked && (
+                                <p className="font-inter text-[10px] text-muted-foreground mt-0.5">🔒 Complete a lição anterior</p>
+                              )}
+                              {isDone && !isFullyDone && !isLocked && (
+                                <p className="font-inter text-[10px] text-secondary mt-0.5">⏳ Faltam devocionais ou estudo</p>
+                              )}
                             </div>
-                            {isDone
-                              ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-brand-green/15 text-brand-green px-2 py-0.5 rounded-full">✓ Feita</span>
+                            {isFullyDone
+                              ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-brand-green/15 text-brand-green px-2 py-0.5 rounded-full">✓ Completa</span>
+                              : isDone && !isLocked
+                              ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-secondary/15 text-secondary px-2 py-0.5 rounded-full">Em andamento</span>
+                              : isLocked
+                              ? <Lock className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                               : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                             }
                           </button>
