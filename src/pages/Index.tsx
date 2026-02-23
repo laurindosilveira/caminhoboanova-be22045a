@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, Bell, BellOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { requestNotificationPermission, isNotificationEnabled, scheduleDailyReminder } from "@/lib/notifications";
 
 import HeroHeader from "@/components/home/HeroHeader";
 import MissionCard from "@/components/home/MissionCard";
@@ -13,6 +14,8 @@ import EditProfileForm from "@/components/home/EditProfileForm";
 import CommunityTab from "@/components/home/CommunityTab";
 import DiscipleshipTab from "@/components/home/DiscipleshipTab";
 import DevotionalReminder from "@/components/home/DevotionalReminder";
+import UpcomingEventReminder from "@/components/home/UpcomingEventReminder";
+import StreakRiskReminder from "@/components/home/StreakRiskReminder";
 import UserAgendaTab from "@/components/home/UserAgendaTab";
 import BottomNav, { type Tab } from "@/components/home/BottomNav";
 import { useUserStats } from "@/hooks/useUserStats";
@@ -22,6 +25,11 @@ export default function Index() {
   const { profile, role } = useAuth();
   const navigate = useNavigate();
   const stats = useUserStats();
+  const [notificationsOn, setNotificationsOn] = useState(isNotificationEnabled());
+
+  useEffect(() => {
+    if (notificationsOn) scheduleDailyReminder();
+  }, [notificationsOn]);
 
   async function handleCompleteActivity(activityId: string) {
     const { data: { user } } = await supabase.auth.getUser();
@@ -51,6 +59,8 @@ export default function Index() {
         {activeTab === "jornada" && (
           <>
             <DevotionalReminder onNavigateToDiscipulado={() => setActiveTab("discipulado")} />
+            <UpcomingEventReminder onNavigateToAgenda={() => setActiveTab("agenda")} />
+            <StreakRiskReminder onNavigateToJornada={() => setActiveTab("discipulado")} />
             <MissionCard
               nextActivity={stats.nextActivity}
               completedCount={stats.completedCount}
@@ -98,6 +108,46 @@ export default function Index() {
 
             {/* Edição de dados pessoais */}
             <EditProfileForm />
+
+            {/* Notificações */}
+            {"Notification" in window && (
+              <div className="px-5 mt-3">
+                <button
+                  onClick={async () => {
+                    if (notificationsOn) {
+                      setNotificationsOn(false);
+                      localStorage.setItem("caminho_notifications_enabled", "false");
+                    } else {
+                      const granted = await requestNotificationPermission();
+                      setNotificationsOn(granted);
+                      if (granted) scheduleDailyReminder();
+                    }
+                  }}
+                  className="w-full flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm hover:bg-muted/50 transition-colors"
+                >
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${notificationsOn ? "bg-brand-green/15" : "bg-muted"}`}>
+                    {notificationsOn ? (
+                      <Bell className="w-5 h-5 text-brand-green" />
+                    ) : (
+                      <BellOff className="w-5 h-5 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="text-left">
+                    <p className="font-montserrat font-bold text-foreground text-sm">
+                      {notificationsOn ? "Lembretes ativos" : "Ativar lembretes"}
+                    </p>
+                    <p className="text-muted-foreground text-xs font-inter">
+                      {notificationsOn ? "Recebendo lembrete diário às 7h" : "Receba lembretes diários do devocional"}
+                    </p>
+                  </div>
+                  <span className={`ml-auto px-2 py-1 rounded-full text-[10px] font-inter font-bold ${
+                    notificationsOn ? "bg-brand-green/15 text-brand-green" : "bg-muted text-muted-foreground"
+                  }`}>
+                    {notificationsOn ? "ON" : "OFF"}
+                  </span>
+                </button>
+              </div>
+            )}
 
             {/* Admin access — somente visível para admins */}
             {role === "admin" && (
