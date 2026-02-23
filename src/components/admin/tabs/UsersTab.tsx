@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Shield, User, Search, ShieldCheck, ShieldOff, CalendarDays, MapPin } from "lucide-react";
+import { Shield, User, Search, ShieldCheck, ShieldOff, CalendarDays, MapPin, ChevronRight, X, Save, Phone, Cake } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 
@@ -10,6 +10,7 @@ type UserEntry = {
   community: string;
   area: string;
   phone: string;
+  birth_date: string;
   role: "admin" | "user";
   admin_area: string | null;
   created_year: number;
@@ -30,6 +31,11 @@ const ROLE_CFG = {
 
 const AREAS = ["Área 1", "Área 2"];
 
+const AREA_COMMUNITIES: Record<string, string[]> = {
+  "Área 1": ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"],
+  "Área 2": ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"],
+};
+
 export default function UsersTab() {
   const { toast } = useToast();
   const [users, setUsers] = useState<UserEntry[]>([]);
@@ -39,6 +45,9 @@ export default function UsersTab() {
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [saving, setSaving] = useState<string | null>(null);
   const [promotingUser, setPromotingUser] = useState<UserEntry | null>(null);
+  const [editingUser, setEditingUser] = useState<UserEntry | null>(null);
+  const [editForm, setEditForm] = useState({ full_name: "", phone: "", birth_date: "", community: "", area: "" });
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => { fetchUsers(); }, []);
 
@@ -46,7 +55,7 @@ export default function UsersTab() {
     setLoading(true);
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("user_id, full_name, community, area, phone, created_at")
+      .select("user_id, full_name, community, area, phone, birth_date, created_at")
       .order("full_name");
 
     const { data: roles } = await supabase
@@ -74,21 +83,14 @@ export default function UsersTab() {
   async function promoteToAdmin(u: UserEntry, area: string) {
     setSaving(u.user_id);
     const { error } = await supabase.from("user_roles").upsert({
-      user_id: u.user_id,
-      role: "admin",
-      admin_area: area,
+      user_id: u.user_id, role: "admin", admin_area: area,
     }, { onConflict: "user_id,role" });
 
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
-      setUsers(prev =>
-        prev.map(p => p.user_id === u.user_id ? { ...p, role: "admin", admin_area: area } : p)
-      );
-      toast({
-        title: "✅ Administrador ativado",
-        description: `${u.full_name} agora lidera ${area}.`,
-      });
+      setUsers(prev => prev.map(p => p.user_id === u.user_id ? { ...p, role: "admin", admin_area: area } : p));
+      toast({ title: "✅ Administrador ativado", description: `${u.full_name} agora lidera ${area}.` });
     }
     setSaving(null);
     setPromotingUser(null);
@@ -98,29 +100,62 @@ export default function UsersTab() {
     setSaving(u.user_id);
     const { error } = await supabase.from("user_roles")
       .update({ role: "user", admin_area: null })
-      .eq("user_id", u.user_id)
-      .eq("role", "admin");
+      .eq("user_id", u.user_id).eq("role", "admin");
 
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
-      setUsers(prev =>
-        prev.map(p => p.user_id === u.user_id ? { ...p, role: "user", admin_area: null } : p)
-      );
-      toast({
-        title: "✅ Voltou a participante",
-        description: `${u.full_name} agora é Participante.`,
-      });
+      setUsers(prev => prev.map(p => p.user_id === u.user_id ? { ...p, role: "user", admin_area: null } : p));
+      toast({ title: "✅ Voltou a participante", description: `${u.full_name} agora é Participante.` });
     }
     setSaving(null);
   }
 
   function handleToggle(u: UserEntry) {
-    if (u.role === "admin") {
-      demoteToUser(u);
+    if (u.role === "admin") demoteToUser(u);
+    else setPromotingUser(u);
+  }
+
+  function openEditUser(u: UserEntry) {
+    setEditingUser(u);
+    setEditForm({
+      full_name: u.full_name,
+      phone: u.phone,
+      birth_date: u.birth_date,
+      community: u.community,
+      area: u.area,
+    });
+  }
+
+  async function saveEditUser() {
+    if (!editingUser) return;
+    setSavingEdit(true);
+
+    // Determine correct area based on community
+    const newArea = Object.entries(AREA_COMMUNITIES).find(([_, comms]) =>
+      comms.includes(editForm.community)
+    )?.[0] ?? editForm.area;
+
+    const { error } = await supabase.from("profiles").update({
+      full_name: editForm.full_name,
+      phone: editForm.phone,
+      birth_date: editForm.birth_date,
+      community: editForm.community as any,
+      area: newArea as any,
+    }).eq("user_id", editingUser.user_id);
+
+    if (error) {
+      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
     } else {
-      setPromotingUser(u);
+      setUsers(prev => prev.map(p =>
+        p.user_id === editingUser.user_id
+          ? { ...p, full_name: editForm.full_name, phone: editForm.phone, birth_date: editForm.birth_date, community: editForm.community, area: newArea }
+          : p
+      ));
+      toast({ title: "✅ Perfil atualizado", description: `Dados de ${editForm.full_name} salvos.` });
+      setEditingUser(null);
     }
+    setSavingEdit(false);
   }
 
   const filtered = users.filter(u => {
@@ -132,6 +167,9 @@ export default function UsersTab() {
 
   const admins = filtered.filter(u => u.role === "admin");
   const regular = filtered.filter(u => u.role === "user");
+
+  // Get communities for the selected area in edit form
+  const editCommunities = AREA_COMMUNITIES[editForm.area] ?? [];
 
   return (
     <div className="space-y-5">
@@ -148,12 +186,7 @@ export default function UsersTab() {
       {/* Search */}
       <div className="relative">
         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Buscar por nome ou comunidade..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="pl-9 rounded-2xl border-border"
-        />
+        <Input placeholder="Buscar por nome ou comunidade..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 rounded-2xl border-border" />
       </div>
 
       {/* Year filter */}
@@ -161,22 +194,13 @@ export default function UsersTab() {
         <div className="flex items-center gap-2">
           <CalendarDays className="w-4 h-4 text-muted-foreground flex-shrink-0" />
           <div className="flex gap-1.5 flex-wrap">
-            <button
-              onClick={() => setSelectedYear(null)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-montserrat font-bold transition-all ${
-                !selectedYear ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
-              }`}
-            >
+            <button onClick={() => setSelectedYear(null)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-montserrat font-bold transition-all ${!selectedYear ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>
               Todos
             </button>
             {availableYears.map(year => (
-              <button
-                key={year}
-                onClick={() => setSelectedYear(year)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-montserrat font-bold transition-all ${
-                  selectedYear === year ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
-                }`}
-              >
+              <button key={year} onClick={() => setSelectedYear(year)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-montserrat font-bold transition-all ${selectedYear === year ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>
                 {year}
               </button>
             ))}
@@ -184,33 +208,83 @@ export default function UsersTab() {
         </div>
       )}
 
-      {/* Area selection modal */}
+      {/* Area selection modal for promoting */}
       {promotingUser && (
         <div className="bg-card border-2 border-primary/30 rounded-2xl p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
           <p className="font-montserrat font-bold text-foreground text-sm">
             Selecione a turma para <span className="text-primary">{promotingUser.full_name}</span>
           </p>
-          <p className="text-muted-foreground font-inter text-xs">
-            Qual área este administrador vai liderar?
-          </p>
+          <p className="text-muted-foreground font-inter text-xs">Qual área este administrador vai liderar?</p>
           <div className="flex gap-2">
             {AREAS.map(area => (
-              <button
-                key={area}
-                onClick={() => promoteToAdmin(promotingUser, area)}
-                disabled={saving === promotingUser.user_id}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded-xl text-sm font-montserrat font-bold text-primary transition-all disabled:opacity-50"
-              >
-                <MapPin className="w-4 h-4" />
-                {area}
+              <button key={area} onClick={() => promoteToAdmin(promotingUser, area)} disabled={saving === promotingUser.user_id}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded-xl text-sm font-montserrat font-bold text-primary transition-all disabled:opacity-50">
+                <MapPin className="w-4 h-4" />{area}
               </button>
             ))}
           </div>
-          <button
-            onClick={() => setPromotingUser(null)}
-            className="w-full text-center text-xs font-inter text-muted-foreground hover:text-foreground transition-colors py-1"
-          >
-            Cancelar
+          <button onClick={() => setPromotingUser(null)} className="w-full text-center text-xs font-inter text-muted-foreground hover:text-foreground transition-colors py-1">Cancelar</button>
+        </div>
+      )}
+
+      {/* Edit user panel */}
+      {editingUser && (
+        <div className="bg-card border-2 border-primary/30 rounded-2xl p-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center justify-between">
+            <p className="font-montserrat font-bold text-foreground text-base">Editar perfil</p>
+            <button onClick={() => setEditingUser(null)} className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center hover:bg-muted/80">
+              <X className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-inter font-medium text-muted-foreground mb-1 block">Nome completo</label>
+              <Input value={editForm.full_name} onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))} className="rounded-xl" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-inter font-medium text-muted-foreground mb-1 flex items-center gap-1"><Phone className="w-3 h-3" /> Telefone</label>
+                <Input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} className="rounded-xl" />
+              </div>
+              <div>
+                <label className="text-xs font-inter font-medium text-muted-foreground mb-1 flex items-center gap-1"><Cake className="w-3 h-3" /> Nascimento</label>
+                <Input type="date" value={editForm.birth_date} onChange={e => setEditForm(f => ({ ...f, birth_date: e.target.value }))} className="rounded-xl" />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-inter font-medium text-muted-foreground mb-1 flex items-center gap-1"><MapPin className="w-3 h-3" /> Área</label>
+              <div className="flex gap-2">
+                {AREAS.map(area => (
+                  <button key={area} onClick={() => {
+                    const newComms = AREA_COMMUNITIES[area] ?? [];
+                    setEditForm(f => ({ ...f, area, community: newComms.includes(f.community) ? f.community : newComms[0] ?? "" }));
+                  }}
+                    className={`flex-1 py-2 rounded-xl text-xs font-montserrat font-bold transition-all border ${
+                      editForm.area === area ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
+                    }`}>
+                    {area}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-inter font-medium text-muted-foreground mb-1 block">Comunidade</label>
+              <select value={editForm.community} onChange={e => setEditForm(f => ({ ...f, community: e.target.value }))}
+                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                {editCommunities.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <button onClick={saveEditUser} disabled={savingEdit || !editForm.full_name}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-montserrat font-bold text-primary-foreground disabled:opacity-50 transition-opacity"
+            style={{ background: "var(--gradient-hero)" }}>
+            <Save className="w-4 h-4" />
+            {savingEdit ? "Salvando..." : "Salvar alterações"}
           </button>
         </div>
       )}
@@ -221,56 +295,38 @@ export default function UsersTab() {
         </div>
       ) : (
         <>
-          {/* Admins */}
           {admins.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <ShieldCheck className="w-3.5 h-3.5 text-primary" />
-                <span className="text-xs font-montserrat font-bold text-muted-foreground uppercase tracking-wide">
-                  Administradores ({admins.length})
-                </span>
+                <span className="text-xs font-montserrat font-bold text-muted-foreground uppercase tracking-wide">Administradores ({admins.length})</span>
               </div>
               <div className="bg-card border border-border rounded-2xl overflow-hidden">
                 {admins.map((u, i) => (
-                  <UserRow
-                    key={u.user_id}
-                    user={u}
-                    isLast={i === admins.length - 1}
-                    isSaving={saving === u.user_id}
-                    onToggle={() => handleToggle(u)}
-                  />
+                  <UserRow key={u.user_id} user={u} isLast={i === admins.length - 1} isSaving={saving === u.user_id}
+                    onToggle={() => handleToggle(u)} onEdit={() => openEditUser(u)} />
                 ))}
               </div>
             </div>
           )}
 
-          {/* Regular users */}
           {regular.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <User className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="text-xs font-montserrat font-bold text-muted-foreground uppercase tracking-wide">
-                  Participantes ({regular.length})
-                </span>
+                <span className="text-xs font-montserrat font-bold text-muted-foreground uppercase tracking-wide">Participantes ({regular.length})</span>
               </div>
               <div className="bg-card border border-border rounded-2xl overflow-hidden">
                 {regular.map((u, i) => (
-                  <UserRow
-                    key={u.user_id}
-                    user={u}
-                    isLast={i === regular.length - 1}
-                    isSaving={saving === u.user_id}
-                    onToggle={() => handleToggle(u)}
-                  />
+                  <UserRow key={u.user_id} user={u} isLast={i === regular.length - 1} isSaving={saving === u.user_id}
+                    onToggle={() => handleToggle(u)} onEdit={() => openEditUser(u)} />
                 ))}
               </div>
             </div>
           )}
 
           {filtered.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground font-inter text-sm">
-              Nenhum usuário encontrado.
-            </div>
+            <div className="text-center py-12 text-muted-foreground font-inter text-sm">Nenhum usuário encontrado.</div>
           )}
         </>
       )}
@@ -279,15 +335,9 @@ export default function UsersTab() {
 }
 
 function UserRow({
-  user: u,
-  isLast,
-  isSaving,
-  onToggle,
+  user: u, isLast, isSaving, onToggle, onEdit,
 }: {
-  user: UserEntry;
-  isLast: boolean;
-  isSaving: boolean;
-  onToggle: () => void;
+  user: UserEntry; isLast: boolean; isSaving: boolean; onToggle: () => void; onEdit: () => void;
 }) {
   const cfg = ROLE_CFG[u.role];
   const initials = u.full_name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
@@ -299,7 +349,7 @@ function UserRow({
       }`}>
         {initials}
       </div>
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 cursor-pointer" onClick={onEdit}>
         <p className="font-montserrat font-bold text-foreground text-sm truncate">{u.full_name}</p>
         <p className="text-muted-foreground text-xs font-inter">
           {u.community} · {u.area}
@@ -308,13 +358,13 @@ function UserRow({
           )}
         </p>
       </div>
-      <button
-        onClick={onToggle}
-        disabled={isSaving}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-montserrat font-bold transition-all disabled:opacity-50 ${cfg.badge}`}
-      >
+      <button onClick={onEdit} className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center hover:bg-muted/80 flex-shrink-0 mr-1" title="Editar">
+        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+      </button>
+      <button onClick={onToggle} disabled={isSaving}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-montserrat font-bold transition-all disabled:opacity-50 ${cfg.badge}`}>
         {u.role === "admin" ? <ShieldOff className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-        {u.role === "admin" ? "Remover admin" : "Tornar admin"}
+        {u.role === "admin" ? "Remover" : "Admin"}
       </button>
     </div>
   );
