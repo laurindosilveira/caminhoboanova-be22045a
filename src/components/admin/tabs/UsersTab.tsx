@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Shield, User, Search, ShieldCheck, ShieldOff } from "lucide-react";
+import { Shield, User, Search, ShieldCheck, ShieldOff, CalendarDays } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 
@@ -11,6 +11,7 @@ type UserEntry = {
   area: string;
   phone: string;
   role: "admin" | "user";
+  created_year: number;
 };
 
 const ROLE_CFG = {
@@ -31,6 +32,8 @@ export default function UsersTab() {
   const [users, setUsers] = useState<UserEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [saving, setSaving] = useState<string | null>(null);
 
   useEffect(() => { fetchUsers(); }, []);
@@ -40,7 +43,7 @@ export default function UsersTab() {
     // Fetch all profiles + their roles
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("user_id, full_name, community, area, phone")
+      .select("user_id, full_name, community, area, phone, created_at")
       .order("full_name");
 
     const { data: roles } = await supabase
@@ -53,7 +56,11 @@ export default function UsersTab() {
     const combined: UserEntry[] = (profiles ?? []).map(p => ({
       ...p,
       role: roleMap[p.user_id] ?? "user",
+      created_year: new Date(p.created_at).getFullYear(),
     }));
+
+    const years = [...new Set(combined.map(u => u.created_year))].sort((a, b) => b - a);
+    setAvailableYears(years);
 
     setUsers(combined);
     setLoading(false);
@@ -97,10 +104,12 @@ export default function UsersTab() {
     setSaving(null);
   }
 
-  const filtered = users.filter(u =>
-    u.full_name.toLowerCase().includes(search.toLowerCase()) ||
-    u.community.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = users.filter(u => {
+    const matchesSearch = u.full_name.toLowerCase().includes(search.toLowerCase()) ||
+      u.community.toLowerCase().includes(search.toLowerCase());
+    const matchesYear = selectedYear ? u.created_year === selectedYear : true;
+    return matchesSearch && matchesYear;
+  });
 
   const admins = filtered.filter(u => u.role === "admin");
   const regular = filtered.filter(u => u.role === "user");
@@ -127,6 +136,34 @@ export default function UsersTab() {
           className="pl-9 rounded-2xl border-border"
         />
       </div>
+
+      {/* Year filter */}
+      {availableYears.length > 0 && (
+        <div className="flex items-center gap-2">
+          <CalendarDays className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+          <div className="flex gap-1.5 flex-wrap">
+            <button
+              onClick={() => setSelectedYear(null)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-montserrat font-bold transition-all ${
+                !selectedYear ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              Todos
+            </button>
+            {availableYears.map(year => (
+              <button
+                key={year}
+                onClick={() => setSelectedYear(year)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-montserrat font-bold transition-all ${
+                  selectedYear === year ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                {year}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="space-y-2">
