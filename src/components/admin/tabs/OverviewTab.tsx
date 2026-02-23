@@ -1,11 +1,15 @@
 import { useState, useEffect } from "react";
 import {
   BookOpen, GraduationCap, CalendarDays, Zap, Users,
-  AlertTriangle, CheckCircle2, Flame, Heart, Star, ChevronRight
+  AlertTriangle, CheckCircle2, Flame, Heart, Star, ChevronRight, Trophy, Lock
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 type Activity = { id: string; type: string; title: string; points: number; order_num: number; subtitle: string | null };
+type CourseInfo = { id: string; title: string; order_num: number };
+type RankingSeason = { id: string; course_id: string; community: string; closed_at: string; winners: any[]; total_participants: number };
 type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
@@ -46,9 +50,13 @@ function MiniBar({ pct, color }: { pct: number; color: string }) {
 type WeeklyDevStat = { user_id: string; full_name: string; community: string; count: number };
 
 export default function OverviewTab({ participants, activities, plans, onSelectParticipant }: Props) {
+  const { profile } = useAuth();
   const [communityFilter, setCommunityFilter] = useState("todas");
   const [weeklyDevStats, setWeeklyDevStats] = useState<WeeklyDevStat[]>([]);
   const [weeklyTotal, setWeeklyTotal] = useState(0);
+  const [courses, setCourses] = useState<CourseInfo[]>([]);
+  const [seasons, setSeasons] = useState<RankingSeason[]>([]);
+  const [closingSeason, setClosingSeason] = useState(false);
 
   useEffect(() => {
     async function fetchWeeklyDevotionals() {
@@ -92,6 +100,67 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
     }
     if (participants.length > 0) fetchWeeklyDevotionals();
   }, [participants]);
+
+  // Fetch courses and existing seasons
+  useEffect(() => {
+    async function fetchSeasons() {
+      const [{ data: coursesData }, { data: seasonsData }] = await Promise.all([
+        supabase.from("courses").select("id, title, order_num").order("order_num"),
+        supabase.from("ranking_seasons").select("*"),
+      ]);
+      setCourses((coursesData ?? []) as CourseInfo[]);
+      setSeasons((seasonsData ?? []) as unknown as RankingSeason[]);
+    }
+    fetchSeasons();
+  }, []);
+
+  async function handleCloseSeason(courseId: string) {
+    if (!profile?.community) return;
+    const community = profile.community as string;
+
+    // Check if already closed
+    if (seasons.some(s => s.course_id === courseId && s.community === community)) {
+      toast.info("Esta temporada já foi encerrada para sua comunidade.");
+      return;
+    }
+
+    setClosingSeason(true);
+
+    // Fetch ranking for this community
+    const { data: rankingData } = await supabase.rpc("get_community_ranking", {
+      _community: profile.community as any,
+    });
+
+    const ranking = (rankingData ?? []) as { user_id: string; full_name: string; faith_points: number }[];
+
+    const winners = ranking.slice(0, 3).map((r, i) => ({
+      position: i + 1,
+      user_id: r.user_id,
+      full_name: r.full_name,
+      faith_points: Number(r.faith_points),
+      medal: i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉",
+    }));
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { error } = await supabase.from("ranking_seasons").insert({
+      course_id: courseId,
+      community,
+      closed_by: user!.id,
+      winners,
+      total_participants: ranking.length,
+    });
+
+    if (error) {
+      toast.error("Erro ao encerrar temporada: " + error.message);
+    } else {
+      toast.success("🏆 Temporada encerrada! Vencedores registrados.", { duration: 4000 });
+      // Refresh seasons
+      const { data: seasonsData } = await supabase.from("ranking_seasons").select("*");
+      setSeasons((seasonsData ?? []) as unknown as RankingSeason[]);
+    }
+    setClosingSeason(false);
+  }
 
   const total = participants.length;
   const ativos = participants.filter(p => p.completed_count > 0).length;
@@ -366,6 +435,75 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
           {filteredParticipants.length === 0 && (
             <p className="text-center text-muted-foreground font-inter text-sm py-8">Nenhum participante encontrado.</p>
           )}
+        </div>
+      </div>
+
+      {/* ── TEMPORADA & VENCEDORES ─── */}
+      <div className="bg-card rounded-2xl border border-border p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Trophy className="w-4 h-4 text-accent-foreground" />
+          <p className="font-montserrat font-bold text-foreground text-sm">🏆 Temporada & Vencedores</p>
+        </div>
+
+        {/* Existing closed seasons */}
+        {seasons.length > 0 && (
+          <div className="space-y-3 mb-4">
+            {seasons.map(s => {
+              const course = courses.find(c => c.id === s.course_id);
+              const winners = (s.winners as any[]) ?? [];
+              return (
+                <div key={s.id} className="bg-accent/10 rounded-xl p-3 border border-accent/20">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Lock className="w-3.5 h-3.5 text-accent-foreground" />
+                    <p className="font-montserrat font-bold text-foreground text-xs">
+                      {course?.title ?? "Curso"} · {s.community}
+                    </p>
+                    <span className="text-[10px] font-inter text-muted-foreground ml-auto">
+                      Encerrado em {new Date(s.closed_at).toLocaleDateString("pt-BR")}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {winners.map((w: any) => (
+                      <div key={w.user_id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-card/50">
+                        <span className="text-lg">{w.medal}</span>
+                        <p className="font-inter text-sm text-foreground flex-1">{w.full_name}</p>
+                        <span className="font-montserrat font-bold text-xs text-accent-foreground">{w.faith_points} pts</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-muted-foreground font-inter text-[10px] mt-2">{s.total_participants} participantes</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Close season buttons */}
+        <p className="font-inter text-xs text-muted-foreground mb-2">Encerrar temporada para registrar os vencedores:</p>
+        <div className="space-y-2">
+          {courses.map(course => {
+            const isClosed = seasons.some(s => s.course_id === course.id && s.community === (profile?.community as string));
+            return (
+              <div key={course.id} className="flex items-center gap-3 p-2.5 rounded-xl border border-border">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "var(--gradient-hero)" }}>
+                  <span className="font-montserrat font-black text-primary-foreground text-xs">#{course.order_num}</span>
+                </div>
+                <p className="font-inter text-sm text-foreground flex-1">{course.title}</p>
+                {isClosed ? (
+                  <span className="text-[10px] font-inter font-bold text-brand-green bg-brand-green/10 px-2 py-1 rounded-full">✓ Encerrado</span>
+                ) : (
+                  <button
+                    onClick={() => handleCloseSeason(course.id)}
+                    disabled={closingSeason}
+                    className="px-3 py-1.5 rounded-xl text-xs font-inter font-bold text-primary-foreground disabled:opacity-50 transition-opacity"
+                    style={{ background: "var(--gradient-hero)" }}
+                  >
+                    {closingSeason ? "..." : "🏆 Encerrar"}
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
