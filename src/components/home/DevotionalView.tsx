@@ -192,11 +192,22 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
 
       {/* Complete button */}
       {!isCompleted && !hideCompleteButton && (
-        <button onClick={handleComplete} disabled={completing}
-          className="w-full py-3.5 rounded-2xl font-montserrat text-sm font-black text-primary-foreground disabled:opacity-60 shadow-lg shadow-secondary/30 active:scale-95 transition-all"
-          style={{ background: "var(--gradient-orange)" }}>
-          {completing ? "Marcando..." : `Concluir Devocional · +${activity.points} pts →`}
-        </button>
+        <div className="space-y-2">
+          <button onClick={handleComplete} disabled={completing}
+            className="w-full py-3.5 rounded-2xl font-montserrat text-sm font-black text-primary-foreground disabled:opacity-60 shadow-lg shadow-secondary/30 active:scale-95 transition-all"
+            style={{ background: "var(--gradient-orange)" }}>
+            {completing ? "Marcando..." : `Concluir Devocional · +${activity.points} pts →`}
+          </button>
+          <p className="text-center text-muted-foreground font-inter text-[10px]">
+            ⭐ Você ganha pontos de fé ao concluir cada devocional!
+          </p>
+        </div>
+      )}
+      {isCompleted && (
+        <div className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-brand-green/10 border border-brand-green/20">
+          <CheckCircle2 className="w-4 h-4 text-brand-green" />
+          <span className="font-inter text-sm font-medium text-brand-green">Concluído · +{activity.points} pts ganhos</span>
+        </div>
       )}
     </div>
   );
