@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Trophy, Lock } from "lucide-react";
+import { Trophy, Lock, Flame } from "lucide-react";
 
 interface AchievementsGridProps {
   faithPoints: number;
@@ -21,10 +21,19 @@ type Achievement = {
 type Winner = { position: number; user_id: string; full_name: string; faith_points: number; medal: string };
 type RankingSeason = { id: string; course_id: string; community: string; closed_at: string; winners: Winner[]; total_participants: number };
 
+interface RankingMember {
+  user_id: string;
+  full_name: string;
+  completed_count: number;
+  faith_points: number;
+}
+
 export default function AchievementsGrid({ faithPoints, streakDays, completedCount }: AchievementsGridProps) {
   const { profile } = useAuth();
   const myUserId = profile?.user_id;
   const [seasons, setSeasons] = useState<RankingSeason[]>([]);
+  const [members, setMembers] = useState<RankingMember[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(true);
   const [celebrationFired, setCelebrationFired] = useState(false);
   const winnerBannerRef = useRef<HTMLDivElement>(null);
 
@@ -56,7 +65,16 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
         .eq("community", profile!.community as string);
       setSeasons((data ?? []) as unknown as RankingSeason[]);
     }
+    async function fetchRanking() {
+      setLoadingMembers(true);
+      const { data } = await supabase.rpc("get_community_ranking", {
+        _community: profile!.community as any,
+      });
+      setMembers((data ?? []) as RankingMember[]);
+      setLoadingMembers(false);
+    }
     fetchSeasons();
+    fetchRanking();
   }, [profile]);
 
   const achievements: Achievement[] = [
@@ -142,6 +160,61 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
           ))}
         </div>
       )}
+
+
+      {/* Ranking da Turma */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Flame className="w-4 h-4 text-secondary" />
+          <span className="font-montserrat font-bold text-foreground text-sm">Ranking da turma</span>
+        </div>
+
+        {loadingMembers ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map(i => <div key={i} className="bg-muted rounded-2xl h-16 animate-pulse" />)}
+          </div>
+        ) : members.length === 0 ? (
+          <div className="bg-card rounded-2xl border border-border p-6 text-center">
+            <p className="text-muted-foreground text-sm font-inter">Nenhum participante encontrado.</p>
+          </div>
+        ) : (
+          <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+            {members.map((m, i) => {
+              const isMe = m.user_id === myUserId;
+              const initials = m.full_name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
+              const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : null;
+              return (
+                <div
+                  key={m.user_id}
+                  className={`flex items-center gap-3 px-4 py-3 ${
+                    i < members.length - 1 ? "border-b border-border" : ""
+                  } ${isMe ? "bg-primary/5" : ""}`}
+                >
+                  <div className="w-7 flex-shrink-0 text-center">
+                    {medal ? (
+                      <span className="text-lg">{medal}</span>
+                    ) : (
+                      <span className="font-montserrat font-black text-muted-foreground text-sm">#{i + 1}</span>
+                    )}
+                  </div>
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center font-montserrat font-black text-sm text-primary-foreground flex-shrink-0 ${isMe ? "bg-gradient-orange" : "bg-primary"}`}>
+                    {initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-montserrat font-bold text-card-foreground text-sm">
+                      {m.full_name} {isMe && <span className="text-secondary text-xs font-inter">(você)</span>}
+                    </p>
+                    <p className="text-muted-foreground text-xs font-inter">{Number(m.completed_count)} atividades · {Number(m.faith_points)} pts</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <span className="font-montserrat font-black text-accent text-sm">{Number(m.faith_points)} pts</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Achievements Grid */}
       <div className="grid grid-cols-2 gap-3">

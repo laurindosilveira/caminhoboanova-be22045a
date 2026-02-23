@@ -1,15 +1,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageCircle, Flame, GraduationCap, Cake } from "lucide-react";
+import { MessageCircle, GraduationCap, Cake } from "lucide-react";
 import ClassroomTab from "./ClassroomTab";
 
-interface CommunityMember {
-  user_id: string;
-  full_name: string;
-  completed_count: number;
-  faith_points: number;
-}
 
 interface Message {
   id: string;
@@ -29,12 +23,9 @@ type SubTab = "comunidade" | "sala";
 export default function CommunityTab() {
   const { profile } = useAuth();
   const [subTab, setSubTab] = useState<SubTab>("comunidade");
-  const [members, setMembers] = useState<CommunityMember[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [loadingMembers, setLoadingMembers] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [birthdays, setBirthdays] = useState<BirthdayPerson[]>([]);
-  const myUserId = profile?.user_id;
 
   useEffect(() => {
     if (!profile) return;
@@ -50,14 +41,6 @@ export default function CommunityTab() {
       setLoadingMessages(false);
     }
 
-    async function fetchRanking() {
-      setLoadingMembers(true);
-      const { data } = await supabase.rpc("get_community_ranking", {
-        _community: profile.community as any,
-      });
-      setMembers((data ?? []) as CommunityMember[]);
-      setLoadingMembers(false);
-    }
 
     async function fetchBirthdays() {
       const currentMonth = new Date().getMonth() + 1;
@@ -80,7 +63,6 @@ export default function CommunityTab() {
     }
 
     fetchMessages();
-    fetchRanking();
     fetchBirthdays();
   }, [profile]);
 
@@ -117,7 +99,7 @@ export default function CommunityTab() {
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <Flame className="w-3.5 h-3.5" />
+            <MessageCircle className="w-3.5 h-3.5" />
             Comunidade
           </button>
           <button
@@ -202,60 +184,6 @@ export default function CommunityTab() {
                         </p>
                       </div>
                       <span className="text-muted-foreground text-xs font-inter flex-shrink-0">dia {b.day}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Active Ranking */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <Flame className="w-4 h-4 text-secondary" />
-              <span className="font-montserrat font-bold text-foreground text-sm">Ranking da comunidade</span>
-            </div>
-
-            {loadingMembers ? (
-              <div className="space-y-2">
-                {[1, 2, 3].map(i => <div key={i} className="bg-muted rounded-2xl h-16 animate-pulse" />)}
-              </div>
-            ) : members.length === 0 ? (
-              <div className="bg-card rounded-2xl border border-border p-6 text-center">
-                <p className="text-muted-foreground text-sm font-inter">Nenhum participante encontrado.</p>
-              </div>
-            ) : (
-              <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
-                {members.map((m, i) => {
-                  const isMe = m.user_id === myUserId;
-                  const initials = m.full_name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
-                  const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : null;
-                  return (
-                    <div
-                      key={m.user_id}
-                      className={`flex items-center gap-3 px-4 py-3 ${
-                        i < members.length - 1 ? "border-b border-border" : ""
-                      } ${isMe ? "bg-primary/5" : ""}`}
-                    >
-                      <div className="w-7 flex-shrink-0 text-center">
-                        {medal ? (
-                          <span className="text-lg">{medal}</span>
-                        ) : (
-                          <span className="font-montserrat font-black text-muted-foreground text-sm">#{i + 1}</span>
-                        )}
-                      </div>
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center font-montserrat font-black text-sm text-primary-foreground flex-shrink-0 ${isMe ? "bg-gradient-orange" : "bg-primary"}`}>
-                        {initials}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-montserrat font-bold text-card-foreground text-sm">
-                          {m.full_name} {isMe && <span className="text-secondary text-xs font-inter">(você)</span>}
-                        </p>
-                        <p className="text-muted-foreground text-xs font-inter">{Number(m.completed_count)} atividades · {Number(m.faith_points)} pts</p>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <span className="font-montserrat font-black text-accent text-sm">{Number(m.faith_points)} pts</span>
-                      </div>
                     </div>
                   );
                 })}
