@@ -116,7 +116,7 @@ export default function CommunityTab() {
           <div>
             <div className="flex items-center gap-2 mb-3">
               <MessageCircle className="w-4 h-4 text-primary" />
-              <span className="font-montserrat font-bold text-foreground text-sm">Mensagens do Pastor</span>
+              <span className="font-montserrat font-bold text-foreground text-sm">Avisos</span>
             </div>
 
             {loadingMessages ? (
