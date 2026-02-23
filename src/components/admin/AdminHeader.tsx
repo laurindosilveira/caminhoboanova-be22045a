@@ -9,6 +9,7 @@ type Stats = {
 
 type Props = {
   areaName: string;
+  subtitle?: string | null;
   stats: Stats;
   onSignOut: () => void;
   onBackToUser: () => void;
@@ -16,7 +17,7 @@ type Props = {
   onChangeCommunity?: () => void;
 };
 
-export default function AdminHeader({ areaName, stats, onSignOut, onBackToUser, selectedCommunity, onChangeCommunity }: Props) {
+export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBackToUser, selectedCommunity, onChangeCommunity }: Props) {
   return (
     <header className="px-4 pt-8 pb-5" style={{ background: "var(--gradient-hero)" }}>
       <div className="max-w-2xl mx-auto">
@@ -37,6 +38,7 @@ export default function AdminHeader({ areaName, stats, onSignOut, onBackToUser, 
             <div>
               <p className="text-primary-foreground/60 font-inter text-xs">Painel do Administrador</p>
               <h1 className="font-montserrat font-black text-primary-foreground text-lg">{areaName}</h1>
+              {subtitle && <p className="text-primary-foreground/60 font-inter text-xs mt-0.5">📍 {subtitle}</p>}
             </div>
           </div>
           <div className="flex items-center gap-2">

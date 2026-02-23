@@ -210,13 +210,15 @@ export default function AdminDashboard() {
     );
   }
 
-  const displayCommunity = selectedCommunity === "todas" ? turmaName : `${turmaName} — ${selectedCommunity}`;
+  const displayTurma = turmaName;
+  const displaySubtitle = selectedCommunity === "todas" ? null : selectedCommunity;
   const displayParticipants = selectedCommunity === "todas" ? participants : filteredParticipants;
 
   return (
     <div className="min-h-screen bg-background">
       <AdminHeader
-        areaName={displayCommunity}
+        areaName={displayTurma}
+        subtitle={displaySubtitle}
         stats={stats}
         onSignOut={signOut}
         onBackToUser={() => navigate("/")}
