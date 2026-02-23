@@ -19,6 +19,7 @@ type Event = {
 const EVENT_TYPES: Record<string, { label: string; color: string; emoji: string }> = {
   encontro: { label: "Encontro", color: "bg-primary/10 text-primary", emoji: "📅" },
   culto:    { label: "Culto",    color: "bg-brand-green/10 text-brand-green", emoji: "⛪" },
+  jemiac:   { label: "JEMIAC",   color: "bg-secondary/10 text-secondary", emoji: "✝️" },
   retiro:   { label: "Retiro",   color: "bg-secondary/10 text-secondary", emoji: "🏕️" },
   evento:   { label: "Evento",   color: "bg-accent/20 text-accent-foreground", emoji: "🎉" },
 };
