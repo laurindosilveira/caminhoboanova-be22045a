@@ -48,6 +48,8 @@ function MiniBar({ pct, color }: { pct: number; color: string }) {
 }
 
 type WeeklyDevStat = { user_id: string; full_name: string; community: string; count: number };
+type RankingEntry = { user_id: string; full_name: string; completed_count: number; faith_points: number };
+type CommunityRanking = { community: string; ranking: RankingEntry[] };
 
 export default function OverviewTab({ participants, activities, plans, onSelectParticipant }: Props) {
   const { profile } = useAuth();
@@ -57,6 +59,8 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
   const [courses, setCourses] = useState<CourseInfo[]>([]);
   const [seasons, setSeasons] = useState<RankingSeason[]>([]);
   const [closingSeason, setClosingSeason] = useState(false);
+  const [areaRankings, setAreaRankings] = useState<CommunityRanking[]>([]);
+  const [rankingCommunityFilter, setRankingCommunityFilter] = useState("todas");
 
   useEffect(() => {
     async function fetchWeeklyDevotionals() {
@@ -113,6 +117,23 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
     }
     fetchSeasons();
   }, []);
+
+  // Fetch rankings for all communities in the area
+  useEffect(() => {
+    async function fetchAreaRankings() {
+      const comms = [...new Set(participants.map(p => p.community))];
+      if (comms.length === 0) return;
+      const results: CommunityRanking[] = [];
+      for (const comm of comms) {
+        const { data } = await supabase.rpc("get_community_ranking", { _community: comm as any });
+        if (data && data.length > 0) {
+          results.push({ community: comm, ranking: data as RankingEntry[] });
+        }
+      }
+      setAreaRankings(results);
+    }
+    if (participants.length > 0) fetchAreaRankings();
+  }, [participants]);
 
   async function handleCloseSeason(courseId: string) {
     if (!profile?.community) return;
@@ -438,7 +459,60 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
         </div>
       </div>
 
-      {/* ── TEMPORADA & VENCEDORES ─── */}
+      {/* ── RANKING POR COMUNIDADE ─── */}
+      {areaRankings.length > 0 && (
+        <div className="bg-card rounded-2xl border border-border p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-secondary" />
+              <p className="font-montserrat font-bold text-foreground text-sm">🏅 Ranking da Área</p>
+            </div>
+            <select
+              value={rankingCommunityFilter}
+              onChange={e => setRankingCommunityFilter(e.target.value)}
+              className="text-[10px] font-inter border border-border rounded-lg px-2 py-1 bg-background text-foreground focus:outline-none appearance-none"
+            >
+              <option value="todas">Todas as comunidades</option>
+              {areaRankings.map(cr => (
+                <option key={cr.community} value={cr.community}>{cr.community}</option>
+              ))}
+            </select>
+          </div>
+
+          {(rankingCommunityFilter === "todas" ? areaRankings : areaRankings.filter(cr => cr.community === rankingCommunityFilter)).map(cr => (
+            <div key={cr.community} className="mb-4 last:mb-0">
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`px-2 py-0.5 rounded-lg text-[10px] font-inter font-medium ${COMMUNITY_COLORS[cr.community] ?? "bg-muted text-foreground"}`}>
+                  {cr.community}
+                </span>
+                <span className="text-[10px] font-inter text-muted-foreground">{cr.ranking.length} participantes</span>
+              </div>
+              <div className="space-y-1.5">
+                {cr.ranking.slice(0, 10).map((r, i) => {
+                  const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : null;
+                  return (
+                    <div key={r.user_id} className={`flex items-center gap-3 px-3 py-2 rounded-xl ${i < 3 ? "bg-accent/10" : "bg-muted/30"}`}>
+                      <span className="w-6 text-center flex-shrink-0">
+                        {medal ?? <span className="font-montserrat font-bold text-xs text-muted-foreground">{i + 1}</span>}
+                      </span>
+                      <p className="font-inter text-sm text-foreground flex-1 truncate">{r.full_name}</p>
+                      <div className="text-right flex-shrink-0">
+                        <span className="font-montserrat font-bold text-xs text-secondary">{Number(r.faith_points)} pts</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                {cr.ranking.length > 10 && (
+                  <p className="text-center text-muted-foreground font-inter text-[10px] pt-1">
+                    +{cr.ranking.length - 10} participantes
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="bg-card rounded-2xl border border-border p-4">
         <div className="flex items-center gap-2 mb-3">
           <Trophy className="w-4 h-4 text-accent-foreground" />
