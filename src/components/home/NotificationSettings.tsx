@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Bell, BellOff, BookOpen, CalendarDays, Flame, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
-import { requestNotificationPermission, isNotificationEnabled, scheduleDailyReminder } from "@/lib/notifications";
+import { Bell, BellOff, BookOpen, CalendarDays, Flame, ChevronDown, ChevronUp, MessageSquare, AlertCircle, Send } from "lucide-react";
+import { requestNotificationPermission, isNotificationEnabled, scheduleDailyReminder, sendNotification } from "@/lib/notifications";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -31,6 +31,7 @@ export default function NotificationSettings() {
   const [prefs, setPrefs] = useState<NotifPrefs>(defaultPrefs);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [permissionError, setPermissionError] = useState(false);
 
   // Load prefs from DB
   useEffect(() => {
@@ -82,17 +83,32 @@ export default function NotificationSettings() {
       setMasterOn(false);
       localStorage.setItem("caminho_notifications_enabled", "false");
       setExpanded(false);
+      setPermissionError(false);
       await saveToDb(false, prefs);
     } else {
+      setPermissionError(false);
       setMasterOn(true);
       localStorage.setItem("caminho_notifications_enabled", "true");
       setExpanded(true);
       await saveToDb(true, prefs);
       try {
         const granted = await requestNotificationPermission();
-        if (granted) scheduleDailyReminder();
-      } catch {}
+        if (granted) {
+          scheduleDailyReminder();
+        } else if (Notification.permission === "denied") {
+          setPermissionError(true);
+        }
+      } catch {
+        setPermissionError(true);
+      }
     }
+  }
+
+  function handleTestNotification() {
+    sendNotification(
+      "🔔 Teste de Notificação",
+      "Se você está vendo isso, as notificações estão funcionando! 🎉"
+    );
   }
 
   async function handleTogglePref(key: keyof NotifPrefs) {
@@ -147,6 +163,27 @@ export default function NotificationSettings() {
 
         {masterOn && expanded && (
           <div className="border-t border-border animate-in fade-in slide-in-from-top-1 duration-200">
+            {/* Permission error banner */}
+            {permissionError && (
+              <div className="mx-4 mt-3 mb-1 p-3 rounded-xl bg-accent/20 border border-accent/30">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-accent-foreground flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-inter text-xs font-bold text-foreground mb-1">Não foi possível ativar as notificações</p>
+                    <p className="font-inter text-[11px] text-muted-foreground leading-relaxed">
+                      O Android bloqueia permissões quando há sobreposições de outros apps. Para resolver:
+                    </p>
+                    <ul className="font-inter text-[11px] text-muted-foreground mt-1.5 space-y-1 list-none">
+                      <li>📱 Feche <strong>bolhas flutuantes</strong> (Messenger, WhatsApp)</li>
+                      <li>🌙 Desative <strong>filtros de tela</strong> (modo noturno, Twilight)</li>
+                      <li>🎥 Feche <strong>gravadores de tela</strong></li>
+                      <li>🔄 Depois, tente ativar novamente</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {NOTIF_OPTIONS.map(({ key, label, desc, icon: Icon, color }) => (
               <button
                 key={key}
@@ -163,6 +200,15 @@ export default function NotificationSettings() {
                 </div>
               </button>
             ))}
+
+            {/* Test notification button */}
+            <button
+              onClick={handleTestNotification}
+              className="w-full flex items-center justify-center gap-2 py-2.5 text-xs font-inter font-bold text-brand-green hover:bg-brand-green/5 transition-colors border-b border-border"
+            >
+              <Send className="w-3.5 h-3.5" />
+              Enviar notificação de teste
+            </button>
 
             <button
               onClick={handleToggleMaster}
