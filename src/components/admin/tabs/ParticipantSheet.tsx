@@ -37,9 +37,14 @@ type MeetingEval = {
   event_title?: string; event_date?: string;
 };
 
+type WorshipRecord = {
+  id: string; worship_date: string; worship_time: string;
+  preacher_name: string; status: string; created_at: string;
+};
+
 type TimelineItem = {
   date: string;
-  type: "activity" | "note" | "assessment" | "attendance" | "evaluation";
+  type: "activity" | "note" | "assessment" | "attendance" | "evaluation" | "worship";
   title: string;
   detail?: string;
   icon: string;
@@ -102,6 +107,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
   const [meetingEvals, setMeetingEvals] = useState<MeetingEval[]>([]);
+  const [worshipRecords, setWorshipRecords] = useState<WorshipRecord[]>([]);
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
@@ -109,7 +115,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
 
   useEffect(() => {
     async function load() {
-      const [{ data: ass }, { data: planData }, { data: notesData }, { data: lessonsData }, { data: attendanceData }, { data: progressData }, { data: allAssessments }, { data: evalData }] = await Promise.all([
+      const [{ data: ass }, { data: planData }, { data: notesData }, { data: lessonsData }, { data: attendanceData }, { data: progressData }, { data: allAssessments }, { data: evalData }, { data: worshipData }] = await Promise.all([
         supabase.from("spiritual_assessments").select("*").eq("user_id", p.user_id).eq("month", month).eq("year", year).maybeSingle(),
         supabase.from("discipleship_plans").select("*").eq("user_id", p.user_id).maybeSingle(),
         supabase.from("pastoral_notes").select("*").eq("user_id", p.user_id).order("created_at", { ascending: false }),
@@ -118,6 +124,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         supabase.from("user_progress").select("activity_id, completed_at").eq("user_id", p.user_id),
         supabase.from("spiritual_assessments").select("month, year, prayer_score, presence_score, created_at").eq("user_id", p.user_id),
         supabase.from("meeting_evaluations").select("event_id, participation_score, understanding_score, engagement_score, notes, created_at").eq("user_id", p.user_id),
+        supabase.from("worship_attendance").select("id, worship_date, worship_time, preacher_name, status, created_at").eq("user_id", p.user_id).order("worship_date", { ascending: false }),
       ]);
 
       setAssessment(ass ?? null);
@@ -202,6 +209,20 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           });
         });
       }
+
+      // Worship attendance
+      const worshipArr = worshipData ?? [];
+      setWorshipRecords(worshipArr);
+      worshipArr.forEach(w => {
+        const statusLabel = w.status === "aprovado" ? "✅ Aprovado" : w.status === "rejeitado" ? "❌ Rejeitado" : "⏳ Pendente";
+        tl.push({
+          date: w.created_at,
+          type: "worship",
+          title: `⛪ Culto: ${new Date(w.worship_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} ${w.worship_time}`,
+          detail: `Pregador: ${w.preacher_name} · ${statusLabel}`,
+          icon: "⛪",
+        });
+      });
 
       tl.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setTimelineItems(tl);
@@ -653,6 +674,38 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                       {ev.notes && (
                         <p className="font-inter text-xs text-muted-foreground bg-muted/50 rounded-lg px-2 py-1.5">📝 {ev.notes}</p>
                       )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {/* Worship Attendance */}
+          {worshipRecords.length > 0 && (
+            <div className="mt-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">⛪</span>
+                <p className="font-montserrat font-bold text-foreground text-sm">Presença em Cultos</p>
+              </div>
+              <div className="space-y-2">
+                {worshipRecords.map(w => {
+                  const statusCfg = {
+                    aprovado: { label: "Aprovado", color: "text-brand-green", bg: "bg-brand-green/10" },
+                    rejeitado: { label: "Rejeitado", color: "text-destructive", bg: "bg-destructive/10" },
+                    pendente: { label: "Pendente", color: "text-accent-foreground", bg: "bg-accent/20" },
+                  }[w.status] ?? { label: w.status, color: "text-muted-foreground", bg: "bg-muted" };
+                  return (
+                    <div key={w.id} className="bg-card rounded-xl border border-border p-3 flex items-center gap-3">
+                      <span className="text-lg">⛪</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-inter text-sm font-medium text-foreground">
+                          {new Date(w.worship_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })} · {w.worship_time}
+                        </p>
+                        <p className="font-inter text-[10px] text-muted-foreground">Pregador: {w.preacher_name}</p>
+                      </div>
+                      <span className={`text-xs font-inter font-medium px-2 py-0.5 rounded-full ${statusCfg.bg} ${statusCfg.color}`}>
+                        {statusCfg.label}
+                      </span>
                     </div>
                   );
                 })}
