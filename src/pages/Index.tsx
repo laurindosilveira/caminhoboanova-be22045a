@@ -12,6 +12,7 @@ import DiscipleProfile from "@/components/home/DiscipleProfile";
 import EditProfileForm from "@/components/home/EditProfileForm";
 import CommunityTab from "@/components/home/CommunityTab";
 import DiscipleshipTab from "@/components/home/DiscipleshipTab";
+import DevotionalReminder from "@/components/home/DevotionalReminder";
 import UserAgendaTab from "@/components/home/UserAgendaTab";
 import BottomNav, { type Tab } from "@/components/home/BottomNav";
 import { useUserStats } from "@/hooks/useUserStats";
@@ -49,6 +50,7 @@ export default function Index() {
         {/* ===== JORNADA ===== */}
         {activeTab === "jornada" && (
           <>
+            <DevotionalReminder onNavigateToDiscipulado={() => setActiveTab("discipulado")} />
             <MissionCard
               nextActivity={stats.nextActivity}
               completedCount={stats.completedCount}
