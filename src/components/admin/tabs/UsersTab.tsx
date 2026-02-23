@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Shield, User, Search, ShieldCheck, ShieldOff, CalendarDays, MapPin, ChevronRight, X, Save, Phone, Cake } from "lucide-react";
+import { Shield, User, Search, ShieldCheck, ShieldOff, CalendarDays, MapPin, ChevronRight, X, Save, Phone, Cake, Home, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 
@@ -11,6 +11,11 @@ type UserEntry = {
   area: string;
   phone: string;
   birth_date: string;
+  father_name: string;
+  mother_name: string;
+  father_phone: string;
+  mother_phone: string;
+  address: string;
   role: "admin" | "user";
   admin_area: string | null;
   created_year: number;
@@ -46,7 +51,7 @@ export default function UsersTab() {
   const [saving, setSaving] = useState<string | null>(null);
   const [promotingUser, setPromotingUser] = useState<UserEntry | null>(null);
   const [editingUser, setEditingUser] = useState<UserEntry | null>(null);
-  const [editForm, setEditForm] = useState({ full_name: "", phone: "", birth_date: "", community: "", area: "" });
+  const [editForm, setEditForm] = useState({ full_name: "", phone: "", birth_date: "", community: "", area: "", father_name: "", mother_name: "", father_phone: "", mother_phone: "", address: "" });
   const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => { fetchUsers(); }, []);
@@ -55,7 +60,7 @@ export default function UsersTab() {
     setLoading(true);
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("user_id, full_name, community, area, phone, birth_date, created_at")
+      .select("user_id, full_name, community, area, phone, birth_date, father_name, mother_name, father_phone, mother_phone, address, created_at")
       .order("full_name");
 
     const { data: roles } = await supabase
@@ -69,6 +74,11 @@ export default function UsersTab() {
 
     const combined: UserEntry[] = (profiles ?? []).map(p => ({
       ...p,
+      father_name: (p as any).father_name ?? "",
+      mother_name: (p as any).mother_name ?? "",
+      father_phone: (p as any).father_phone ?? "",
+      mother_phone: (p as any).mother_phone ?? "",
+      address: (p as any).address ?? "",
       role: roleMap[p.user_id]?.role ?? "user",
       admin_area: roleMap[p.user_id]?.admin_area ?? null,
       created_year: new Date(p.created_at).getFullYear(),
@@ -124,6 +134,11 @@ export default function UsersTab() {
       birth_date: u.birth_date,
       community: u.community,
       area: u.area,
+      father_name: u.father_name,
+      mother_name: u.mother_name,
+      father_phone: u.father_phone,
+      mother_phone: u.mother_phone,
+      address: u.address,
     });
   }
 
@@ -142,6 +157,11 @@ export default function UsersTab() {
       birth_date: editForm.birth_date,
       community: editForm.community as any,
       area: newArea as any,
+      father_name: editForm.father_name,
+      mother_name: editForm.mother_name,
+      father_phone: editForm.father_phone,
+      mother_phone: editForm.mother_phone,
+      address: editForm.address,
     }).eq("user_id", editingUser.user_id);
 
     if (error) {
@@ -277,6 +297,36 @@ export default function UsersTab() {
                 className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
                 {editCommunities.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
+            </div>
+
+            {/* Endereço */}
+            <div>
+              <label className="text-xs font-inter font-medium text-muted-foreground mb-1 flex items-center gap-1"><Home className="w-3 h-3" /> Endereço</label>
+              <Input value={editForm.address} onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))} className="rounded-xl" placeholder="Rua, nº, bairro, cidade" />
+            </div>
+
+            {/* Pai */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-inter font-medium text-muted-foreground mb-1 flex items-center gap-1"><Users className="w-3 h-3" /> Nome do pai</label>
+                <Input value={editForm.father_name} onChange={e => setEditForm(f => ({ ...f, father_name: e.target.value }))} className="rounded-xl" />
+              </div>
+              <div>
+                <label className="text-xs font-inter font-medium text-muted-foreground mb-1 flex items-center gap-1"><Phone className="w-3 h-3" /> Contato pai</label>
+                <Input value={editForm.father_phone} onChange={e => setEditForm(f => ({ ...f, father_phone: e.target.value }))} className="rounded-xl" />
+              </div>
+            </div>
+
+            {/* Mãe */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-inter font-medium text-muted-foreground mb-1 flex items-center gap-1"><Users className="w-3 h-3" /> Nome da mãe</label>
+                <Input value={editForm.mother_name} onChange={e => setEditForm(f => ({ ...f, mother_name: e.target.value }))} className="rounded-xl" />
+              </div>
+              <div>
+                <label className="text-xs font-inter font-medium text-muted-foreground mb-1 flex items-center gap-1"><Phone className="w-3 h-3" /> Contato mãe</label>
+                <Input value={editForm.mother_phone} onChange={e => setEditForm(f => ({ ...f, mother_phone: e.target.value }))} className="rounded-xl" />
+              </div>
             </div>
           </div>
 

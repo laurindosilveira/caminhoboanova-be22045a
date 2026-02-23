@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Pencil, Save, X, User, Phone, Calendar, MapPin, ChevronDown } from "lucide-react";
+import { Pencil, Save, X, User, Phone, Calendar, MapPin, ChevronDown, Home, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +22,11 @@ const profileSchema = z.object({
   phone: z.string().trim().min(8, "Telefone inválido").max(20),
   birth_date: z.string().min(1, "Data de nascimento é obrigatória"),
   community: z.enum(COMMUNITIES, { required_error: "Selecione uma comunidade" }),
+  father_name: z.string().max(100).optional(),
+  mother_name: z.string().max(100).optional(),
+  father_phone: z.string().max(20).optional(),
+  mother_phone: z.string().max(20).optional(),
+  address: z.string().max(200).optional(),
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
@@ -44,6 +49,11 @@ export default function EditProfileForm() {
       phone: profile?.phone ?? "",
       birth_date: profile?.birth_date ?? "",
       community: (profile?.community as (typeof COMMUNITIES)[number]) ?? undefined,
+      father_name: profile?.father_name ?? "",
+      mother_name: profile?.mother_name ?? "",
+      father_phone: profile?.father_phone ?? "",
+      mother_phone: profile?.mother_phone ?? "",
+      address: profile?.address ?? "",
     },
   });
 
@@ -53,6 +63,11 @@ export default function EditProfileForm() {
       phone: profile?.phone ?? "",
       birth_date: profile?.birth_date ?? "",
       community: (profile?.community as (typeof COMMUNITIES)[number]) ?? undefined,
+      father_name: profile?.father_name ?? "",
+      mother_name: profile?.mother_name ?? "",
+      father_phone: profile?.father_phone ?? "",
+      mother_phone: profile?.mother_phone ?? "",
+      address: profile?.address ?? "",
     });
     setIsEditing(false);
   }
@@ -76,6 +91,11 @@ export default function EditProfileForm() {
             birth_date: values.birth_date,
             community: values.community,
             area: areaVal as "Área 1" | "Área 2",
+            father_name: values.father_name ?? "",
+            mother_name: values.mother_name ?? "",
+            father_phone: values.father_phone ?? "",
+            mother_phone: values.mother_phone ?? "",
+            address: values.address ?? "",
           },
           { onConflict: "user_id" }
         );
@@ -129,6 +149,11 @@ export default function EditProfileForm() {
             />
             <InfoRow icon={<MapPin className="w-4 h-4 text-muted-foreground" />} label="Comunidade" value={profile?.community ?? "—"} />
             <InfoRow icon={<MapPin className="w-4 h-4 text-muted-foreground" />} label="Área" value={profile?.area ?? "—"} />
+            <InfoRow icon={<Home className="w-4 h-4 text-muted-foreground" />} label="Endereço" value={profile?.address || "—"} />
+            <InfoRow icon={<Users className="w-4 h-4 text-muted-foreground" />} label="Nome do pai" value={profile?.father_name || "—"} />
+            <InfoRow icon={<Phone className="w-4 h-4 text-muted-foreground" />} label="Contato do pai" value={profile?.father_phone || "—"} />
+            <InfoRow icon={<Users className="w-4 h-4 text-muted-foreground" />} label="Nome da mãe" value={profile?.mother_name || "—"} />
+            <InfoRow icon={<Phone className="w-4 h-4 text-muted-foreground" />} label="Contato da mãe" value={profile?.mother_phone || "—"} />
           </div>
         </div>
       </div>
@@ -204,6 +229,56 @@ export default function EditProfileForm() {
               <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             </div>
             {errors.community && <p className="text-xs text-destructive font-inter">{errors.community.message}</p>}
+          </div>
+
+          {/* Endereço */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-inter font-medium text-muted-foreground">Endereço</label>
+            <input
+              {...register("address")}
+              placeholder="Rua, nº, bairro, cidade"
+              className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+
+          {/* Nome do Pai */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-inter font-medium text-muted-foreground">Nome do pai</label>
+            <input
+              {...register("father_name")}
+              placeholder="Nome completo do pai"
+              className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+
+          {/* Contato do Pai */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-inter font-medium text-muted-foreground">Contato do pai</label>
+            <input
+              {...register("father_phone")}
+              placeholder="(00) 00000-0000"
+              className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+
+          {/* Nome da Mãe */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-inter font-medium text-muted-foreground">Nome da mãe</label>
+            <input
+              {...register("mother_name")}
+              placeholder="Nome completo da mãe"
+              className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+
+          {/* Contato da Mãe */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-inter font-medium text-muted-foreground">Contato da mãe</label>
+            <input
+              {...register("mother_phone")}
+              placeholder="(00) 00000-0000"
+              className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
           </div>
 
           {/* Save button */}
