@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ChevronLeft, BookOpen, Heart, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, BookOpen, Heart, CheckCircle2, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 
 type DevotionalContent = {
   bible_text: string;
@@ -26,9 +27,11 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
   const [content, setContent] = useState<DevotionalContent | null>(devotionalData ?? null);
   const [loading, setLoading] = useState(!devotionalData);
   const [completing, setCompleting] = useState(false);
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [attempted, setAttempted] = useState(false);
 
   useEffect(() => {
-    if (devotionalData) return; // Already have data
+    if (devotionalData) return;
     async function load() {
       const { data } = await supabase
         .from("devotional_content")
@@ -50,7 +53,20 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
     load();
   }, [activity.id, devotionalData]);
 
+  // Validation: all non-empty questions must be answered
+  const activeQuestions = (content?.questions ?? []).filter(q => q.trim());
+  const allQuestionsAnswered = activeQuestions.length === 0 || activeQuestions.every((_, i) => (answers[i] ?? "").trim().length > 0);
+  const canComplete = allQuestionsAnswered;
+
   async function handleComplete() {
+    setAttempted(true);
+    if (!canComplete) {
+      toast.error("Responda todas as perguntas antes de concluir!", {
+        description: "Preencha cada campo para ganhar seus pontos.",
+        duration: 4000,
+      });
+      return;
+    }
     setCompleting(true);
     await onComplete(activity.id);
     setCompleting(false);
@@ -78,13 +94,6 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
           <p className="font-montserrat font-bold text-foreground">{activity.title}</p>
           <p className="text-muted-foreground font-inter text-sm mt-1">Conteúdo em preparação pelo seu pastor. Volte em breve!</p>
         </div>
-        {!isCompleted && !hideCompleteButton && (
-          <button onClick={handleComplete} disabled={completing}
-            className="w-full py-3.5 rounded-2xl font-inter text-sm font-bold text-primary-foreground disabled:opacity-60"
-            style={{ background: "var(--gradient-hero)" }}>
-            {completing ? "Marcando..." : "Marcar como concluído →"}
-          </button>
-        )}
       </div>
     );
   }
@@ -146,20 +155,44 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
         </div>
       )}
 
-      {/* Questions */}
-      {content.questions.length > 0 && content.questions[0] && (
+      {/* Questions with answer fields */}
+      {activeQuestions.length > 0 && (
         <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <span className="text-sm">💬</span>
             <p className="font-montserrat font-bold text-foreground text-sm">Para Pensar</p>
+            {!isCompleted && (
+              <span className="ml-auto text-muted-foreground font-inter text-[10px]">
+                {activeQuestions.filter((_, i) => (answers[i] ?? "").trim()).length}/{activeQuestions.length} respondidas
+              </span>
+            )}
           </div>
-          <div className="p-4 space-y-3">
-            {content.questions.filter(q => q.trim()).map((q, i) => (
-              <div key={i} className="flex gap-3">
-                <span className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center font-montserrat font-bold text-primary text-xs flex-shrink-0 mt-0.5">{i + 1}</span>
-                <p className="text-foreground font-inter text-sm">{q}</p>
-              </div>
-            ))}
+          <div className="p-4 space-y-4">
+            {activeQuestions.map((q, i) => {
+              const answered = (answers[i] ?? "").trim().length > 0;
+              const showError = attempted && !answered && !isCompleted;
+              return (
+                <div key={i} className="space-y-2">
+                  <div className="flex gap-3">
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center font-montserrat font-bold text-xs flex-shrink-0 mt-0.5 ${
+                      answered ? "bg-brand-green/20 text-brand-green" : showError ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"
+                    }`}>{i + 1}</span>
+                    <p className="text-foreground font-inter text-sm">{q}</p>
+                  </div>
+                  {!isCompleted && (
+                    <textarea
+                      value={answers[i] ?? ""}
+                      onChange={e => setAnswers(prev => ({ ...prev, [i]: e.target.value }))}
+                      placeholder="Escreva sua reflexão..."
+                      rows={2}
+                      className={`w-full px-3 py-2.5 rounded-xl border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 resize-none transition-colors ${
+                        showError ? "border-destructive focus:ring-destructive" : "border-border focus:ring-primary"
+                      }`}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -190,16 +223,28 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
         </div>
       )}
 
+      {/* Validation warning */}
+      {!isCompleted && !hideCompleteButton && attempted && !canComplete && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-destructive/10 border border-destructive/20">
+          <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
+          <p className="font-inter text-xs text-destructive">
+            Responda todas as perguntas para poder concluir o devocional.
+          </p>
+        </div>
+      )}
+
       {/* Complete button */}
       {!isCompleted && !hideCompleteButton && (
         <div className="space-y-2">
           <button onClick={handleComplete} disabled={completing}
-            className="w-full py-3.5 rounded-2xl font-montserrat text-sm font-black text-primary-foreground disabled:opacity-60 shadow-lg shadow-secondary/30 active:scale-95 transition-all"
+            className={`w-full py-3.5 rounded-2xl font-montserrat text-sm font-black text-primary-foreground disabled:opacity-60 shadow-lg active:scale-95 transition-all ${
+              canComplete ? "shadow-secondary/30" : "opacity-70"
+            }`}
             style={{ background: "var(--gradient-orange)" }}>
             {completing ? "Marcando..." : `Concluir Devocional · +${activity.points} pts →`}
           </button>
           <p className="text-center text-muted-foreground font-inter text-[10px]">
-            ⭐ Você ganha pontos de fé ao concluir cada devocional!
+            ⭐ Responda as perguntas para ganhar seus pontos de fé!
           </p>
         </div>
       )}
