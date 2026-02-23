@@ -19,7 +19,7 @@ const TYPE_LABEL: Record<string, string> = {
   devocional: "Devocional",
   formacao: "Formação",
   encontro: "Encontro",
-  desafio: "Desafio",
+  desafio: "Atividade",
 };
 
 interface MissionCardProps {
@@ -66,7 +66,7 @@ export default function MissionCard({ nextActivity, completedCount, totalActivit
         <div className="rounded-3xl shadow-xl border border-border overflow-hidden bg-card">
           <div className="bg-gradient-orange px-5 py-3 flex items-center gap-2">
             <Zap className="w-5 h-5 text-primary-foreground fill-primary-foreground" />
-            <span className="font-montserrat font-bold text-primary-foreground text-sm tracking-wide">MISSÃO DE HOJE</span>
+            <span className="font-montserrat font-bold text-primary-foreground text-sm tracking-wide">PRÓXIMA ATIVIDADE</span>
           </div>
           <div className="p-5 text-center">
             <span className="text-4xl block mb-3">🎉</span>
@@ -85,7 +85,7 @@ export default function MissionCard({ nextActivity, completedCount, totalActivit
         <div className="bg-gradient-orange px-5 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Zap className="w-5 h-5 text-primary-foreground fill-primary-foreground" />
-            <span className="font-montserrat font-bold text-primary-foreground text-sm tracking-wide">MISSÃO DE HOJE</span>
+            <span className="font-montserrat font-bold text-primary-foreground text-sm tracking-wide">PRÓXIMA ATIVIDADE</span>
           </div>
           <div className="flex items-center gap-1 bg-white/20 rounded-full px-2 py-0.5">
             <Clock className="w-3 h-3 text-primary-foreground" />

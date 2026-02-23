@@ -58,15 +58,29 @@ export default function Index() {
         {/* ===== JORNADA ===== */}
         {activeTab === "jornada" && (
           <>
-            <DevotionalReminder onNavigateToDiscipulado={() => setActiveTab("discipulado")} />
-            <UpcomingEventReminder onNavigateToAgenda={() => setActiveTab("agenda")} />
-            <StreakRiskReminder onNavigateToJornada={() => setActiveTab("discipulado")} />
+            {/* Cabeçalho explicativo */}
+            <div className="px-5 pt-4 pb-1">
+              <p className="text-muted-foreground font-inter text-xs leading-relaxed">
+                ✨ Complete atividades para ganhar pontos e avançar na sua jornada de fé
+              </p>
+            </div>
+
+            {/* Avisos rápidos — agrupados */}
+            <div className="space-y-0">
+              <DevotionalReminder onNavigateToDiscipulado={() => setActiveTab("discipulado")} />
+              <UpcomingEventReminder onNavigateToAgenda={() => setActiveTab("agenda")} />
+              <StreakRiskReminder onNavigateToJornada={() => setActiveTab("discipulado")} />
+            </div>
+
+            {/* Próxima atividade */}
             <MissionCard
               nextActivity={stats.nextActivity}
               completedCount={stats.completedCount}
               totalActivities={stats.totalActivities}
               onComplete={handleCompleteActivity}
             />
+
+            {/* Caminho da jornada */}
             <JourneyPath />
           </>
         )}
