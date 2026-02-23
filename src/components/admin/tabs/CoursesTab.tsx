@@ -25,6 +25,7 @@ export default function CoursesTab() {
   const [loading, setLoading] = useState(true);
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
+  const [publishedLessonIds, setPublishedLessonIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchCourses();
@@ -32,13 +33,17 @@ export default function CoursesTab() {
 
   async function fetchCourses() {
     setLoading(true);
-    const { data: coursesData } = await supabase.from("courses").select("*").order("order_num");
-    const { data: lessonsData } = await supabase.from("lessons").select("*").order("order_num");
+    const [{ data: coursesData }, { data: lessonsData }, { data: contentData }] = await Promise.all([
+      supabase.from("courses").select("*").order("order_num"),
+      supabase.from("lessons").select("*").order("order_num"),
+      supabase.from("lesson_content").select("lesson_id"),
+    ]);
     const courseList = (coursesData ?? []).map(c => ({
       ...c,
       lessons: (lessonsData ?? []).filter(l => l.course_id === c.id),
     }));
     setCourses(courseList);
+    setPublishedLessonIds(new Set((contentData ?? []).map(c => c.lesson_id)));
     if (courseList.length > 0) setExpandedCourse(courseList[0].id);
     setLoading(false);
   }
@@ -56,7 +61,7 @@ export default function CoursesTab() {
 
   // If editing a lesson's content
   if (editingLesson) {
-    return <LessonContentEditor lesson={editingLesson} onBack={() => setEditingLesson(null)} />;
+    return <LessonContentEditor lesson={editingLesson} onBack={() => { setEditingLesson(null); fetchCourses(); }} />;
   }
 
   return (
@@ -69,7 +74,7 @@ export default function CoursesTab() {
             {courses.reduce((s, c) => s + c.lessons.length, 0)} lições em {courses.length} cursos cadastrados
           </p>
           <p className="text-muted-foreground font-inter text-[10px] mt-1">
-            Clique em ✏️ para editar o conteúdo de cada lição (vídeo, áudio, perguntas, etc.)
+            ✅ = conteúdo publicado · 📝 = usando conteúdo padrão
           </p>
         </div>
       </div>
@@ -88,7 +93,13 @@ export default function CoursesTab() {
               <div className="flex-1 min-w-0">
                 <p className="font-montserrat font-bold text-foreground text-sm">{course.title}</p>
                 {course.subtitle && <p className="text-muted-foreground font-inter text-xs truncate">{course.subtitle}</p>}
-                <p className="text-muted-foreground font-inter text-xs mt-0.5">{course.lessons.length} lições</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-muted-foreground font-inter text-xs">{course.lessons.length} lições</p>
+                  <span className="text-muted-foreground font-inter text-[10px]">·</span>
+                  <p className="text-brand-green font-inter text-[10px] font-medium">
+                    {course.lessons.filter(l => publishedLessonIds.has(l.id)).length} publicadas
+                  </p>
+                </div>
               </div>
               {isOpen
                 ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
@@ -131,8 +142,15 @@ export default function CoursesTab() {
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors flex-shrink-0"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
-                        <span className="font-inter text-xs font-medium">Editar</span>
+                        <span className="font-inter text-xs font-medium">
+                          {publishedLessonIds.has(lesson.id) ? "Editar" : "Criar"}
+                        </span>
                       </button>
+                      {publishedLessonIds.has(lesson.id) ? (
+                        <span className="text-brand-green text-[9px] font-inter font-bold">✅</span>
+                      ) : (
+                        <span className="text-muted-foreground text-[9px] font-inter">📝</span>
+                      )}
                     </div>
                   </div>
                 ))}
