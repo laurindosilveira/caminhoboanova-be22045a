@@ -119,6 +119,7 @@ export default function DiscipleshipTab() {
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [recentEvents, setRecentEvents] = useState<EventRecord[]>([]);
+  const [allAssessments, setAllAssessments] = useState<Assessment[]>([]);
 
   const [form, setForm] = useState({
     prayer_score: null as number | null,
@@ -140,7 +141,7 @@ export default function DiscipleshipTab() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }, { data: responsesData }, { data: eventsData }, { data: attendanceData }] = await Promise.all([
+    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }, { data: responsesData }, { data: eventsData }, { data: attendanceData }, { data: allAssess }] = await Promise.all([
       supabase.from("activities").select("id, type, title, points"),
       supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
       supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).eq("month", month).eq("year", year).maybeSingle(),
@@ -150,6 +151,7 @@ export default function DiscipleshipTab() {
       supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
       supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false }).limit(10),
       supabase.from("attendance").select("event_id, status").eq("user_id", user.id),
+      supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).order("year", { ascending: true }).order("month", { ascending: true }),
     ]);
 
     setActivities(acts ?? []);
@@ -173,6 +175,9 @@ export default function DiscipleshipTab() {
     // Attendance history
     setRecentEvents((eventsData ?? []) as EventRecord[]);
     setAttendanceRecords((attendanceData ?? []) as AttendanceRecord[]);
+
+    // All assessments for evolution chart
+    setAllAssessments((allAssess ?? []) as Assessment[]);
 
     setLoading(false);
   }
@@ -404,6 +409,74 @@ export default function DiscipleshipTab() {
           </div>
         )}
       </SectionCard>
+
+      {/* ── EVOLUÇÃO MENSAL ──────────────────────── */}
+      {allAssessments.length > 1 && (
+        <SectionCard icon={<CalendarDays className="w-4 h-4 text-primary" />} title="Evolução Espiritual">
+          <div className="space-y-3">
+            {/* Mini bar chart */}
+            <div className="flex items-end gap-1.5 justify-center h-28">
+              {allAssessments.slice(-6).map((a) => {
+                const avg = (
+                  (a.prayer_score ?? 3) +
+                  (a.presence_score ?? 3) +
+                  (5 - (a.struggle_score ?? 3)) +
+                  (5 - (a.doubt_score ?? 3))
+                ) / 4;
+                const pctH = Math.round((avg / 5) * 100);
+                const health = computeHealth(a);
+                const color = health === "saudavel" ? "var(--gradient-green)" : health === "atencao" ? "var(--gradient-orange)" : "hsl(var(--destructive))";
+                const MONTH_SHORT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+                return (
+                  <div key={`${a.year}-${a.month}`} className="flex flex-col items-center gap-1 flex-1 max-w-[48px]">
+                    <div
+                      className="w-full rounded-t-lg transition-all min-h-[8px]"
+                      style={{ height: `${pctH}%`, background: color }}
+                    />
+                    <span className="text-[9px] font-inter text-muted-foreground leading-none">
+                      {MONTH_SHORT[a.month - 1]}
+                    </span>
+                    <span className="text-[9px] font-montserrat font-bold text-foreground leading-none">
+                      {avg.toFixed(1)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-center text-muted-foreground font-inter text-[10px]">
+              Média geral dos últimos {Math.min(allAssessments.length, 6)} meses (1–5)
+            </p>
+
+            {/* Month-by-month detail */}
+            <div className="space-y-2 mt-2">
+              {allAssessments.slice(-6).reverse().map((a) => {
+                const health = computeHealth(a);
+                const MONTH_NAMES_SHORT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+                return (
+                  <div key={`detail-${a.year}-${a.month}`} className="flex items-center gap-3 py-2 px-3 rounded-xl bg-muted/30">
+                    <span className="font-inter text-xs text-muted-foreground w-16 flex-shrink-0">
+                      {MONTH_NAMES_SHORT[a.month - 1]}/{a.year}
+                    </span>
+                    <div className="flex gap-1.5 flex-1 justify-center">
+                      <span title="Oração" className="text-sm">{EMOJIS[(a.prayer_score ?? 3) - 1]}</span>
+                      <span title="Presença de Deus" className="text-sm">{EMOJIS[(a.presence_score ?? 3) - 1]}</span>
+                      <span title="Tentações" className="text-sm">{EMOJIS[(a.struggle_score ?? 3) - 1]}</span>
+                      <span title="Dúvidas" className="text-sm">{EMOJIS[(a.doubt_score ?? 3) - 1]}</span>
+                    </div>
+                    <span className={`text-[10px] font-inter font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                      health === "saudavel" ? "text-brand-green bg-brand-green/10" :
+                      health === "critico" ? "text-destructive bg-destructive/10" :
+                      "text-accent-foreground bg-accent/20"
+                    }`}>
+                      {health === "saudavel" ? "🟢" : health === "critico" ? "🔴" : "🟡"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </SectionCard>
+      )}
 
       {/* ── PLANO DE CRESCIMENTO ──────────────────── */}
       <SectionCard icon={<Sparkles className="w-4 h-4 text-accent-foreground" />} title="Plano de Crescimento Espiritual">
