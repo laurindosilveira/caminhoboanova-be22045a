@@ -8,13 +8,11 @@ import AdminBottomNav, { AdminTab } from "@/components/admin/AdminBottomNav";
 import OverviewTab from "@/components/admin/tabs/OverviewTab";
 import ParticipantsTab from "@/components/admin/tabs/ParticipantsTab";
 import CoursesTab from "@/components/admin/tabs/CoursesTab";
-// AgendaTab merged into AttendanceTab
 import MessagesTab from "@/components/admin/tabs/MessagesTab";
 import AdminDiscipleshipTab from "@/components/admin/tabs/AdminDiscipleshipTab";
 import ClassroomSettingsTab from "@/components/admin/tabs/ClassroomSettingsTab";
 import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
 import UsersTab from "@/components/admin/tabs/UsersTab";
-// MeetingsTab merged into AttendanceTab
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
 const AREA_2_COMMUNITIES = ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"];
@@ -102,7 +100,7 @@ export default function AdminDashboard() {
   // Navigate to discipleship tab and highlight a specific participant (from Overview alerts)
   function handleSelectParticipantFromOverview(participant: Participant) {
     setHighlightedParticipant(participant);
-    setActiveTab("discipleship");
+    setActiveTab("attendance");
   }
 
   // Filter participants by selected community
@@ -245,24 +243,18 @@ export default function AdminDashboard() {
                 onSelectParticipant={handleSelectParticipantFromOverview}
               />
             )}
-            {activeTab === "participants" && (
-              <ParticipantsTab participants={displayParticipants} activities={activities} communities={communities} />
-            )}
-            {activeTab === "courses" && <CoursesTab />}
-            {/* AgendaTab merged into AttendanceTab */}
-            {activeTab === "messages" && <MessagesTab />}
-            {activeTab === "sala" && <ClassroomSettingsTab />}
-            {activeTab === "attendance" && <AttendanceTab participants={displayParticipants} activities={activities} />}
-            {activeTab === "users" && <UsersTab />}
-            {activeTab === "users" && <UsersTab />}
-            {activeTab === "discipleship" && (
-              <AdminDiscipleshipTab
+            {activeTab === "attendance" && (
+              <AttendanceTab
                 participants={displayParticipants}
                 activities={activities}
+                communities={communities}
                 initialParticipant={highlightedParticipant}
                 onClearInitial={() => setHighlightedParticipant(null)}
               />
             )}
+            {activeTab === "courses" && <CoursesTab />}
+            {activeTab === "messages" && <MessagesTab />}
+            {activeTab === "users" && <UsersTab />}
           </>
         )}
       </main>
