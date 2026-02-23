@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   BookOpen, GraduationCap, CalendarDays, Zap, Users,
   AlertTriangle, CheckCircle2, Flame, Heart, Star, ChevronRight
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 type Activity = { id: string; type: string; title: string; points: number; order_num: number; subtitle: string | null };
 type Participant = {
@@ -42,8 +43,55 @@ function MiniBar({ pct, color }: { pct: number; color: string }) {
   );
 }
 
+type WeeklyDevStat = { user_id: string; full_name: string; community: string; count: number };
+
 export default function OverviewTab({ participants, activities, plans, onSelectParticipant }: Props) {
   const [communityFilter, setCommunityFilter] = useState("todas");
+  const [weeklyDevStats, setWeeklyDevStats] = useState<WeeklyDevStat[]>([]);
+  const [weeklyTotal, setWeeklyTotal] = useState(0);
+
+  useEffect(() => {
+    async function fetchWeeklyDevotionals() {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const since = sevenDaysAgo.toISOString();
+
+      const { data: progress } = await supabase
+        .from("devotional_progress")
+        .select("user_id, completed_at")
+        .gte("completed_at", since);
+
+      if (!progress || progress.length === 0) {
+        setWeeklyDevStats([]);
+        setWeeklyTotal(0);
+        return;
+      }
+
+      // Count per user
+      const countMap: Record<string, number> = {};
+      progress.forEach(p => {
+        countMap[p.user_id] = (countMap[p.user_id] || 0) + 1;
+      });
+
+      // Map to participant info
+      const stats: WeeklyDevStat[] = [];
+      participants.forEach(part => {
+        if (countMap[part.user_id]) {
+          stats.push({
+            user_id: part.user_id,
+            full_name: part.full_name,
+            community: part.community,
+            count: countMap[part.user_id],
+          });
+        }
+      });
+      stats.sort((a, b) => b.count - a.count);
+
+      setWeeklyDevStats(stats);
+      setWeeklyTotal(progress.length);
+    }
+    if (participants.length > 0) fetchWeeklyDevotionals();
+  }, [participants]);
 
   const total = participants.length;
   const ativos = participants.filter(p => p.completed_count > 0).length;
@@ -206,6 +254,66 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
             </div>
           ))}
         </div>
+      </div>
+
+      {/* ── RESUMO SEMANAL DE DEVOCIONAIS ─── */}
+      <div className="bg-card rounded-2xl border border-border p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <BookOpen className="w-4 h-4 text-brand-green" />
+          <p className="font-montserrat font-bold text-foreground text-sm">📖 Devocionais — últimos 7 dias</p>
+        </div>
+        {weeklyTotal === 0 ? (
+          <p className="text-muted-foreground font-inter text-xs text-center py-4">
+            Nenhum devocional concluído nos últimos 7 dias.
+          </p>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 mb-3 p-3 rounded-xl bg-brand-green/5 border border-brand-green/20">
+              <div className="w-10 h-10 rounded-xl bg-brand-green/15 flex items-center justify-center">
+                <span className="font-montserrat font-black text-brand-green text-lg">{weeklyTotal}</span>
+              </div>
+              <div>
+                <p className="font-inter text-sm font-medium text-foreground">
+                  devocional{weeklyTotal > 1 ? "is" : ""} concluído{weeklyTotal > 1 ? "s" : ""}
+                </p>
+                <p className="text-muted-foreground font-inter text-[10px]">
+                  por {weeklyDevStats.length} jovem{weeklyDevStats.length > 1 ? "ns" : ""}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {weeklyDevStats.map(s => {
+                const participant = participants.find(p => p.user_id === s.user_id);
+                return (
+                  <button
+                    key={s.user_id}
+                    onClick={() => participant && onSelectParticipant(participant)}
+                    className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-muted/30 transition-colors text-left"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-brand-green/10 flex items-center justify-center flex-shrink-0">
+                      <span className="font-montserrat font-black text-brand-green text-xs">{s.full_name.charAt(0)}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-inter text-xs font-medium text-foreground truncate">{s.full_name}</p>
+                      <p className="text-muted-foreground font-inter text-[10px]">{s.community}</p>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <span className="font-montserrat font-bold text-xs text-brand-green">{s.count}</span>
+                      <span className="text-muted-foreground font-inter text-[10px]">dev.</span>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                  </button>
+                );
+              })}
+            </div>
+            {/* Participants with zero */}
+            {participants.length - weeklyDevStats.length > 0 && (
+              <p className="text-center text-muted-foreground font-inter text-[10px] mt-2 pt-2 border-t border-border">
+                ⚠️ {participants.length - weeklyDevStats.length} jovem{participants.length - weeklyDevStats.length > 1 ? "ns" : ""} sem nenhum devocional nesta semana
+              </p>
+            )}
+          </>
+        )}
       </div>
 
       {/* ── LISTA RÁPIDA ─── */}
