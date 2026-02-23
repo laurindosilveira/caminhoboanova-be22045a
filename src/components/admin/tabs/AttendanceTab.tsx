@@ -68,6 +68,7 @@ export default function AttendanceTab({ participants, activities }: { participan
   const [prepReport, setPrepReport] = useState<Record<string, string[]>>({});
   const [selectedParticipant, setSelectedParticipant] = useState<string | null>(null);
   const [savingEval, setSavingEval] = useState(false);
+  const [filterType, setFilterType] = useState<string | null>(null);
 
   useEffect(() => { fetchEvents(); }, []);
 
@@ -250,6 +251,16 @@ export default function AttendanceTab({ participants, activities }: { participan
     );
   }
 
+  const EVENT_TYPES = [
+    { value: null, label: "Todos" },
+    { value: "encontro", label: "📅 Encontros" },
+    { value: "culto", label: "⛪ Cultos" },
+    { value: "retiro", label: "🏕️ Retiros" },
+    { value: "evento", label: "🎉 Eventos" },
+  ];
+
+  const filteredEvents = filterType ? events.filter(e => e.type === filterType) : events;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
@@ -262,8 +273,25 @@ export default function AttendanceTab({ participants, activities }: { participan
         </div>
       </div>
 
+      {/* Type filter */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
+        {EVENT_TYPES.map(t => (
+          <button
+            key={t.label}
+            onClick={() => setFilterType(t.value)}
+            className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-inter font-medium transition-all ${
+              filterType === t.value
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "bg-muted text-muted-foreground hover:bg-primary/10"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       <div className="space-y-3">
-        {events.map(event => {
+        {filteredEvents.map(event => {
           const isExpanded = expandedEvent === event.id;
           const isEncontro = event.type === "encontro";
           const eventParticipants = getParticipantsForEvent(event);
