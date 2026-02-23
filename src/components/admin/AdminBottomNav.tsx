@@ -1,6 +1,6 @@
-import { BarChart3, Users, BookOpen, CalendarDays, MessageSquare, Heart, GraduationCap, UserCheck, Shield, ClipboardList, BookMarked } from "lucide-react";
+import { BarChart3, Users, BookOpen, CalendarDays, MessageSquare, Heart, GraduationCap, UserCheck, Shield, ClipboardList } from "lucide-react";
 
-export type AdminTab = "overview" | "participants" | "courses" | "agenda" | "messages" | "discipleship" | "sala" | "attendance" | "users" | "meetings" | "devotionals";
+export type AdminTab = "overview" | "participants" | "courses" | "agenda" | "messages" | "discipleship" | "sala" | "attendance" | "users" | "meetings";
 
 const TABS = [
   { id: "overview" as AdminTab, label: "Visão", icon: BarChart3 },
@@ -8,7 +8,6 @@ const TABS = [
   { id: "attendance" as AdminTab, label: "Presença", icon: UserCheck },
   { id: "discipleship" as AdminTab, label: "Discipu.", icon: Heart },
   { id: "courses" as AdminTab, label: "Cursos", icon: BookOpen },
-  { id: "devotionals" as AdminTab, label: "Devoc.", icon: BookMarked },
   { id: "agenda" as AdminTab, label: "Agenda", icon: CalendarDays },
   { id: "messages" as AdminTab, label: "Msgs", icon: MessageSquare },
   { id: "meetings" as AdminTab, label: "Encontros", icon: ClipboardList },

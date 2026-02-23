@@ -16,14 +16,19 @@ type Props = {
   onBack: () => void;
   onComplete: (activityId: string) => void;
   isCompleted: boolean;
+  /** Pass devotional data directly (for lesson-linked devotionals) */
+  devotionalData?: DevotionalContent;
+  /** Hide the complete button */
+  hideCompleteButton?: boolean;
 };
 
-export default function DevotionalView({ activity, onBack, onComplete, isCompleted }: Props) {
-  const [content, setContent] = useState<DevotionalContent | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function DevotionalView({ activity, onBack, onComplete, isCompleted, devotionalData, hideCompleteButton }: Props) {
+  const [content, setContent] = useState<DevotionalContent | null>(devotionalData ?? null);
+  const [loading, setLoading] = useState(!devotionalData);
   const [completing, setCompleting] = useState(false);
 
   useEffect(() => {
+    if (devotionalData) return; // Already have data
     async function load() {
       const { data } = await supabase
         .from("devotional_content")
@@ -43,7 +48,7 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
       setLoading(false);
     }
     load();
-  }, [activity.id]);
+  }, [activity.id, devotionalData]);
 
   async function handleComplete() {
     setCompleting(true);
@@ -73,7 +78,7 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
           <p className="font-montserrat font-bold text-foreground">{activity.title}</p>
           <p className="text-muted-foreground font-inter text-sm mt-1">Conteúdo em preparação pelo seu pastor. Volte em breve!</p>
         </div>
-        {!isCompleted && (
+        {!isCompleted && !hideCompleteButton && (
           <button onClick={handleComplete} disabled={completing}
             className="w-full py-3.5 rounded-2xl font-inter text-sm font-bold text-primary-foreground disabled:opacity-60"
             style={{ background: "var(--gradient-hero)" }}>
@@ -87,7 +92,7 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
   return (
     <div className="px-5 pt-6 pb-24 space-y-4">
       <button onClick={onBack} className="flex items-center gap-1.5 text-muted-foreground font-inter text-sm hover:text-foreground transition-colors">
-        <ChevronLeft className="w-4 h-4" /> Voltar à Jornada
+        <ChevronLeft className="w-4 h-4" /> Voltar
       </button>
 
       {/* Header */}
@@ -186,7 +191,7 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
       )}
 
       {/* Complete button */}
-      {!isCompleted && (
+      {!isCompleted && !hideCompleteButton && (
         <button onClick={handleComplete} disabled={completing}
           className="w-full py-3.5 rounded-2xl font-montserrat text-sm font-black text-primary-foreground disabled:opacity-60 shadow-lg shadow-secondary/30 active:scale-95 transition-all"
           style={{ background: "var(--gradient-orange)" }}>
