@@ -425,10 +425,10 @@ export default function AttendanceTab({ participants, activities }: { participan
       {/* Event attendance requests - filtered by event type */}
       {(() => {
         const TYPE_EMOJI: Record<string, string> = {
-          encontro: "📅", culto: "⛪", jemiac: "✝️", retiro: "🏕️", evento: "🎉",
+          culto: "⛪", jemiac: "✝️", retiro: "🏕️",
         };
         const TYPE_LABEL: Record<string, string> = {
-          encontro: "Encontros", culto: "Cultos", jemiac: "JEMIAC", retiro: "Retiros", evento: "Eventos",
+          culto: "Cultos", jemiac: "JEMIAC", retiro: "Retiros",
         };
         const filtered = filterType
           ? worshipRequests.filter(w => w.event_type === filterType)

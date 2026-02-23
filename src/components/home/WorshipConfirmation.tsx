@@ -19,11 +19,9 @@ type WorshipRecord = {
 };
 
 const EVENT_TYPE_OPTIONS = [
-  { value: "encontro", label: "Encontro", emoji: "📅" },
   { value: "culto", label: "Culto", emoji: "⛪" },
   { value: "jemiac", label: "JEMIAC", emoji: "✝️" },
   { value: "retiro", label: "Retiro", emoji: "🏕️" },
-  { value: "evento", label: "Evento", emoji: "🎉" },
 ];
 
 const TIME_OPTIONS = [
