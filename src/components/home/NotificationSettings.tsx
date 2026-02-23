@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Bell, BellOff, BookOpen, CalendarDays, Flame, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
 import { requestNotificationPermission, isNotificationEnabled, scheduleDailyReminder } from "@/lib/notifications";
-
-const PREF_KEY = "caminho_notification_prefs";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 type NotifPrefs = {
   devocional: boolean;
@@ -18,18 +18,6 @@ const defaultPrefs: NotifPrefs = {
   mensagens: true,
 };
 
-function loadPrefs(): NotifPrefs {
-  try {
-    const raw = localStorage.getItem(PREF_KEY);
-    if (raw) return { ...defaultPrefs, ...JSON.parse(raw) };
-  } catch {}
-  return defaultPrefs;
-}
-
-function savePrefs(prefs: NotifPrefs) {
-  localStorage.setItem(PREF_KEY, JSON.stringify(prefs));
-}
-
 const NOTIF_OPTIONS = [
   { key: "devocional" as const, label: "Devocional diário", desc: "Lembrete às 7h para o devocional", icon: BookOpen, color: "text-brand-green" },
   { key: "eventos" as const, label: "Eventos e encontros", desc: "Avisos de eventos próximos", icon: CalendarDays, color: "text-primary" },
@@ -38,23 +26,68 @@ const NOTIF_OPTIONS = [
 ];
 
 export default function NotificationSettings() {
-  const [masterOn, setMasterOn] = useState(isNotificationEnabled());
-  const [prefs, setPrefs] = useState<NotifPrefs>(loadPrefs);
+  const { user } = useAuth();
+  const [masterOn, setMasterOn] = useState(false);
+  const [prefs, setPrefs] = useState<NotifPrefs>(defaultPrefs);
   const [expanded, setExpanded] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  if (!("Notification" in window)) return null;
+  // Load prefs from DB
+  useEffect(() => {
+    if (!user) return;
+    async function load() {
+      const { data } = await supabase
+        .from("notification_preferences")
+        .select("*")
+        .eq("user_id", user!.id)
+        .maybeSingle();
+      if (data) {
+        setMasterOn(data.master_enabled);
+        setPrefs({
+          devocional: data.devocional,
+          eventos: data.eventos,
+          streak: data.streak,
+          mensagens: data.mensagens,
+        });
+      } else {
+        // Check localStorage for existing state and use browser permission
+        setMasterOn(isNotificationEnabled());
+      }
+      setLoading(false);
+    }
+    load();
+  }, [user]);
+
+  if (!("Notification" in window) || loading) return null;
 
   const activeCount = masterOn ? Object.values(prefs).filter(Boolean).length : 0;
+
+  async function saveToDb(master: boolean, newPrefs: NotifPrefs) {
+    if (!user) return;
+    const payload = {
+      user_id: user.id,
+      master_enabled: master,
+      devocional: newPrefs.devocional,
+      eventos: newPrefs.eventos,
+      streak: newPrefs.streak,
+      mensagens: newPrefs.mensagens,
+    };
+    await supabase
+      .from("notification_preferences")
+      .upsert(payload, { onConflict: "user_id" });
+  }
 
   async function handleToggleMaster() {
     if (masterOn) {
       setMasterOn(false);
       localStorage.setItem("caminho_notifications_enabled", "false");
       setExpanded(false);
+      await saveToDb(false, prefs);
     } else {
       setMasterOn(true);
       localStorage.setItem("caminho_notifications_enabled", "true");
       setExpanded(true);
+      await saveToDb(true, prefs);
       try {
         const granted = await requestNotificationPermission();
         if (granted) scheduleDailyReminder();
@@ -62,16 +95,15 @@ export default function NotificationSettings() {
     }
   }
 
-  function handleTogglePref(key: keyof NotifPrefs) {
+  async function handleTogglePref(key: keyof NotifPrefs) {
     const updated = { ...prefs, [key]: !prefs[key] };
     setPrefs(updated);
-    savePrefs(updated);
+    await saveToDb(masterOn, updated);
   }
 
   return (
     <div className="px-5 mt-3">
       <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
-        {/* Master toggle header */}
         <button
           onClick={() => {
             if (!masterOn) {
@@ -113,7 +145,6 @@ export default function NotificationSettings() {
           )}
         </button>
 
-        {/* Expanded options */}
         {masterOn && expanded && (
           <div className="border-t border-border animate-in fade-in slide-in-from-top-1 duration-200">
             {NOTIF_OPTIONS.map(({ key, label, desc, icon: Icon, color }) => (
@@ -133,7 +164,6 @@ export default function NotificationSettings() {
               </button>
             ))}
 
-            {/* Turn off all */}
             <button
               onClick={handleToggleMaster}
               className="w-full py-2.5 text-center text-xs font-inter text-destructive hover:bg-destructive/5 transition-colors"

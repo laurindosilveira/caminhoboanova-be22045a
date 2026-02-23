@@ -522,6 +522,42 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_preferences: {
+        Row: {
+          created_at: string
+          devocional: boolean
+          eventos: boolean
+          id: string
+          master_enabled: boolean
+          mensagens: boolean
+          streak: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          devocional?: boolean
+          eventos?: boolean
+          id?: string
+          master_enabled?: boolean
+          mensagens?: boolean
+          streak?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          devocional?: boolean
+          eventos?: boolean
+          id?: string
+          master_enabled?: boolean
+          mensagens?: boolean
+          streak?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       pastoral_notes: {
         Row: {
           admin_id: string
