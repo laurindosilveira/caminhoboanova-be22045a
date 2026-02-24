@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ChevronLeft, BookOpen, GraduationCap, CheckCircle2, Star } from "lucide-react";
+import { ChevronLeft, BookOpen, GraduationCap, CheckCircle2, Star, LockKeyhole } from "lucide-react";
 import DevotionalView from "@/components/home/DevotionalView";
 import { toast } from "sonner";
 
@@ -38,6 +38,8 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
   const [showDevotionals, setShowDevotionals] = useState(false);
   const [viewingDevotional, setViewingDevotional] = useState<DevotionalItem | null>(null);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
+  const [completedDates, setCompletedDates] = useState<Map<string, string>>(new Map());
+  const [lockedIds, setLockedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     async function load() {
@@ -45,11 +47,49 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
       const [{ data: devs }, { data: prog }] = await Promise.all([
         supabase.from("devotional_content").select("*").eq("lesson_id", lesson.id).order("day_number"),
         user
-          ? supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id)
+          ? supabase.from("devotional_progress").select("devotional_id, completed_at").eq("user_id", user.id)
           : Promise.resolve({ data: [] }),
       ]);
-      setDevotionals((devs ?? []) as DevotionalItem[]);
-      setCompletedIds(new Set((prog ?? []).map((p: any) => p.devotional_id)));
+      const devList = (devs ?? []) as DevotionalItem[];
+      const progList = prog ?? [];
+      const completedMap = new Map<string, string>();
+      progList.forEach((p: any) => completedMap.set(p.devotional_id, p.completed_at));
+      setCompletedIds(new Set(progList.map((p: any) => p.devotional_id)));
+      setCompletedDates(completedMap);
+
+      // Calculate locked devotionals based on sequential day logic
+      const locked = new Set<string>();
+      if (devList.length > 0) {
+        // Find the first completed devotional for this lesson to anchor the timeline
+        const lessonDevIds = new Set(devList.map(d => d.id));
+        const lessonCompleted = progList.filter((p: any) => lessonDevIds.has(p.devotional_id));
+        
+        if (lessonCompleted.length > 0) {
+          // Find the completion of day 1 (or earliest completed day)
+          const day1Dev = devList.find(d => d.day_number === 1);
+          const day1Completion = day1Dev ? completedMap.get(day1Dev.id) : null;
+          
+          if (day1Completion) {
+            const startDate = new Date(day1Completion);
+            startDate.setHours(0, 0, 0, 0);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            for (const dev of devList) {
+              if (completedMap.has(dev.id)) continue; // Already completed
+              // Day N should be done on startDate + (N-1) days
+              const expectedDate = new Date(startDate);
+              expectedDate.setDate(expectedDate.getDate() + (dev.day_number - 1));
+              // If the expected date has passed, lock it
+              if (expectedDate < today) {
+                locked.add(dev.id);
+              }
+            }
+          }
+        }
+      }
+      setLockedIds(locked);
+      setDevotionals(devList);
       setLoading(false);
     }
     load();
@@ -69,7 +109,8 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
     });
   }
 
-  const completedCount = devotionals.filter(d => completedIds.has(d.id)).length;
+  const completedCount = devotionals.filter(d => completedIds.has(d.id) && !lockedIds.has(d.id)).length;
+  const lockedCount = lockedIds.size;
   const totalCount = devotionals.length;
   const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
@@ -114,7 +155,7 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
           <p className="text-primary-foreground/60 font-inter text-xs mb-1">📖 Devocionais da semana · Lição {lesson.order_num}</p>
           <h2 className="font-montserrat font-black text-primary-foreground text-lg">{lesson.title}</h2>
           <p className="text-primary-foreground/70 font-inter text-xs mt-1">
-            {completedCount}/{totalCount} concluídos
+            {completedCount}/{totalCount} concluídos{lockedCount > 0 ? ` · ${lockedCount} bloqueado${lockedCount > 1 ? "s" : ""}` : ""}
           </p>
           {totalCount > 0 && (
             <div className="mt-2 h-1.5 bg-white/20 rounded-full overflow-hidden">
@@ -133,29 +174,37 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
           <div className="space-y-2">
             {devotionals.map((dev) => {
               const done = completedIds.has(dev.id);
+              const locked = lockedIds.has(dev.id);
               return (
-                <button key={dev.id} onClick={() => setViewingDevotional(dev)}
+                <button key={dev.id} 
+                  onClick={() => !locked && setViewingDevotional(dev)}
+                  disabled={locked}
                   className={`w-full flex items-center gap-3 p-4 bg-card rounded-2xl border shadow-sm text-left transition-colors ${
+                    locked ? "border-destructive/20 bg-destructive/5 opacity-60 cursor-not-allowed" :
                     done ? "border-brand-green/30 bg-brand-green/5" : "border-border hover:bg-brand-green/5"
                   }`}>
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                    done ? "bg-brand-green/20" : "bg-brand-green/10"
+                    locked ? "bg-destructive/10" : done ? "bg-brand-green/20" : "bg-brand-green/10"
                   }`}>
-                    {done ? (
+                    {locked ? (
+                      <LockKeyhole className="w-5 h-5 text-destructive/60" />
+                    ) : done ? (
                       <CheckCircle2 className="w-5 h-5 text-brand-green" />
                     ) : (
                       <span className="font-montserrat font-bold text-brand-green text-sm">{dev.day_number}</span>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`font-montserrat font-bold text-sm ${done ? "text-brand-green" : "text-foreground"}`}>
+                    <p className={`font-montserrat font-bold text-sm ${
+                      locked ? "text-destructive/60" : done ? "text-brand-green" : "text-foreground"
+                    }`}>
                       {dev.title || `Dia ${dev.day_number}`}
                     </p>
                     <p className="text-muted-foreground font-inter text-[10px] truncate">
-                      {done ? "✅ Concluído" : dev.bible_reference ? `✝️ ${dev.bible_reference}` : ""}
+                      {locked ? "🔒 Bloqueado — dia perdido" : done ? "✅ Concluído" : dev.bible_reference ? `✝️ ${dev.bible_reference}` : ""}
                     </p>
                   </div>
-                  <span className="text-muted-foreground text-xs">→</span>
+                  {!locked && <span className="text-muted-foreground text-xs">→</span>}
                 </button>
               );
             })}
