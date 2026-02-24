@@ -130,9 +130,11 @@ export default function UsersTab() {
 
   async function demoteToUser(u: UserEntry) {
     setSaving(u.user_id);
+    // Delete the admin/lider role row instead of updating, since a "user" row already exists
     const { error } = await supabase.from("user_roles")
-      .update({ role: "user", admin_area: null })
-      .eq("user_id", u.user_id);
+      .delete()
+      .eq("user_id", u.user_id)
+      .in("role", ["admin", "lider"]);
 
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
