@@ -1,9 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { MessageCircle, GraduationCap, Cake } from "lucide-react";
 import ClassroomTab from "./ClassroomTab";
 
+const REACTION_EMOJIS = [
+  { emoji: "🙏", label: "orando" },
+  { emoji: "❤️", label: "amém" },
+  { emoji: "🔥", label: "forte" },
+  { emoji: "🙌", label: "glória" },
+];
 
 interface Message {
   id: string;
@@ -11,6 +17,9 @@ interface Message {
   body: string;
   created_at: string;
 }
+
+type ReactionMap = Record<string, Record<string, { count: number; hasReacted: boolean }>>;
+// { messageId: { emoji: { count, hasReacted } } }
 
 interface BirthdayPerson {
   full_name: string;
@@ -24,6 +33,7 @@ export default function CommunityTab() {
   const { profile } = useAuth();
   const [subTab, setSubTab] = useState<SubTab>("comunidade");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [reactions, setReactions] = useState<ReactionMap>({});
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [birthdays, setBirthdays] = useState<BirthdayPerson[]>([]);
 
@@ -32,12 +42,25 @@ export default function CommunityTab() {
 
     async function fetchMessages() {
       setLoadingMessages(true);
-      const { data } = await supabase
-        .from("messages")
-        .select("id, title, body, created_at")
-        .order("created_at", { ascending: false })
-        .limit(5);
+      const { data: { user } } = await supabase.auth.getUser();
+      const [{ data }, { data: reactionsData }] = await Promise.all([
+        supabase
+          .from("messages")
+          .select("id, title, body, created_at")
+          .order("created_at", { ascending: false })
+          .limit(5),
+        supabase.from("message_reactions").select("message_id, emoji, user_id"),
+      ]);
       setMessages(data ?? []);
+      // Build reactions map
+      const rMap: ReactionMap = {};
+      (reactionsData ?? []).forEach((r: any) => {
+        if (!rMap[r.message_id]) rMap[r.message_id] = {};
+        if (!rMap[r.message_id][r.emoji]) rMap[r.message_id][r.emoji] = { count: 0, hasReacted: false };
+        rMap[r.message_id][r.emoji].count++;
+        if (user && r.user_id === user.id) rMap[r.message_id][r.emoji].hasReacted = true;
+      });
+      setReactions(rMap);
       setLoadingMessages(false);
     }
 
@@ -65,6 +88,34 @@ export default function CommunityTab() {
     fetchMessages();
     fetchBirthdays();
   }, [profile]);
+
+  async function toggleReaction(messageId: string, emoji: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const current = reactions[messageId]?.[emoji];
+    if (current?.hasReacted) {
+      await supabase.from("message_reactions").delete().eq("message_id", messageId).eq("user_id", user.id).eq("emoji", emoji);
+      setReactions(prev => {
+        const copy = { ...prev };
+        if (copy[messageId]?.[emoji]) {
+          copy[messageId] = { ...copy[messageId] };
+          copy[messageId][emoji] = { count: copy[messageId][emoji].count - 1, hasReacted: false };
+          if (copy[messageId][emoji].count <= 0) delete copy[messageId][emoji];
+        }
+        return copy;
+      });
+    } else {
+      await supabase.from("message_reactions").insert({ message_id: messageId, user_id: user.id, emoji });
+      setReactions(prev => {
+        const copy = { ...prev };
+        if (!copy[messageId]) copy[messageId] = {};
+        copy[messageId] = { ...copy[messageId] };
+        const old = copy[messageId][emoji] ?? { count: 0, hasReacted: false };
+        copy[messageId][emoji] = { count: old.count + 1, hasReacted: true };
+        return copy;
+      });
+    }
+  }
 
   function timeAgo(dateStr: string): string {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -149,6 +200,29 @@ export default function CommunityTab() {
                       </div>
                     </div>
                     <p className="text-card-foreground text-sm font-inter leading-relaxed">{msg.body}</p>
+                    {/* Reactions */}
+                    <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+                      {REACTION_EMOJIS.map(({ emoji, label }) => {
+                        const r = reactions[msg.id]?.[emoji];
+                        const active = r?.hasReacted;
+                        const count = r?.count ?? 0;
+                        return (
+                          <button
+                            key={emoji}
+                            onClick={() => toggleReaction(msg.id, emoji)}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-inter transition-all ${
+                              active
+                                ? "bg-primary/15 text-primary border border-primary/30 font-semibold"
+                                : "bg-muted/50 text-muted-foreground border border-transparent hover:bg-muted"
+                            }`}
+                            title={label}
+                          >
+                            <span className="text-sm">{emoji}</span>
+                            {count > 0 && <span>{count}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 ))}
               </div>
