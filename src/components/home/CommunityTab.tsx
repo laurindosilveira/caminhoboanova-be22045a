@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageCircle, GraduationCap, Cake } from "lucide-react";
+import { MessageCircle, GraduationCap, Cake, Sparkles, Send, Trash2 } from "lucide-react";
 import ClassroomTab from "./ClassroomTab";
 
 const REACTION_EMOJIS = [
@@ -21,6 +21,14 @@ interface Message {
 type ReactionMap = Record<string, Record<string, { count: number; hasReacted: boolean }>>;
 // { messageId: { emoji: { count, hasReacted } } }
 
+interface Testimony {
+  id: string;
+  user_name: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+}
+
 interface BirthdayPerson {
   full_name: string;
   birth_date: string;
@@ -34,6 +42,9 @@ export default function CommunityTab() {
   const [subTab, setSubTab] = useState<SubTab>("comunidade");
   const [messages, setMessages] = useState<Message[]>([]);
   const [reactions, setReactions] = useState<ReactionMap>({});
+  const [testimonies, setTestimonies] = useState<Testimony[]>([]);
+  const [newTestimony, setNewTestimony] = useState("");
+  const [submittingTestimony, setSubmittingTestimony] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [birthdays, setBirthdays] = useState<BirthdayPerson[]>([]);
 
@@ -85,8 +96,18 @@ export default function CommunityTab() {
       setBirthdays(bdays);
     }
 
+    async function fetchTestimonies() {
+      const { data } = await supabase
+        .from("testimonies")
+        .select("id, user_name, user_id, content, created_at")
+        .order("created_at", { ascending: false })
+        .limit(10);
+      setTestimonies((data ?? []) as Testimony[]);
+    }
+
     fetchMessages();
     fetchBirthdays();
+    fetchTestimonies();
   }, [profile]);
 
   async function toggleReaction(messageId: string, emoji: string) {
@@ -115,6 +136,28 @@ export default function CommunityTab() {
         return copy;
       });
     }
+  }
+
+  async function submitTestimony() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !profile || !newTestimony.trim()) return;
+    setSubmittingTestimony(true);
+    const { data, error } = await supabase.from("testimonies").insert({
+      user_id: user.id,
+      user_name: profile.full_name,
+      community: profile.community,
+      content: newTestimony.trim(),
+    }).select().single();
+    if (data && !error) {
+      setTestimonies(prev => [data as Testimony, ...prev]);
+      setNewTestimony("");
+    }
+    setSubmittingTestimony(false);
+  }
+
+  async function deleteTestimony(id: string) {
+    await supabase.from("testimonies").delete().eq("id", id);
+    setTestimonies(prev => prev.filter(t => t.id !== id));
   }
 
   function timeAgo(dateStr: string): string {
@@ -223,6 +266,62 @@ export default function CommunityTab() {
                         );
                       })}
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ✨ Testemunhos */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="w-4 h-4 text-secondary" />
+              <span className="font-montserrat font-bold text-foreground text-sm">✨ O que Deus fez esta semana</span>
+            </div>
+
+            {/* New testimony form */}
+            <div className="bg-card rounded-2xl border border-border p-3 shadow-sm mb-3">
+              <textarea
+                value={newTestimony}
+                onChange={e => setNewTestimony(e.target.value)}
+                placeholder="Compartilhe o que Deus fez na sua vida esta semana..."
+                className="w-full rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm font-inter text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                rows={2}
+                maxLength={500}
+              />
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-[10px] text-muted-foreground font-inter">{newTestimony.length}/500</span>
+                <button
+                  onClick={submitTestimony}
+                  disabled={!newTestimony.trim() || submittingTestimony}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-inter font-semibold disabled:opacity-50 transition-colors hover:bg-primary/90"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  Compartilhar
+                </button>
+              </div>
+            </div>
+
+            {/* Testimonies list */}
+            {testimonies.length > 0 && (
+              <div className="space-y-2.5">
+                {testimonies.map(t => (
+                  <div key={t.id} className="bg-card rounded-2xl border border-border p-3.5 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-base">✨</span>
+                        <div>
+                          <p className="font-montserrat font-bold text-card-foreground text-xs">{t.user_name}</p>
+                          <p className="text-muted-foreground text-[10px] font-inter">{timeAgo(t.created_at)}</p>
+                        </div>
+                      </div>
+                      {profile && t.user_id === profile.user_id && (
+                        <button onClick={() => deleteTestimony(t.id)} className="text-muted-foreground hover:text-destructive transition-colors p-1">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-card-foreground text-sm font-inter leading-relaxed">{t.content}</p>
                   </div>
                 ))}
               </div>

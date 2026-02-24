@@ -790,6 +790,33 @@ export type Database = {
         }
         Relationships: []
       }
+      testimonies: {
+        Row: {
+          community: string
+          content: string
+          created_at: string
+          id: string
+          user_id: string
+          user_name: string
+        }
+        Insert: {
+          community: string
+          content: string
+          created_at?: string
+          id?: string
+          user_id: string
+          user_name: string
+        }
+        Update: {
+          community?: string
+          content?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+          user_name?: string
+        }
+        Relationships: []
+      }
       user_progress: {
         Row: {
           activity_id: string
