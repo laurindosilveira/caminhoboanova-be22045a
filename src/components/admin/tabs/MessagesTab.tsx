@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageSquare, Plus, Send, Users, MapPin, Globe } from "lucide-react";
+import { MessageSquare, Plus, Send, Users, MapPin, Globe, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -20,6 +20,7 @@ export default function MessagesTab() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ title: "", body: "", target: "area" as "all" | "area" | "community", community: "" });
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const communities = profile?.area === "Área 1" ? AREA_1_COMMUNITIES : AREA_2_COMMUNITIES;
 
@@ -47,6 +48,14 @@ export default function MessagesTab() {
     setShowForm(false);
     setSaving(false);
     fetchMessages();
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Tem certeza que deseja excluir este aviso?")) return;
+    setDeleting(id);
+    await supabase.from("messages").delete().eq("id", id);
+    setMessages(prev => prev.filter(m => m.id !== id));
+    setDeleting(null);
   }
 
   return (
@@ -145,6 +154,11 @@ export default function MessagesTab() {
                     )}
                   </div>
                 </div>
+                <button onClick={() => handleDelete(msg.id)} disabled={deleting === msg.id}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                  title="Excluir aviso">
+                  <Trash2 className={`w-4 h-4 ${deleting === msg.id ? "text-muted-foreground animate-pulse" : "text-destructive/60 hover:text-destructive"}`} />
+                </button>
               </div>
             </div>
           ))}
