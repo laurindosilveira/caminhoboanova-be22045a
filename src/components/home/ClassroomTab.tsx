@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Send, MessageSquare, Heart, BookOpen, ExternalLink, Eye, EyeOff } from "lucide-react";
+import { Send, MessageSquare, Heart, BookOpen, ExternalLink, Eye, EyeOff, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,7 +43,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function ClassroomTab() {
-  const { profile } = useAuth();
+  const { profile, role } = useAuth();
 
   // Chat
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -58,7 +58,8 @@ export default function ClassroomTab() {
   const [sendingPrayer, setSendingPrayer] = useState(false);
   const [showPrayerForm, setShowPrayerForm] = useState(false);
   const [amenLoading, setAmenLoading] = useState<string | null>(null);
-
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const canModerate = role === "admin" || role === "lider";
   // Settings
   const [settings, setSettings] = useState<CommunitySettings | null>(null);
 
@@ -115,6 +116,18 @@ export default function ClassroomTab() {
         },
         (payload) => {
           setChatMessages((prev) => [...prev, payload.new as ChatMessage]);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "community_chat",
+          filter: `community=eq.${community}`,
+        },
+        (payload) => {
+          setChatMessages((prev) => prev.filter(m => m.id !== (payload.old as any).id));
         }
       )
       .subscribe();
@@ -197,6 +210,22 @@ export default function ClassroomTab() {
       prev.map((p) => p.id === prayer.id ? { ...p, amen_count: p.amen_count + 1 } : p)
     );
     setAmenLoading(null);
+  }
+
+  async function deletePrayer(id: string) {
+    if (!confirm("Deseja excluir este pedido de oração?")) return;
+    setDeletingId(id);
+    await supabase.from("prayer_requests").delete().eq("id", id);
+    setPrayers(prev => prev.filter(p => p.id !== id));
+    setDeletingId(null);
+  }
+
+  async function deleteChatMessage(id: string) {
+    if (!confirm("Deseja excluir esta mensagem?")) return;
+    setDeletingId(id);
+    await supabase.from("community_chat").delete().eq("id", id);
+    setChatMessages(prev => prev.filter(m => m.id !== id));
+    setDeletingId(null);
   }
 
   if (!community) return null;
@@ -326,6 +355,16 @@ export default function ClassroomTab() {
                       {p.amen_count > 0 ? p.amen_count : "Amém"}
                     </span>
                   </button>
+                  {(p.user_id === myUserId || canModerate) && (
+                    <button
+                      onClick={() => deletePrayer(p.id)}
+                      disabled={deletingId === p.id}
+                      className="flex-shrink-0 ml-1 p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
+                      title="Excluir pedido"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -379,9 +418,21 @@ export default function ClassroomTab() {
                       >
                         {msg.message}
                       </div>
-                      <span className="text-[10px] text-muted-foreground mt-0.5 px-1">
-                        {timeAgo(msg.created_at)}
-                      </span>
+                      <div className="flex items-center gap-1 mt-0.5 px-1">
+                        <span className="text-[10px] text-muted-foreground">
+                          {timeAgo(msg.created_at)}
+                        </span>
+                        {(isMe || canModerate) && (
+                          <button
+                            onClick={() => deleteChatMessage(msg.id)}
+                            disabled={deletingId === msg.id}
+                            className="p-0.5 rounded text-muted-foreground/50 hover:text-destructive transition-colors disabled:opacity-40"
+                            title="Excluir mensagem"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
