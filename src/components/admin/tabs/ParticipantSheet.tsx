@@ -101,7 +101,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [noteForm, setNoteForm] = useState({ note_type: "acompanhamento", content: "" });
   const [savingNote, setSavingNote] = useState(false);
-  const [activeSection, setActiveSection] = useState<"overview"|"plan"|"notes"|"jornada"|"presenca"|"timeline"|"relatorio">("overview");
+  const [activeSection, setActiveSection] = useState<"overview"|"plan"|"notes"|"jornada"|"presenca"|"timeline"|"relatorio"|"parecer">("overview");
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -296,6 +296,59 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
     );
   }
 
+  // ── PARECER PASTORAL AUTOMÁTICO ──
+  const generateParecer = () => {
+    // 🧠 Conhecimento: progresso formação + lições respondidas
+    const conhecimentoPct = formacoes.length > 0 ? (doneForm / formacoes.length) * 100 : 0;
+    const lessonResponseCount = lessons.length; // total lessons available
+    const conhecimentoScore = Math.min(5, Math.round((conhecimentoPct / 20)));
+    const conhecimentoLabel = conhecimentoScore >= 4 ? "Sólido" : conhecimentoScore >= 3 ? "Adequado" : conhecimentoScore >= 2 ? "Em desenvolvimento" : "Insuficiente";
+
+    // ❤️ Vida espiritual: autoavaliação + devocionais completados
+    const devPct = devocionais.length > 0 ? (doneDev / devocionais.length) * 100 : 0;
+    const prayerScore = assessment?.prayer_score ?? 0;
+    const presenceScore = assessment?.presence_score ?? 0;
+    const spiritAvg = prayerScore > 0 && presenceScore > 0 ? (prayerScore + presenceScore) / 2 : 0;
+    const vidaScore = spiritAvg > 0 ? Math.round((spiritAvg * 0.6 + (devPct / 20) * 0.4)) : Math.min(5, Math.round(devPct / 20));
+    const vidaLabel = vidaScore >= 4 ? "Vibrante" : vidaScore >= 3 ? "Estável" : vidaScore >= 2 ? "Oscilante" : "Preocupante";
+
+    // 👥 Comunhão: presença em encontros + cultos aprovados
+    const worshipApproved = worshipRecords.filter(w => w.status === "aprovado").length;
+    const comunhaoPct = totalEvents > 0 ? (presentCount / totalEvents) * 100 : 0;
+    const comunhaoWorshipPct = worshipRecords.length > 0 ? (worshipApproved / worshipRecords.length) * 100 : 0;
+    const comunhaoAvg = totalEvents > 0 && worshipRecords.length > 0
+      ? (comunhaoPct + comunhaoWorshipPct) / 2
+      : totalEvents > 0 ? comunhaoPct : comunhaoWorshipPct;
+    const comunhaoScore = Math.min(5, Math.round(comunhaoAvg / 20));
+    const comunhaoLabel = comunhaoScore >= 4 ? "Muito presente" : comunhaoScore >= 3 ? "Regular" : comunhaoScore >= 2 ? "Irregular" : "Ausente";
+
+    // 🌍 Testemunho: avaliações de encontros (participação, engajamento)
+    const evalScores = meetingEvals.map(ev => {
+      const scores = [ev.participation_score, ev.engagement_score].filter(Boolean) as number[];
+      return scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+    }).filter(s => s > 0);
+    const testemunhoAvg = evalScores.length > 0 ? evalScores.reduce((a, b) => a + b, 0) / evalScores.length : 0;
+    const testemunhoScore = Math.round(testemunhoAvg) || (p.completed_count > 0 ? 2 : 1);
+    const testemunhoLabel = testemunhoScore >= 4 ? "Exemplar" : testemunhoScore >= 3 ? "Bom" : testemunhoScore >= 2 ? "Em crescimento" : "Precisa atenção";
+
+    // Overall
+    const overall = (conhecimentoScore + vidaScore + comunhaoScore + testemunhoScore) / 4;
+    const aptidao = overall >= 3.5 ? "apto" : overall >= 2.5 ? "acompanhamento" : "nao_apto";
+    const aptidaoLabel = aptidao === "apto" ? "✅ Apto para Profissão de Fé" : aptidao === "acompanhamento" ? "🟡 Em acompanhamento" : "🔴 Não apto no momento";
+
+    return {
+      dimensions: [
+        { emoji: "🧠", label: "Conhecimento", score: conhecimentoScore, sublabel: conhecimentoLabel, detail: `${doneForm}/${formacoes.length} formações concluídas (${Math.round(conhecimentoPct)}%)` },
+        { emoji: "❤️", label: "Vida Espiritual", score: vidaScore, sublabel: vidaLabel, detail: `${doneDev}/${devocionais.length} devocionais · Autoavaliação: ${spiritAvg > 0 ? spiritAvg.toFixed(1) : "N/A"}/5` },
+        { emoji: "👥", label: "Comunhão", score: comunhaoScore, sublabel: comunhaoLabel, detail: `${presentCount}/${totalEvents} encontros (${attendancePct}%) · ${worshipApproved} cultos aprovados` },
+        { emoji: "🌍", label: "Testemunho", score: testemunhoScore, sublabel: testemunhoLabel, detail: `Média avaliações: ${testemunhoAvg > 0 ? testemunhoAvg.toFixed(1) : "N/A"}/5 · ${meetingEvals.length} avaliações` },
+      ],
+      overall,
+      aptidao,
+      aptidaoLabel,
+    };
+  };
+
   const SECTIONS = [
     { id: "overview" as const, label: "Visão Geral" },
     { id: "plan" as const, label: "Plano" },
@@ -303,6 +356,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
     { id: "presenca" as const, label: "Presença" },
     { id: "timeline" as const, label: "Timeline" },
     { id: "jornada" as const, label: "Jornada" },
+    { id: "parecer" as const, label: "📄 Parecer" },
     { id: "relatorio" as const, label: "Relatório" },
   ];
 
@@ -797,6 +851,79 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           )}
         </div>
       )}
+
+      {/* PARECER PASTORAL */}
+      {activeSection === "parecer" && (() => {
+        const parecer = generateParecer();
+        return (
+          <div className="space-y-4">
+            {/* Resultado geral */}
+            <div className={`rounded-2xl p-4 border ${
+              parecer.aptidao === "apto" ? "bg-brand-green/5 border-brand-green/20" :
+              parecer.aptidao === "acompanhamento" ? "bg-accent/5 border-accent/20" :
+              "bg-destructive/5 border-destructive/20"
+            }`}>
+              <p className="font-montserrat font-black text-lg text-center mb-1">{parecer.aptidaoLabel}</p>
+              <p className="font-inter text-xs text-muted-foreground text-center">
+                Média geral: <strong className="text-foreground">{parecer.overall.toFixed(1)}/5</strong> — Gerado automaticamente com base nos dados reais
+              </p>
+            </div>
+
+            {/* 4 dimensões */}
+            <div className="space-y-3">
+              {parecer.dimensions.map((dim, idx) => (
+                <div key={idx} className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">{dim.emoji}</span>
+                      <div>
+                        <p className="font-montserrat font-bold text-sm text-foreground">{dim.label}</p>
+                        <p className={`font-inter text-[10px] font-semibold ${
+                          dim.score >= 4 ? "text-brand-green" : dim.score >= 3 ? "text-accent-foreground" : "text-destructive"
+                        }`}>{dim.sublabel}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-montserrat font-black text-lg text-foreground">{dim.score}</span>
+                      <span className="font-inter text-xs text-muted-foreground">/5</span>
+                    </div>
+                  </div>
+                  {/* Score bar */}
+                  <div className="h-2 bg-muted rounded-full overflow-hidden mb-2">
+                    <div className="h-full rounded-full transition-all" style={{
+                      width: `${(dim.score / 5) * 100}%`,
+                      background: dim.score >= 4 ? "var(--gradient-green)" : dim.score >= 3 ? "hsl(var(--accent))" : "hsl(var(--destructive))",
+                    }} />
+                  </div>
+                  <p className="font-inter text-[11px] text-muted-foreground">{dim.detail}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Save aptidão */}
+            <button
+              onClick={async () => {
+                const parecer = generateParecer();
+                await supabase.from("discipleship_plans").upsert({
+                  user_id: p.user_id,
+                  aptidao: parecer.aptidao,
+                  health_status: plan.health_status,
+                }, { onConflict: "user_id" });
+                setSaved(true);
+                setTimeout(() => setSaved(false), 2000);
+              }}
+              className="w-full py-3 rounded-xl font-inter font-semibold text-sm transition-all"
+              style={{ background: "var(--gradient-hero)", color: "hsl(var(--primary-foreground))" }}
+            >
+              {saved ? "✅ Parecer salvo!" : "💾 Salvar parecer no plano de discipulado"}
+            </button>
+
+            <p className="font-inter text-[10px] text-muted-foreground text-center leading-relaxed">
+              Este parecer é gerado automaticamente com base em dados de formação, devocionais, autoavaliação espiritual, presença em encontros e cultos, e avaliações de participação. O pastor pode ajustar manualmente na aba "Plano".
+            </p>
+          </div>
+        );
+      })()}
 
       {/* RELATÓRIO SECTION */}
       {activeSection === "relatorio" && (
