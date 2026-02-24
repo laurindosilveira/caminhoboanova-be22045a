@@ -296,7 +296,47 @@ export default function DiscipleshipTab() {
     { label: "Testemunho", emoji: "🟠", score: testemunhoScore, color: "hsl(28, 100%, 50%)", bg: "bg-secondary/10" },
   ];
 
-  // If a lesson is selected
+  // ── Recompensas Espirituais ──
+  // Compute streak from allAssessments + devotional/attendance data
+  const devDoneCount = doneDev;
+  const avgThermo = Math.round((feScore + comunhaoScore + conhecimentoScore + testemunhoScore) / 4);
+
+  const spiritualRewards: { icon: string; title: string; subtitle: string; earned: boolean; bg: string }[] = [];
+
+  // Streak-based
+  if (worshipCount >= 4) {
+    spiritualRewards.push({ icon: "⛪", title: "Adorador fiel", subtitle: `${worshipCount} cultos confirmados`, earned: true, bg: "bg-primary/10" });
+  }
+  if (attendancePresent >= 3) {
+    spiritualRewards.push({ icon: "🤝", title: "Presença que edifica", subtitle: `${attendancePresent} encontros presentes`, earned: true, bg: "bg-brand-green/10" });
+  }
+  if (pct >= 80) {
+    spiritualRewards.push({ icon: "🏆", title: "Caminhada exemplar", subtitle: `${pct}% das atividades concluídas`, earned: true, bg: "bg-secondary/10" });
+  } else if (pct >= 50) {
+    spiritualRewards.push({ icon: "💪", title: "Perseverante na fé", subtitle: `${pct}% das atividades concluídas`, earned: true, bg: "bg-accent/15" });
+  }
+  if (completedLessonsCount >= 3) {
+    spiritualRewards.push({ icon: "📖", title: "Estudante da Palavra", subtitle: `${completedLessonsCount} lições completas`, earned: true, bg: "bg-primary/10" });
+  }
+  if (avgThermo >= 75) {
+    spiritualRewards.push({ icon: "🔥", title: "Exemplo de fé da turma", subtitle: "Termômetro espiritual acima de 75%", earned: true, bg: "bg-secondary/10" });
+  }
+  if (assessment && (assessment.prayer_score ?? 0) >= 4 && (assessment.presence_score ?? 0) >= 4) {
+    spiritualRewards.push({ icon: "🙏", title: "Vida de oração forte", subtitle: "Oração e presença de Deus em alta", earned: true, bg: "bg-brand-green/10" });
+  }
+  if (healthStatus === "saudavel") {
+    spiritualRewards.push({ icon: "🕊️", title: "Coração saudável", subtitle: "Saúde espiritual plena", earned: true, bg: "bg-brand-green/10" });
+  }
+  // Always show some aspirational ones if few earned
+  if (spiritualRewards.length < 3) {
+    if (!spiritualRewards.some(r => r.icon === "⛪")) {
+      spiritualRewards.push({ icon: "⛪", title: "Adorador fiel", subtitle: "Confirme 4 cultos para desbloquear", earned: false, bg: "bg-muted" });
+    }
+    if (!spiritualRewards.some(r => r.icon === "🔥")) {
+      spiritualRewards.push({ icon: "🔥", title: "Exemplo de fé da turma", subtitle: "Alcance 75% no termômetro", earned: false, bg: "bg-muted" });
+    }
+  }
+
   if (selectedLesson) {
     if (selectedLessonMode === "study") {
       return (
@@ -397,6 +437,34 @@ export default function DiscipleshipTab() {
         </p>
       </SectionCard>
 
+      {/* ── RECOMPENSAS ESPIRITUAIS ────────────── */}
+      {spiritualRewards.length > 0 && (
+        <SectionCard icon={<Sparkles className="w-4 h-4 text-accent-foreground" />} title="Recompensas Espirituais">
+          <p className="text-muted-foreground font-inter text-[10px] mb-3 text-center">
+            Reconhecimento pela sua dedicação — não é competição, é celebração! 🎉
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {spiritualRewards.map((reward, i) => (
+              <div
+                key={i}
+                className={`rounded-xl p-3 text-center transition-all ${
+                  reward.earned
+                    ? `${reward.bg} border border-transparent`
+                    : "bg-muted/30 border border-dashed border-border opacity-60"
+                }`}
+              >
+                <span className={`text-2xl ${reward.earned ? "" : "grayscale opacity-40"}`}>{reward.icon}</span>
+                <p className={`font-montserrat font-bold text-xs mt-1 ${reward.earned ? "text-foreground" : "text-muted-foreground"}`}>
+                  {reward.title}
+                </p>
+                <p className="font-inter text-[10px] text-muted-foreground mt-0.5 leading-tight">
+                  {reward.subtitle}
+                </p>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
 
       {/* ── AUTOAVALIAÇÃO ────────────────────────── */}
       <SectionCard icon={<Heart className="w-4 h-4 text-primary" />} title={`Autoavaliação — ${MONTH_NAMES[month-1]}`}>
