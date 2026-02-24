@@ -126,6 +126,7 @@ export default function DiscipleshipTab() {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [recentEvents, setRecentEvents] = useState<EventRecord[]>([]);
   const [allAssessments, setAllAssessments] = useState<Assessment[]>([]);
+  const [worshipCount, setWorshipCount] = useState(0);
 
   const [form, setForm] = useState({
     prayer_score: null as number | null,
@@ -147,7 +148,7 @@ export default function DiscipleshipTab() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }, { data: responsesData }, { data: eventsData }, { data: attendanceData }, { data: allAssess }, { data: devContentData }, { data: devProgressData }] = await Promise.all([
+    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }, { data: responsesData }, { data: eventsData }, { data: attendanceData }, { data: allAssess }, { data: devContentData }, { data: devProgressData }, { data: worshipData }] = await Promise.all([
       supabase.from("activities").select("id, type, title, points"),
       supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
       supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).eq("month", month).eq("year", year).maybeSingle(),
@@ -160,6 +161,7 @@ export default function DiscipleshipTab() {
       supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).order("year", { ascending: true }).order("month", { ascending: true }),
       supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null),
       supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
+      supabase.from("worship_attendance").select("id").eq("user_id", user.id).eq("status", "aprovado"),
     ]);
 
     setActivities(acts ?? []);
@@ -207,6 +209,7 @@ export default function DiscipleshipTab() {
 
     // All assessments for evolution chart
     setAllAssessments((allAssess ?? []) as Assessment[]);
+    setWorshipCount((worshipData ?? []).length);
 
     setLoading(false);
   }
@@ -262,6 +265,36 @@ export default function DiscipleshipTab() {
 
   const healthStatus = plan?.health_status ?? computeHealth(assessment);
   const MONTH_NAMES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+  // ── Termômetro do Discipulado ──
+  const totalLessonsCount = courses.reduce((s, c) => s + c.lessons.length, 0);
+  const completedLessonsCount = fullyCompletedLessonIds.size;
+  const attendancePresent = attendanceRecords.filter(a => a.status === "presente").length;
+  const totalEventsCount = recentEvents.length;
+
+  // Fé: based on prayer + presence scores (assessment)
+  const feScore = assessment
+    ? Math.round((((assessment.prayer_score ?? 3) + (assessment.presence_score ?? 3)) / 2) * 20)
+    : 50;
+  // Comunhão: attendance percentage
+  const comunhaoScore = totalEventsCount > 0
+    ? Math.round((attendancePresent / totalEventsCount) * 100)
+    : 0;
+  // Conhecimento: lessons progress
+  const conhecimentoScore = totalLessonsCount > 0
+    ? Math.round((completedLessonsCount / totalLessonsCount) * 100)
+    : 0;
+  // Testemunho: worship + activities progress combined
+  const testemunhoBase = totalActs > 0 ? (completedActs / totalActs) : 0;
+  const worshipBase = Math.min(worshipCount / 4, 1); // 4 worships = 100%
+  const testemunhoScore = Math.round(((testemunhoBase + worshipBase) / 2) * 100);
+
+  const thermometerDimensions = [
+    { label: "Fé", emoji: "🟢", score: feScore, color: "hsl(142, 71%, 45%)", bg: "bg-brand-green/10" },
+    { label: "Comunhão", emoji: "🟡", score: comunhaoScore, color: "hsl(45, 93%, 47%)", bg: "bg-accent/15" },
+    { label: "Conhecimento", emoji: "🔵", score: conhecimentoScore, color: "hsl(217, 91%, 60%)", bg: "bg-primary/10" },
+    { label: "Testemunho", emoji: "🟠", score: testemunhoScore, color: "hsl(28, 100%, 50%)", bg: "bg-secondary/10" },
+  ];
 
   // If a lesson is selected
   if (selectedLesson) {
@@ -338,6 +371,31 @@ export default function DiscipleshipTab() {
         <p className="text-center text-muted-foreground font-inter text-xs mt-1.5">{completedActs}/{totalActs} atividades concluídas · {pct}%</p>
       </SectionCard>
 
+      {/* ── TERMÔMETRO DO DISCIPULADO ────────────── */}
+      <SectionCard icon={<Sparkles className="w-4 h-4 text-secondary" />} title="Termômetro do Discipulado">
+        <div className="space-y-3">
+          {thermometerDimensions.map(({ label, emoji, score, color, bg }) => (
+            <div key={label} className="space-y-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">{emoji}</span>
+                  <span className="font-montserrat font-bold text-foreground text-sm">{label}</span>
+                </div>
+                <span className="font-montserrat font-bold text-xs" style={{ color }}>{score}%</span>
+              </div>
+              <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{ width: `${score}%`, backgroundColor: color }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="text-muted-foreground font-inter text-[10px] mt-3 text-center">
+          Baseado na sua autoavaliação, presença, estudos e atividades
+        </p>
+      </SectionCard>
 
 
       {/* ── AUTOAVALIAÇÃO ────────────────────────── */}
