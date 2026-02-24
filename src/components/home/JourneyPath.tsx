@@ -177,6 +177,30 @@ export default function JourneyPath() {
         <p className="text-muted-foreground font-inter text-[11px] mt-1.5">
           Progresso geral: lições estudadas e devocionais concluídos
         </p>
+
+        {/* Fase atual */}
+        {(() => {
+          const currentCourse = courses.find(c =>
+            c.lessons.some(l => !fullyCompletedLessonIds.has(l.id))
+          ) ?? courses[courses.length - 1];
+          if (!currentCourse) return null;
+          const currentLesson = currentCourse.lessons.find(l => !fullyCompletedLessonIds.has(l.id));
+          return (
+            <div className="mt-2 flex items-center gap-2 bg-secondary/10 rounded-xl px-3 py-2">
+              <span className="text-sm">📍</span>
+              <div className="min-w-0">
+                <p className="font-montserrat font-bold text-foreground text-xs">
+                  Fase atual: Curso {currentCourse.order_num} — {currentCourse.title}
+                </p>
+                {currentLesson && (
+                  <p className="font-inter text-[10px] text-muted-foreground truncate">
+                    Próxima: Lição {currentLesson.order_num} — {currentLesson.title}
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Stats cards */}
