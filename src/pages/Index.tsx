@@ -67,6 +67,26 @@ export default function Index() {
               <StreakRiskReminder onNavigateToJornada={() => setActiveTab("discipulado")} />
             </div>
 
+            {/* Indicador de impacto espiritual */}
+            {(() => {
+              const indicators = [];
+              if (stats.faithLevel >= 3) indicators.push("✨ Você está crescendo");
+              if (stats.streakDays >= 3) indicators.push("✨ Em constância");
+              if (stats.faithEnergy >= 3) indicators.push("✨ Em comunhão");
+              if (indicators.length === 0) indicators.push("🌱 Comece sua jornada!");
+              return (
+                <div className="px-5 mb-2">
+                  <div className="flex flex-wrap gap-2">
+                    {indicators.map((text, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-secondary/10 text-secondary font-inter text-xs font-semibold">
+                        {text}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Próxima atividade */}
             <MissionCard
               nextActivity={stats.nextActivity}
