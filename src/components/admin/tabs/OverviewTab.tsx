@@ -540,26 +540,81 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
         </div>
       </div>
 
-      {/* ── PROGRESSO POR COMUNIDADE ─── */}
+      {/* ── VISÃO COMPARATIVA POR COMUNIDADE ─── */}
       <div className="bg-card rounded-2xl border border-border p-4">
-        <p className="font-montserrat font-bold text-foreground text-sm mb-3">🏡 Por comunidade</p>
-        <div className="space-y-3">
-          {byComm.map(c => (
-            <div key={c.name}>
-              <div className="flex items-center gap-2 mb-1.5">
-                <div className={`px-2 py-0.5 rounded-lg text-[10px] font-inter font-medium flex-shrink-0 ${COMMUNITY_COLORS[c.name] ?? "bg-muted text-foreground"}`}>
-                  {c.name}
+        <p className="font-montserrat font-bold text-foreground text-sm mb-1">🏡 Visão por Comunidade</p>
+        <p className="text-muted-foreground font-inter text-[10px] mb-3">Comparação pastoral entre comunidades da área</p>
+        <div className="space-y-4">
+          {byComm.map(c => {
+            const group = participants.filter(p => p.community === c.name);
+            // Detailed stats
+            const devIds = new Set(activities.filter(a => a.type === "devocional").map(a => a.id));
+            const formIds = new Set(activities.filter(a => a.type === "formacao").map(a => a.id));
+            const devDone = group.reduce((s, p) => s + p.completed_activity_ids.filter(id => devIds.has(id)).length, 0);
+            const devTotal = devIds.size * group.length;
+            const devPct = devTotal > 0 ? Math.round((devDone / devTotal) * 100) : 0;
+            const formDone = group.reduce((s, p) => s + p.completed_activity_ids.filter(id => formIds.has(id)).length, 0);
+            const formTotal = formIds.size * group.length;
+            const formPct = formTotal > 0 ? Math.round((formDone / formTotal) * 100) : 0;
+            const ativos = group.filter(p => p.completed_count > 0).length;
+            const inativos = group.length - ativos;
+            const alertCount = smartAlerts.filter(a => a.community === c.name).length;
+
+            return (
+              <div key={c.name} className="rounded-xl border border-border overflow-hidden">
+                {/* Community header */}
+                <div className="flex items-center gap-2 px-3 py-2.5 bg-muted/30 border-b border-border">
+                  <span className={`px-2 py-0.5 rounded-lg text-[10px] font-inter font-semibold ${COMMUNITY_COLORS[c.name] ?? "bg-muted text-foreground"}`}>
+                    {c.name}
+                  </span>
+                  <span className="font-montserrat font-black text-sm text-foreground ml-auto">{c.avgPct}%</span>
                 </div>
-                <MiniBar pct={c.avgPct} color={c.avgPct >= 70 ? "var(--gradient-green)" : c.avgPct >= 34 ? "var(--gradient-orange)" : "hsl(var(--destructive))"} />
-                <span className="font-montserrat font-bold text-xs text-foreground w-8 text-right">{c.avgPct}%</span>
+                <div className="p-3 space-y-2.5">
+                  {/* Progress bar */}
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{
+                      width: `${c.avgPct}%`,
+                      background: c.avgPct >= 70 ? "var(--gradient-green)" : c.avgPct >= 34 ? "var(--gradient-orange)" : "hsl(var(--destructive))"
+                    }} />
+                  </div>
+                  {/* Stats grid */}
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[
+                      { label: "Jovens", value: c.count, emoji: "👥" },
+                      { label: "Ativos", value: ativos, emoji: "🔥" },
+                      { label: "Inativos", value: inativos, emoji: "😴" },
+                      { label: "Alertas", value: alertCount, emoji: "⚠️" },
+                    ].map(st => (
+                      <div key={st.label} className="text-center p-1.5 rounded-lg bg-muted/30">
+                        <span className="text-xs">{st.emoji}</span>
+                        <p className="font-montserrat font-black text-sm text-foreground leading-none">{st.value}</p>
+                        <p className="text-[8px] font-inter text-muted-foreground">{st.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Category breakdown */}
+                  <div className="space-y-1.5">
+                    {[
+                      { label: "📖 Devocionais", pct: devPct, color: "var(--gradient-green)" },
+                      { label: "🎓 Formação", pct: formPct, color: "hsl(var(--secondary))" },
+                    ].map(cat => (
+                      <div key={cat.label} className="flex items-center gap-2">
+                        <span className="font-inter text-[10px] text-muted-foreground w-20 flex-shrink-0">{cat.label}</span>
+                        <MiniBar pct={cat.pct} color={cat.color} />
+                        <span className="font-montserrat font-bold text-[10px] text-foreground w-7 text-right">{cat.pct}%</span>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Health summary */}
+                  <div className="flex gap-2 pt-1 border-t border-border">
+                    <span className="text-[10px] font-inter font-medium text-brand-green">🟢 {c.saudaveis}</span>
+                    <span className="text-[10px] font-inter font-medium text-accent-foreground">🟡 {c.count - c.saudaveis - c.criticos}</span>
+                    <span className="text-[10px] font-inter font-medium text-destructive">🔴 {c.criticos}</span>
+                  </div>
+                </div>
               </div>
-              <div className="flex gap-2 ml-1 flex-wrap">
-                <span className="text-[10px] font-inter text-muted-foreground">{c.count} jovens</span>
-                <span className="text-[10px] font-inter text-brand-green">🟢 {c.saudaveis}</span>
-                <span className="text-[10px] font-inter text-destructive">🔴 {c.criticos}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
