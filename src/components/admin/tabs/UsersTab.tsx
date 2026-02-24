@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Shield, User, Search, ShieldCheck, ShieldOff, CalendarDays, MapPin, ChevronRight, X, Save, Phone, Cake, Home, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type UserEntry = {
   user_id: string;
@@ -313,15 +314,12 @@ export default function UsersTab() {
         </div>
       )}
 
-      {/* Edit user panel */}
-      {editingUser && (
-        <div className="bg-card border-2 border-primary/30 rounded-2xl p-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="flex items-center justify-between">
-            <p className="font-montserrat font-bold text-foreground text-base">Editar perfil</p>
-            <button onClick={() => setEditingUser(null)} className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center hover:bg-muted/80">
-              <X className="w-4 h-4 text-muted-foreground" />
-            </button>
-          </div>
+      {/* Edit user dialog */}
+      <Dialog open={!!editingUser} onOpenChange={(open) => { if (!open) setEditingUser(null); }}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-montserrat font-bold text-foreground text-base">Editar perfil</DialogTitle>
+          </DialogHeader>
 
           <div className="space-y-3">
             <div>
@@ -365,13 +363,11 @@ export default function UsersTab() {
               </select>
             </div>
 
-            {/* Endereço */}
             <div>
               <label className="text-xs font-inter font-medium text-muted-foreground mb-1 flex items-center gap-1"><Home className="w-3 h-3" /> Endereço</label>
               <Input value={editForm.address} onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))} className="rounded-xl" placeholder="Rua, nº, bairro, cidade" />
             </div>
 
-            {/* Pai */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-inter font-medium text-muted-foreground mb-1 flex items-center gap-1"><Users className="w-3 h-3" /> Nome do pai</label>
@@ -383,7 +379,6 @@ export default function UsersTab() {
               </div>
             </div>
 
-            {/* Mãe */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-inter font-medium text-muted-foreground mb-1 flex items-center gap-1"><Users className="w-3 h-3" /> Nome da mãe</label>
@@ -402,8 +397,8 @@ export default function UsersTab() {
             <Save className="w-4 h-4" />
             {savingEdit ? "Salvando..." : "Salvar alterações"}
           </button>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {loading ? (
         <div className="space-y-2">
