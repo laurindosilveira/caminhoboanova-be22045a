@@ -44,6 +44,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
   const [attendanceCount, setAttendanceCount] = useState(0);
   const [chatCount, setChatCount] = useState(0);
   const [prayerCount, setPrayerCount] = useState(0);
+  const [isApto, setIsApto] = useState(false);
 
   const fireCelebration = useCallback(() => {
     if (celebrationFired) return;
@@ -87,18 +88,20 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     async function fetchQualitative() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const [{ count: devC }, { count: worC }, { data: attD }, { count: chatC }, { count: prayerC }] = await Promise.all([
+      const [{ count: devC }, { count: worC }, { data: attD }, { count: chatC }, { count: prayerC }, { data: planData }] = await Promise.all([
         supabase.from("devotional_progress").select("id", { count: "exact", head: true }).eq("user_id", user.id),
         supabase.from("worship_attendance").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "aprovado"),
         supabase.from("attendance").select("event_id").eq("user_id", user.id).eq("status", "presente"),
         supabase.from("community_chat").select("id", { count: "exact", head: true }).eq("user_id", user.id),
         supabase.from("prayer_requests").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+        supabase.from("discipleship_plans").select("aptidao").eq("user_id", user.id).limit(1),
       ]);
       setDevCount(devC ?? 0);
       setWorshipCount(worC ?? 0);
       setAttendanceCount((attD ?? []).length);
       setChatCount(chatC ?? 0);
       setPrayerCount(prayerC ?? 0);
+      setIsApto(planData?.[0]?.aptidao === "apto");
     }
     fetchQualitative();
   }, [profile]);
@@ -123,6 +126,8 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     // Conquistas surpresa
     { id: 7, icon: "🛡️", title: "Guardião da Fé", desc: "14 dias seguidos de dedicação!", unlocked: streakDays >= 14, current: streakDays, target: 14, secret: true },
     { id: 8, icon: "👁️‍🗨️", title: "Constância Invisível", desc: "30 dias seguidos — lendário!", unlocked: streakDays >= 30, current: streakDays, target: 30, secret: true },
+    // Conquista final
+    { id: 17, icon: "✝️", title: "Pronto para a Profissão de Fé", desc: "Seu pastor confirmou: você está pronto!", unlocked: isApto, current: isApto ? 1 : 0, target: 1, secret: true },
   ];
 
   const unlockedCount = achievements.filter(a => a.unlocked).length;
