@@ -210,6 +210,38 @@ export type Database = {
         }
         Relationships: []
       }
+      course_unlocks: {
+        Row: {
+          area: string
+          course_id: string
+          id: string
+          unlocked_at: string
+          unlocked_by: string
+        }
+        Insert: {
+          area: string
+          course_id: string
+          id?: string
+          unlocked_at?: string
+          unlocked_by: string
+        }
+        Update: {
+          area?: string
+          course_id?: string
+          id?: string
+          unlocked_at?: string
+          unlocked_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_unlocks_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       courses: {
         Row: {
           created_at: string
