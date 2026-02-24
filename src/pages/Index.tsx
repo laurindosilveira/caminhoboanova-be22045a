@@ -14,6 +14,7 @@ import CommunityTab from "@/components/home/CommunityTab";
 import DiscipleshipTab from "@/components/home/DiscipleshipTab";
 import DevotionalReminder from "@/components/home/DevotionalReminder";
 import UpcomingEventReminder from "@/components/home/UpcomingEventReminder";
+import NextMeetingCard from "@/components/home/NextMeetingCard";
 import StreakRiskReminder from "@/components/home/StreakRiskReminder";
 import UserAgendaTab from "@/components/home/UserAgendaTab";
 import NotificationSettings from "@/components/home/NotificationSettings";
@@ -86,6 +87,9 @@ export default function Index() {
                 </div>
               );
             })()}
+
+            {/* Próximo encontro */}
+            <NextMeetingCard onNavigateToAgenda={() => setActiveTab("agenda")} />
 
             {/* Próxima atividade */}
             <MissionCard
