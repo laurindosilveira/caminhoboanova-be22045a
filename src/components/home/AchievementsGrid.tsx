@@ -39,6 +39,9 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [celebrationFired, setCelebrationFired] = useState(false);
   const winnerBannerRef = useRef<HTMLDivElement>(null);
+  const [devCount, setDevCount] = useState(0);
+  const [worshipCount, setWorshipCount] = useState(0);
+  const [attendanceCount, setAttendanceCount] = useState(0);
 
   const fireCelebration = useCallback(() => {
     if (celebrationFired) return;
@@ -78,6 +81,20 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     }
     fetchSeasons();
     fetchRanking();
+    // Fetch qualitative data
+    async function fetchQualitative() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const [{ count: devC }, { count: worC }, { data: attD }] = await Promise.all([
+        supabase.from("devotional_progress").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+        supabase.from("worship_attendance").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "aprovado"),
+        supabase.from("attendance").select("event_id").eq("user_id", user.id).eq("status", "presente"),
+      ]);
+      setDevCount(devC ?? 0);
+      setWorshipCount(worC ?? 0);
+      setAttendanceCount((attD ?? []).length);
+    }
+    fetchQualitative();
   }, [profile]);
 
   const achievements: Achievement[] = [
@@ -87,7 +104,12 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     { id: 4, icon: "⭐", title: "100 pontos da fé", desc: "Crescendo sempre!", unlocked: faithPoints >= 100, current: faithPoints, target: 100 },
     { id: 5, icon: "🏆", title: "10 atividades", desc: "Dedicação exemplar!", unlocked: completedCount >= 10, current: completedCount, target: 10 },
     { id: 6, icon: "💎", title: "200 pontos", desc: "Nível máximo de fé!", unlocked: faithPoints >= 200, current: faithPoints, target: 200 },
-    // Conquistas surpresa — só aparecem quando desbloqueadas
+    // Conquistas qualitativas/espirituais
+    { id: 9, icon: "❤️", title: "Oração contínua", desc: "10 devocionais completos", unlocked: devCount >= 10, current: devCount, target: 10 },
+    { id: 10, icon: "🤝", title: "Serviço fiel", desc: "5 presenças em encontros", unlocked: attendanceCount >= 5, current: attendanceCount, target: 5 },
+    { id: 11, icon: "📖", title: "Leitura bíblica", desc: "20 devocionais completos", unlocked: devCount >= 20, current: devCount, target: 20 },
+    { id: 12, icon: "⛪", title: "Adorador", desc: "5 cultos confirmados", unlocked: worshipCount >= 5, current: worshipCount, target: 5 },
+    // Conquistas surpresa
     { id: 7, icon: "🛡️", title: "Guardião da Fé", desc: "14 dias seguidos de dedicação!", unlocked: streakDays >= 14, current: streakDays, target: 14, secret: true },
     { id: 8, icon: "👁️‍🗨️", title: "Constância Invisível", desc: "30 dias seguidos — lendário!", unlocked: streakDays >= 30, current: streakDays, target: 30, secret: true },
   ];
