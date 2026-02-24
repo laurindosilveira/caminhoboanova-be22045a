@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { CalendarDays, MapPin, Users, BookOpen } from "lucide-react";
+import { CalendarDays, MapPin, Users, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
 import WorshipConfirmation from "./WorshipConfirmation";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -17,6 +17,7 @@ type Event = {
   type: string;
 };
 
+type LessonContentInfo = { lesson_id: string; summary: string; bible_texts: string[]; prayer_prompt: string };
 type AttendanceRecord = { event_id: string; status: string };
 type LessonInfo = { id: string; title: string; order_num: number; course_title: string; course_order: number };
 
@@ -33,19 +34,21 @@ export default function UserAgendaTab() {
   const [events, setEvents] = useState<Event[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [lessonsByIndex, setLessonsByIndex] = useState<LessonInfo[]>([]);
+  const [lessonContentMap, setLessonContentMap] = useState<Map<string, LessonContentInfo>>(new Map());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetch() {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-      const [{ data: eventsData }, attResult, { data: coursesData }, { data: lessonsData }] = await Promise.all([
+      const [{ data: eventsData }, attResult, { data: coursesData }, { data: lessonsData }, { data: lessonContentData }] = await Promise.all([
         supabase.from("events").select("*").order("event_date"),
         user
           ? supabase.from("attendance").select("event_id, status").eq("user_id", user.id)
           : Promise.resolve({ data: [] }),
         supabase.from("courses").select("id, title, order_num").order("order_num"),
         supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
+        supabase.from("lesson_content").select("lesson_id, summary, bible_texts, prayer_prompt"),
       ]);
       const { data: attendanceData } = attResult;
       const all = (eventsData ?? []) as Event[];
@@ -66,6 +69,12 @@ export default function UserAgendaTab() {
         });
       });
       setLessonsByIndex(ordered);
+      // Build lesson content map
+      const contentMap = new Map<string, LessonContentInfo>();
+      (lessonContentData ?? []).forEach((lc: any) => {
+        contentMap.set(lc.lesson_id, lc);
+      });
+      setLessonContentMap(contentMap);
       setLoading(false);
     }
     if (profile) fetch();
@@ -132,7 +141,7 @@ export default function UserAgendaTab() {
           {upcoming.length > 0 && (
             <div className="space-y-3">
               <p className="font-montserrat font-bold text-foreground text-sm">📌 Próximos eventos</p>
-              {upcoming.map(event => <EventCard key={event.id} event={event} linkedLesson={encontroLessonMap.get(event.id)} attendanceRecords={attendanceRecords} onCheckIn={handleCheckIn} />)}
+              {upcoming.map(event => <EventCard key={event.id} event={event} linkedLesson={encontroLessonMap.get(event.id)} lessonContent={encontroLessonMap.get(event.id) ? lessonContentMap.get(encontroLessonMap.get(event.id)!.id) : undefined} attendanceRecords={attendanceRecords} onCheckIn={handleCheckIn} />)}
             </div>
           )}
           {past.length > 0 && (
@@ -203,12 +212,13 @@ export default function UserAgendaTab() {
   );
 }
 
-function EventCard({ event, past = false, linkedLesson, attendanceRecords = [], onCheckIn }: { 
-  event: Event; past?: boolean; linkedLesson?: LessonInfo; 
+function EventCard({ event, past = false, linkedLesson, lessonContent, attendanceRecords = [], onCheckIn }: { 
+  event: Event; past?: boolean; linkedLesson?: LessonInfo; lessonContent?: LessonContentInfo;
   attendanceRecords?: AttendanceRecord[]; onCheckIn?: (eventId: string, status: "presente" | "faltou", justification?: string) => void;
 }) {
   const [showJustification, setShowJustification] = useState(false);
   const [justificationText, setJustificationText] = useState("");
+  const [showPrep, setShowPrep] = useState(false);
   const typeInfo = EVENT_TYPES[event.type] ?? EVENT_TYPES.evento;
   const dateObj = new Date(event.event_date);
   
@@ -253,6 +263,42 @@ function EventCard({ event, past = false, linkedLesson, attendanceRecords = [], 
               <p className="font-inter text-[10px] text-secondary font-medium truncate">
                 📖 Ligado ao Curso {linkedLesson.course_order} — Lição {linkedLesson.order_num}: {linkedLesson.title}
               </p>
+            </div>
+          )}
+          {/* Preparation section for upcoming encontros */}
+          {!past && linkedLesson && lessonContent && (lessonContent.summary || lessonContent.prayer_prompt || (lessonContent.bible_texts && lessonContent.bible_texts.length > 0)) && (
+            <div className="mt-2">
+              <button
+                onClick={() => setShowPrep(p => !p)}
+                className="flex items-center gap-1.5 text-primary font-inter text-[11px] font-semibold hover:underline"
+              >
+                {showPrep ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                📖 Preparação para o encontro
+              </button>
+              {showPrep && (
+                <div className="mt-2 space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-200 p-3 rounded-xl bg-muted/40 border border-border">
+                  {lessonContent.bible_texts && lessonContent.bible_texts.length > 0 && lessonContent.bible_texts[0] !== "" && (
+                    <div>
+                      <p className="font-inter text-[10px] font-bold text-foreground mb-1">📖 Conteúdo a estudar</p>
+                      {lessonContent.bible_texts.map((t, i) => (
+                        <p key={i} className="font-inter text-[11px] text-muted-foreground leading-relaxed">• {t}</p>
+                      ))}
+                    </div>
+                  )}
+                  {lessonContent.summary && (
+                    <div>
+                      <p className="font-inter text-[10px] font-bold text-foreground mb-1">📝 Resumo</p>
+                      <p className="font-inter text-[11px] text-muted-foreground leading-relaxed">{lessonContent.summary}</p>
+                    </div>
+                  )}
+                  {lessonContent.prayer_prompt && (
+                    <div>
+                      <p className="font-inter text-[10px] font-bold text-foreground mb-1">🙏 Preparação espiritual</p>
+                      <p className="font-inter text-[11px] text-muted-foreground leading-relaxed">{lessonContent.prayer_prompt}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
           {event.description && (
