@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   CalendarDays, Users, CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp,
   Star, BookOpen, FileText, Save, Church, Plus, MapPin, X as XIcon,
-  Heart, GraduationCap, MessageSquare,
+  Heart, GraduationCap, MessageSquare, ClipboardList,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -109,6 +109,7 @@ export default function AttendanceTab({ participants, activities, communities, i
   const [eventForm, setEventForm] = useState({
     title: "", description: "", event_date: "", location: "", type: "culto", area: "", community: "",
   });
+  const [reportEventId, setReportEventId] = useState<string | null>(null);
 
   useEffect(() => { fetchEvents(); fetchWorshipRequests(); }, []);
 
@@ -640,6 +641,15 @@ export default function AttendanceTab({ participants, activities, communities, i
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {isExpanded && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setReportEventId(event.id); }}
+                      className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors"
+                      title="Relatório do Encontro"
+                    >
+                      <ClipboardList className="w-3.5 h-3.5 text-primary" />
+                    </button>
+                  )}
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
                     className="w-7 h-7 rounded-lg bg-destructive/10 flex items-center justify-center hover:bg-destructive/20 transition-colors"
@@ -816,6 +826,114 @@ export default function AttendanceTab({ participants, activities, communities, i
           );
         })}
       </div>
+
+      {/* Meeting Report Modal */}
+      {reportEventId && (() => {
+        const event = events.find(e => e.id === reportEventId);
+        if (!event) return null;
+        const eventParticipants = getParticipantsForEvent(event);
+        const attMap = attendance[reportEventId] ?? {};
+        const evalMap = evaluations[reportEventId] ?? {};
+        const dateObj = new Date(event.event_date);
+
+        const presentes = eventParticipants.filter(p => attMap[p.user_id] === "presente");
+        const faltaram = eventParticipants.filter(p => attMap[p.user_id] === "faltou");
+        const justificaram = eventParticipants.filter(p => attMap[p.user_id] === "justificou");
+        const semRegistro = eventParticipants.filter(p => !attMap[p.user_id]);
+
+        const sections = [
+          { title: "✅ Presentes", list: presentes, color: "text-brand-green", bg: "bg-brand-green/10" },
+          { title: "❌ Faltaram", list: faltaram, color: "text-destructive", bg: "bg-destructive/10" },
+          { title: "⏰ Justificaram", list: justificaram, color: "text-accent-foreground", bg: "bg-accent/10" },
+          { title: "❓ Sem registro", list: semRegistro, color: "text-muted-foreground", bg: "bg-muted" },
+        ];
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60" onClick={() => setReportEventId(null)}>
+            <div
+              className="bg-background w-full max-w-lg max-h-[85vh] rounded-t-3xl sm:rounded-3xl overflow-y-auto shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="sticky top-0 z-10 bg-background border-b border-border px-5 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <ClipboardList className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-montserrat font-black text-foreground text-sm">Relatório do Encontro</p>
+                    <p className="text-muted-foreground font-inter text-xs">
+                      {event.title} · {format(dateObj, "d 'de' MMMM yyyy", { locale: ptBR })}
+                    </p>
+                  </div>
+                </div>
+                <button onClick={() => setReportEventId(null)} className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                  <XIcon className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
+
+              {/* Summary cards */}
+              <div className="px-5 py-4 grid grid-cols-4 gap-2">
+                <div className="bg-brand-green/10 rounded-xl p-3 text-center">
+                  <p className="font-montserrat font-black text-brand-green text-lg">{presentes.length}</p>
+                  <p className="text-[10px] font-inter text-brand-green">Presentes</p>
+                </div>
+                <div className="bg-destructive/10 rounded-xl p-3 text-center">
+                  <p className="font-montserrat font-black text-destructive text-lg">{faltaram.length}</p>
+                  <p className="text-[10px] font-inter text-destructive">Faltaram</p>
+                </div>
+                <div className="bg-accent/10 rounded-xl p-3 text-center">
+                  <p className="font-montserrat font-black text-accent-foreground text-lg">{justificaram.length}</p>
+                  <p className="text-[10px] font-inter text-accent-foreground">Justificaram</p>
+                </div>
+                <div className="bg-muted rounded-xl p-3 text-center">
+                  <p className="font-montserrat font-black text-muted-foreground text-lg">{semRegistro.length}</p>
+                  <p className="text-[10px] font-inter text-muted-foreground">Sem registro</p>
+                </div>
+              </div>
+
+              {/* Sections */}
+              <div className="px-5 pb-6 space-y-4">
+                {sections.map(sec => {
+                  if (sec.list.length === 0) return null;
+                  return (
+                    <div key={sec.title}>
+                      <p className={`font-montserrat font-bold text-sm mb-2 ${sec.color}`}>{sec.title} ({sec.list.length})</p>
+                      <div className="space-y-1.5">
+                        {sec.list.map(p => {
+                          const ev = evalMap[p.user_id];
+                          const hasNotes = ev?.notes && ev.notes.trim().length > 0;
+                          return (
+                            <div key={p.user_id} className={`${sec.bg} rounded-xl px-3 py-2.5`}>
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="font-inter font-medium text-foreground text-sm">{p.full_name}</p>
+                                  <p className="text-muted-foreground font-inter text-xs">{p.community}</p>
+                                </div>
+                                {ev?.participation_score && (
+                                  <div className="flex items-center gap-1">
+                                    <Star className="w-3 h-3 text-primary fill-primary" />
+                                    <span className="text-xs font-montserrat font-bold text-primary">
+                                      {Math.round(((ev.participation_score ?? 0) + (ev.understanding_score ?? 0) + (ev.engagement_score ?? 0)) / 3 * 10) / 10}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                              {hasNotes && (
+                                <p className="text-xs font-inter text-muted-foreground mt-1 italic">📝 {ev!.notes}</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
