@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { CalendarDays, MapPin, Users } from "lucide-react";
+import { CalendarDays, MapPin, Users, BookOpen } from "lucide-react";
 import WorshipConfirmation from "./WorshipConfirmation";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -18,6 +18,7 @@ type Event = {
 };
 
 type AttendanceRecord = { event_id: string; status: string };
+type LessonInfo = { id: string; title: string; order_num: number; course_title: string; course_order: number };
 
 const EVENT_TYPES: Record<string, { label: string; color: string; emoji: string }> = {
   encontro: { label: "Encontro", color: "bg-primary/10 text-primary", emoji: "📅" },
@@ -31,18 +32,22 @@ export default function UserAgendaTab() {
   const { profile } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [lessonsByIndex, setLessonsByIndex] = useState<LessonInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetch() {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-      const [{ data: eventsData }, { data: attendanceData }] = await Promise.all([
+      const [{ data: eventsData }, attResult, { data: coursesData }, { data: lessonsData }] = await Promise.all([
         supabase.from("events").select("*").order("event_date"),
         user
           ? supabase.from("attendance").select("event_id, status").eq("user_id", user.id)
           : Promise.resolve({ data: [] }),
+        supabase.from("courses").select("id, title, order_num").order("order_num"),
+        supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
       ]);
+      const { data: attendanceData } = attResult;
       const all = (eventsData ?? []) as Event[];
       const filtered = all.filter(e =>
         !e.area ||
@@ -51,12 +56,29 @@ export default function UserAgendaTab() {
       );
       setEvents(filtered);
       setAttendanceRecords((attendanceData ?? []) as AttendanceRecord[]);
+      // Build ordered lessons list for encontro mapping
+      const courses = coursesData ?? [];
+      const lessons = lessonsData ?? [];
+      const ordered: LessonInfo[] = [];
+      courses.forEach(c => {
+        lessons.filter(l => l.course_id === c.id).forEach(l => {
+          ordered.push({ id: l.id, title: l.title, order_num: l.order_num, course_title: c.title, course_order: c.order_num });
+        });
+      });
+      setLessonsByIndex(ordered);
       setLoading(false);
     }
     if (profile) fetch();
   }, [profile]);
 
   const now = new Date();
+  // Map encontro events to lesson by order
+  const encontroEvents = events.filter(e => e.type === "encontro").sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
+  const encontroLessonMap = new Map<string, LessonInfo>();
+  encontroEvents.forEach((e, i) => {
+    if (i < lessonsByIndex.length) encontroLessonMap.set(e.id, lessonsByIndex[i]);
+  });
+
   const upcoming = events.filter(e => new Date(e.event_date) >= now);
   const past = events.filter(e => new Date(e.event_date) < now);
 
@@ -93,14 +115,14 @@ export default function UserAgendaTab() {
           {upcoming.length > 0 && (
             <div className="space-y-3">
               <p className="font-montserrat font-bold text-foreground text-sm">📌 Próximos eventos</p>
-              {upcoming.map(event => <EventCard key={event.id} event={event} />)}
+              {upcoming.map(event => <EventCard key={event.id} event={event} linkedLesson={encontroLessonMap.get(event.id)} />)}
             </div>
           )}
           {past.length > 0 && (
             <div className="space-y-3">
               <p className="font-montserrat font-bold text-muted-foreground text-sm">Eventos anteriores</p>
               {past.slice(0, 3).map(event => (
-                <EventCard key={event.id} event={event} past />
+                <EventCard key={event.id} event={event} past linkedLesson={encontroLessonMap.get(event.id)} />
               ))}
             </div>
           )}
@@ -164,7 +186,7 @@ export default function UserAgendaTab() {
   );
 }
 
-function EventCard({ event, past = false }: { event: Event; past?: boolean }) {
+function EventCard({ event, past = false, linkedLesson }: { event: Event; past?: boolean; linkedLesson?: LessonInfo }) {
   const typeInfo = EVENT_TYPES[event.type] ?? EVENT_TYPES.evento;
   const dateObj = new Date(event.event_date);
 
@@ -197,6 +219,14 @@ function EventCard({ event, past = false }: { event: Event; past?: boolean }) {
               </span>
             )}
           </div>
+          {linkedLesson && (
+            <div className="flex items-center gap-1.5 mt-2 px-2.5 py-1.5 rounded-lg bg-secondary/10">
+              <BookOpen className="w-3.5 h-3.5 text-secondary flex-shrink-0" />
+              <p className="font-inter text-[10px] text-secondary font-medium truncate">
+                📖 Ligado ao Curso {linkedLesson.course_order} — Lição {linkedLesson.order_num}: {linkedLesson.title}
+              </p>
+            </div>
+          )}
           {event.description && (
             <p className="text-muted-foreground font-inter text-xs mt-1.5 leading-relaxed">{event.description}</p>
           )}
