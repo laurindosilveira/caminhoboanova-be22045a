@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Send, MessageSquare, Heart, BookOpen, ExternalLink, Eye, EyeOff, Trash2 } from "lucide-react";
+import { Send, MessageSquare, Heart, BookOpen, ExternalLink, Eye, EyeOff, Trash2, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,6 +23,7 @@ interface PrayerRequest {
   is_anonymous: boolean;
   amen_count: number;
   created_at: string;
+  status: string;
 }
 
 interface CommunitySettings {
@@ -220,6 +221,12 @@ export default function ClassroomTab() {
     setDeletingId(null);
   }
 
+  async function togglePrayerStatus(prayer: PrayerRequest) {
+    const newStatus = prayer.status === "respondido" ? "em_oracao" : "respondido";
+    await supabase.from("prayer_requests").update({ status: newStatus } as any).eq("id", prayer.id);
+    setPrayers(prev => prev.map(p => p.id === prayer.id ? { ...p, status: newStatus } : p));
+  }
+
   async function deleteChatMessage(id: string) {
     if (!confirm("Deseja excluir esta mensagem?")) return;
     setDeletingId(id);
@@ -336,25 +343,49 @@ export default function ClassroomTab() {
         ) : (
           <div className="space-y-2">
             {prayers.map((p) => (
-              <div key={p.id} className="bg-card border border-border rounded-2xl p-4">
+              <div key={p.id} className={`bg-card border rounded-2xl p-4 ${p.status === "respondido" ? "border-brand-green/30 bg-brand-green/5" : "border-border"}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-montserrat font-bold text-muted-foreground mb-1">
-                      {p.is_anonymous ? "Anônimo" : p.user_name}
-                      <span className="font-normal ml-1">· {timeAgo(p.created_at)}</span>
-                    </p>
-                    <p className="text-sm font-inter text-card-foreground leading-relaxed">{p.content}</p>
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="text-xs font-montserrat font-bold text-muted-foreground">
+                        {p.is_anonymous ? "Anônimo" : p.user_name}
+                        <span className="font-normal ml-1">· {timeAgo(p.created_at)}</span>
+                      </p>
+                      <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-inter font-semibold ${
+                        p.status === "respondido" 
+                          ? "bg-brand-green/15 text-brand-green" 
+                          : "bg-primary/10 text-primary"
+                      }`}>
+                        {p.status === "respondido" ? "✔ Respondido" : "🙏 Em oração"}
+                      </span>
+                    </div>
+                    <p className={`text-sm font-inter leading-relaxed ${p.status === "respondido" ? "text-muted-foreground" : "text-card-foreground"}`}>{p.content}</p>
                   </div>
-                  <button
-                    onClick={() => handleAmen(p)}
-                    disabled={amenLoading === p.id}
-                    className="flex flex-col items-center gap-0.5 flex-shrink-0 ml-2 group"
-                  >
-                    <Heart className="w-5 h-5 text-primary group-hover:fill-primary transition-all" />
-                    <span className="text-xs font-montserrat font-bold text-primary">
-                      {p.amen_count > 0 ? p.amen_count : "Amém"}
-                    </span>
-                  </button>
+                  <div className="flex flex-col items-center gap-1 flex-shrink-0 ml-2">
+                    <button
+                      onClick={() => handleAmen(p)}
+                      disabled={amenLoading === p.id}
+                      className="flex flex-col items-center gap-0.5 group"
+                    >
+                      <Heart className="w-5 h-5 text-primary group-hover:fill-primary transition-all" />
+                      <span className="text-xs font-montserrat font-bold text-primary">
+                        {p.amen_count > 0 ? p.amen_count : "Amém"}
+                      </span>
+                    </button>
+                    {p.user_id === myUserId && (
+                      <button
+                        onClick={() => togglePrayerStatus(p)}
+                        className={`p-1 rounded-lg transition-colors ${
+                          p.status === "respondido"
+                            ? "text-brand-green hover:bg-brand-green/10"
+                            : "text-muted-foreground hover:text-brand-green hover:bg-brand-green/10"
+                        }`}
+                        title={p.status === "respondido" ? "Voltar para em oração" : "Marcar como respondido"}
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                   {(p.user_id === myUserId || canModerate) && (
                     <button
                       onClick={() => deletePrayer(p.id)}

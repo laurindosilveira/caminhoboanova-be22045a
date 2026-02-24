@@ -705,6 +705,7 @@ export type Database = {
           created_at: string
           id: string
           is_anonymous: boolean
+          status: string
           user_id: string
           user_name: string
         }
@@ -715,6 +716,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_anonymous?: boolean
+          status?: string
           user_id: string
           user_name: string
         }
@@ -725,6 +727,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_anonymous?: boolean
+          status?: string
           user_id?: string
           user_name?: string
         }
