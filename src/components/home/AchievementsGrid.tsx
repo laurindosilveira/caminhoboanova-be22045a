@@ -42,6 +42,8 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
   const [devCount, setDevCount] = useState(0);
   const [worshipCount, setWorshipCount] = useState(0);
   const [attendanceCount, setAttendanceCount] = useState(0);
+  const [chatCount, setChatCount] = useState(0);
+  const [prayerCount, setPrayerCount] = useState(0);
 
   const fireCelebration = useCallback(() => {
     if (celebrationFired) return;
@@ -85,14 +87,18 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     async function fetchQualitative() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const [{ count: devC }, { count: worC }, { data: attD }] = await Promise.all([
+      const [{ count: devC }, { count: worC }, { data: attD }, { count: chatC }, { count: prayerC }] = await Promise.all([
         supabase.from("devotional_progress").select("id", { count: "exact", head: true }).eq("user_id", user.id),
         supabase.from("worship_attendance").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "aprovado"),
         supabase.from("attendance").select("event_id").eq("user_id", user.id).eq("status", "presente"),
+        supabase.from("community_chat").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+        supabase.from("prayer_requests").select("id", { count: "exact", head: true }).eq("user_id", user.id),
       ]);
       setDevCount(devC ?? 0);
       setWorshipCount(worC ?? 0);
       setAttendanceCount((attD ?? []).length);
+      setChatCount(chatC ?? 0);
+      setPrayerCount(prayerC ?? 0);
     }
     fetchQualitative();
   }, [profile]);
@@ -109,6 +115,11 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     { id: 10, icon: "🤝", title: "Serviço fiel", desc: "5 presenças em encontros", unlocked: attendanceCount >= 5, current: attendanceCount, target: 5 },
     { id: 11, icon: "📖", title: "Leitura bíblica", desc: "20 devocionais completos", unlocked: devCount >= 20, current: devCount, target: 20 },
     { id: 12, icon: "⛪", title: "Adorador", desc: "5 cultos confirmados", unlocked: worshipCount >= 5, current: worshipCount, target: 5 },
+    // Conquistas de comunidade
+    { id: 13, icon: "👥", title: "Participou do encontro", desc: "3 presenças em encontros", unlocked: attendanceCount >= 3, current: attendanceCount, target: 3 },
+    { id: 14, icon: "🎤", title: "Compartilhou testemunho", desc: "5 mensagens no chat", unlocked: chatCount >= 5, current: chatCount, target: 5 },
+    { id: 15, icon: "🙏", title: "Intercessor", desc: "3 pedidos de oração", unlocked: prayerCount >= 3, current: prayerCount, target: 3 },
+    { id: 16, icon: "💬", title: "Voz ativa", desc: "20 mensagens no chat", unlocked: chatCount >= 20, current: chatCount, target: 20 },
     // Conquistas surpresa
     { id: 7, icon: "🛡️", title: "Guardião da Fé", desc: "14 dias seguidos de dedicação!", unlocked: streakDays >= 14, current: streakDays, target: 14, secret: true },
     { id: 8, icon: "👁️‍🗨️", title: "Constância Invisível", desc: "30 dias seguidos — lendário!", unlocked: streakDays >= 30, current: streakDays, target: 30, secret: true },
