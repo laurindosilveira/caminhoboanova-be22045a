@@ -49,6 +49,7 @@ export type Database = {
           created_at: string
           event_id: string
           id: string
+          justification: string | null
           status: string
           user_id: string
         }
@@ -56,6 +57,7 @@ export type Database = {
           created_at?: string
           event_id: string
           id?: string
+          justification?: string | null
           status?: string
           user_id: string
         }
@@ -63,6 +65,7 @@ export type Database = {
           created_at?: string
           event_id?: string
           id?: string
+          justification?: string | null
           status?: string
           user_id?: string
         }

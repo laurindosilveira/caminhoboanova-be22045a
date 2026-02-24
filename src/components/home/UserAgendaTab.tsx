@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { CalendarDays, MapPin, Users, BookOpen } from "lucide-react";
@@ -82,15 +82,16 @@ export default function UserAgendaTab() {
   const upcoming = events.filter(e => new Date(e.event_date) >= now);
   const past = events.filter(e => new Date(e.event_date) < now);
 
-  async function handleCheckIn(eventId: string, status: "presente" | "faltou") {
+  async function handleCheckIn(eventId: string, status: "presente" | "faltou", justification?: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    // Upsert: if already exists, update
+    const payload: any = { status };
+    if (justification) payload.justification = justification;
     const existing = attendanceRecords.find(a => a.event_id === eventId);
     if (existing) {
-      await supabase.from("attendance").update({ status }).eq("event_id", eventId).eq("user_id", user.id);
+      await supabase.from("attendance").update(payload).eq("event_id", eventId).eq("user_id", user.id);
     } else {
-      await supabase.from("attendance").insert({ event_id: eventId, user_id: user.id, status });
+      await supabase.from("attendance").insert({ event_id: eventId, user_id: user.id, ...payload });
     }
     setAttendanceRecords(prev => {
       const filtered = prev.filter(a => a.event_id !== eventId);
@@ -204,8 +205,10 @@ export default function UserAgendaTab() {
 
 function EventCard({ event, past = false, linkedLesson, attendanceRecords = [], onCheckIn }: { 
   event: Event; past?: boolean; linkedLesson?: LessonInfo; 
-  attendanceRecords?: AttendanceRecord[]; onCheckIn?: (eventId: string, status: "presente" | "faltou") => void;
+  attendanceRecords?: AttendanceRecord[]; onCheckIn?: (eventId: string, status: "presente" | "faltou", justification?: string) => void;
 }) {
+  const [showJustification, setShowJustification] = useState(false);
+  const [justificationText, setJustificationText] = useState("");
   const typeInfo = EVENT_TYPES[event.type] ?? EVENT_TYPES.evento;
   const dateObj = new Date(event.event_date);
   
@@ -271,21 +274,44 @@ function EventCard({ event, past = false, linkedLesson, attendanceRecords = [], 
                   </p>
                 </div>
               ) : (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => onCheckIn(event.id, "presente")}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors"
-                  >
-                    <span className="text-sm">📍</span>
-                    <span className="font-inter text-xs font-semibold">Cheguei</span>
-                  </button>
-                  <button
-                    onClick={() => onCheckIn(event.id, "faltou")}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
-                  >
-                    <span className="text-sm">❌</span>
-                    <span className="font-inter text-xs font-semibold">Não compareci</span>
-                  </button>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => onCheckIn(event.id, "presente")}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors"
+                    >
+                      <span className="text-sm">📍</span>
+                      <span className="font-inter text-xs font-semibold">Cheguei</span>
+                    </button>
+                    <button
+                      onClick={() => setShowJustification(prev => !prev)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl transition-colors ${showJustification ? "bg-destructive/20 text-destructive" : "bg-destructive/10 text-destructive hover:bg-destructive/20"}`}
+                    >
+                      <span className="text-sm">❌</span>
+                      <span className="font-inter text-xs font-semibold">Não compareci</span>
+                    </button>
+                  </div>
+                  {showJustification && (
+                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <textarea
+                        value={justificationText}
+                        onChange={e => setJustificationText(e.target.value)}
+                        placeholder="Não poderei participar por…"
+                        className="w-full rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs font-inter text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                        rows={2}
+                        maxLength={300}
+                      />
+                      <button
+                        onClick={() => {
+                          onCheckIn(event.id, "faltou", justificationText || undefined);
+                          setShowJustification(false);
+                        }}
+                        className="w-full py-2 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors font-inter text-xs font-semibold"
+                      >
+                        Confirmar ausência
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
