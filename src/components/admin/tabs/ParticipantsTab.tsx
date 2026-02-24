@@ -1,13 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Search, ChevronDown, Filter, Users, CheckCircle, Clock, BookOpen,
-  GraduationCap, CalendarDays, Zap, ChevronLeft, Phone, MapPin, Calendar, Star
+  GraduationCap, CalendarDays, Zap, ChevronLeft, Phone, MapPin, Calendar, Star, AlertTriangle
 } from "lucide-react";
 
 type Activity = { id: string; type: string; title: string; points: number; order_num: number; subtitle: string | null };
 type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
+};
+
+type StatusReason = {
+  icon: string;
+  label: string;
+  severity: "high" | "medium" | "low";
 };
 
 const ACTIVITY_TYPES = [
@@ -196,6 +203,99 @@ export default function ParticipantsTab({ participants, activities, communities 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("todos");
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
 
+  const [statusReasons, setStatusReasons] = useState<Record<string, StatusReason[]>>({});
+
+  // Fetch objective status reasons from DB
+  useEffect(() => {
+    async function fetchReasons() {
+      const userIds = participants.map(p => p.user_id);
+      if (userIds.length === 0) return;
+
+      const now = new Date();
+      const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+      const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
+
+      const [{ data: devData }, { data: attData }, { data: planData }, { data: assessData }] = await Promise.all([
+        supabase.from("devotional_progress").select("user_id, completed_at").in("user_id", userIds),
+        supabase.from("attendance").select("user_id, status, created_at").in("user_id", userIds).order("created_at", { ascending: false }),
+        supabase.from("discipleship_plans").select("user_id, health_status, is_priority").in("user_id", userIds),
+        supabase.from("spiritual_assessments").select("user_id, needs_pastor, prayer_score, presence_score, month, year")
+          .in("user_id", userIds).eq("month", now.getMonth() + 1).eq("year", now.getFullYear()),
+      ]);
+
+      // Last devotional per user
+      const lastDev: Record<string, Date> = {};
+      (devData ?? []).forEach(d => {
+        const dt = new Date(d.completed_at);
+        if (!lastDev[d.user_id] || dt > lastDev[d.user_id]) lastDev[d.user_id] = dt;
+      });
+
+      // Consecutive absences per user
+      const userAtt: Record<string, string[]> = {};
+      (attData ?? []).forEach(a => {
+        if (!userAtt[a.user_id]) userAtt[a.user_id] = [];
+        userAtt[a.user_id].push(a.status);
+      });
+
+      const planMap: Record<string, { health_status: string; is_priority: boolean }> = {};
+      (planData ?? []).forEach(p => { planMap[p.user_id] = { health_status: p.health_status, is_priority: p.is_priority ?? false }; });
+
+      const assessMap: Record<string, any> = {};
+      (assessData ?? []).forEach(a => { assessMap[a.user_id] = a; });
+
+      const reasons: Record<string, StatusReason[]> = {};
+
+      participants.forEach(p => {
+        const r: StatusReason[] = [];
+
+        // Consecutive absences
+        const statuses = userAtt[p.user_id] ?? [];
+        let consecutive = 0;
+        for (const s of statuses) {
+          if (s !== "presente") consecutive++;
+          else break;
+        }
+        if (consecutive >= 3) r.push({ icon: "📅", label: `${consecutive} faltas seguidas`, severity: "high" });
+        else if (consecutive === 2) r.push({ icon: "📅", label: "2 faltas seguidas", severity: "medium" });
+
+        // Devotional inactivity
+        const last = lastDev[p.user_id];
+        if (!last) {
+          r.push({ icon: "📖", label: "Nunca fez devocional", severity: "high" });
+        } else if (last < fourteenDaysAgo) {
+          const days = Math.floor((now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
+          r.push({ icon: "📖", label: `Sem devocional há ${days} dias`, severity: "high" });
+        } else if (last < tenDaysAgo) {
+          const days = Math.floor((now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
+          r.push({ icon: "📖", label: `Sem devocional há ${days} dias`, severity: "medium" });
+        }
+
+        // Needs pastor
+        if (assessMap[p.user_id]?.needs_pastor) {
+          r.push({ icon: "🙏", label: "Pediu ajuda pastoral", severity: "high" });
+        }
+
+        // Health status
+        const plan = planMap[p.user_id];
+        if (plan?.health_status === "critico") {
+          r.push({ icon: "🚨", label: "Status crítico", severity: "high" });
+        } else if (plan?.is_priority) {
+          r.push({ icon: "⚠️", label: "Prioridade pastoral", severity: "medium" });
+        }
+
+        // Low activity progress
+        if (activities.length > 0 && p.completed_count === 0) {
+          r.push({ icon: "😴", label: "Nenhuma atividade concluída", severity: "medium" });
+        }
+
+        if (r.length > 0) reasons[p.user_id] = r;
+      });
+
+      setStatusReasons(reasons);
+    }
+    fetchReasons();
+  }, [participants, activities]);
+
   if (selectedParticipant) {
     return <ParticipantDetail participant={selectedParticipant} activities={activities} onBack={() => setSelectedParticipant(null)} />;
   }
@@ -308,6 +408,23 @@ export default function ParticipantsTab({ participants, activities, communities 
                       }} />
                     </div>
                   </div>
+                  {/* Status reasons */}
+                  {statusReasons[p.user_id] && statusReasons[p.user_id].length > 0 && (
+                    <div className="mt-2.5 flex flex-wrap gap-1.5">
+                      {statusReasons[p.user_id].map((reason, idx) => (
+                        <span
+                          key={idx}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-inter font-medium ${
+                            reason.severity === "high"
+                              ? "bg-destructive/10 text-destructive"
+                              : "bg-accent/20 text-accent-foreground"
+                          }`}
+                        >
+                          {reason.icon} {reason.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </button>
             );
