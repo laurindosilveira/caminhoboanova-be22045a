@@ -338,51 +338,6 @@ export default function DiscipleshipTab() {
         <p className="text-center text-muted-foreground font-inter text-xs mt-1.5">{completedActs}/{totalActs} atividades concluídas · {pct}%</p>
       </SectionCard>
 
-      {/* ── HISTÓRICO DE PRESENÇA ────────────────── */}
-      {recentEvents.length > 0 && (
-        <SectionCard icon={<CalendarDays className="w-4 h-4 text-secondary" />} title="Histórico de Presença">
-          <div className="space-y-2">
-            {recentEvents.slice(0, 8).map((evt) => {
-              const record = attendanceRecords.find(a => a.event_id === evt.id);
-              const status = record?.status;
-              const statusCfg = {
-                presente: { icon: "🟢", label: "Presente", cls: "text-brand-green bg-brand-green/10" },
-                faltou: { icon: "🔴", label: "Faltou", cls: "text-destructive bg-destructive/10" },
-                justificou: { icon: "🟡", label: "Justificou", cls: "text-accent-foreground bg-accent/20" },
-              }[status ?? ""] ?? { icon: "⚪", label: "Sem registro", cls: "text-muted-foreground bg-muted" };
-
-              const date = new Date(evt.event_date);
-              const dateStr = date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
-
-              return (
-                <div key={evt.id} className="flex items-center gap-3 py-2 px-3 rounded-xl bg-muted/30">
-                  <span className="text-base">{statusCfg.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-inter text-sm text-foreground truncate">{evt.title}</p>
-                    <p className="font-inter text-[10px] text-muted-foreground">{dateStr}</p>
-                  </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-inter font-semibold ${statusCfg.cls}`}>
-                    {statusCfg.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          {(() => {
-            const total = recentEvents.filter(e => attendanceRecords.some(a => a.event_id === e.id)).length;
-            const present = attendanceRecords.filter(a => a.status === "presente").length;
-            const rate = total > 0 ? Math.round((present / total) * 100) : 0;
-            return total > 0 ? (
-              <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
-                <span className="font-inter text-xs text-muted-foreground">Taxa de presença</span>
-                <span className={`font-montserrat font-bold text-sm ${rate >= 70 ? "text-brand-green" : rate >= 40 ? "text-accent-foreground" : "text-destructive"}`}>
-                  {rate}%
-                </span>
-              </div>
-            ) : null;
-          })()}
-        </SectionCard>
-      )}
 
       {/* ── PRESENÇA EM CULTOS ────────────────────── */}
       <WorshipConfirmation />

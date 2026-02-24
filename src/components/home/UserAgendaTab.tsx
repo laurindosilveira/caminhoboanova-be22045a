@@ -16,6 +16,8 @@ type Event = {
   type: string;
 };
 
+type AttendanceRecord = { event_id: string; status: string };
+
 const EVENT_TYPES: Record<string, { label: string; color: string; emoji: string }> = {
   encontro: { label: "Encontro", color: "bg-primary/10 text-primary", emoji: "📅" },
   culto:    { label: "Culto",    color: "bg-brand-green/10 text-brand-green", emoji: "⛪" },
@@ -27,23 +29,27 @@ const EVENT_TYPES: Record<string, { label: string; color: string; emoji: string 
 export default function UserAgendaTab() {
   const { profile } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetch() {
       setLoading(true);
-      const { data } = await supabase
-        .from("events")
-        .select("*")
-        .order("event_date");
-      // Filter to show events for user's area/community or general events
-      const all = (data ?? []) as Event[];
+      const { data: { user } } = await supabase.auth.getUser();
+      const [{ data: eventsData }, { data: attendanceData }] = await Promise.all([
+        supabase.from("events").select("*").order("event_date"),
+        user
+          ? supabase.from("attendance").select("event_id, status").eq("user_id", user.id)
+          : Promise.resolve({ data: [] }),
+      ]);
+      const all = (eventsData ?? []) as Event[];
       const filtered = all.filter(e =>
         !e.area ||
         e.area === profile?.area ||
         e.community === profile?.community
       );
       setEvents(filtered);
+      setAttendanceRecords((attendanceData ?? []) as AttendanceRecord[]);
       setLoading(false);
     }
     if (profile) fetch();
@@ -52,6 +58,11 @@ export default function UserAgendaTab() {
   const now = new Date();
   const upcoming = events.filter(e => new Date(e.event_date) >= now);
   const past = events.filter(e => new Date(e.event_date) < now);
+
+  // Attendance history: past events only
+  const pastEvents = events
+    .filter(e => new Date(e.event_date) < now)
+    .sort((a, b) => new Date(b.event_date).getTime() - new Date(a.event_date).getTime());
 
   return (
     <div className="px-5 pt-5 pb-4 space-y-5">
@@ -93,6 +104,57 @@ export default function UserAgendaTab() {
             </div>
           )}
         </>
+      )}
+
+      {/* ── HISTÓRICO DE PRESENÇA ────────────────── */}
+      {pastEvents.length > 0 && (
+        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="px-4 py-3 flex items-center gap-2.5 border-b border-border bg-muted/30">
+            <CalendarDays className="w-4 h-4 text-secondary" />
+            <p className="font-montserrat font-bold text-foreground text-sm">Histórico de Presença</p>
+          </div>
+          <div className="p-4 space-y-2">
+            {pastEvents.slice(0, 8).map((evt) => {
+              const record = attendanceRecords.find(a => a.event_id === evt.id);
+              const status = record?.status;
+              const statusCfg = {
+                presente: { icon: "🟢", label: "Presente", cls: "text-brand-green bg-brand-green/10" },
+                faltou: { icon: "🔴", label: "Faltou", cls: "text-destructive bg-destructive/10" },
+                justificou: { icon: "🟡", label: "Justificou", cls: "text-accent-foreground bg-accent/20" },
+              }[status ?? ""] ?? { icon: "⚪", label: "Sem registro", cls: "text-muted-foreground bg-muted" };
+
+              const date = new Date(evt.event_date);
+              const dateStr = date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+
+              return (
+                <div key={evt.id} className="flex items-center gap-3 py-2 px-3 rounded-xl bg-muted/30">
+                  <span className="text-base">{statusCfg.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-inter text-sm text-foreground truncate">{evt.title}</p>
+                    <p className="font-inter text-[10px] text-muted-foreground">{dateStr}</p>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-inter font-semibold ${statusCfg.cls}`}>
+                    {statusCfg.label}
+                  </span>
+                </div>
+              );
+            })}
+
+            {(() => {
+              const total = pastEvents.filter(e => attendanceRecords.some(a => a.event_id === e.id)).length;
+              const present = attendanceRecords.filter(a => a.status === "presente").length;
+              const rate = total > 0 ? Math.round((present / total) * 100) : 0;
+              return total > 0 ? (
+                <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
+                  <span className="font-inter text-xs text-muted-foreground">Taxa de presença</span>
+                  <span className={`font-montserrat font-bold text-sm ${rate >= 70 ? "text-brand-green" : rate >= 40 ? "text-accent-foreground" : "text-destructive"}`}>
+                    {rate}%
+                  </span>
+                </div>
+              ) : null;
+            })()}
+          </div>
+        </div>
       )}
     </div>
   );
