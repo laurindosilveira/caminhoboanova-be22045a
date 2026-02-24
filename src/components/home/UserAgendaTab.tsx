@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { CalendarDays, MapPin, Users } from "lucide-react";
+import WorshipConfirmation from "./WorshipConfirmation";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -156,6 +157,9 @@ export default function UserAgendaTab() {
           </div>
         </div>
       )}
+
+      {/* ── CONFIRMAÇÃO DE PRESENÇA EM EVENTOS ──── */}
+      <WorshipConfirmation />
     </div>
   );
 }
