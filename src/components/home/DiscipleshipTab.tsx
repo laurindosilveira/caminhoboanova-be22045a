@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import JourneyLessonView from "@/components/home/JourneyLessonView";
 import LessonChoiceView from "@/components/home/LessonChoiceView";
-import WorshipConfirmation from "@/components/home/WorshipConfirmation";
+
 import { toast } from "sonner";
 
 // ─── Types ───────────────────────────────────────────────
@@ -339,8 +339,6 @@ export default function DiscipleshipTab() {
       </SectionCard>
 
 
-      {/* ── PRESENÇA EM CULTOS ────────────────────── */}
-      <WorshipConfirmation />
 
       {/* ── AUTOAVALIAÇÃO ────────────────────────── */}
       <SectionCard icon={<Heart className="w-4 h-4 text-primary" />} title={`Autoavaliação — ${MONTH_NAMES[month-1]}`}>
