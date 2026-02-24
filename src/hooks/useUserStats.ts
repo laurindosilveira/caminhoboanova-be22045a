@@ -66,13 +66,14 @@ export function useUserStats(): UserStats {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setStats(s => ({ ...s, loading: false })); return; }
 
-      const [{ data: activities }, { data: progress }, { data: devProgress }, { data: lessonResponses }, { data: attendance }, { data: worshipData }] = await Promise.all([
+      const [{ data: activities }, { data: progress }, { data: devProgress }, { data: lessonResponses }, { data: attendance }, { data: worshipData }, { data: achievementUnlocks }] = await Promise.all([
         supabase.from("activities").select("id, type, title, subtitle, order_num, points").order("order_num"),
         supabase.from("user_progress").select("activity_id, completed_at").eq("user_id", user.id),
         supabase.from("devotional_progress").select("devotional_id, completed_at").eq("user_id", user.id),
         supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
         supabase.from("attendance").select("event_id, status").eq("user_id", user.id),
         supabase.from("worship_attendance").select("id, status").eq("user_id", user.id).eq("status", "aprovado"),
+        supabase.from("achievement_unlocks").select("achievement_key, bonus_points").eq("user_id", user.id),
       ]);
 
       const acts = activities ?? [];
@@ -92,7 +93,8 @@ export function useUserStats(): UserStats {
       const lessonStudyPoints = new Set((lessonResponses ?? []).map(r => r.lesson_id)).size * 20;
       const attendancePoints = (attendance ?? []).filter(a => a.status === "presente").length * 10;
       const worshipPoints = (worshipData ?? []).length * 5;
-      const faithPoints = activityPoints + devotionalPoints + lessonStudyPoints + attendancePoints + worshipPoints;
+      const achievementBonusPoints = (achievementUnlocks ?? []).reduce((sum, a) => sum + (a.bonus_points ?? 0), 0);
+      const faithPoints = activityPoints + devotionalPoints + lessonStudyPoints + attendancePoints + worshipPoints + achievementBonusPoints;
 
       const faithLevel = calculateLevel(faithPoints);
       const streakDays = calculateStreak(allDates);
