@@ -47,6 +47,7 @@ export default function JourneyPath() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
   const [fullyCompletedLessonIds, setFullyCompletedLessonIds] = useState<Set<string>>(new Set());
+  const [unlockedCourseIds, setUnlockedCourseIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
   const [integrated, setIntegrated] = useState<IntegratedStats>({
@@ -73,6 +74,7 @@ export default function JourneyPath() {
       { data: events },
       { data: attendance },
       { data: worship },
+      { data: unlocksData },
     ] = await Promise.all([
       supabase.from("courses").select("*").order("order_num"),
       supabase.from("lessons").select("id, title, order_num, objective, course_id").order("order_num"),
@@ -82,6 +84,7 @@ export default function JourneyPath() {
       supabase.from("events").select("id").gte("event_date", new Date(Date.now() - 90 * 86400000).toISOString()),
       supabase.from("attendance").select("event_id, status").eq("user_id", user.id),
       supabase.from("worship_attendance").select("id, status").eq("user_id", user.id).eq("status", "aprovado"),
+      supabase.from("course_unlocks").select("course_id"),
     ]);
 
     const lessons = lessonsData ?? [];
@@ -112,6 +115,7 @@ export default function JourneyPath() {
       lessons: lessons.filter(l => l.course_id === c.id),
     }));
     setCourses(courseList);
+    setUnlockedCourseIds(new Set((unlocksData ?? []).map((u: any) => u.course_id)));
     if (courseList.length > 0) setExpandedCourse(courseList[0].id);
 
     // Integrated stats
@@ -256,46 +260,61 @@ export default function JourneyPath() {
 
           {courses.map((course) => {
             const isOpen = expandedCourse === course.id;
+            const isCourseUnlocked = unlockedCourseIds.has(course.id);
             const doneLessons = course.lessons.filter(l => fullyCompletedLessonIds.has(l.id)).length;
             const totalLessons = course.lessons.length;
             const coursePct = totalLessons > 0 ? Math.round((doneLessons / totalLessons) * 100) : 0;
 
             return (
-              <div key={course.id} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+              <div key={course.id} className={`bg-card rounded-2xl border shadow-sm overflow-hidden ${
+                isCourseUnlocked ? "border-border" : "border-border opacity-75"
+              }`}>
                 {/* Course header */}
                 <button
-                  onClick={() => setExpandedCourse(isOpen ? null : course.id)}
-                  className="w-full flex items-center gap-3 p-4 text-left"
+                  onClick={() => isCourseUnlocked ? setExpandedCourse(isOpen ? null : course.id) : null}
+                  className={`w-full flex items-center gap-3 p-4 text-left ${!isCourseUnlocked ? "cursor-default" : ""}`}
                 >
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "var(--gradient-hero)" }}>
-                    <span className="font-montserrat font-black text-primary-foreground text-sm">#{course.order_num}</span>
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                    isCourseUnlocked ? "" : "bg-muted"
+                  }`} style={isCourseUnlocked ? { background: "var(--gradient-hero)" } : {}}>
+                    {isCourseUnlocked
+                      ? <span className="font-montserrat font-black text-primary-foreground text-sm">#{course.order_num}</span>
+                      : <Lock className="w-4 h-4 text-muted-foreground" />
+                    }
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-montserrat font-bold text-foreground text-sm">{course.title}</p>
-                    {course.subtitle && <p className="text-muted-foreground font-inter text-xs truncate">{course.subtitle}</p>}
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{
-                            width: `${coursePct}%`,
-                            background: coursePct === 100 ? "var(--gradient-green)" : "var(--gradient-hero)",
-                          }}
-                        />
-                      </div>
-                      <span className={`font-inter text-[10px] font-semibold flex-shrink-0 ${coursePct === 100 ? "text-brand-green" : "text-muted-foreground"}`}>
-                        {doneLessons}/{totalLessons}
-                      </span>
-                    </div>
+                    {isCourseUnlocked ? (
+                      <>
+                        {course.subtitle && <p className="text-muted-foreground font-inter text-xs truncate">{course.subtitle}</p>}
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{
+                                width: `${coursePct}%`,
+                                background: coursePct === 100 ? "var(--gradient-green)" : "var(--gradient-hero)",
+                              }}
+                            />
+                          </div>
+                          <span className={`font-inter text-[10px] font-semibold flex-shrink-0 ${coursePct === 100 ? "text-brand-green" : "text-muted-foreground"}`}>
+                            {doneLessons}/{totalLessons}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground font-inter text-xs mt-0.5">🔒 Curso ainda não liberado pelo líder</p>
+                    )}
                   </div>
-                  {isOpen
-                    ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                    : <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                  }
+                  {isCourseUnlocked && (
+                    isOpen
+                      ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                      : <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                  )}
                 </button>
 
                 {/* Lessons list */}
-                {isOpen && (
+                {isOpen && isCourseUnlocked && (
                   <div className="border-t border-border">
                     {course.lessons.length === 0 ? (
                       <p className="px-4 py-3 text-muted-foreground font-inter text-xs text-center">Nenhuma lição cadastrada ainda.</p>

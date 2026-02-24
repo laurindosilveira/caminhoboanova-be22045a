@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  Heart, ChevronLeft, AlertCircle, Star, Search, Filter, LayoutGrid, List, Users
+  Heart, ChevronLeft, AlertCircle, Star, Search, Filter, LayoutGrid, List, Users, Lock, Unlock, GraduationCap
 } from "lucide-react";
 import ParticipantSheet, { HealthBadge } from "./ParticipantSheet";
 import type { Participant, Activity } from "./ParticipantSheet";
+import { useAuth } from "@/contexts/AuthContext";
 
 const HEALTH_CFG = {
   saudavel: { label: "🟢 Saudável", bg: "bg-brand-green/10", text: "text-brand-green" },
@@ -23,6 +24,7 @@ type ViewMode = "list" | "table";
 type StatusFilter = "all" | "saudavel" | "atencao" | "critico" | "pastor" | "priority";
 
 export default function AdminDiscipleshipTab({ participants, activities, initialParticipant, onClearInitial }: Props) {
+  const { profile } = useAuth();
   const [selected, setSelected] = useState<Participant | null>(initialParticipant ?? null);
   const [plans, setPlans] = useState<Record<string, { health_status: string; needs_pastor?: boolean; is_priority?: boolean }>>({});
   const [search, setSearch] = useState("");
@@ -30,6 +32,39 @@ export default function AdminDiscipleshipTab({ participants, activities, initial
   const [communityFilter, setCommunityFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [attendanceMap, setAttendanceMap] = useState<Record<string, { present: number; total: number }>>({});
+  const [courses, setCourses] = useState<{ id: string; title: string; order_num: number }[]>([]);
+  const [unlockedCourseIds, setUnlockedCourseIds] = useState<Set<string>>(new Set());
+  const [unlockLoading, setUnlockLoading] = useState<string | null>(null);
+
+  const myArea = profile?.area ?? "";
+
+  useEffect(() => {
+    fetchCourseUnlocks();
+  }, [myArea]);
+
+  async function fetchCourseUnlocks() {
+    const [{ data: coursesData }, { data: unlocksData }] = await Promise.all([
+      supabase.from("courses").select("id, title, order_num").order("order_num"),
+      supabase.from("course_unlocks").select("course_id, area").eq("area", myArea),
+    ]);
+    setCourses(coursesData ?? []);
+    setUnlockedCourseIds(new Set((unlocksData ?? []).map((u: any) => u.course_id)));
+  }
+
+  async function toggleCourseUnlock(courseId: string) {
+    setUnlockLoading(courseId);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setUnlockLoading(null); return; }
+
+    if (unlockedCourseIds.has(courseId)) {
+      await supabase.from("course_unlocks").delete().eq("course_id", courseId).eq("area", myArea);
+      setUnlockedCourseIds(prev => { const n = new Set(prev); n.delete(courseId); return n; });
+    } else {
+      await supabase.from("course_unlocks").insert({ course_id: courseId, area: myArea, unlocked_by: user.id } as any);
+      setUnlockedCourseIds(prev => new Set(prev).add(courseId));
+    }
+    setUnlockLoading(null);
+  }
 
   useEffect(() => {
     if (initialParticipant) { setSelected(initialParticipant); onClearInitial?.(); }
@@ -99,6 +134,58 @@ export default function AdminDiscipleshipTab({ participants, activities, initial
 
   return (
     <div className="space-y-4">
+      {/* Course Unlock Management */}
+      {courses.length > 0 && (
+        <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <GraduationCap className="w-4 h-4 text-secondary" />
+            <p className="font-montserrat font-bold text-foreground text-sm">Liberação de Cursos</p>
+          </div>
+          <p className="font-inter text-xs text-muted-foreground mb-3">
+            Libere os cursos que sua turma poderá acessar. Cursos bloqueados ficam visíveis mas inacessíveis.
+          </p>
+          <div className="space-y-2">
+            {courses.map(c => {
+              const isUnlocked = unlockedCourseIds.has(c.id);
+              const loading = unlockLoading === c.id;
+              return (
+                <div key={c.id} className={`flex items-center justify-between gap-3 p-3 rounded-xl border transition-colors ${
+                  isUnlocked ? "border-brand-green/30 bg-brand-green/5" : "border-border bg-muted/30"
+                }`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      isUnlocked ? "bg-brand-green/15" : "bg-muted"
+                    }`}>
+                      {isUnlocked
+                        ? <Unlock className="w-4 h-4 text-brand-green" />
+                        : <Lock className="w-4 h-4 text-muted-foreground" />
+                      }
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-montserrat font-bold text-foreground text-sm">Curso {c.order_num} — {c.title}</p>
+                      <p className="font-inter text-[10px] text-muted-foreground">
+                        {isUnlocked ? "✅ Liberado para a turma" : "🔒 Bloqueado"}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => toggleCourseUnlock(c.id)}
+                    disabled={loading}
+                    className={`px-3 py-1.5 rounded-lg font-inter text-xs font-semibold transition-colors flex-shrink-0 ${
+                      isUnlocked
+                        ? "bg-destructive/10 text-destructive hover:bg-destructive/20"
+                        : "bg-brand-green/10 text-brand-green hover:bg-brand-green/20"
+                    } disabled:opacity-40`}
+                  >
+                    {loading ? "..." : isUnlocked ? "Bloquear" : "Liberar"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Summary */}
       <div className="grid grid-cols-3 gap-2">
         {[
