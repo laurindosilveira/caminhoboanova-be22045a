@@ -82,6 +82,22 @@ export default function UserAgendaTab() {
   const upcoming = events.filter(e => new Date(e.event_date) >= now);
   const past = events.filter(e => new Date(e.event_date) < now);
 
+  async function handleCheckIn(eventId: string, status: "presente" | "faltou") {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    // Upsert: if already exists, update
+    const existing = attendanceRecords.find(a => a.event_id === eventId);
+    if (existing) {
+      await supabase.from("attendance").update({ status }).eq("event_id", eventId).eq("user_id", user.id);
+    } else {
+      await supabase.from("attendance").insert({ event_id: eventId, user_id: user.id, status });
+    }
+    setAttendanceRecords(prev => {
+      const filtered = prev.filter(a => a.event_id !== eventId);
+      return [...filtered, { event_id: eventId, status }];
+    });
+  }
+
   // Attendance history: past events only
   const pastEvents = events
     .filter(e => new Date(e.event_date) < now)
@@ -115,14 +131,14 @@ export default function UserAgendaTab() {
           {upcoming.length > 0 && (
             <div className="space-y-3">
               <p className="font-montserrat font-bold text-foreground text-sm">📌 Próximos eventos</p>
-              {upcoming.map(event => <EventCard key={event.id} event={event} linkedLesson={encontroLessonMap.get(event.id)} />)}
+              {upcoming.map(event => <EventCard key={event.id} event={event} linkedLesson={encontroLessonMap.get(event.id)} attendanceRecords={attendanceRecords} onCheckIn={handleCheckIn} />)}
             </div>
           )}
           {past.length > 0 && (
             <div className="space-y-3">
               <p className="font-montserrat font-bold text-muted-foreground text-sm">Eventos anteriores</p>
               {past.slice(0, 3).map(event => (
-                <EventCard key={event.id} event={event} past linkedLesson={encontroLessonMap.get(event.id)} />
+                <EventCard key={event.id} event={event} past linkedLesson={encontroLessonMap.get(event.id)} attendanceRecords={attendanceRecords} onCheckIn={handleCheckIn} />
               ))}
             </div>
           )}
@@ -186,9 +202,18 @@ export default function UserAgendaTab() {
   );
 }
 
-function EventCard({ event, past = false, linkedLesson }: { event: Event; past?: boolean; linkedLesson?: LessonInfo }) {
+function EventCard({ event, past = false, linkedLesson, attendanceRecords = [], onCheckIn }: { 
+  event: Event; past?: boolean; linkedLesson?: LessonInfo; 
+  attendanceRecords?: AttendanceRecord[]; onCheckIn?: (eventId: string, status: "presente" | "faltou") => void;
+}) {
   const typeInfo = EVENT_TYPES[event.type] ?? EVENT_TYPES.evento;
   const dateObj = new Date(event.event_date);
+  
+  // Check-in: show for today's events or events in the last 24h
+  const now = new Date();
+  const diffHours = (now.getTime() - dateObj.getTime()) / 3600000;
+  const isCheckInWindow = diffHours >= -2 && diffHours <= 24; // 2h before to 24h after
+  const existingRecord = attendanceRecords.find(a => a.event_id === event.id);
 
   return (
     <div className={`bg-card rounded-2xl border border-border p-4 shadow-sm ${past ? "opacity-60" : ""}`}>
@@ -229,6 +254,41 @@ function EventCard({ event, past = false, linkedLesson }: { event: Event; past?:
           )}
           {event.description && (
             <p className="text-muted-foreground font-inter text-xs mt-1.5 leading-relaxed">{event.description}</p>
+          )}
+
+          {/* Check-in buttons */}
+          {isCheckInWindow && onCheckIn && (
+            <div className="mt-2.5">
+              {existingRecord ? (
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-xl ${
+                  existingRecord.status === "presente" ? "bg-brand-green/10" : "bg-destructive/10"
+                }`}>
+                  <span className="text-sm">{existingRecord.status === "presente" ? "📍" : "❌"}</span>
+                  <p className={`font-inter text-xs font-semibold ${
+                    existingRecord.status === "presente" ? "text-brand-green" : "text-destructive"
+                  }`}>
+                    {existingRecord.status === "presente" ? "Check-in realizado ✓" : "Ausência registrada"}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onCheckIn(event.id, "presente")}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors"
+                  >
+                    <span className="text-sm">📍</span>
+                    <span className="font-inter text-xs font-semibold">Cheguei</span>
+                  </button>
+                  <button
+                    onClick={() => onCheckIn(event.id, "faltou")}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                  >
+                    <span className="text-sm">❌</span>
+                    <span className="font-inter text-xs font-semibold">Não compareci</span>
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
