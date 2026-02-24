@@ -79,6 +79,80 @@ export type Database = {
           },
         ]
       }
+      challenge_participants: {
+        Row: {
+          challenge_id: string
+          completed: boolean
+          completed_at: string | null
+          id: string
+          joined_at: string
+          user_id: string
+        }
+        Insert: {
+          challenge_id: string
+          completed?: boolean
+          completed_at?: string | null
+          id?: string
+          joined_at?: string
+          user_id: string
+        }
+        Update: {
+          challenge_id?: string
+          completed?: boolean
+          completed_at?: string | null
+          id?: string
+          joined_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_participants_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "community_challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_challenges: {
+        Row: {
+          area: string | null
+          community: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          emoji: string
+          end_date: string
+          id: string
+          start_date: string
+          title: string
+        }
+        Insert: {
+          area?: string | null
+          community?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          emoji?: string
+          end_date: string
+          id?: string
+          start_date: string
+          title: string
+        }
+        Update: {
+          area?: string | null
+          community?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          emoji?: string
+          end_date?: string
+          id?: string
+          start_date?: string
+          title?: string
+        }
+        Relationships: []
+      }
       community_chat: {
         Row: {
           community: string

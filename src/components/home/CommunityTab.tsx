@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageCircle, GraduationCap, Cake, Sparkles, Send, Trash2 } from "lucide-react";
+import { MessageCircle, GraduationCap, Cake, Sparkles, Send, Trash2, Target, Check, Users } from "lucide-react";
 import ClassroomTab from "./ClassroomTab";
 
 const REACTION_EMOJIS = [
@@ -29,6 +29,18 @@ interface Testimony {
   created_at: string;
 }
 
+interface Challenge {
+  id: string;
+  title: string;
+  description: string | null;
+  emoji: string;
+  start_date: string;
+  end_date: string;
+  participant_count: number;
+  has_joined: boolean;
+  has_completed: boolean;
+}
+
 interface BirthdayPerson {
   full_name: string;
   birth_date: string;
@@ -45,6 +57,7 @@ export default function CommunityTab() {
   const [testimonies, setTestimonies] = useState<Testimony[]>([]);
   const [newTestimony, setNewTestimony] = useState("");
   const [submittingTestimony, setSubmittingTestimony] = useState(false);
+  const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [birthdays, setBirthdays] = useState<BirthdayPerson[]>([]);
 
@@ -105,9 +118,41 @@ export default function CommunityTab() {
       setTestimonies((data ?? []) as Testimony[]);
     }
 
+    async function fetchChallenges() {
+      const { data: { user } } = await supabase.auth.getUser();
+      const today = new Date().toISOString().split("T")[0];
+      const { data: challengesData } = await supabase
+        .from("community_challenges")
+        .select("*")
+        .lte("start_date", today)
+        .gte("end_date", today);
+      const cIds = (challengesData ?? []).map((c: any) => c.id);
+      let participantsData: any[] = [];
+      if (cIds.length > 0) {
+        const { data } = await supabase.from("challenge_participants").select("challenge_id, user_id, completed").in("challenge_id", cIds);
+        participantsData = data ?? [];
+      }
+      const mapped: Challenge[] = (challengesData ?? []).map((c: any) => {
+        const parts = participantsData.filter((p: any) => p.challenge_id === c.id);
+        return {
+          id: c.id,
+          title: c.title,
+          description: c.description,
+          emoji: c.emoji,
+          start_date: c.start_date,
+          end_date: c.end_date,
+          participant_count: parts.length,
+          has_joined: user ? parts.some((p: any) => p.user_id === user.id) : false,
+          has_completed: user ? parts.some((p: any) => p.user_id === user.id && p.completed) : false,
+        };
+      });
+      setChallenges(mapped);
+    }
+
     fetchMessages();
     fetchBirthdays();
     fetchTestimonies();
+    fetchChallenges();
   }, [profile]);
 
   async function toggleReaction(messageId: string, emoji: string) {
@@ -158,6 +203,20 @@ export default function CommunityTab() {
   async function deleteTestimony(id: string) {
     await supabase.from("testimonies").delete().eq("id", id);
     setTestimonies(prev => prev.filter(t => t.id !== id));
+  }
+
+  async function joinChallenge(challengeId: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from("challenge_participants").insert({ challenge_id: challengeId, user_id: user.id });
+    setChallenges(prev => prev.map(c => c.id === challengeId ? { ...c, has_joined: true, participant_count: c.participant_count + 1 } : c));
+  }
+
+  async function completeChallenge(challengeId: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from("challenge_participants").update({ completed: true, completed_at: new Date().toISOString() }).eq("challenge_id", challengeId).eq("user_id", user.id);
+    setChallenges(prev => prev.map(c => c.id === challengeId ? { ...c, has_completed: true } : c));
   }
 
   function timeAgo(dateStr: string): string {
@@ -271,6 +330,69 @@ export default function CommunityTab() {
               </div>
             )}
           </div>
+
+          {/* 🎯 Desafios Comunitários */}
+          {challenges.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Target className="w-4 h-4 text-primary" />
+                <span className="font-montserrat font-bold text-foreground text-sm">🎯 Desafios da Semana</span>
+              </div>
+              <div className="space-y-2.5">
+                {challenges.map(ch => {
+                  const endDate = new Date(ch.end_date + "T23:59:59");
+                  const daysLeft = Math.max(0, Math.ceil((endDate.getTime() - Date.now()) / 86400000));
+                  return (
+                    <div key={ch.id} className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <span className="text-xl">{ch.emoji}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-montserrat font-bold text-foreground text-sm">{ch.title}</h4>
+                          {ch.description && (
+                            <p className="text-muted-foreground font-inter text-xs mt-0.5 leading-relaxed">{ch.description}</p>
+                          )}
+                          <div className="flex items-center gap-3 mt-2 flex-wrap">
+                            <span className="flex items-center gap-1 text-muted-foreground text-[10px] font-inter">
+                              <Users className="w-3 h-3" />{ch.participant_count} participando
+                            </span>
+                            <span className="text-[10px] font-inter text-muted-foreground">
+                              ⏳ {daysLeft} dia{daysLeft !== 1 ? "s" : ""} restante{daysLeft !== 1 ? "s" : ""}
+                            </span>
+                          </div>
+                          <div className="mt-2.5">
+                            {ch.has_completed ? (
+                              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-green/10">
+                                <Check className="w-3.5 h-3.5 text-brand-green" />
+                                <span className="font-inter text-xs font-semibold text-brand-green">Desafio concluído ✓</span>
+                              </div>
+                            ) : ch.has_joined ? (
+                              <button
+                                onClick={() => completeChallenge(ch.id)}
+                                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span className="font-inter text-xs font-semibold">Completei o desafio!</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => joinChallenge(ch.id)}
+                                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                              >
+                                <Target className="w-3.5 h-3.5" />
+                                <span className="font-inter text-xs font-semibold">Participar</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* ✨ Testemunhos */}
           <div>
