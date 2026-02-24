@@ -18,6 +18,7 @@ type Achievement = {
   unlocked: boolean;
   current: number;
   target: number;
+  secret?: boolean;
 };
 
 type Winner = { position: number; user_id: string; full_name: string; faith_points: number; medal: string };
@@ -86,6 +87,9 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     { id: 4, icon: "⭐", title: "100 pontos da fé", desc: "Crescendo sempre!", unlocked: faithPoints >= 100, current: faithPoints, target: 100 },
     { id: 5, icon: "🏆", title: "10 atividades", desc: "Dedicação exemplar!", unlocked: completedCount >= 10, current: completedCount, target: 10 },
     { id: 6, icon: "💎", title: "200 pontos", desc: "Nível máximo de fé!", unlocked: faithPoints >= 200, current: faithPoints, target: 200 },
+    // Conquistas surpresa — só aparecem quando desbloqueadas
+    { id: 7, icon: "🛡️", title: "Guardião da Fé", desc: "14 dias seguidos de dedicação!", unlocked: streakDays >= 14, current: streakDays, target: 14, secret: true },
+    { id: 8, icon: "👁️‍🗨️", title: "Constância Invisível", desc: "30 dias seguidos — lendário!", unlocked: streakDays >= 30, current: streakDays, target: 30, secret: true },
   ];
 
   const unlockedCount = achievements.filter(a => a.unlocked).length;
@@ -220,22 +224,27 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
 
       {/* Achievements Grid */}
       <div className="grid grid-cols-2 gap-3">
-        {achievements.map((a) => (
+        {achievements.filter(a => !a.secret || a.unlocked).map((a) => (
           <div
             key={a.id}
             className={`rounded-2xl p-4 border transition-all ${
               a.unlocked
-                ? "bg-card border-accent/30 shadow-md"
+                ? a.secret
+                  ? "bg-card border-amber-400/40 shadow-lg ring-1 ring-amber-400/20"
+                  : "bg-card border-accent/30 shadow-md"
                 : "bg-muted border-border opacity-50"
             }`}
           >
             <span className="text-3xl block mb-2">{a.unlocked ? a.icon : "🔒"}</span>
-            <p className="font-montserrat font-bold text-card-foreground text-sm leading-tight">{a.title}</p>
+            <p className="font-montserrat font-bold text-card-foreground text-sm leading-tight">
+              {a.secret && a.unlocked && <span className="text-amber-500 text-[10px] font-inter block mb-0.5">✨ SURPRESA!</span>}
+              {a.title}
+            </p>
             <p className="text-muted-foreground text-xs font-inter mt-1">{a.desc}</p>
             {a.unlocked ? (
               <div className="mt-2 flex items-center gap-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-brand-green" />
-                <span className="text-brand-green text-xs font-inter">Desbloqueada</span>
+                <div className={`w-1.5 h-1.5 rounded-full ${a.secret ? "bg-amber-500" : "bg-brand-green"}`} />
+                <span className={`text-xs font-inter ${a.secret ? "text-amber-500" : "text-brand-green"}`}>Desbloqueada</span>
               </div>
             ) : (
               <div className="mt-2">
@@ -252,6 +261,17 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
             )}
           </div>
         ))}
+
+        {/* Placeholder para conquistas secretas não desbloqueadas */}
+        {achievements.filter(a => a.secret && !a.unlocked).length > 0 && (
+          <div className="rounded-2xl p-4 border border-dashed border-amber-400/30 bg-amber-400/5 flex flex-col items-center justify-center text-center col-span-2">
+            <span className="text-3xl mb-2">❓</span>
+            <p className="font-montserrat font-bold text-foreground/60 text-sm">Conquistas secretas</p>
+            <p className="text-muted-foreground text-[10px] font-inter mt-1">
+              {achievements.filter(a => a.secret && !a.unlocked).length} conquista{achievements.filter(a => a.secret && !a.unlocked).length > 1 ? "s" : ""} escondida{achievements.filter(a => a.secret && !a.unlocked).length > 1 ? "s" : ""} — continue sua jornada!
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
