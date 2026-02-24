@@ -42,12 +42,15 @@ type WorshipRecord = {
   preacher_name: string; status: string; created_at: string;
 };
 
+type TimelineCategory = "encontro" | "crise" | "progresso" | "conversa" | "marco";
 type TimelineItem = {
   date: string;
-  type: "activity" | "note" | "assessment" | "attendance" | "evaluation" | "worship";
+  type: "activity" | "note" | "assessment" | "attendance" | "evaluation" | "worship" | "milestone" | "crisis";
+  category: TimelineCategory;
   title: string;
   detail?: string;
   icon: string;
+  severity?: "positive" | "neutral" | "warning" | "critical";
 };
 
 export type Participant = {
@@ -108,6 +111,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
   const [meetingEvals, setMeetingEvals] = useState<MeetingEval[]>([]);
   const [worshipRecords, setWorshipRecords] = useState<WorshipRecord[]>([]);
+  const [timelineFilter, setTimelineFilter] = useState<TimelineCategory | "todos">("todos");
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
@@ -152,33 +156,81 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       const tl: TimelineItem[] = [];
 
       // Activities completed
-      (progressData ?? []).forEach(pr => {
+      let completedCount = 0;
+      const sortedProgress = [...(progressData ?? [])].sort((a, b) => new Date(a.completed_at).getTime() - new Date(b.completed_at).getTime());
+      sortedProgress.forEach(pr => {
         const act = actsMap.get(pr.activity_id);
         if (act) {
-          tl.push({ date: pr.completed_at, type: "activity", title: act.title, detail: act.type, icon: act.type === "devocional" ? "📖" : act.type === "formacao" ? "🎓" : act.type === "encontro" ? "📅" : "✨" });
+          completedCount++;
+          const isMilestone = completedCount === 1 || completedCount === 10 || completedCount === 25 || completedCount === 50 || completedCount % 25 === 0;
+          if (isMilestone) {
+            tl.push({ date: pr.completed_at, type: "milestone", category: "marco", title: `🏆 Marco: ${completedCount}ª atividade concluída!`, detail: act.title, icon: "🏆", severity: "positive" });
+          }
+          tl.push({ date: pr.completed_at, type: "activity", category: "progresso", title: act.title, detail: act.type === "devocional" ? "Devocional" : act.type === "formacao" ? "Formação" : act.type === "encontro" ? "Encontro" : "Atividade", icon: act.type === "devocional" ? "📖" : act.type === "formacao" ? "🎓" : act.type === "encontro" ? "📅" : "✨", severity: "positive" });
         }
       });
 
-      // Pastoral notes
+      // Pastoral notes — detect crises vs conversations
       (notesData ?? []).forEach(n => {
         const typeLabel = NOTE_TYPES.find(t => t.value === n.note_type)?.label ?? n.note_type;
-        tl.push({ date: n.created_at, type: "note", title: typeLabel, detail: n.content.slice(0, 80), icon: "📝" });
+        const contentLower = n.content.toLowerCase();
+        const isCrisis = contentLower.includes("crise") || contentLower.includes("urgente") || contentLower.includes("problema") || contentLower.includes("preocup") || contentLower.includes("afastand") || contentLower.includes("desist");
+        tl.push({
+          date: n.created_at, type: "note",
+          category: isCrisis ? "crise" : "conversa",
+          title: isCrisis ? `⚠️ ${typeLabel}` : typeLabel,
+          detail: n.content.slice(0, 100),
+          icon: isCrisis ? "⚠️" : "📝",
+          severity: isCrisis ? "critical" : "neutral",
+        });
       });
 
-      // Assessments
-      (allAssessments ?? []).forEach(a => {
-        tl.push({ date: a.created_at, type: "assessment", title: `Autoavaliação ${MONTH_NAMES[a.month - 1]}/${a.year}`, icon: "💗" });
+      // Assessments — detect spiritual milestones/crises
+      const allAssArr = (allAssessments ?? []) as { month: number; year: number; prayer_score: number | null; presence_score: number | null; created_at: string }[];
+      allAssArr.forEach(a => {
+        const avg = ((a.prayer_score ?? 0) + (a.presence_score ?? 0)) / 2;
+        const isHigh = avg >= 4;
+        const isLow = avg > 0 && avg <= 2;
+        if (isHigh) {
+          tl.push({ date: a.created_at, type: "milestone", category: "marco", title: `🌟 Autoavaliação excelente — ${MONTH_NAMES[a.month - 1]}/${a.year}`, detail: `Média: ${avg.toFixed(1)}/5`, icon: "🌟", severity: "positive" });
+        } else if (isLow) {
+          tl.push({ date: a.created_at, type: "crisis", category: "crise", title: `💔 Autoavaliação preocupante — ${MONTH_NAMES[a.month - 1]}/${a.year}`, detail: `Média: ${avg.toFixed(1)}/5 — Precisa de atenção pastoral`, icon: "💔", severity: "critical" });
+        }
+        tl.push({ date: a.created_at, type: "assessment", category: "progresso", title: `Autoavaliação ${MONTH_NAMES[a.month - 1]}/${a.year}`, icon: "💗", severity: "neutral" });
       });
 
-      // Attendance
+      // Attendance — detect consecutive absences as crises
       if (attArr.length > 0) {
         const eventIds = [...new Set(attArr.map(a => a.event_id))];
         const { data: eventsData } = await supabase.from("events").select("id, title, event_date").in("id", eventIds);
         const eventsMap = new Map((eventsData ?? []).map(e => [e.id, e]));
-        attArr.forEach(a => {
+        const sortedAtt = [...attArr].sort((a, b) => {
+          const da = eventsMap.get(a.event_id)?.event_date ?? a.created_at;
+          const db = eventsMap.get(b.event_id)?.event_date ?? b.created_at;
+          return new Date(da).getTime() - new Date(db).getTime();
+        });
+
+        let consecutiveMisses = 0;
+        sortedAtt.forEach(a => {
           const ev = eventsMap.get(a.event_id);
           const statusEmoji = a.status === "presente" ? "🟢" : a.status === "faltou" ? "🔴" : "🟡";
-          tl.push({ date: ev?.event_date ?? a.created_at, type: "attendance", title: `${statusEmoji} ${ev?.title ?? "Evento"}`, detail: a.status === "presente" ? "Presente" : a.status === "faltou" ? "Faltou" : "Justificou", icon: statusEmoji });
+          const severity = a.status === "presente" ? "positive" as const : a.status === "faltou" ? "warning" as const : "neutral" as const;
+          
+          if (a.status !== "presente") {
+            consecutiveMisses++;
+          } else {
+            if (consecutiveMisses >= 3) {
+              // Returning after crisis
+              tl.push({ date: ev?.event_date ?? a.created_at, type: "milestone", category: "marco", title: `🎉 Retornou após ${consecutiveMisses} faltas!`, detail: "Momento de acolhimento", icon: "🎉", severity: "positive" });
+            }
+            consecutiveMisses = 0;
+          }
+
+          if (consecutiveMisses === 3) {
+            tl.push({ date: ev?.event_date ?? a.created_at, type: "crisis", category: "crise", title: `🚨 3 faltas consecutivas`, detail: "Alerta pastoral — possível afastamento", icon: "🚨", severity: "critical" });
+          }
+
+          tl.push({ date: ev?.event_date ?? a.created_at, type: "attendance", category: "encontro", title: `${statusEmoji} ${ev?.title ?? "Evento"}`, detail: a.status === "presente" ? "Presente" : a.status === "faltou" ? "Faltou" : "Justificou", icon: statusEmoji, severity });
         });
       }
 
@@ -196,33 +248,41 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         enrichedEvals.sort((a, b) => new Date(b.event_date!).getTime() - new Date(a.event_date!).getTime());
         setMeetingEvals(enrichedEvals);
 
-        // Add to timeline
         enrichedEvals.forEach(ev => {
           const scores = [ev.participation_score, ev.understanding_score, ev.engagement_score].filter(Boolean);
           const avg = scores.length > 0 ? (scores.reduce((s, v) => s + (v ?? 0), 0) / scores.length).toFixed(1) : "—";
           tl.push({
-            date: ev.event_date ?? ev.created_at,
-            type: "evaluation",
+            date: ev.event_date ?? ev.created_at, type: "evaluation", category: "encontro",
             title: `⭐ Avaliação: ${ev.event_title}`,
             detail: `Média: ${avg}/5${ev.notes ? ` · ${ev.notes.slice(0, 50)}` : ""}`,
-            icon: "⭐",
+            icon: "⭐", severity: "neutral",
           });
         });
       }
 
-      // Worship attendance
+      // Worship attendance — first worship as milestone
       const worshipArr = worshipData ?? [];
       setWorshipRecords(worshipArr);
+      let worshipCount = 0;
       worshipArr.forEach(w => {
         const statusLabel = w.status === "aprovado" ? "✅ Aprovado" : w.status === "rejeitado" ? "❌ Rejeitado" : "⏳ Pendente";
+        if (w.status === "aprovado") worshipCount++;
+        if (worshipCount === 1 && w.status === "aprovado") {
+          tl.push({ date: w.created_at, type: "milestone", category: "marco", title: "⛪ Primeiro culto confirmado!", detail: "Marco importante na caminhada", icon: "⛪", severity: "positive" });
+        }
         tl.push({
-          date: w.created_at,
-          type: "worship",
+          date: w.created_at, type: "worship", category: "encontro",
           title: `⛪ Culto: ${new Date(w.worship_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} ${w.worship_time}`,
           detail: `Pregador: ${w.preacher_name} · ${statusLabel}`,
-          icon: "⛪",
+          icon: "⛪", severity: w.status === "aprovado" ? "positive" : "neutral",
         });
       });
+
+      // First registered assessment as milestone
+      if (allAssArr.length > 0) {
+        const first = [...allAssArr].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0];
+        tl.push({ date: first.created_at, type: "milestone", category: "marco", title: "💗 Primeira autoavaliação espiritual", detail: "Início do acompanhamento da vida espiritual", icon: "💗", severity: "positive" });
+      }
 
       tl.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setTimelineItems(tl);
@@ -770,45 +830,99 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       )}
 
       {/* TIMELINE SECTION */}
-      {activeSection === "timeline" && (
-        <div className="space-y-1">
-          <div className="bg-primary/5 border border-primary/20 rounded-2xl p-3 flex items-start gap-2 mb-3">
+      {activeSection === "timeline" && (() => {
+        const FILTERS: { id: TimelineCategory | "todos"; label: string; icon: string }[] = [
+          { id: "todos", label: "Todos", icon: "📋" },
+          { id: "marco", label: "Marcos", icon: "🏆" },
+          { id: "crise", label: "Crises", icon: "⚠️" },
+          { id: "encontro", label: "Encontros", icon: "📅" },
+          { id: "conversa", label: "Conversas", icon: "💬" },
+          { id: "progresso", label: "Progressos", icon: "📈" },
+        ];
+        const [filter, setFilter] = [timelineFilter, setTimelineFilter];
+        const filtered = filter === "todos" ? timelineItems : timelineItems.filter(i => i.category === filter);
+        const crisisCount = timelineItems.filter(i => i.category === "crise").length;
+        const marcoCount = timelineItems.filter(i => i.category === "marco").length;
+
+        const severityBg = (s?: string) =>
+          s === "positive" ? "bg-brand-green/15 border-brand-green/30" :
+          s === "critical" ? "bg-destructive/10 border-destructive/20" :
+          s === "warning" ? "bg-accent/15 border-accent/30" :
+          "bg-muted/40 border-border";
+
+        const severityDot = (s?: string) =>
+          s === "positive" ? "bg-brand-green" :
+          s === "critical" ? "bg-destructive" :
+          s === "warning" ? "bg-accent" :
+          "bg-muted-foreground/40";
+
+        return (
+        <div className="space-y-3">
+          <div className="bg-primary/5 border border-primary/20 rounded-2xl p-3 flex items-start gap-2">
             <Clock className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
-            <p className="font-inter text-xs text-primary leading-relaxed">
-              Linha do tempo completa de <strong>{p.full_name}</strong>: atividades, presenças, notas e avaliações.
-            </p>
+            <div>
+              <p className="font-inter text-xs text-primary leading-relaxed">
+                Linha do tempo completa de <strong>{p.full_name}</strong>
+              </p>
+              <div className="flex gap-2 mt-1">
+                {marcoCount > 0 && <span className="text-[10px] font-inter font-semibold text-brand-green">🏆 {marcoCount} marcos</span>}
+                {crisisCount > 0 && <span className="text-[10px] font-inter font-semibold text-destructive">⚠️ {crisisCount} crises</span>}
+                <span className="text-[10px] font-inter text-muted-foreground">{timelineItems.length} registros</span>
+              </div>
+            </div>
           </div>
-          {timelineItems.length === 0 ? (
+
+          {/* Category filters */}
+          <div className="flex gap-1 overflow-x-auto pb-1">
+            {FILTERS.map(f => (
+              <button key={f.id} onClick={() => setTimelineFilter(f.id as any)}
+                className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-inter font-medium transition-all ${
+                  filter === f.id ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                }`}>
+                <span>{f.icon}</span> {f.label}
+              </button>
+            ))}
+          </div>
+
+          {filtered.length === 0 ? (
             <div className="text-center py-10 text-muted-foreground font-inter text-sm">
               <Clock className="w-10 h-10 mx-auto mb-2 opacity-40" />
-              <p>Nenhum registro na timeline ainda.</p>
+              <p>Nenhum registro {filter !== "todos" ? `na categoria "${FILTERS.find(f => f.id === filter)?.label}"` : "na timeline ainda"}.</p>
             </div>
           ) : (
             <div className="relative">
-              {timelineItems.map((item, idx) => (
+              {filtered.map((item, idx) => (
                 <div key={idx} className="flex gap-3 mb-1">
                   <div className="flex flex-col items-center">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0 ${
-                      item.type === "activity" ? "bg-secondary/20" :
-                      item.type === "note" ? "bg-primary/10" :
-                      item.type === "assessment" ? "bg-accent/20" :
-                      "bg-muted"
-                    }`}>
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 border ${severityBg(item.severity)}`}>
                       {item.icon}
                     </div>
-                    {idx < timelineItems.length - 1 && (
-                      <div className="w-0.5 h-6 bg-border rounded-full mt-1" />
+                    {idx < filtered.length - 1 && (
+                      <div className={`w-0.5 h-6 rounded-full mt-1 ${severityDot(item.severity)}`} />
                     )}
                   </div>
-                  <div className="flex-1 pb-4 pt-1">
+                  <div className={`flex-1 pb-4 pt-1 ${item.severity === "critical" || item.severity === "positive" ? "" : ""}`}>
                     <div className="flex items-center gap-2">
-                      <p className="font-inter text-sm font-medium text-foreground">{item.title}</p>
+                      <p className={`font-inter text-sm font-medium ${
+                        item.severity === "critical" ? "text-destructive" :
+                        item.severity === "positive" ? "text-brand-green" :
+                        "text-foreground"
+                      }`}>{item.title}</p>
                       <span className="text-muted-foreground font-inter text-[10px] ml-auto flex-shrink-0">
                         {new Date(item.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
                       </span>
                     </div>
                     {item.detail && (
-                      <p className="font-inter text-xs text-muted-foreground mt-0.5 truncate">{item.detail}</p>
+                      <p className="font-inter text-xs text-muted-foreground mt-0.5">{item.detail}</p>
+                    )}
+                    {item.category !== "encontro" && item.category !== "progresso" && (
+                      <span className={`inline-block mt-1 px-1.5 py-0.5 rounded text-[9px] font-inter font-medium ${
+                        item.category === "marco" ? "bg-brand-green/10 text-brand-green" :
+                        item.category === "crise" ? "bg-destructive/10 text-destructive" :
+                        "bg-muted text-muted-foreground"
+                      }`}>
+                        {item.category === "marco" ? "Marco espiritual" : item.category === "crise" ? "Momento de crise" : item.category === "conversa" ? "Conversa pastoral" : item.category}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -816,7 +930,8 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* JORNADA SECTION */}
       {activeSection === "jornada" && (
