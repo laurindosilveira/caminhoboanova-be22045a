@@ -118,37 +118,45 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
     if (participants.length === 0) return;
     async function detectAlerts() {
       const ids = participants.map(p => p.user_id);
-      const fourteenDaysAgo = new Date();
-      fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-      const since14 = fourteenDaysAgo.toISOString();
-
       const now = new Date();
       const curMonth = now.getMonth() + 1;
       const curYear = now.getFullYear();
       const prevMonth = curMonth === 1 ? 12 : curMonth - 1;
       const prevYear = curMonth === 1 ? curYear - 1 : curYear;
 
-      const [{ data: recentDev }, { data: recentAtt }, { data: curAssess }, { data: prevAssess }] = await Promise.all([
-        supabase.from("devotional_progress").select("user_id").in("user_id", ids).gte("completed_at", since14),
+      const [{ data: devData }, { data: recentAtt }, { data: curAssess }, { data: prevAssess }, { data: progressData }] = await Promise.all([
+        supabase.from("devotional_progress").select("user_id, completed_at").in("user_id", ids),
         supabase.from("attendance").select("user_id, status, created_at").in("user_id", ids).order("created_at", { ascending: false }),
-        supabase.from("spiritual_assessments").select("user_id, prayer_score, presence_score, doubt_score, struggle_score").in("user_id", ids).eq("month", curMonth).eq("year", curYear),
+        supabase.from("spiritual_assessments").select("user_id, prayer_score, presence_score, doubt_score, struggle_score, needs_pastor").in("user_id", ids).eq("month", curMonth).eq("year", curYear),
         supabase.from("spiritual_assessments").select("user_id, prayer_score, presence_score, doubt_score, struggle_score").in("user_id", ids).eq("month", prevMonth).eq("year", prevYear),
+        supabase.from("user_progress").select("user_id, completed_at").in("user_id", ids),
       ]);
 
-      // Users with devotionals in last 14 days
-      const devActiveUsers = new Set((recentDev ?? []).map(d => d.user_id));
+      // Last devotional per user
+      const lastDev: Record<string, Date> = {};
+      (devData ?? []).forEach(d => {
+        const dt = new Date(d.completed_at);
+        if (!lastDev[d.user_id] || dt > lastDev[d.user_id]) lastDev[d.user_id] = dt;
+      });
 
-      // Build last 3 attendance per user
+      // Last activity per user
+      const lastActivity: Record<string, Date> = {};
+      (progressData ?? []).forEach(p => {
+        const dt = new Date(p.completed_at);
+        if (!lastActivity[p.user_id] || dt > lastActivity[p.user_id]) lastActivity[p.user_id] = dt;
+      });
+
+      // Consecutive absences per user (from most recent)
       const attByUser: Record<string, string[]> = {};
       (recentAtt ?? []).forEach(a => {
         if (!attByUser[a.user_id]) attByUser[a.user_id] = [];
-        if (attByUser[a.user_id].length < 3) attByUser[a.user_id].push(a.status);
+        attByUser[a.user_id].push(a.status);
       });
 
       // Assessment maps
-      const curMap: Record<string, { prayer: number; presence: number }> = {};
+      const curMap: Record<string, { prayer: number; presence: number; needs_pastor: boolean }> = {};
       (curAssess ?? []).forEach(a => {
-        curMap[a.user_id] = { prayer: a.prayer_score ?? 3, presence: a.presence_score ?? 3 };
+        curMap[a.user_id] = { prayer: a.prayer_score ?? 3, presence: a.presence_score ?? 3, needs_pastor: a.needs_pastor ?? false };
       });
       const prevMap: Record<string, { prayer: number; presence: number }> = {};
       (prevAssess ?? []).forEach(a => {
@@ -160,25 +168,68 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
       for (const p of participants) {
         const reasons: PastoralAlert["reasons"] = [];
 
-        // 1. No devotionals in 14 days
-        if (!devActiveUsers.has(p.user_id)) {
-          reasons.push({ icon: "📖", label: "Sem devocionais há 14+ dias", severity: "high" });
+        // 1. Days without any activity (devotional or progress)
+        const lastDevDate = lastDev[p.user_id];
+        const lastActDate = lastActivity[p.user_id];
+        const latestAction = lastDevDate && lastActDate
+          ? (lastDevDate > lastActDate ? lastDevDate : lastActDate)
+          : lastDevDate || lastActDate;
+
+        if (!latestAction) {
+          reasons.push({ icon: "😴", label: "Nunca realizou nenhuma atividade", severity: "high" });
+        } else {
+          const daysSince = Math.floor((now.getTime() - latestAction.getTime()) / (1000 * 60 * 60 * 24));
+          if (daysSince >= 21) {
+            reasons.push({ icon: "🚨", label: `${daysSince} dias sem atividade`, severity: "high" });
+          } else if (daysSince >= 14) {
+            reasons.push({ icon: "⏰", label: `${daysSince} dias sem atividade`, severity: "high" });
+          } else if (daysSince >= 7) {
+            reasons.push({ icon: "⏰", label: `${daysSince} dias sem atividade`, severity: "medium" });
+          }
         }
 
-        // 2. Missed last 2+ events
-        const lastStatuses = attByUser[p.user_id] ?? [];
-        const consecutiveMisses = lastStatuses.filter(s => s !== "presente").length;
-        if (lastStatuses.length >= 2 && consecutiveMisses >= 2) {
-          reasons.push({ icon: "📅", label: `Faltou nos últimos ${consecutiveMisses} encontros`, severity: consecutiveMisses >= 3 ? "high" : "medium" });
+        // 2. Devotional specific inactivity
+        if (!lastDevDate) {
+          reasons.push({ icon: "📖", label: "Nunca fez devocional", severity: "high" });
+        } else {
+          const devDays = Math.floor((now.getTime() - lastDevDate.getTime()) / (1000 * 60 * 60 * 24));
+          if (devDays >= 10) {
+            reasons.push({ icon: "📖", label: `Sem devocional há ${devDays} dias`, severity: devDays >= 14 ? "high" : "medium" });
+          }
         }
 
-        // 3. Assessment score dropped
+        // 3. Consecutive absences (exact count)
+        const statuses = attByUser[p.user_id] ?? [];
+        let consecutiveMisses = 0;
+        for (const s of statuses) {
+          if (s !== "presente") consecutiveMisses++;
+          else break;
+        }
+        if (consecutiveMisses >= 2) {
+          reasons.push({
+            icon: "📅",
+            label: `${consecutiveMisses} falta${consecutiveMisses > 1 ? "s" : ""} consecutiva${consecutiveMisses > 1 ? "s" : ""}`,
+            severity: consecutiveMisses >= 3 ? "high" : "medium",
+          });
+        }
+
+        // 4. Assessment score dropped
         if (curMap[p.user_id] && prevMap[p.user_id]) {
           const curAvg = (curMap[p.user_id].prayer + curMap[p.user_id].presence) / 2;
           const prevAvg = (prevMap[p.user_id].prayer + prevMap[p.user_id].presence) / 2;
-          if (prevAvg - curAvg >= 1) {
-            reasons.push({ icon: "📉", label: "Avaliação espiritual caiu", severity: prevAvg - curAvg >= 2 ? "high" : "medium" });
+          const drop = prevAvg - curAvg;
+          if (drop >= 1) {
+            reasons.push({
+              icon: "📉",
+              label: `Avaliação caiu ${drop >= 2 ? "muito" : ""} (${prevAvg.toFixed(1)} → ${curAvg.toFixed(1)})`,
+              severity: drop >= 2 ? "high" : "medium",
+            });
           }
+        }
+
+        // 5. Needs pastor
+        if (curMap[p.user_id]?.needs_pastor) {
+          reasons.push({ icon: "🙏", label: "Pediu ajuda pastoral", severity: "high" });
         }
 
         if (reasons.length > 0) {
@@ -371,59 +422,77 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
       )}
 
       {/* ── SISTEMA DE CUIDADO PASTORAL (AUTO) ─── */}
-      {smartAlerts.length > 0 && (
-        <div className="bg-accent/5 border border-accent/20 rounded-2xl p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-base">🧭</span>
-            <p className="font-montserrat font-bold text-foreground text-sm">Sistema de Cuidado Pastoral</p>
-          </div>
-          <p className="text-muted-foreground font-inter text-[10px] mb-3">
-            Alertas automáticos detectados pelo sistema · {smartAlerts.length} jovem{smartAlerts.length > 1 ? "ns" : ""} precisando de atenção
-          </p>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {smartAlerts.map(alert => {
-              const participant = participants.find(p => p.user_id === alert.user_id);
-              const hasHigh = alert.reasons.some(r => r.severity === "high");
-              return (
-                <button
-                  key={alert.user_id}
-                  onClick={() => participant && onSelectParticipant(participant)}
-                  className={`w-full flex items-start gap-3 p-3 rounded-xl transition-colors text-left ${
-                    hasHigh ? "bg-destructive/5 hover:bg-destructive/10 border border-destructive/15" : "bg-muted/30 hover:bg-muted/50 border border-border"
-                  }`}
-                >
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                    hasHigh ? "bg-destructive/10" : "bg-accent/15"
-                  }`}>
-                    <span className="font-montserrat font-black text-sm">{alert.full_name.charAt(0)}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-inter text-sm font-medium text-foreground truncate">{alert.full_name}</p>
-                      <span className="text-[10px] font-inter text-muted-foreground">{alert.community}</span>
+      {smartAlerts.length > 0 && (() => {
+        const highCount = smartAlerts.filter(a => a.reasons.some(r => r.severity === "high")).length;
+        const mediumOnly = smartAlerts.length - highCount;
+        return (
+          <div className="bg-accent/5 border border-accent/20 rounded-2xl p-4">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🧭</span>
+                <p className="font-montserrat font-bold text-foreground text-sm">Alertas Automáticos</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {highCount > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-inter font-bold bg-destructive/10 text-destructive">
+                    🔴 {highCount} urgente{highCount > 1 ? "s" : ""}
+                  </span>
+                )}
+                {mediumOnly > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-inter font-bold bg-accent/20 text-accent-foreground">
+                    🟡 {mediumOnly} atenção
+                  </span>
+                )}
+              </div>
+            </div>
+            <p className="text-muted-foreground font-inter text-[10px] mb-3">
+              Detectados automaticamente com base em dados reais de atividade, presença e avaliação
+            </p>
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {smartAlerts.map(alert => {
+                const participant = participants.find(p => p.user_id === alert.user_id);
+                const hasHigh = alert.reasons.some(r => r.severity === "high");
+                return (
+                  <button
+                    key={alert.user_id}
+                    onClick={() => participant && onSelectParticipant(participant)}
+                    className={`w-full flex items-start gap-3 p-3 rounded-xl transition-colors text-left ${
+                      hasHigh ? "bg-destructive/5 hover:bg-destructive/10 border border-destructive/15" : "bg-muted/30 hover:bg-muted/50 border border-border"
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                      hasHigh ? "bg-destructive/10" : "bg-accent/15"
+                    }`}>
+                      <span className="font-montserrat font-black text-sm">{alert.full_name.charAt(0)}</span>
                     </div>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {alert.reasons.map((r, i) => (
-                        <span
-                          key={i}
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-inter font-medium ${
-                            r.severity === "high"
-                              ? "bg-destructive/10 text-destructive"
-                              : "bg-accent/15 text-accent-foreground"
-                          }`}
-                        >
-                          {r.icon} {r.label}
-                        </span>
-                      ))}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-inter text-sm font-medium text-foreground truncate">{alert.full_name}</p>
+                        <span className="text-[10px] font-inter text-muted-foreground">{alert.community}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {alert.reasons.map((r, i) => (
+                          <span
+                            key={i}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-inter font-medium ${
+                              r.severity === "high"
+                                ? "bg-destructive/10 text-destructive"
+                                : "bg-accent/15 text-accent-foreground"
+                            }`}
+                          >
+                            {r.icon} {r.label}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
-                </button>
-              );
-            })}
+                    <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── INDICADORES ─── */}
       <div className="grid grid-cols-2 gap-2">
