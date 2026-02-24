@@ -36,6 +36,11 @@ export default function UpcomingEventReminder({ onNavigateToAgenda }: Props) {
   if (loading || dismissed || !event) return null;
 
   const eventDate = new Date(event.event_date);
+  const nowMs = Date.now();
+  const diffMs = eventDate.getTime() - nowMs;
+  const diffHours = Math.max(0, Math.floor(diffMs / 3600000));
+  const diffMins = Math.max(0, Math.floor((diffMs % 3600000) / 60000));
+
   const isToday = eventDate.toDateString() === new Date().toDateString();
   const isTomorrow = (() => {
     const tom = new Date();
@@ -44,6 +49,17 @@ export default function UpcomingEventReminder({ onNavigateToAgenda }: Props) {
   })();
   const dateLabel = isToday ? "Hoje" : isTomorrow ? "Amanhã" : eventDate.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "short" });
   const timeLabel = eventDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+  // Countdown label
+  const countdownLabel = diffMs <= 0
+    ? "🔴 Acontecendo agora!"
+    : diffHours >= 24
+    ? `🔔 Faltam ${Math.floor(diffHours / 24)} dia${Math.floor(diffHours / 24) > 1 ? "s" : ""} e ${diffHours % 24}h`
+    : diffHours >= 1
+    ? `🔔 Faltam ${diffHours}h${diffMins > 0 ? ` e ${diffMins}min` : ""}`
+    : `🔔 Faltam ${diffMins} minutos!`;
+
+  const isUrgent = diffHours < 6;
 
   return (
     <div className="mx-5 mb-3 rounded-2xl border border-secondary/30 bg-secondary/5 p-4 relative overflow-hidden">
@@ -66,8 +82,8 @@ export default function UpcomingEventReminder({ onNavigateToAgenda }: Props) {
           {event.location && (
             <p className="text-muted-foreground font-inter text-[10px] mt-0.5">📍 {event.location}</p>
           )}
-          <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
-            {isToday ? "Não esqueça! Seu encontro é hoje!" : "Prepare-se! Seu encontro está chegando!"}
+          <p className={`font-inter text-[10px] mt-1 font-semibold ${isUrgent ? "text-destructive" : "text-secondary"}`}>
+            {countdownLabel}
           </p>
         </div>
       </div>
