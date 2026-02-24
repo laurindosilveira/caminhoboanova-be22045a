@@ -64,7 +64,11 @@ export default function WorshipConfirmation() {
     }
     setSubmitting(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setSubmitting(false); return; }
+    if (!user) {
+      toast({ title: "Você precisa estar logado", description: "Faça login para confirmar sua presença.", variant: "destructive" });
+      setSubmitting(false);
+      return;
+    }
 
     const { error } = await supabase.from("worship_attendance").insert({
       user_id: user.id,
