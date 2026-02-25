@@ -817,6 +817,7 @@ export type Database = {
           mother_name: string | null
           mother_phone: string | null
           phone: string
+          turma_id: string | null
           updated_at: string
           user_id: string
         }
@@ -833,6 +834,7 @@ export type Database = {
           mother_name?: string | null
           mother_phone?: string | null
           phone: string
+          turma_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -849,10 +851,19 @@ export type Database = {
           mother_name?: string | null
           mother_phone?: string | null
           phone?: string
+          turma_id?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ranking_seasons: {
         Row: {
@@ -961,6 +972,39 @@ export type Database = {
           id?: string
           user_id?: string
           user_name?: string
+        }
+        Relationships: []
+      }
+      turmas: {
+        Row: {
+          area: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          year: number
+        }
+        Insert: {
+          area?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          year?: number
+        }
+        Update: {
+          area?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          year?: number
         }
         Relationships: []
       }
