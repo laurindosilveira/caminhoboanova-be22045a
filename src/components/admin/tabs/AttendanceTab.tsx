@@ -59,12 +59,15 @@ const STATUS_CFG: Record<AttendanceStatus, { label: string; icon: React.ReactNod
 };
 
 const TYPE_EMOJI: Record<string, string> = {
-  culto: "⛪", jemiac: "✝️", retiro: "🏕️",
+  encontro: "📅", culto: "⛪", jemiac: "✝️", retiro: "🏕️", confirmatorio: "📖", evento: "🎉",
 };
 const AGENDA_EVENT_TYPES = [
+  { value: "encontro", label: "Encontro" },
   { value: "culto", label: "Culto" },
   { value: "jemiac", label: "JEMIAC" },
   { value: "retiro", label: "Retiro" },
+  { value: "confirmatorio", label: "Ens. Confirmatório" },
+  { value: "evento", label: "Evento" },
 ];
 const SCORE_LABELS = ["", "Fraco", "Regular", "Bom", "Muito bom", "Excelente"];
 
@@ -80,9 +83,10 @@ type AttendanceProps = {
   communities?: string[];
   initialParticipant?: Participant | null;
   onClearInitial?: () => void;
+  adminArea?: string | null;
 };
 
-export default function AttendanceTab({ participants, activities, communities, initialParticipant, onClearInitial }: AttendanceProps) {
+export default function AttendanceTab({ participants, activities, communities, initialParticipant, onClearInitial, adminArea }: AttendanceProps) {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>(initialParticipant ? "discipulado" : "presenca");
   const { profile } = useAuth();
   const { toast } = useToast();
@@ -107,11 +111,31 @@ export default function AttendanceTab({ participants, activities, communities, i
   const [showEventForm, setShowEventForm] = useState(false);
   const [savingEvent, setSavingEvent] = useState(false);
   const [eventForm, setEventForm] = useState({
-    title: "", description: "", event_date: "", location: "", type: "culto", area: "", community: "",
+    title: "", description: "", event_date: "", location: "", type: "encontro", area: adminArea ?? "", community: "", linked_lesson_id: "",
   });
   const [reportEventId, setReportEventId] = useState<string | null>(null);
 
-  useEffect(() => { fetchEvents(); fetchWorshipRequests(); }, []);
+  // Lesson options for linking to confirmatorio events
+  type LessonOption = { id: string; title: string; order_num: number; course_title: string; course_order: number };
+  const [lessonOptions, setLessonOptions] = useState<LessonOption[]>([]);
+
+  useEffect(() => { fetchEvents(); fetchWorshipRequests(); fetchLessonOptions(); }, []);
+
+  async function fetchLessonOptions() {
+    const [{ data: coursesData }, { data: lessonsData }] = await Promise.all([
+      supabase.from("courses").select("id, title, order_num").order("order_num"),
+      supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
+    ]);
+    const courses = coursesData ?? [];
+    const lessonsList = lessonsData ?? [];
+    const options: LessonOption[] = [];
+    courses.forEach(c => {
+      lessonsList.filter(l => l.course_id === c.id).forEach(l => {
+        options.push({ id: l.id, title: l.title, order_num: l.order_num, course_title: c.title, course_order: c.order_num });
+      });
+    });
+    setLessonOptions(options);
+  }
 
   async function fetchEvents() {
     setLoading(true);
@@ -207,11 +231,12 @@ export default function AttendanceTab({ participants, activities, communities, i
       event_date: eventForm.event_date,
       location: eventForm.location || null,
       type: eventForm.type,
-      area: eventForm.area || null,
+      area: adminArea || eventForm.area || null,
       community: eventForm.community || null,
       created_by: user?.id,
+      linked_lesson_id: eventForm.linked_lesson_id || null,
     });
-    setEventForm({ title: "", description: "", event_date: "", location: "", type: "culto", area: "", community: "" });
+    setEventForm({ title: "", description: "", event_date: "", location: "", type: "encontro", area: adminArea ?? "", community: "", linked_lesson_id: "" });
     setShowEventForm(false);
     setSavingEvent(false);
     fetchEvents();
@@ -347,10 +372,27 @@ export default function AttendanceTab({ participants, activities, communities, i
             placeholder="Local (opcional)"
             className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
         </div>
-        <select value={eventForm.type} onChange={e => setEventForm(f => ({ ...f, type: e.target.value }))}
+        <select value={eventForm.type} onChange={e => setEventForm(f => ({ ...f, type: e.target.value, linked_lesson_id: "" }))}
           className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
           {AGENDA_EVENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
+        {eventForm.type === "confirmatorio" && (
+          <div className="space-y-1">
+            <label className="font-inter text-xs font-medium text-muted-foreground">📖 Vincular a um estudo (opcional)</label>
+            <select
+              value={eventForm.linked_lesson_id}
+              onChange={e => setEventForm(f => ({ ...f, linked_lesson_id: e.target.value }))}
+              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+            >
+              <option value="">Sem vínculo</option>
+              {lessonOptions.map(l => (
+                <option key={l.id} value={l.id}>
+                  Curso {l.course_order} — Lição {l.order_num}: {l.title}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="flex gap-2">
           <button onClick={handleSaveEvent} disabled={savingEvent || !eventForm.title || !eventForm.event_date}
             className="flex-1 py-2.5 rounded-xl text-sm font-inter font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
@@ -454,14 +496,21 @@ export default function AttendanceTab({ participants, activities, communities, i
     );
   }
 
-  const EVENT_TYPES = [
+  const EVENT_TYPES_FILTER = [
     { value: null, label: "Todos" },
+    { value: "encontro", label: "📅 Encontros" },
     { value: "culto", label: "⛪ Cultos" },
     { value: "jemiac", label: "✝️ JEMIAC" },
     { value: "retiro", label: "🏕️ Retiros" },
+    { value: "confirmatorio", label: "📖 Ens. Confirmatório" },
+    { value: "evento", label: "🎉 Eventos" },
   ];
 
-  const filteredEvents = filterType ? events.filter(e => e.type === filterType) : events;
+  // Filter events by admin area and selected type
+  const areaFilteredEvents = adminArea && adminArea !== "todas"
+    ? events.filter(e => !e.area || e.area === adminArea)
+    : events;
+  const filteredEvents = filterType ? areaFilteredEvents.filter(e => e.type === filterType) : areaFilteredEvents;
 
   return (
     <div className="space-y-4">
@@ -487,7 +536,7 @@ export default function AttendanceTab({ participants, activities, communities, i
 
       {/* Type filter */}
       <div className="flex gap-1.5 overflow-x-auto pb-1">
-        {EVENT_TYPES.map(t => (
+        {EVENT_TYPES_FILTER.map(t => (
           <button
             key={t.label}
             onClick={() => setFilterType(t.value)}
@@ -504,11 +553,11 @@ export default function AttendanceTab({ participants, activities, communities, i
 
       {/* Event attendance requests - filtered by event type */}
       {(() => {
-        const TYPE_EMOJI: Record<string, string> = {
-          culto: "⛪", jemiac: "✝️", retiro: "🏕️",
+        const TYPE_EMOJI_LOCAL: Record<string, string> = {
+          encontro: "📅", culto: "⛪", jemiac: "✝️", retiro: "🏕️", confirmatorio: "📖", evento: "🎉",
         };
         const TYPE_LABEL: Record<string, string> = {
-          culto: "Cultos", jemiac: "JEMIAC", retiro: "Retiros",
+          encontro: "Encontros", culto: "Cultos", jemiac: "JEMIAC", retiro: "Retiros", confirmatorio: "Ens. Confirmatório", evento: "Eventos",
         };
         const filtered = filterType
           ? worshipRequests.filter(w => w.event_type === filterType)
@@ -531,7 +580,7 @@ export default function AttendanceTab({ participants, activities, communities, i
             {filtered.map(w => {
               const isPending = w.status === "pendente";
               const isSaving = savingWorship === w.id;
-              const emoji = TYPE_EMOJI[w.event_type] ?? "📅";
+              const emoji = TYPE_EMOJI_LOCAL[w.event_type] ?? "📅";
               const typeLabel = TYPE_LABEL[w.event_type] ?? w.event_type;
               return (
                 <div key={w.id} className={`bg-card rounded-2xl border ${isPending ? "border-accent/50" : "border-border"} p-4 shadow-sm space-y-2`}>

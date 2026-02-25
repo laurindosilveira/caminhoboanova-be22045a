@@ -347,6 +347,7 @@ export default function AdminDashboard() {
                 communities={communities}
                 initialParticipant={highlightedParticipant}
                 onClearInitial={() => setHighlightedParticipant(null)}
+                adminArea={selectedArea ?? areaName}
               />
             )}
             {activeTab === "courses" && <CoursesTab />}
