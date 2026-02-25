@@ -12,6 +12,7 @@ import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
 import AdminDashboard from "./pages/AdminDashboard";
 import Install from "./pages/Install";
+import ExportData from "./pages/ExportData";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -64,6 +65,7 @@ const AppRoutes = () => (
     <Route path="/verificar-email" element={<VerifyEmail />} />
     <Route path="/redefinir-senha" element={<ResetPassword />} />
     <Route path="/instalar" element={<Install />} />
+    <Route path="/exportar-dados" element={<ProtectedRoute><ExportData /></ProtectedRoute>} />
 
     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
     <Route path="*" element={<NotFound />} />
