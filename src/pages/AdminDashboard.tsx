@@ -352,7 +352,13 @@ export default function AdminDashboard() {
             )}
             {activeTab === "courses" && <CoursesTab />}
             {/* messages tab removed — now inside AttendanceTab as "Avisos" sub-tab */}
-            {activeTab === "users" && <UsersTab />}
+            {activeTab === "users" && <UsersTab onSelectTurma={(turma) => {
+              if (turma.area) {
+                setSelectedArea(turma.area);
+                setSelectedCommunity("todas");
+                setActiveTab("overview");
+              }
+            }} />}
           </>
         )}
       </main>
