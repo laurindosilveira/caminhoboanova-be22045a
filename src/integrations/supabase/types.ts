@@ -471,6 +471,7 @@ export type Database = {
           icebreaker: string
           id: string
           lesson_id: string
+          pdf_link: string
           practice: string
           prayer_prompt: string
           questions: string[]
@@ -486,6 +487,7 @@ export type Database = {
           icebreaker?: string
           id?: string
           lesson_id: string
+          pdf_link?: string
           practice?: string
           prayer_prompt?: string
           questions?: string[]
@@ -501,6 +503,7 @@ export type Database = {
           icebreaker?: string
           id?: string
           lesson_id?: string
+          pdf_link?: string
           practice?: string
           prayer_prompt?: string
           questions?: string[]

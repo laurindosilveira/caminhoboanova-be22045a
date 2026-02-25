@@ -30,6 +30,7 @@ type LessonContent = {
   prayer_prompt: string;
   video_link: string;
   audio_link: string;
+  pdf_link: string;
 };
 
 function getDefaultContent(lessonNum: number): LessonContent {
@@ -47,6 +48,7 @@ function getDefaultContent(lessonNum: number): LessonContent {
     prayer_prompt: "Escreva uma oração sobre o que você aprendeu hoje e como deseja crescer.",
     video_link: "",
     audio_link: "",
+    pdf_link: "",
   };
 }
 
@@ -87,6 +89,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
           prayer_prompt: data.prayer_prompt || getDefaultContent(lesson.order_num).prayer_prompt,
           video_link: data.video_link ?? "",
           audio_link: data.audio_link ?? "",
+          pdf_link: (data as any).pdf_link ?? "",
         });
       }
       setContentLoaded(true);
@@ -543,6 +546,24 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
                 <AlertCircle className="w-3 h-3" /> Ouça o áudio antes de salvar
               </p>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Apostila / PDF Download */}
+      {content.pdf_link && (
+        <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+          <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
+            <FileText className="w-4 h-4 text-primary" />
+            <p className="font-montserrat font-bold text-foreground text-sm">📄 Baixar Apostila</p>
+          </div>
+          <div className="p-4">
+            <a href={content.pdf_link} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 bg-primary/10 rounded-xl text-primary hover:bg-primary/20 transition-colors">
+              <Download className="w-5 h-5" />
+              <span className="font-inter text-sm font-medium">Baixar PDF da aula</span>
+              <Link className="w-4 h-4 ml-auto" />
+            </a>
           </div>
         </div>
       )}

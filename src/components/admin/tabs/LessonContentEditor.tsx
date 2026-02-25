@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ChevronLeft, Save, Plus, Trash2, BookOpen, Heart,
-  MessageCircle, Target, Pen, Play, Volume2, Link2
+  MessageCircle, Target, Pen, Play, Volume2, Link2, FileText
 } from "lucide-react";
 
 type Lesson = {
@@ -24,6 +24,7 @@ type LessonContent = {
   prayer_prompt: string;
   video_link: string;
   audio_link: string;
+  pdf_link: string;
 };
 
 function getDefaultContent(lessonNum: number): LessonContent {
@@ -41,6 +42,7 @@ function getDefaultContent(lessonNum: number): LessonContent {
     prayer_prompt: "Escreva uma oração sobre o que você aprendeu hoje e como deseja crescer.",
     video_link: "",
     audio_link: "",
+    pdf_link: "",
   };
 }
 
@@ -81,6 +83,7 @@ export default function LessonContentEditor({ lesson, onBack }: Props) {
         prayer_prompt: data.prayer_prompt || defaults.prayer_prompt,
         video_link: data.video_link ?? "",
         audio_link: data.audio_link ?? "",
+        pdf_link: (data as any).pdf_link ?? "",
       });
     }
     setLoading(false);
@@ -99,6 +102,7 @@ export default function LessonContentEditor({ lesson, onBack }: Props) {
       prayer_prompt: content.prayer_prompt,
       video_link: content.video_link,
       audio_link: content.audio_link,
+      pdf_link: content.pdf_link,
     }, { onConflict: "lesson_id" });
     setSaving(false);
     setSaved(true);
@@ -258,6 +262,19 @@ export default function LessonContentEditor({ lesson, onBack }: Props) {
               value={content.audio_link}
               onChange={e => setContent(p => ({ ...p, audio_link: e.target.value }))}
               placeholder="https://..."
+              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 mb-1.5">
+              <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+              <p className="font-inter text-xs font-semibold text-muted-foreground">Link da apostila / PDF (Google Drive)</p>
+            </div>
+            <input
+              type="url"
+              value={content.pdf_link}
+              onChange={e => setContent(p => ({ ...p, pdf_link: e.target.value }))}
+              placeholder="https://drive.google.com/..."
               className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
