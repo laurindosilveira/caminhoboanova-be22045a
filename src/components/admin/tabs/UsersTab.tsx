@@ -1,9 +1,13 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Shield, User, Search, ShieldCheck, ShieldOff, CalendarDays, MapPin, ChevronRight, X, Save, Phone, Cake, Home, Users } from "lucide-react";
+import { Shield, User, Search, ShieldCheck, ShieldOff, CalendarDays, MapPin, ChevronRight, X, Save, Phone, Cake, Home, Users, GraduationCap, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import TurmasManagement from "./TurmasManagement";
+import WaitingRoom from "./WaitingRoom";
+
+type Turma = { id: string; name: string; year: number; area: string | null };
 
 type UserEntry = {
   user_id: string;
@@ -17,6 +21,7 @@ type UserEntry = {
   father_phone: string;
   mother_phone: string;
   address: string;
+  turma_id: string | null;
   role: "admin" | "lider" | "user";
   admin_area: string | null;
   created_year: number;
@@ -49,6 +54,7 @@ const AREA_COMMUNITIES: Record<string, string[]> = {
 
 export default function UsersTab() {
   const { toast } = useToast();
+  const [subTab, setSubTab] = useState<"users" | "turmas" | "waiting">("users");
   const [users, setUsers] = useState<UserEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -58,25 +64,24 @@ export default function UsersTab() {
   const [promotingUser, setPromotingUser] = useState<UserEntry | null>(null);
   const [promotingRole, setPromotingRole] = useState<"admin" | "lider" | null>(null);
   const [editingUser, setEditingUser] = useState<UserEntry | null>(null);
-  const [editForm, setEditForm] = useState({ full_name: "", phone: "", birth_date: "", community: "", area: "", father_name: "", mother_name: "", father_phone: "", mother_phone: "", address: "" });
+  const [editForm, setEditForm] = useState({ full_name: "", phone: "", birth_date: "", community: "", area: "", father_name: "", mother_name: "", father_phone: "", mother_phone: "", address: "", turma_id: "" });
+  const [turmas, setTurmas] = useState<Turma[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => { fetchUsers(); }, []);
 
   async function fetchUsers() {
     setLoading(true);
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("user_id, full_name, community, area, phone, birth_date, father_name, mother_name, father_phone, mother_phone, address, created_at")
-      .order("full_name");
+    const [{ data: profiles }, { data: roles }, { data: turmasData }] = await Promise.all([
+      supabase.from("profiles").select("user_id, full_name, community, area, phone, birth_date, father_name, mother_name, father_phone, mother_phone, address, created_at, turma_id").order("full_name"),
+      supabase.from("user_roles").select("user_id, role, admin_area"),
+      supabase.from("turmas").select("id, name, year, area").eq("is_active", true).order("year", { ascending: false }),
+    ]);
 
-    const { data: roles } = await supabase
-      .from("user_roles")
-      .select("user_id, role, admin_area");
+    setTurmas(turmasData ?? []);
 
     const roleMap: Record<string, { role: "admin" | "lider" | "user"; admin_area: string | null }> = {};
     (roles ?? []).forEach(r => {
-      // Prioritize admin over lider
       const existing = roleMap[r.user_id];
       if (!existing || (r.role === "admin" && existing.role !== "admin")) {
         roleMap[r.user_id] = { role: r.role as "admin" | "lider" | "user", admin_area: r.admin_area ?? null };
@@ -90,6 +95,7 @@ export default function UsersTab() {
       father_phone: (p as any).father_phone ?? "",
       mother_phone: (p as any).mother_phone ?? "",
       address: (p as any).address ?? "",
+      turma_id: p.turma_id ?? null,
       role: roleMap[p.user_id]?.role ?? "user",
       admin_area: roleMap[p.user_id]?.admin_area ?? null,
       created_year: new Date(p.created_at).getFullYear(),
@@ -163,6 +169,7 @@ export default function UsersTab() {
       father_phone: u.father_phone,
       mother_phone: u.mother_phone,
       address: u.address,
+      turma_id: u.turma_id ?? "",
     });
   }
 
@@ -186,6 +193,7 @@ export default function UsersTab() {
       father_phone: editForm.father_phone,
       mother_phone: editForm.mother_phone,
       address: editForm.address,
+      turma_id: editForm.turma_id || null,
     }).eq("user_id", editingUser.user_id);
 
     if (error) {
@@ -193,7 +201,7 @@ export default function UsersTab() {
     } else {
       setUsers(prev => prev.map(p =>
         p.user_id === editingUser.user_id
-          ? { ...p, full_name: editForm.full_name, phone: editForm.phone, birth_date: editForm.birth_date, community: editForm.community, area: newArea }
+          ? { ...p, full_name: editForm.full_name, phone: editForm.phone, birth_date: editForm.birth_date, community: editForm.community, area: newArea, turma_id: editForm.turma_id || null }
           : p
       ));
       toast({ title: "✅ Perfil atualizado", description: `Dados de ${editForm.full_name} salvos.` });
@@ -216,8 +224,24 @@ export default function UsersTab() {
   // Get communities for the selected area in edit form
   const editCommunities = AREA_COMMUNITIES[editForm.area] ?? [];
 
+  if (subTab === "turmas") return (
+    <div className="space-y-5">
+      <SubTabNav active={subTab} onChange={setSubTab} />
+      <TurmasManagement />
+    </div>
+  );
+
+  if (subTab === "waiting") return (
+    <div className="space-y-5">
+      <SubTabNav active={subTab} onChange={setSubTab} />
+      <WaitingRoom />
+    </div>
+  );
+
   return (
     <div className="space-y-5">
+      <SubTabNav active={subTab} onChange={setSubTab} />
+
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
           <Shield className="w-5 h-5 text-primary" />
@@ -370,6 +394,16 @@ export default function UsersTab() {
               <Input value={editForm.address} onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))} className="rounded-xl" placeholder="Rua, nº, bairro, cidade" />
             </div>
 
+            {/* Turma selector */}
+            <div>
+              <label className="text-xs font-inter font-medium text-muted-foreground mb-1 flex items-center gap-1"><GraduationCap className="w-3 h-3" /> Turma</label>
+              <select value={editForm.turma_id} onChange={e => setEditForm(f => ({ ...f, turma_id: e.target.value }))}
+                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                <option value="">Sem turma (Sala de espera)</option>
+                {turmas.map(t => <option key={t.id} value={t.id}>{t.name} ({t.year})</option>)}
+              </select>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-inter font-medium text-muted-foreground mb-1 flex items-center gap-1"><Users className="w-3 h-3" /> Nome do pai</label>
@@ -497,6 +531,33 @@ function UserRow({
         {(u.role === "admin" || u.role === "lider") ? <ShieldOff className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />}
         {u.role === "admin" ? "Remover" : u.role === "lider" ? "Remover" : "Promover"}
       </button>
+    </div>
+  );
+}
+
+type SubTabType = "users" | "turmas" | "waiting";
+const SUB_TABS: { id: SubTabType; label: string; icon: typeof Shield }[] = [
+  { id: "users", label: "Usuários", icon: Shield },
+  { id: "turmas", label: "Turmas", icon: GraduationCap },
+  { id: "waiting", label: "Sala de Espera", icon: Clock },
+];
+
+function SubTabNav({ active, onChange }: { active: SubTabType; onChange: (t: SubTabType) => void }) {
+  return (
+    <div className="flex gap-1.5 bg-muted rounded-2xl p-1">
+      {SUB_TABS.map(tab => {
+        const Icon = tab.icon;
+        const isActive = active === tab.id;
+        return (
+          <button key={tab.id} onClick={() => onChange(tab.id)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-montserrat font-bold transition-all ${
+              isActive ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            }`}>
+            <Icon className="w-3.5 h-3.5" />
+            {tab.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
