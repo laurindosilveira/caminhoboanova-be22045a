@@ -16,6 +16,7 @@ import UsersTab from "@/components/admin/tabs/UsersTab";
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
 const AREA_2_COMMUNITIES = ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"];
+const ALL_COMMUNITIES = [...AREA_1_COMMUNITIES, ...AREA_2_COMMUNITIES];
 
 const COMMUNITY_ICONS: Record<string, string> = {
   "Rincão Frente": "⛪", "Rincão Fundo": "🏡", "Bom Pastor": "🐑", "Iriá Pira 1": "🌿",
@@ -33,7 +34,7 @@ type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: bo
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { profile, role, signOut } = useAuth();
+  const { profile, role, isSuper, signOut } = useAuth();
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -42,12 +43,15 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<AdminTab>(role === "lider" ? "courses" : "overview");
   const [highlightedParticipant, setHighlightedParticipant] = useState<Participant | null>(null);
   const [selectedCommunity, setSelectedCommunity] = useState<string | null>(role === "lider" ? "todas" : "todas");
+  const [selectedArea, setSelectedArea] = useState<string | null>(isSuper ? null : (profile?.area ?? null));
 
-  const areaName = profile?.area ?? "";
+  const areaName = selectedArea ?? profile?.area ?? "";
   const areaNumber = areaName === "Área 1" ? "1" : "2";
   const currentYear = new Date().getFullYear();
-  const turmaName = `Área ${areaNumber} · ${currentYear}`;
-  const communities = areaName === "Área 1" ? AREA_1_COMMUNITIES : AREA_2_COMMUNITIES;
+  const turmaName = isSuper && !selectedArea ? `Todas as Turmas · ${currentYear}` : `Área ${areaNumber} · ${currentYear}`;
+  const communities = isSuper && !selectedArea 
+    ? ALL_COMMUNITIES 
+    : (areaName === "Área 1" ? AREA_1_COMMUNITIES : AREA_2_COMMUNITIES);
 
   useEffect(() => {
     if (role !== "admin" && role !== "lider") { navigate("/"); return; }
@@ -103,10 +107,13 @@ export default function AdminDashboard() {
     setActiveTab("attendance");
   }
 
-  // Filter participants by selected community
-  const filteredParticipants = selectedCommunity
-    ? participants.filter(p => p.community === selectedCommunity)
+  // Filter participants by selected area and community
+  const areaFilteredParticipants = selectedArea && selectedArea !== "todas"
+    ? participants.filter(p => p.area === selectedArea)
     : participants;
+  const filteredParticipants = selectedCommunity && selectedCommunity !== "todas"
+    ? areaFilteredParticipants.filter(p => p.community === selectedCommunity)
+    : areaFilteredParticipants;
 
   const stats = {
     total: filteredParticipants.length,
@@ -117,8 +124,8 @@ export default function AdminDashboard() {
       : 0,
   };
 
-  // Community selector screen
-  if (!selectedCommunity) {
+  // Area selector for super admins
+  if (isSuper && !selectedArea) {
     return (
       <div className="min-h-screen bg-background">
         <header className="px-4 pt-8 pb-6" style={{ background: "var(--gradient-hero)" }}>
@@ -131,10 +138,90 @@ export default function AdminDashboard() {
             </button>
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-2xl bg-white/15 border border-white/30 flex items-center justify-center">
-                <span className="text-xl">✝️</span>
+                <span className="text-xl">👑</span>
               </div>
               <div>
-                <p className="text-primary-foreground/60 font-inter text-xs">Painel do Administrador</p>
+                <p className="text-primary-foreground/60 font-inter text-xs">Super Administrador</p>
+                <h1 className="font-montserrat font-black text-primary-foreground text-lg">Selecione a Turma</h1>
+              </div>
+            </div>
+          </div>
+        </header>
+        <main className="max-w-2xl mx-auto px-4 py-6 space-y-3">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
+                <span className="text-2xl">✝️</span>
+              </div>
+              <p className="text-muted-foreground font-inter text-sm">Carregando painel...</p>
+            </div>
+          ) : (
+            <>
+              <p className="text-center text-muted-foreground font-inter text-xs">Escolha uma área para gerenciar</p>
+              {/* All areas option */}
+              <button
+                onClick={() => { setSelectedArea("todas"); setSelectedCommunity("todas"); }}
+                className="w-full flex items-center gap-4 p-4 bg-card rounded-2xl border-2 border-primary/20 shadow-sm hover:border-primary/50 hover:bg-primary/5 transition-all"
+              >
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
+                  <span className="text-2xl">🌍</span>
+                </div>
+                <div className="text-left flex-1">
+                  <p className="font-montserrat font-bold text-foreground text-sm">Todas as Áreas</p>
+                  <p className="text-muted-foreground font-inter text-xs mt-0.5">
+                    {participants.length} participantes · Visão completa
+                  </p>
+                </div>
+                <span className="text-muted-foreground text-sm">→</span>
+              </button>
+              {/* Area 1 */}
+              {(["Área 1", "Área 2"] as const).map(area => {
+                const areaParticipants = participants.filter(p => p.area === area);
+                const num = area === "Área 1" ? "1" : "2";
+                return (
+                  <button
+                    key={area}
+                    onClick={() => { setSelectedArea(area); setSelectedCommunity("todas"); }}
+                    className="w-full flex items-center gap-4 p-4 bg-card rounded-2xl border border-border shadow-sm hover:border-primary/50 hover:bg-primary/5 transition-all"
+                  >
+                    <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center">
+                      <span className="text-2xl">{num === "1" ? "⛪" : "✝️"}</span>
+                    </div>
+                    <div className="text-left flex-1">
+                      <p className="font-montserrat font-bold text-foreground text-sm">Área {num} · {currentYear}</p>
+                      <p className="text-muted-foreground font-inter text-xs mt-0.5">
+                        {areaParticipants.length} participantes
+                      </p>
+                    </div>
+                    <span className="text-muted-foreground text-sm">→</span>
+                  </button>
+                );
+              })}
+            </>
+          )}
+        </main>
+      </div>
+    );
+  }
+
+  // Community selector screen (for non-super or after area selection)
+  if (!selectedCommunity) {
+    return (
+      <div className="min-h-screen bg-background">
+        <header className="px-4 pt-8 pb-6" style={{ background: "var(--gradient-hero)" }}>
+          <div className="max-w-2xl mx-auto">
+            <button
+              onClick={() => isSuper ? setSelectedArea(null) : navigate("/")}
+              className="flex items-center gap-1.5 text-primary-foreground/70 font-inter text-xs mb-3 hover:text-primary-foreground transition-colors"
+            >
+              <span className="text-sm">←</span> {isSuper ? "Voltar para seleção de área" : "Voltar para área geral"}
+            </button>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-2xl bg-white/15 border border-white/30 flex items-center justify-center">
+                <span className="text-xl">{isSuper ? "👑" : "✝️"}</span>
+              </div>
+              <div>
+                <p className="text-primary-foreground/60 font-inter text-xs">{isSuper ? "Super Administrador" : "Painel do Administrador"}</p>
                 <h1 className="font-montserrat font-black text-primary-foreground text-lg">{turmaName}</h1>
               </div>
             </div>
@@ -158,10 +245,13 @@ export default function AdminDashboard() {
 
               {/* All communities option */}
               {(() => {
-                const totalAlerts = participants.filter(p => plans[p.user_id]?.is_priority || plans[p.user_id]?.needs_pastor).length;
-                const noActivity = participants.filter(p => p.completed_count === 0).length;
-                const avgProgress = participants.length > 0 && activities.length > 0
-                  ? Math.round(participants.reduce((s, p) => s + (p.completed_count / activities.length) * 100, 0) / participants.length)
+                const filteredByArea = selectedArea && selectedArea !== "todas" 
+                  ? participants.filter(p => p.area === selectedArea)
+                  : participants;
+                const totalAlerts = filteredByArea.filter(p => plans[p.user_id]?.is_priority || plans[p.user_id]?.needs_pastor).length;
+                const noActivity = filteredByArea.filter(p => p.completed_count === 0).length;
+                const avgProgress = filteredByArea.length > 0 && activities.length > 0
+                  ? Math.round(filteredByArea.reduce((s, p) => s + (p.completed_count / activities.length) * 100, 0) / filteredByArea.length)
                   : 0;
                 return (
                   <button
@@ -174,7 +264,7 @@ export default function AdminDashboard() {
                     <div className="text-left flex-1">
                       <p className="font-montserrat font-bold text-foreground text-sm">{turmaName} — Todas</p>
                       <p className="text-muted-foreground font-inter text-xs mt-0.5">
-                        {participants.length} participante{participants.length !== 1 ? "s" : ""} · Visão geral
+                        {filteredByArea.length} participante{filteredByArea.length !== 1 ? "s" : ""} · Visão geral
                       </p>
                       <div className="mt-1.5 flex items-center gap-2">
                         <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -209,9 +299,9 @@ export default function AdminDashboard() {
     );
   }
 
-  const displayTurma = turmaName;
+  const displayTurma = isSuper ? `👑 ${turmaName}` : turmaName;
   const displaySubtitle = selectedCommunity === "todas" ? null : selectedCommunity;
-  const displayParticipants = selectedCommunity === "todas" ? participants : filteredParticipants;
+  const displayParticipants = filteredParticipants;
 
   return (
     <div className="min-h-screen bg-background">
@@ -222,7 +312,14 @@ export default function AdminDashboard() {
         onSignOut={signOut}
         onBackToUser={() => navigate("/")}
         selectedCommunity={selectedCommunity}
-        onChangeCommunity={() => setSelectedCommunity(null)}
+        onChangeCommunity={() => {
+          if (isSuper) {
+            setSelectedCommunity(null);
+            setSelectedArea(null);
+          } else {
+            setSelectedCommunity(null);
+          }
+        }}
       />
 
       <main className="max-w-2xl mx-auto px-4 py-5 pb-24">
