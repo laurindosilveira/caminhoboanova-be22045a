@@ -432,6 +432,7 @@ export type Database = {
           description: string | null
           event_date: string
           id: string
+          linked_lesson_id: string | null
           location: string | null
           title: string
           type: string
@@ -444,6 +445,7 @@ export type Database = {
           description?: string | null
           event_date: string
           id?: string
+          linked_lesson_id?: string | null
           location?: string | null
           title: string
           type?: string
@@ -456,11 +458,20 @@ export type Database = {
           description?: string | null
           event_date?: string
           id?: string
+          linked_lesson_id?: string | null
           location?: string | null
           title?: string
           type?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "events_linked_lesson_id_fkey"
+            columns: ["linked_lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       lesson_content: {
         Row: {
