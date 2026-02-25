@@ -39,7 +39,7 @@ type MeetingEval = {
 
 type WorshipRecord = {
   id: string; worship_date: string; worship_time: string;
-  preacher_name: string; status: string; created_at: string;
+  preacher_name: string; status: string; event_type: string; created_at: string;
 };
 
 type TimelineCategory = "encontro" | "crise" | "progresso" | "conversa" | "marco";
@@ -128,7 +128,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         supabase.from("user_progress").select("activity_id, completed_at").eq("user_id", p.user_id),
         supabase.from("spiritual_assessments").select("month, year, prayer_score, presence_score, created_at").eq("user_id", p.user_id),
         supabase.from("meeting_evaluations").select("event_id, participation_score, understanding_score, engagement_score, notes, created_at").eq("user_id", p.user_id),
-        supabase.from("worship_attendance").select("id, worship_date, worship_time, preacher_name, status, created_at").eq("user_id", p.user_id).order("worship_date", { ascending: false }),
+        supabase.from("worship_attendance").select("id, worship_date, worship_time, preacher_name, status, event_type, created_at").eq("user_id", p.user_id).order("worship_date", { ascending: false }),
       ]);
 
       setAssessment(ass ?? null);
@@ -270,11 +270,13 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         if (worshipCount === 1 && w.status === "aprovado") {
           tl.push({ date: w.created_at, type: "milestone", category: "marco", title: "⛪ Primeiro culto confirmado!", detail: "Marco importante na caminhada", icon: "⛪", severity: "positive" });
         }
+        const eventLabel = w.event_type === "jemiac" ? "JEMIAC" : w.event_type === "retiro" ? "Retiro" : "Culto";
+        const eventEmoji = w.event_type === "jemiac" ? "✝️" : w.event_type === "retiro" ? "🏕️" : "⛪";
         tl.push({
           date: w.created_at, type: "worship", category: "encontro",
-          title: `⛪ Culto: ${new Date(w.worship_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} ${w.worship_time}`,
+          title: `${eventEmoji} ${eventLabel}: ${new Date(w.worship_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} ${w.worship_time}`,
           detail: `Pregador: ${w.preacher_name} · ${statusLabel}`,
-          icon: "⛪", severity: w.status === "aprovado" ? "positive" : "neutral",
+          icon: eventEmoji, severity: w.status === "aprovado" ? "positive" : "neutral",
         });
       });
 
@@ -798,8 +800,8 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           {worshipRecords.length > 0 && (
             <div className="mt-4">
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-lg">⛪</span>
-                <p className="font-montserrat font-bold text-foreground text-sm">Presença em Cultos</p>
+                <span className="text-lg">📅</span>
+                <p className="font-montserrat font-bold text-foreground text-sm">Presença em Eventos</p>
               </div>
               <div className="space-y-2">
                 {worshipRecords.map(w => {
@@ -810,10 +812,10 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   }[w.status] ?? { label: w.status, color: "text-muted-foreground", bg: "bg-muted" };
                   return (
                     <div key={w.id} className="bg-card rounded-xl border border-border p-3 flex items-center gap-3">
-                      <span className="text-lg">⛪</span>
+                      <span className="text-lg">{w.event_type === "jemiac" ? "✝️" : w.event_type === "retiro" ? "🏕️" : "⛪"}</span>
                       <div className="flex-1 min-w-0">
                         <p className="font-inter text-sm font-medium text-foreground">
-                          {new Date(w.worship_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })} · {w.worship_time}
+                          {w.event_type === "jemiac" ? "JEMIAC" : w.event_type === "retiro" ? "Retiro" : "Culto"} · {new Date(w.worship_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })} · {w.worship_time}
                         </p>
                         <p className="font-inter text-[10px] text-muted-foreground">Pregador: {w.preacher_name}</p>
                       </div>
