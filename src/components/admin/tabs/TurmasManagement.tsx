@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Trash2, GraduationCap, Calendar } from "lucide-react";
+import { Plus, Trash2, GraduationCap, Calendar, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -27,6 +27,8 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: "", area: "", year: new Date().getFullYear(), description: "" });
+  const [editingTurma, setEditingTurma] = useState<Turma | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", description: "" });
 
   useEffect(() => { fetchTurmas(); }, []);
 
@@ -67,6 +69,21 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
       fetchTurmas();
     }
     setCreating(false);
+  }
+
+  async function handleEdit() {
+    if (!editingTurma || !editForm.name.trim()) return;
+    const { error } = await supabase.from("turmas").update({
+      name: editForm.name.trim(),
+      description: editForm.description.trim() || null,
+    }).eq("id", editingTurma.id);
+    if (error) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "✅ Turma atualizada" });
+      setEditingTurma(null);
+      fetchTurmas();
+    }
   }
 
   async function handleDelete(turma: Turma) {
@@ -150,6 +167,30 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
         </DialogContent>
       </Dialog>
 
+      {/* Edit dialog */}
+      <Dialog open={!!editingTurma} onOpenChange={(open) => !open && setEditingTurma(null)}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-montserrat font-bold text-foreground text-base">Editar turma</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-inter font-medium text-muted-foreground mb-1 block">Nome da turma</label>
+              <Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} className="rounded-xl" />
+            </div>
+            <div>
+              <label className="text-xs font-inter font-medium text-muted-foreground mb-1 block">Descrição (opcional)</label>
+              <Input value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} className="rounded-xl" />
+            </div>
+            <button onClick={handleEdit} disabled={!editForm.name.trim()}
+              className="w-full py-2.5 rounded-xl text-sm font-montserrat font-bold text-primary-foreground disabled:opacity-50"
+              style={{ background: "var(--gradient-hero)" }}>
+              Salvar
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Turmas list */}
       {loading ? (
         <div className="space-y-2">
@@ -181,10 +222,16 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
                   <p className="text-muted-foreground text-xs font-inter mt-0.5 truncate">{turma.description}</p>
                 )}
               </div>
-              <button onClick={(e) => { e.stopPropagation(); handleDelete(turma); }}
-                className="w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center hover:bg-destructive/20 flex-shrink-0" title="Excluir turma">
-                <Trash2 className="w-4 h-4 text-destructive" />
-              </button>
+              <div className="flex gap-1.5 flex-shrink-0">
+                <button onClick={(e) => { e.stopPropagation(); setEditingTurma(turma); setEditForm({ name: turma.name, description: turma.description || "" }); }}
+                  className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center hover:bg-primary/20" title="Editar turma">
+                  <Pencil className="w-4 h-4 text-primary" />
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); handleDelete(turma); }}
+                  className="w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center hover:bg-destructive/20" title="Excluir turma">
+                  <Trash2 className="w-4 h-4 text-destructive" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
