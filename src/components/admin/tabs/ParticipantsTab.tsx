@@ -56,14 +56,39 @@ function calcAge(birthDate: string) {
   return age;
 }
 
+type WorshipInfo = { event_type: string; worship_date: string };
+
 type DetailProps = { participant: Participant; activities: Activity[]; onBack: () => void };
 
 function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) {
   const [typeFilter, setTypeFilter] = useState("todos");
+  const [worshipRecords, setWorshipRecords] = useState<WorshipInfo[]>([]);
+
+  useEffect(() => {
+    supabase
+      .from("worship_attendance")
+      .select("event_type, worship_date")
+      .eq("user_id", p.user_id)
+      .eq("status", "aprovado")
+      .order("worship_date", { ascending: true })
+      .then(({ data }) => setWorshipRecords(data ?? []));
+  }, [p.user_id]);
+
   const pct = activities.length > 0 ? Math.round((p.completed_count / activities.length) * 100) : 0;
   const status = getStatusInfo(p.completed_count, activities.length);
   const totalPts = activities.filter(a => p.completed_activity_ids.includes(a.id)).reduce((s, a) => s + a.points, 0);
   const age = calcAge(p.birth_date);
+
+  // Map encontro activities to worship event types
+  const encontroActivities = activities.filter(a => a.type === "encontro").sort((a, b) => a.order_num - b.order_num);
+  const activityTitleMap = new Map<string, string>();
+  encontroActivities.forEach((act, idx) => {
+    if (p.completed_activity_ids.includes(act.id) && worshipRecords[idx]) {
+      const w = worshipRecords[idx];
+      const label = w.event_type === "jemiac" ? "JEMIAC" : w.event_type === "retiro" ? "Retiro" : "Culto";
+      activityTitleMap.set(act.id, label);
+    }
+  });
 
   const filteredActivities = typeFilter === "todos" ? activities : activities.filter(a => a.type === typeFilter);
 
@@ -172,7 +197,7 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
                   {done ? <CheckCircle className="w-4 h-4 text-brand-green" /> : <Clock className="w-4 h-4 text-muted-foreground" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={`font-inter text-xs truncate ${done ? "text-foreground" : "text-muted-foreground"}`}>{activity.title}</p>
+                  <p className={`font-inter text-xs truncate ${done ? "text-foreground" : "text-muted-foreground"}`}>{activityTitleMap.get(activity.id) ?? activity.title}</p>
                 </div>
                 <span className={`px-2 py-0.5 rounded-md text-[10px] font-medium flex items-center gap-1 ${getTypeColor(activity.type)}`}>
                   {getTypeIcon(activity.type)} {activity.type}
