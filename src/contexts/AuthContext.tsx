@@ -22,6 +22,7 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   role: "user" | "admin" | "lider" | null;
+  isSuper: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -32,6 +33,7 @@ const AuthContext = createContext<AuthContextType>({
   session: null,
   profile: null,
   role: null,
+  isSuper: false,
   loading: true,
   signOut: async () => {},
   refreshProfile: async () => {},
@@ -42,15 +44,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [role, setRole] = useState<"user" | "admin" | "lider" | null>(null);
+  const [isSuper, setIsSuper] = useState(false);
   const [loading, setLoading] = useState(true);
 
   async function fetchProfileAndRole(userId: string) {
-    const [profileRes, isAdminRes, isLiderRes] = await Promise.all([
+    const [profileRes, isAdminRes, isLiderRes, isSuperRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
       supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
       supabase.rpc("has_role", { _user_id: userId, _role: "lider" }),
+      supabase.rpc("is_super_admin", { _user_id: userId }),
     ]);
     setProfile(profileRes.data ?? null);
+    setIsSuper(isSuperRes.data === true);
     if (!isAdminRes.error && !isLiderRes.error) {
       if (isAdminRes.data === true) setRole("admin");
       else if (isLiderRes.data === true) setRole("lider");
@@ -94,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     setProfile(null);
     setRole(null);
+    setIsSuper(false);
   }
 
   async function refreshProfile() {
@@ -104,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, role, loading, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, session, profile, role, isSuper, loading, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

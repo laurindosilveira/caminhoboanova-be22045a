@@ -983,18 +983,21 @@ export type Database = {
         Row: {
           admin_area: string | null
           id: string
+          is_super: boolean
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
           admin_area?: string | null
           id?: string
+          is_super?: boolean
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
           admin_area?: string | null
           id?: string
+          is_super?: boolean
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
@@ -1072,6 +1075,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_super_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "user" | "admin" | "lider"
