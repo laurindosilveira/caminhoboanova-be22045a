@@ -1,4 +1,5 @@
 import { LogOut, ChevronLeft, RefreshCw } from "lucide-react";
+import TurmaReportPDF from "./TurmaReportPDF";
 
 type Stats = {
   total: number;
@@ -15,9 +16,12 @@ type Props = {
   onBackToUser: () => void;
   selectedCommunity?: string | null;
   onChangeCommunity?: () => void;
+  participants?: any[];
+  activities?: any[];
+  turmaLabel?: string;
 };
 
-export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBackToUser, selectedCommunity, onChangeCommunity }: Props) {
+export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBackToUser, selectedCommunity, onChangeCommunity, participants, activities, turmaLabel }: Props) {
   return (
     <header className="px-4 pt-8 pb-5" style={{ background: "var(--gradient-hero)" }}>
       <div className="max-w-2xl mx-auto">
@@ -42,6 +46,13 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {participants && activities && participants.length > 0 && (
+              <TurmaReportPDF
+                participants={participants}
+                activities={activities}
+                turmaName={turmaLabel || areaName}
+              />
+            )}
             {selectedCommunity && onChangeCommunity && (
               <button
                 onClick={onChangeCommunity}

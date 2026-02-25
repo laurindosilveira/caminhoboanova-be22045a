@@ -312,6 +312,9 @@ export default function AdminDashboard() {
         onSignOut={signOut}
         onBackToUser={() => navigate("/")}
         selectedCommunity={selectedCommunity}
+        participants={displayParticipants}
+        activities={activities}
+        turmaLabel={`${turmaName}${displaySubtitle ? ` - ${displaySubtitle}` : ""}`}
         onChangeCommunity={() => {
           if (isSuper) {
             setSelectedCommunity(null);
