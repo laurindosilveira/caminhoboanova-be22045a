@@ -10,6 +10,7 @@ interface Profile {
   phone: string;
   community: string;
   area: string;
+  turma_id?: string | null;
   father_name?: string;
   mother_name?: string;
   father_phone?: string;
