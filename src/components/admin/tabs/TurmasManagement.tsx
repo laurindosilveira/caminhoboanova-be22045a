@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Trash2, GraduationCap, Calendar, Pencil, Archive, CheckCircle2, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Trash2, GraduationCap, Calendar, Pencil, Archive, CheckCircle2, RotateCcw, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import TurmaReportPDF from "@/components/admin/TurmaReportPDF";
 
 type Turma = {
   id: string;
@@ -32,6 +33,25 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
   const [archiving, setArchiving] = useState<string | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<Turma | null>(null);
   const [showArchive, setShowArchive] = useState(false);
+  const [archivedPdfData, setArchivedPdfData] = useState<Record<string, { participants: any[]; activities: any[] }>>({});
+  const [loadingPdf, setLoadingPdf] = useState<string | null>(null);
+
+  async function loadArchivedTurmaData(turmaId: string) {
+    if (archivedPdfData[turmaId]) return;
+    setLoadingPdf(turmaId);
+    const [{ data: profiles }, { data: activitiesData }, { data: progressData }] = await Promise.all([
+      supabase.from("profiles").select("user_id, full_name, community, area, birth_date, phone, turma_id").eq("turma_id", turmaId),
+      supabase.from("activities").select("*").order("order_num"),
+      supabase.from("user_progress").select("user_id, activity_id"),
+    ]);
+    const participantList = (profiles ?? []).map(p => {
+      const userProgress = (progressData ?? []).filter(pr => pr.user_id === p.user_id);
+      return { ...p, completed_count: userProgress.length, completed_activity_ids: userProgress.map(pr => pr.activity_id) };
+    });
+    setArchivedPdfData(prev => ({ ...prev, [turmaId]: { participants: participantList, activities: activitiesData ?? [] } }));
+    setLoadingPdf(null);
+  }
+
 
   useEffect(() => { fetchTurmas(); }, []);
 
@@ -345,33 +365,54 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
 
               {showArchive && (
                 <div className="mt-2 space-y-2 animate-in slide-in-from-top-2 duration-200">
-                  {archivedTurmas.map(turma => (
-                    <div key={turma.id}
-                      className="bg-card/50 border border-border rounded-2xl p-4 flex items-center gap-4 opacity-80">
-                      <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
-                        <Archive className="w-6 h-6 text-muted-foreground" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="font-montserrat font-bold text-foreground text-sm truncate">{turma.name}</p>
-                          <span className="px-2 py-0.5 rounded-full bg-green-500/10 text-green-700 text-[10px] font-montserrat font-bold flex-shrink-0">
-                            ✓ Confirmado
-                          </span>
+                  {archivedTurmas.map(turma => {
+                    const pdfData = archivedPdfData[turma.id];
+                    return (
+                      <div key={turma.id} className="bg-card/50 border border-border rounded-2xl p-4 opacity-80">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
+                            <Archive className="w-6 h-6 text-muted-foreground" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="font-montserrat font-bold text-foreground text-sm truncate">{turma.name}</p>
+                              <span className="px-2 py-0.5 rounded-full bg-green-500/10 text-green-700 text-[10px] font-montserrat font-bold flex-shrink-0">
+                                ✓ Confirmado
+                              </span>
+                            </div>
+                            <p className="text-muted-foreground text-xs font-inter mt-0.5">
+                              {turma.year} · {turma.area || "Todas as áreas"} · {turma.member_count ?? 0} membro{(turma.member_count ?? 0) !== 1 ? "s" : ""}
+                            </p>
+                          </div>
+                          <div className="flex gap-1.5 flex-shrink-0">
+                            {pdfData ? (
+                              <TurmaReportPDF participants={pdfData.participants} activities={pdfData.activities} turmaName={turma.name} />
+                            ) : (
+                              <button
+                                onClick={() => loadArchivedTurmaData(turma.id)}
+                                disabled={loadingPdf === turma.id}
+                                className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center hover:bg-primary/20 flex-shrink-0 disabled:opacity-50"
+                                title="Carregar relatório PDF"
+                              >
+                                {loadingPdf === turma.id
+                                  ? <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                  : <Download className="w-4 h-4 text-primary" />
+                                }
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleReactivate(turma)}
+                              disabled={archiving === turma.id}
+                              className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center hover:bg-primary/20 flex-shrink-0 disabled:opacity-50"
+                              title="Reativar turma"
+                            >
+                              <RotateCcw className="w-4 h-4 text-primary" />
+                            </button>
+                          </div>
                         </div>
-                        <p className="text-muted-foreground text-xs font-inter mt-0.5">
-                          {turma.year} · {turma.area || "Todas as áreas"} · {turma.member_count ?? 0} membro{(turma.member_count ?? 0) !== 1 ? "s" : ""}
-                        </p>
                       </div>
-                      <button
-                        onClick={() => handleReactivate(turma)}
-                        disabled={archiving === turma.id}
-                        className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center hover:bg-primary/20 flex-shrink-0 disabled:opacity-50"
-                        title="Reativar turma"
-                      >
-                        <RotateCcw className="w-4 h-4 text-primary" />
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
