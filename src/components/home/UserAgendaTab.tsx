@@ -82,11 +82,15 @@ export default function UserAgendaTab() {
   }, [profile]);
 
   const now = new Date();
-  // Map encontro events to lesson by order
-  const encontroEvents = events.filter(e => e.type === "encontro").sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
+  // Map "Ensino Confirmatório" events (starting from March 21, 2026) to Course 2 lessons in order
+  const course2Lessons = lessonsByIndex.filter(l => l.course_order === 2);
+  const confirmatorioCutoff = new Date("2026-03-21T00:00:00");
+  const confirmatorioLessonEvents = events
+    .filter(e => e.type === "confirmatorio" && e.title === "Ensino Confirmatório" && new Date(e.event_date) >= confirmatorioCutoff)
+    .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
   const encontroLessonMap = new Map<string, LessonInfo>();
-  encontroEvents.forEach((e, i) => {
-    if (i < lessonsByIndex.length) encontroLessonMap.set(e.id, lessonsByIndex[i]);
+  confirmatorioLessonEvents.forEach((e, i) => {
+    if (i < course2Lessons.length) encontroLessonMap.set(e.id, course2Lessons[i]);
   });
 
   const upcoming = events.filter(e => new Date(e.event_date) >= now);
