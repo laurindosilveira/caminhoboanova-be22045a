@@ -22,11 +22,12 @@ type AttendanceRecord = { event_id: string; status: string };
 type LessonInfo = { id: string; title: string; order_num: number; course_title: string; course_order: number };
 
 const EVENT_TYPES: Record<string, { label: string; color: string; emoji: string }> = {
-  encontro: { label: "Encontro", color: "bg-primary/10 text-primary", emoji: "📅" },
-  culto:    { label: "Culto",    color: "bg-brand-green/10 text-brand-green", emoji: "⛪" },
-  jemiac:   { label: "JEMIAC",   color: "bg-secondary/10 text-secondary", emoji: "✝️" },
-  retiro:   { label: "Retiro",   color: "bg-secondary/10 text-secondary", emoji: "🏕️" },
-  evento:   { label: "Evento",   color: "bg-accent/20 text-accent-foreground", emoji: "🎉" },
+  encontro:      { label: "Encontro",          color: "bg-primary/10 text-primary",              emoji: "📅" },
+  culto:         { label: "Culto",             color: "bg-brand-green/10 text-brand-green",      emoji: "⛪" },
+  jemiac:        { label: "JEMIAC",            color: "bg-secondary/10 text-secondary",          emoji: "✝️" },
+  retiro:        { label: "Retiro",            color: "bg-secondary/10 text-secondary",          emoji: "🏕️" },
+  confirmatorio: { label: "Ens. Confirmatório", color: "bg-primary/10 text-primary",             emoji: "📖" },
+  evento:        { label: "Evento",            color: "bg-accent/20 text-accent-foreground",     emoji: "🎉" },
 };
 
 export default function UserAgendaTab() {
