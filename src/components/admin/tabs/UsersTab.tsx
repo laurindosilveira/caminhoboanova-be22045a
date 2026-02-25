@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Shield, User, Search, ShieldCheck, ShieldOff, CalendarDays, MapPin, ChevronRight, X, Save, Phone, Cake, Home, Users, GraduationCap, Clock } from "lucide-react";
+import { Shield, User, Search, ShieldCheck, ShieldOff, CalendarDays, MapPin, ChevronRight, X, Save, Phone, Cake, Home, Users, GraduationCap, Clock, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useNavigate } from "react-router-dom";
 import TurmasManagement from "./TurmasManagement";
 import WaitingRoom from "./WaitingRoom";
 
@@ -58,6 +59,7 @@ type UsersTabProps = {
 
 export default function UsersTab({ onSelectTurma }: UsersTabProps) {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [subTab, setSubTab] = useState<"users" | "turmas" | "waiting">("users");
   const [users, setUsers] = useState<UserEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -246,14 +248,23 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
     <div className="space-y-5">
       <SubTabNav active={subTab} onChange={setSubTab} />
 
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
-          <Shield className="w-5 h-5 text-primary" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+            <Shield className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="font-montserrat font-black text-foreground text-lg">Gerenciar Usuários</h2>
+            <p className="text-muted-foreground text-xs font-inter">Gerencie funções e permissões</p>
+          </div>
         </div>
-        <div>
-          <h2 className="font-montserrat font-black text-foreground text-lg">Gerenciar Usuários</h2>
-          <p className="text-muted-foreground text-xs font-inter">Gerencie funções e permissões</p>
-        </div>
+        <button
+          onClick={() => navigate("/exportar-dados")}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground text-xs font-montserrat font-bold transition-all border border-border"
+        >
+          <Download className="w-3.5 h-3.5" />
+          Exportar
+        </button>
       </div>
 
       {/* Search */}
