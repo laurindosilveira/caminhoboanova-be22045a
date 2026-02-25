@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { SCHEMA_SQL } from "@/lib/schemaSQL";
 
 function escapeSQL(val: unknown): string {
   if (val === null || val === undefined) return "NULL";
@@ -29,7 +29,6 @@ function buildInserts(table: string, rows: Record<string, unknown>[]): string {
 export default function ExportData() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
-  const { isSuper } = useAuth();
   const navigate = useNavigate();
 
   async function handleExport() {
@@ -59,15 +58,26 @@ export default function ExportData() {
         supabase.from("community_challenges").select("*"),
       ]);
 
-      setStatus("Gerando SQL...");
+      setStatus("Gerando SQL completo...");
 
       let sql = `-- =============================================\n`;
       sql += `-- EXPORT COMPLETO - Caminho Boa Nova\n`;
       sql += `-- Gerado em: ${new Date().toISOString()}\n`;
+      sql += `-- =============================================\n`;
+      sql += `-- Este arquivo contém TUDO: estrutura + dados.\n`;
+      sql += `-- Execute no SQL Editor do Supabase (projeto novo).\n`;
       sql += `-- =============================================\n\n`;
-      sql += `-- IMPORTANTE: Execute este arquivo no SQL Editor do Supabase\n`;
-      sql += `-- As tabelas devem existir antes de executar os INSERTs.\n`;
-      sql += `-- Este arquivo contém apenas os DADOS (não a estrutura).\n\n`;
+
+      // Part 1: Schema (tables, functions, RLS, triggers)
+      sql += `-- =============================================\n`;
+      sql += `-- PARTE 1: ESTRUTURA (Tabelas, Funções, RLS, Triggers)\n`;
+      sql += `-- =============================================\n\n`;
+      sql += SCHEMA_SQL;
+
+      // Part 2: Data
+      sql += `\n\n-- =============================================\n`;
+      sql += `-- PARTE 2: DADOS\n`;
+      sql += `-- =============================================\n\n`;
 
       // Order matters for foreign keys
       sql += buildInserts("courses", courses ?? []);
@@ -85,13 +95,13 @@ export default function ExportData() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `caminho-boa-nova-export-${new Date().toISOString().slice(0, 10)}.sql`;
+      a.download = `caminho-boa-nova-completo-${new Date().toISOString().slice(0, 10)}.sql`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      setStatus("✅ Arquivo gerado e baixado com sucesso!");
+      setStatus("✅ Arquivo completo gerado e baixado!");
     } catch (err) {
       console.error(err);
       setStatus("❌ Erro ao exportar: " + String(err));
@@ -106,20 +116,20 @@ export default function ExportData() {
         <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
           <span className="text-3xl">📦</span>
         </div>
-        <h1 className="font-montserrat font-black text-xl text-foreground">Exportar Dados</h1>
+        <h1 className="font-montserrat font-black text-xl text-foreground">Exportar Banco Completo</h1>
         <p className="text-muted-foreground font-inter text-sm">
-          Gera um arquivo SQL com todos os dados de cursos, lições, devocionais, atividades, turmas e eventos para importar em outro banco de dados.
+          Gera um arquivo SQL único com <strong>toda a estrutura</strong> (tabelas, funções, RLS, triggers) e <strong>todos os dados</strong> (cursos, lições, devocionais, atividades, turmas, eventos) para importar em outro Supabase.
         </p>
 
         <Button onClick={handleExport} disabled={loading} className="w-full" size="lg">
-          {loading ? "Exportando..." : "Gerar e Baixar SQL"}
+          {loading ? "Exportando..." : "Gerar e Baixar SQL Completo"}
         </Button>
 
         {status && (
           <p className="text-sm font-inter text-muted-foreground">{status}</p>
         )}
 
-        <Button variant="ghost" onClick={() => navigate("/")} className="text-xs">
+        <Button variant="ghost" onClick={() => navigate(-1)} className="text-xs">
           ← Voltar
         </Button>
       </div>
