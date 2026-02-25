@@ -52,7 +52,11 @@ const AREA_COMMUNITIES: Record<string, string[]> = {
   "Área 2": ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"],
 };
 
-export default function UsersTab() {
+type UsersTabProps = {
+  onSelectTurma?: (turma: { id: string; name: string; area: string | null; year: number }) => void;
+};
+
+export default function UsersTab({ onSelectTurma }: UsersTabProps) {
   const { toast } = useToast();
   const [subTab, setSubTab] = useState<"users" | "turmas" | "waiting">("users");
   const [users, setUsers] = useState<UserEntry[]>([]);
@@ -227,7 +231,7 @@ export default function UsersTab() {
   if (subTab === "turmas") return (
     <div className="space-y-5">
       <SubTabNav active={subTab} onChange={setSubTab} />
-      <TurmasManagement />
+      <TurmasManagement onSelectTurma={onSelectTurma} />
     </div>
   );
 
