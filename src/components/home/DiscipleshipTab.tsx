@@ -105,7 +105,12 @@ function ProgressRing({ pct, color, size = 64 }: { pct: number; color: string; s
 }
 
 // ─── MAIN COMPONENT ──────────────────────────────────────
-export default function DiscipleshipTab() {
+type DiscipleshipTabProps = {
+  targetLessonId?: string | null;
+  onTargetLessonConsumed?: () => void;
+};
+
+export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed }: DiscipleshipTabProps = {}) {
   const { profile } = useAuth();
 
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -147,6 +152,21 @@ export default function DiscipleshipTab() {
   const year = now.getFullYear();
 
   useEffect(() => { fetchAll(); }, []);
+
+  // Auto-open lesson when navigating from agenda
+  useEffect(() => {
+    if (targetLessonId && !loading && courses.length > 0) {
+      const lesson = courses.flatMap(c => c.lessons).find(l => l.id === targetLessonId);
+      if (lesson) {
+        setSelectedLesson(lesson);
+        setSelectedLessonMode("choice");
+        // Expand the course containing this lesson
+        const course = courses.find(c => c.lessons.some(l => l.id === targetLessonId));
+        if (course) setExpandedCourse(course.id);
+      }
+      onTargetLessonConsumed?.();
+    }
+  }, [targetLessonId, loading, courses]);
 
   async function fetchAll() {
     setLoading(true);

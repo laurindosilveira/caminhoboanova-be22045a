@@ -23,13 +23,20 @@ import { useUserStats } from "@/hooks/useUserStats";
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>("jornada");
+  const [targetLessonId, setTargetLessonId] = useState<string | null>(null);
   const { profile, role } = useAuth();
   const navigate = useNavigate();
   const stats = useUserStats();
 
   // Listen for lesson navigation from agenda
   useEffect(() => {
-    const handler = () => setActiveTab("jornada");
+    const handler = (e: Event) => {
+      const lessonId = (e as CustomEvent).detail?.lessonId;
+      if (lessonId) {
+        setTargetLessonId(lessonId);
+        setActiveTab("discipulado");
+      }
+    };
     window.addEventListener("navigate-to-lesson", handler);
     return () => window.removeEventListener("navigate-to-lesson", handler);
   }, []);
@@ -129,7 +136,12 @@ export default function Index() {
         {activeTab === "comunidade" && <CommunityTab />}
 
         {/* ===== DISCIPULADO ===== */}
-        {activeTab === "discipulado" && <DiscipleshipTab />}
+        {activeTab === "discipulado" && (
+          <DiscipleshipTab
+            targetLessonId={targetLessonId}
+            onTargetLessonConsumed={() => setTargetLessonId(null)}
+          />
+        )}
 
         {/* ===== PERFIL ===== */}
         {activeTab === "perfil" && (
