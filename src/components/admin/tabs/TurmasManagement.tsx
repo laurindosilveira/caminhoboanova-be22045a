@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Trash2, GraduationCap, Calendar, Pencil } from "lucide-react";
+import { Plus, Trash2, GraduationCap, Calendar, Pencil, Archive, CheckCircle2, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -29,6 +29,9 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
   const [form, setForm] = useState({ name: "", area: "", year: new Date().getFullYear(), description: "" });
   const [editingTurma, setEditingTurma] = useState<Turma | null>(null);
   const [editForm, setEditForm] = useState({ name: "", description: "" });
+  const [archiving, setArchiving] = useState<string | null>(null);
+  const [confirmArchive, setConfirmArchive] = useState<Turma | null>(null);
+  const [showArchive, setShowArchive] = useState(false);
 
   useEffect(() => { fetchTurmas(); }, []);
 
@@ -36,7 +39,6 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
     setLoading(true);
     const { data } = await supabase.from("turmas").select("*").order("year", { ascending: false }).order("name");
     
-    // Count members per turma
     const { data: profiles } = await supabase.from("profiles").select("turma_id");
     const countMap: Record<string, number> = {};
     (profiles ?? []).forEach(p => {
@@ -50,7 +52,6 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
   async function handleCreate() {
     if (!form.name.trim()) return;
     setCreating(true);
-
     const { data: user } = await supabase.auth.getUser();
     const { error } = await supabase.from("turmas").insert({
       name: form.name.trim(),
@@ -59,7 +60,6 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
       description: form.description.trim() || null,
       created_by: user.user?.id,
     });
-
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
@@ -100,8 +100,36 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
     }
   }
 
+  async function handleArchive(turma: Turma) {
+    setArchiving(turma.id);
+    const { error } = await supabase.from("turmas").update({ is_active: false }).eq("id", turma.id);
+    if (error) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "📦 Grupo confirmado!", description: `"${turma.name}" foi arquivada com sucesso.` });
+      fetchTurmas();
+    }
+    setArchiving(null);
+    setConfirmArchive(null);
+  }
+
+  async function handleReactivate(turma: Turma) {
+    setArchiving(turma.id);
+    const { error } = await supabase.from("turmas").update({ is_active: true }).eq("id", turma.id);
+    if (error) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "✅ Turma reativada", description: `"${turma.name}" voltou a ficar ativa.` });
+      fetchTurmas();
+    }
+    setArchiving(null);
+  }
+
   const currentYear = new Date().getFullYear();
   const AREAS = ["Área 1", "Área 2"];
+
+  const activeTurmas = turmas.filter(t => t.is_active);
+  const archivedTurmas = turmas.filter(t => !t.is_active);
 
   return (
     <div className="space-y-4">
@@ -191,12 +219,49 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
         </DialogContent>
       </Dialog>
 
-      {/* Turmas list */}
+      {/* Confirm archive dialog */}
+      <Dialog open={!!confirmArchive} onOpenChange={(open) => !open && setConfirmArchive(null)}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-montserrat font-bold text-foreground text-base">Confirmar grupo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center">
+                <CheckCircle2 className="w-6 h-6 text-green-600" />
+              </div>
+              <div>
+                <p className="font-montserrat font-bold text-foreground text-sm">{confirmArchive?.name}</p>
+                <p className="text-muted-foreground font-inter text-xs mt-0.5">
+                  {confirmArchive?.member_count ?? 0} membro{(confirmArchive?.member_count ?? 0) !== 1 ? "s" : ""} · {confirmArchive?.year}
+                </p>
+              </div>
+            </div>
+            <p className="text-muted-foreground font-inter text-xs leading-relaxed">
+              Ao confirmar este grupo, a turma será <strong>arquivada</strong> e não aparecerá mais na seleção de turmas ativas. Os dados dos participantes serão mantidos para consulta.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmArchive(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-montserrat font-bold bg-muted text-muted-foreground border border-border">
+                Cancelar
+              </button>
+              <button onClick={() => confirmArchive && handleArchive(confirmArchive)}
+                disabled={archiving === confirmArchive?.id}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-montserrat font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors">
+                <CheckCircle2 className="w-4 h-4" />
+                {archiving === confirmArchive?.id ? "Arquivando..." : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Active Turmas list */}
       {loading ? (
         <div className="space-y-2">
           {[1, 2, 3].map(i => <div key={i} className="bg-muted rounded-2xl h-20 animate-pulse" />)}
         </div>
-      ) : turmas.length === 0 ? (
+      ) : activeTurmas.length === 0 && archivedTurmas.length === 0 ? (
         <div className="text-center py-12">
           <div className="w-14 h-14 mx-auto rounded-2xl bg-muted flex items-center justify-center mb-3">
             <GraduationCap className="w-7 h-7 text-muted-foreground" />
@@ -205,36 +270,113 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
           <p className="text-muted-foreground font-inter text-xs mt-1">Clique em "Nova turma" para começar.</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {turmas.map(turma => (
-            <div key={turma.id}
-              className="bg-card border border-border rounded-2xl p-4 flex items-center gap-4 hover:border-primary/30 transition-all cursor-pointer"
-              onClick={() => onSelectTurma?.(turma)}>
-              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <GraduationCap className="w-6 h-6 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-montserrat font-bold text-foreground text-sm truncate">{turma.name}</p>
-                <p className="text-muted-foreground text-xs font-inter mt-0.5">
-                  {turma.year} · {turma.area || "Todas as áreas"} · {turma.member_count ?? 0} membro{(turma.member_count ?? 0) !== 1 ? "s" : ""}
-                </p>
-                {turma.description && (
-                  <p className="text-muted-foreground text-xs font-inter mt-0.5 truncate">{turma.description}</p>
-                )}
-              </div>
-              <div className="flex gap-1.5 flex-shrink-0">
-                <button onClick={(e) => { e.stopPropagation(); setEditingTurma(turma); setEditForm({ name: turma.name, description: turma.description || "" }); }}
-                  className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center hover:bg-primary/20" title="Editar turma">
-                  <Pencil className="w-4 h-4 text-primary" />
-                </button>
-                <button onClick={(e) => { e.stopPropagation(); handleDelete(turma); }}
-                  className="w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center hover:bg-destructive/20" title="Excluir turma">
-                  <Trash2 className="w-4 h-4 text-destructive" />
-                </button>
-              </div>
+        <>
+          {/* Active turmas */}
+          {activeTurmas.length > 0 && (
+            <div className="space-y-2">
+              {activeTurmas.map(turma => (
+                <div key={turma.id}
+                  className="bg-card border border-border rounded-2xl p-4 hover:border-primary/30 transition-all">
+                  <div className="flex items-center gap-4 cursor-pointer" onClick={() => onSelectTurma?.(turma)}>
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <GraduationCap className="w-6 h-6 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-montserrat font-bold text-foreground text-sm truncate">{turma.name}</p>
+                      <p className="text-muted-foreground text-xs font-inter mt-0.5">
+                        {turma.year} · {turma.area || "Todas as áreas"} · {turma.member_count ?? 0} membro{(turma.member_count ?? 0) !== 1 ? "s" : ""}
+                      </p>
+                      {turma.description && (
+                        <p className="text-muted-foreground text-xs font-inter mt-0.5 truncate">{turma.description}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-1.5 flex-shrink-0">
+                      <button onClick={(e) => { e.stopPropagation(); setEditingTurma(turma); setEditForm({ name: turma.name, description: turma.description || "" }); }}
+                        className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center hover:bg-primary/20" title="Editar turma">
+                        <Pencil className="w-4 h-4 text-primary" />
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); handleDelete(turma); }}
+                        className="w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center hover:bg-destructive/20" title="Excluir turma">
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </button>
+                    </div>
+                  </div>
+                  {/* Archive button */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setConfirmArchive(turma); }}
+                    disabled={archiving === turma.id}
+                    className="mt-3 w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-montserrat font-bold border-2 border-green-500/30 bg-green-500/5 text-green-700 hover:bg-green-500/10 hover:border-green-500/50 transition-all disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Grupo Confirmado — Arquivar
+                  </button>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+
+          {activeTurmas.length === 0 && (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground font-inter text-sm">Nenhuma turma ativa no momento.</p>
+            </div>
+          )}
+
+          {/* Archived turmas section */}
+          {archivedTurmas.length > 0 && (
+            <div className="mt-6">
+              <button
+                onClick={() => setShowArchive(!showArchive)}
+                className="w-full flex items-center gap-3 py-3 px-4 bg-muted/50 rounded-2xl border border-border hover:bg-muted transition-all"
+              >
+                <div className="w-8 h-8 rounded-xl bg-muted flex items-center justify-center">
+                  <Archive className="w-4 h-4 text-muted-foreground" />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="font-montserrat font-bold text-muted-foreground text-sm">Arquivo</p>
+                  <p className="text-muted-foreground font-inter text-[10px]">
+                    {archivedTurmas.length} turma{archivedTurmas.length !== 1 ? "s" : ""} confirmada{archivedTurmas.length !== 1 ? "s" : ""}
+                  </p>
+                </div>
+                {showArchive
+                  ? <ChevronUp className="w-5 h-5 text-muted-foreground" />
+                  : <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                }
+              </button>
+
+              {showArchive && (
+                <div className="mt-2 space-y-2 animate-in slide-in-from-top-2 duration-200">
+                  {archivedTurmas.map(turma => (
+                    <div key={turma.id}
+                      className="bg-card/50 border border-border rounded-2xl p-4 flex items-center gap-4 opacity-80">
+                      <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
+                        <Archive className="w-6 h-6 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-montserrat font-bold text-foreground text-sm truncate">{turma.name}</p>
+                          <span className="px-2 py-0.5 rounded-full bg-green-500/10 text-green-700 text-[10px] font-montserrat font-bold flex-shrink-0">
+                            ✓ Confirmado
+                          </span>
+                        </div>
+                        <p className="text-muted-foreground text-xs font-inter mt-0.5">
+                          {turma.year} · {turma.area || "Todas as áreas"} · {turma.member_count ?? 0} membro{(turma.member_count ?? 0) !== 1 ? "s" : ""}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleReactivate(turma)}
+                        disabled={archiving === turma.id}
+                        className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center hover:bg-primary/20 flex-shrink-0 disabled:opacity-50"
+                        title="Reativar turma"
+                      >
+                        <RotateCcw className="w-4 h-4 text-primary" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
