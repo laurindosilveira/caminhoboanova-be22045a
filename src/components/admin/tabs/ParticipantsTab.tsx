@@ -63,32 +63,68 @@ type DetailProps = { participant: Participant; activities: Activity[]; onBack: (
 function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) {
   const [typeFilter, setTypeFilter] = useState("todos");
   const [worshipRecords, setWorshipRecords] = useState<WorshipInfo[]>([]);
+  const [activityTitleMap, setActivityTitleMap] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
-    supabase
-      .from("worship_attendance")
-      .select("event_type, worship_date")
-      .eq("user_id", p.user_id)
-      .eq("status", "aprovado")
-      .order("worship_date", { ascending: true })
-      .then(({ data }) => setWorshipRecords(data ?? []));
-  }, [p.user_id]);
+    async function fetchTitles() {
+      const [{ data: worshipData }, { data: devData }, { data: lessonData }] = await Promise.all([
+        supabase.from("worship_attendance").select("event_type, worship_date").eq("user_id", p.user_id).eq("status", "aprovado").order("worship_date", { ascending: true }),
+        supabase.from("devotional_content").select("activity_id, day_number, lesson_id").not("activity_id", "is", null),
+        supabase.from("lessons").select("id, title"),
+      ]);
+
+      setWorshipRecords(worshipData ?? []);
+
+      const lessonMap = new Map<string, string>();
+      (lessonData ?? []).forEach(l => lessonMap.set(l.id, l.title));
+
+      const titleMap = new Map<string, string>();
+
+      // Devotional titles: "Devocional dia X - Lesson Title"
+      (devData ?? []).forEach(d => {
+        if (d.activity_id) {
+          const lessonTitle = d.lesson_id ? lessonMap.get(d.lesson_id) : null;
+          titleMap.set(d.activity_id, lessonTitle ? `Devocional dia ${d.day_number} - ${lessonTitle}` : `Devocional dia ${d.day_number}`);
+        }
+      });
+
+      // Formação titles: use linked lesson title
+      // Activities of type "formacao" are ordered, lessons are ordered - match by order
+      const formacaoActivities = activities.filter(a => a.type === "formacao").sort((a, b) => a.order_num - b.order_num);
+      const allLessons = (lessonData ?? []).sort((a, b) => {
+        // We don't have order_num here, so just use the array order
+        return 0;
+      });
+      // Better approach: check if there's a direct link via devotional_content's lesson references
+      // For now, fetch lessons with order to map formacao activities
+      const { data: orderedLessons } = await supabase.from("lessons").select("id, title, order_num, course_id").order("course_id").order("order_num");
+      if (orderedLessons) {
+        formacaoActivities.forEach((act, idx) => {
+          if (orderedLessons[idx]) {
+            titleMap.set(act.id, orderedLessons[idx].title);
+          }
+        });
+      }
+
+      // Encontro titles from worship records
+      const encontroActivities = activities.filter(a => a.type === "encontro").sort((a, b) => a.order_num - b.order_num);
+      encontroActivities.forEach((act, idx) => {
+        if (p.completed_activity_ids.includes(act.id) && (worshipData ?? [])[idx]) {
+          const w = (worshipData ?? [])[idx];
+          const label = w.event_type === "jemiac" ? "JEMIAC" : w.event_type === "retiro" ? "Retiro" : "Culto";
+          titleMap.set(act.id, label);
+        }
+      });
+
+      setActivityTitleMap(titleMap);
+    }
+    fetchTitles();
+  }, [p.user_id, activities]);
 
   const pct = activities.length > 0 ? Math.round((p.completed_count / activities.length) * 100) : 0;
   const status = getStatusInfo(p.completed_count, activities.length);
   const totalPts = activities.filter(a => p.completed_activity_ids.includes(a.id)).reduce((s, a) => s + a.points, 0);
   const age = calcAge(p.birth_date);
-
-  // Map encontro activities to worship event types
-  const encontroActivities = activities.filter(a => a.type === "encontro").sort((a, b) => a.order_num - b.order_num);
-  const activityTitleMap = new Map<string, string>();
-  encontroActivities.forEach((act, idx) => {
-    if (p.completed_activity_ids.includes(act.id) && worshipRecords[idx]) {
-      const w = worshipRecords[idx];
-      const label = w.event_type === "jemiac" ? "JEMIAC" : w.event_type === "retiro" ? "Retiro" : "Culto";
-      activityTitleMap.set(act.id, label);
-    }
-  });
 
   const filteredActivities = typeFilter === "todos" ? activities : activities.filter(a => a.type === typeFilter);
 
