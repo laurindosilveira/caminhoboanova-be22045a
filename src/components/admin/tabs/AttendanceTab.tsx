@@ -142,7 +142,7 @@ export default function AttendanceTab({ participants, activities, communities, i
     const { data } = await supabase
       .from("events")
       .select("id, title, event_date, type, location, community, area")
-      .order("event_date", { ascending: false })
+      .order("event_date", { ascending: true })
       .limit(30);
     setEvents(data ?? []);
     setLoading(false);
