@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { ShieldCheck } from "lucide-react";
@@ -26,6 +26,13 @@ export default function Index() {
   const { profile, role } = useAuth();
   const navigate = useNavigate();
   const stats = useUserStats();
+
+  // Listen for lesson navigation from agenda
+  useEffect(() => {
+    const handler = () => setActiveTab("jornada");
+    window.addEventListener("navigate-to-lesson", handler);
+    return () => window.removeEventListener("navigate-to-lesson", handler);
+  }, []);
 
   async function handleCompleteActivity(activityId: string) {
     const { data: { user } } = await supabase.auth.getUser();

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { CalendarDays, Plus, X, MapPin, Users } from "lucide-react";
+import { CalendarDays, Plus, X, MapPin, Users, BookOpen } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -14,6 +14,15 @@ type Event = {
   area: string | null;
   community: string | null;
   type: string;
+  linked_lesson_id: string | null;
+};
+
+type LessonOption = {
+  id: string;
+  title: string;
+  order_num: number;
+  course_title: string;
+  course_order: number;
 };
 
 const EVENT_TYPES = [
@@ -30,20 +39,37 @@ const TYPE_EMOJI: Record<string, string> = {
 export default function AgendaTab() {
   const { profile } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
+  const [lessons, setLessons] = useState<LessonOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    title: "", description: "", event_date: "", location: "", type: "encontro", area: "", community: "",
+    title: "", description: "", event_date: "", location: "", type: "encontro", area: "", community: "", linked_lesson_id: "",
   });
 
-  useEffect(() => { fetchEvents(); }, []);
+  useEffect(() => { fetchEvents(); fetchLessons(); }, []);
 
   async function fetchEvents() {
     setLoading(true);
     const { data } = await supabase.from("events").select("*").order("event_date");
-    setEvents(data ?? []);
+    setEvents((data ?? []) as Event[]);
     setLoading(false);
+  }
+
+  async function fetchLessons() {
+    const [{ data: coursesData }, { data: lessonsData }] = await Promise.all([
+      supabase.from("courses").select("id, title, order_num").order("order_num"),
+      supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
+    ]);
+    const courses = coursesData ?? [];
+    const lessonsList = lessonsData ?? [];
+    const options: LessonOption[] = [];
+    courses.forEach(c => {
+      lessonsList.filter(l => l.course_id === c.id).forEach(l => {
+        options.push({ id: l.id, title: l.title, order_num: l.order_num, course_title: c.title, course_order: c.order_num });
+      });
+    });
+    setLessons(options);
   }
 
   async function handleSave() {
@@ -59,8 +85,9 @@ export default function AgendaTab() {
       area: form.area || null,
       community: form.community || null,
       created_by: user?.id,
+      linked_lesson_id: form.linked_lesson_id || null,
     });
-    setForm({ title: "", description: "", event_date: "", location: "", type: "encontro", area: "", community: "" });
+    setForm({ title: "", description: "", event_date: "", location: "", type: "encontro", area: "", community: "", linked_lesson_id: "" });
     setShowForm(false);
     setSaving(false);
     fetchEvents();
@@ -70,6 +97,14 @@ export default function AgendaTab() {
     await supabase.from("events").delete().eq("id", id);
     fetchEvents();
   }
+
+  // Get lesson info for display
+  const getLessonLabel = (lessonId: string | null) => {
+    if (!lessonId) return null;
+    const lesson = lessons.find(l => l.id === lessonId);
+    if (!lesson) return null;
+    return `Curso ${lesson.course_order} — Lição ${lesson.order_num}: ${lesson.title}`;
+  };
 
   return (
     <div className="space-y-4">
@@ -101,10 +136,30 @@ export default function AgendaTab() {
               placeholder="Local (opcional)"
               className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
           </div>
-          <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+          <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value, linked_lesson_id: "" }))}
             className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
             {EVENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
+
+          {/* Lesson selector for confirmatorio events */}
+          {form.type === "confirmatorio" && (
+            <div className="space-y-1">
+              <label className="font-inter text-xs font-medium text-muted-foreground">📖 Vincular a um estudo (opcional)</label>
+              <select
+                value={form.linked_lesson_id}
+                onChange={e => setForm(f => ({ ...f, linked_lesson_id: e.target.value }))}
+                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+              >
+                <option value="">Sem vínculo</option>
+                {lessons.map(l => (
+                  <option key={l.id} value={l.id}>
+                    Curso {l.course_order} — Lição {l.order_num}: {l.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="flex gap-2">
             <button onClick={handleSave} disabled={saving || !form.title || !form.event_date}
               className="flex-1 py-2.5 rounded-xl text-sm font-inter font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
@@ -132,6 +187,7 @@ export default function AgendaTab() {
           {events.map(event => {
             const typeInfo = EVENT_TYPES.find(t => t.value === event.type);
             const dateObj = new Date(event.event_date);
+            const lessonLabel = getLessonLabel(event.linked_lesson_id);
             return (
               <div key={event.id} className="bg-card rounded-2xl border border-border p-4 shadow-sm">
                 <div className="flex items-start gap-3">
@@ -157,6 +213,14 @@ export default function AgendaTab() {
                         </span>
                       )}
                     </div>
+                    {lessonLabel && (
+                      <div className="flex items-center gap-1.5 mt-2 px-2.5 py-1.5 rounded-lg bg-secondary/10">
+                        <BookOpen className="w-3.5 h-3.5 text-secondary flex-shrink-0" />
+                        <p className="font-inter text-[10px] text-secondary font-medium truncate">
+                          📖 {lessonLabel}
+                        </p>
+                      </div>
+                    )}
                     {event.description && <p className="text-muted-foreground font-inter text-xs mt-1.5">{event.description}</p>}
                   </div>
                   <button onClick={() => handleDelete(event.id)} className="w-7 h-7 rounded-lg bg-destructive/10 flex items-center justify-center flex-shrink-0">

@@ -15,6 +15,7 @@ type Event = {
   area: string | null;
   community: string | null;
   type: string;
+  linked_lesson_id: string | null;
 };
 
 type LessonContentInfo = { lesson_id: string; summary: string; bible_texts: string[]; prayer_prompt: string };
@@ -34,9 +35,10 @@ export default function UserAgendaTab() {
   const { profile } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
-  const [lessonsByIndex, setLessonsByIndex] = useState<LessonInfo[]>([]);
+  const [lessonInfoMap, setLessonInfoMap] = useState<Map<string, LessonInfo>>(new Map());
   const [lessonContentMap, setLessonContentMap] = useState<Map<string, LessonContentInfo>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<string>("agenda");
 
   useEffect(() => {
     async function fetch() {
@@ -60,16 +62,18 @@ export default function UserAgendaTab() {
       );
       setEvents(filtered);
       setAttendanceRecords((attendanceData ?? []) as AttendanceRecord[]);
-      // Build ordered lessons list for encontro mapping
+
+      // Build lesson info map keyed by lesson id
       const courses = coursesData ?? [];
       const lessons = lessonsData ?? [];
-      const ordered: LessonInfo[] = [];
+      const infoMap = new Map<string, LessonInfo>();
       courses.forEach(c => {
         lessons.filter(l => l.course_id === c.id).forEach(l => {
-          ordered.push({ id: l.id, title: l.title, order_num: l.order_num, course_title: c.title, course_order: c.order_num });
+          infoMap.set(l.id, { id: l.id, title: l.title, order_num: l.order_num, course_title: c.title, course_order: c.order_num });
         });
       });
-      setLessonsByIndex(ordered);
+      setLessonInfoMap(infoMap);
+
       // Build lesson content map
       const contentMap = new Map<string, LessonContentInfo>();
       (lessonContentData ?? []).forEach((lc: any) => {
@@ -82,17 +86,6 @@ export default function UserAgendaTab() {
   }, [profile]);
 
   const now = new Date();
-  // Map "Ensino Confirmatório" events (starting from March 21, 2026) to Course 2 lessons in order
-  const course2Lessons = lessonsByIndex.filter(l => l.course_order === 2);
-  const confirmatorioCutoff = new Date("2026-03-21T00:00:00");
-  const confirmatorioLessonEvents = events
-    .filter(e => e.type === "confirmatorio" && e.title === "Ensino Confirmatório" && new Date(e.event_date) >= confirmatorioCutoff)
-    .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
-  const encontroLessonMap = new Map<string, LessonInfo>();
-  confirmatorioLessonEvents.forEach((e, i) => {
-    if (i < course2Lessons.length) encontroLessonMap.set(e.id, course2Lessons[i]);
-  });
-
   const upcoming = events.filter(e => new Date(e.event_date) >= now);
   const past = events.filter(e => new Date(e.event_date) < now);
 
@@ -146,15 +139,32 @@ export default function UserAgendaTab() {
           {upcoming.length > 0 && (
             <div className="space-y-3">
               <p className="font-montserrat font-bold text-foreground text-sm">📌 Próximos eventos</p>
-              {upcoming.map(event => <EventCard key={event.id} event={event} linkedLesson={encontroLessonMap.get(event.id)} lessonContent={encontroLessonMap.get(event.id) ? lessonContentMap.get(encontroLessonMap.get(event.id)!.id) : undefined} attendanceRecords={attendanceRecords} onCheckIn={handleCheckIn} />)}
+              {upcoming.map(event => {
+                const linkedLesson = event.linked_lesson_id ? lessonInfoMap.get(event.linked_lesson_id) : undefined;
+                const lessonContent = linkedLesson ? lessonContentMap.get(linkedLesson.id) : undefined;
+                return (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    linkedLesson={linkedLesson}
+                    lessonContent={lessonContent}
+                    attendanceRecords={attendanceRecords}
+                    onCheckIn={handleCheckIn}
+                    onNavigateToLesson={setActiveTab}
+                  />
+                );
+              })}
             </div>
           )}
           {past.length > 0 && (
             <div className="space-y-3">
               <p className="font-montserrat font-bold text-muted-foreground text-sm">Eventos anteriores</p>
-              {past.slice(0, 3).map(event => (
-                <EventCard key={event.id} event={event} past linkedLesson={encontroLessonMap.get(event.id)} attendanceRecords={attendanceRecords} onCheckIn={handleCheckIn} />
-              ))}
+              {past.slice(0, 3).map(event => {
+                const linkedLesson = event.linked_lesson_id ? lessonInfoMap.get(event.linked_lesson_id) : undefined;
+                return (
+                  <EventCard key={event.id} event={event} past linkedLesson={linkedLesson} attendanceRecords={attendanceRecords} onCheckIn={handleCheckIn} />
+                );
+              })}
             </div>
           )}
         </>
@@ -217,9 +227,10 @@ export default function UserAgendaTab() {
   );
 }
 
-function EventCard({ event, past = false, linkedLesson, lessonContent, attendanceRecords = [], onCheckIn }: { 
+function EventCard({ event, past = false, linkedLesson, lessonContent, attendanceRecords = [], onCheckIn, onNavigateToLesson }: { 
   event: Event; past?: boolean; linkedLesson?: LessonInfo; lessonContent?: LessonContentInfo;
   attendanceRecords?: AttendanceRecord[]; onCheckIn?: (eventId: string, status: "presente" | "faltou", justification?: string) => void;
+  onNavigateToLesson?: (tab: string) => void;
 }) {
   const [showJustification, setShowJustification] = useState(false);
   const [justificationText, setJustificationText] = useState("");
@@ -230,8 +241,16 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
   // Check-in: show for today's events or events in the last 24h
   const now = new Date();
   const diffHours = (now.getTime() - dateObj.getTime()) / 3600000;
-  const isCheckInWindow = diffHours >= -2 && diffHours <= 24; // 2h before to 24h after
+  const isCheckInWindow = diffHours >= -2 && diffHours <= 24;
   const existingRecord = attendanceRecords.find(a => a.event_id === event.id);
+
+  const handleLessonClick = () => {
+    // Navigate to the Jornada tab where the user can access the lesson
+    if (onNavigateToLesson) {
+      // Dispatch a custom event so the parent (Index page) can switch tabs
+      window.dispatchEvent(new CustomEvent("navigate-to-lesson", { detail: { lessonId: linkedLesson?.id } }));
+    }
+  };
 
   return (
     <div className={`bg-card rounded-2xl border border-border p-4 shadow-sm ${past ? "opacity-60" : ""}`}>
@@ -263,14 +282,17 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
             )}
           </div>
           {linkedLesson && (
-            <div className="flex items-center gap-1.5 mt-2 px-2.5 py-1.5 rounded-lg bg-secondary/10">
+            <button
+              onClick={handleLessonClick}
+              className="flex items-center gap-1.5 mt-2 px-2.5 py-1.5 rounded-lg bg-secondary/10 hover:bg-secondary/20 transition-colors w-full text-left"
+            >
               <BookOpen className="w-3.5 h-3.5 text-secondary flex-shrink-0" />
               <p className="font-inter text-[10px] text-secondary font-medium truncate">
                 📖 Ligado ao Curso {linkedLesson.course_order} — Lição {linkedLesson.order_num}: {linkedLesson.title}
               </p>
-            </div>
+            </button>
           )}
-          {/* Preparation section for upcoming encontros */}
+          {/* Preparation section for upcoming events with linked lesson */}
           {!past && linkedLesson && lessonContent && (lessonContent.summary || lessonContent.prayer_prompt || (lessonContent.bible_texts && lessonContent.bible_texts.length > 0)) && (
             <div className="mt-2">
               <button
