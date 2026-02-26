@@ -144,15 +144,17 @@ export default function Login() {
             </button>
 
             {/* Admin access */}
-            <button
-              type="submit"
-              disabled={loading}
-              onClick={() => setAdminMode(true)}
-              className="w-full py-3 rounded-xl font-montserrat font-bold text-sm transition-all active:scale-95 disabled:opacity-60 border border-border bg-muted text-foreground flex items-center justify-center gap-2"
-            >
-              <ShieldCheck className="w-4 h-4" />
-              {loading && adminMode ? "Verificando..." : "Acesso Administrador"}
-            </button>
+            <div className="text-center pt-1">
+              <button
+                type="submit"
+                disabled={loading}
+                onClick={() => setAdminMode(true)}
+                className="text-muted-foreground font-inter text-xs hover:text-foreground transition-colors inline-flex items-center gap-1 disabled:opacity-60"
+              >
+                <ShieldCheck className="w-3 h-3" />
+                {loading && adminMode ? "Verificando..." : "Acesso administrativo"}
+              </button>
+            </div>
           </form>
 
           <div className="mt-6 text-center">
