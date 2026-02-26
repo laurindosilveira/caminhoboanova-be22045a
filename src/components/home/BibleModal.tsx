@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, ExternalLink, BookOpen } from "lucide-react";
 
 interface BibleModalProps {
@@ -9,6 +9,14 @@ interface BibleModalProps {
 
 export default function BibleModal({ reference, open, onClose }: BibleModalProps) {
   const [iframeError, setIframeError] = useState(false);
+  const [iframeLoading, setIframeLoading] = useState(true);
+
+  useEffect(() => {
+    if (open) {
+      setIframeLoading(true);
+      setIframeError(false);
+    }
+  }, [open, reference]);
   const url = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(reference)}&version=NVI-PT&interface=print`;
   const externalUrl = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(reference)}&version=NVI-PT`;
 
@@ -60,14 +68,24 @@ export default function BibleModal({ reference, open, onClose }: BibleModalProps
           {/* Content */}
           <div className="flex-1 overflow-hidden">
             {!iframeError ? (
-              <iframe
-                src={url}
-                className="w-full border-0"
-                style={{ height: "65vh" }}
-                title={`Bíblia - ${reference}`}
-                onError={() => setIframeError(true)}
-                sandbox="allow-same-origin allow-scripts"
-              />
+              <div className="relative" style={{ height: "65vh" }}>
+                {iframeLoading && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-card z-10">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
+                      <BookOpen className="w-5 h-5 text-primary" />
+                    </div>
+                    <p className="text-muted-foreground font-inter text-sm">Carregando texto...</p>
+                  </div>
+                )}
+                <iframe
+                  src={url}
+                  className="w-full h-full border-0"
+                  title={`Bíblia - ${reference}`}
+                  onLoad={() => setIframeLoading(false)}
+                  onError={() => { setIframeError(true); setIframeLoading(false); }}
+                  sandbox="allow-same-origin allow-scripts"
+                />
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center p-10 text-center" style={{ minHeight: "40vh" }}>
                 <div className="w-16 h-16 rounded-2xl bg-secondary/10 flex items-center justify-center mb-5">
