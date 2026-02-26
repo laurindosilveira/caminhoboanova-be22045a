@@ -8,7 +8,7 @@ const ALL_TABS: TabDef[] = [
   { id: "overview", label: "Visão", icon: BarChart3 },
   { id: "attendance", label: "Encontros", icon: UserCheck },
   { id: "courses", label: "Cursos", icon: BookOpen },
-  { id: "guide", label: "Roteiro", icon: ClipboardList },
+  { id: "guide", label: "Líder", icon: ClipboardList },
   { id: "users", label: "Usuários", icon: Shield },
 ];
 
