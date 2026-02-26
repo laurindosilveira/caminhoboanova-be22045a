@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Eye, EyeOff, Mail, Lock, Flame } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, Flame, ShieldCheck } from "lucide-react";
 import { z } from "zod";
 
 const loginSchema = z.object({
@@ -17,6 +17,8 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const [adminMode, setAdminMode] = useState(false);
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -28,7 +30,7 @@ export default function Login() {
     }
 
     setLoading(true);
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email: parsed.data.email,
       password: parsed.data.password,
     });
@@ -39,7 +41,21 @@ export default function Login() {
       return;
     }
 
-    navigate("/");
+    if (adminMode && authData.user) {
+      // Verify admin/lider role before navigating
+      const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: authData.user.id, _role: "admin" });
+      const { data: isLider } = await supabase.rpc("has_role", { _user_id: authData.user.id, _role: "lider" });
+      if (isAdmin || isLider) {
+        navigate("/admin");
+      } else {
+        setError("Você não possui permissão de administrador.");
+        await supabase.auth.signOut();
+        setLoading(false);
+        return;
+      }
+    } else {
+      navigate("/");
+    }
   }
 
   return (
@@ -120,10 +136,22 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
+              onClick={() => setAdminMode(false)}
               className="w-full py-3.5 rounded-xl font-montserrat font-bold text-primary-foreground text-base transition-all active:scale-95 disabled:opacity-60 shadow-md"
               style={{ background: "var(--gradient-orange)" }}
             >
-              {loading ? "Entrando..." : "Entrar na Jornada"}
+              {loading && !adminMode ? "Entrando..." : "Entrar na Jornada"}
+            </button>
+
+            {/* Admin access */}
+            <button
+              type="submit"
+              disabled={loading}
+              onClick={() => setAdminMode(true)}
+              className="w-full py-3 rounded-xl font-montserrat font-bold text-sm transition-all active:scale-95 disabled:opacity-60 border border-border bg-muted text-foreground flex items-center justify-center gap-2"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              {loading && adminMode ? "Verificando..." : "Acesso Administrador"}
             </button>
           </form>
 
