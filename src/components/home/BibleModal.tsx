@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, ExternalLink } from "lucide-react";
+import { X, ExternalLink, BookOpen } from "lucide-react";
 
 interface BibleModalProps {
   reference: string;
@@ -10,70 +10,85 @@ interface BibleModalProps {
 export default function BibleModal({ reference, open, onClose }: BibleModalProps) {
   const [iframeError, setIframeError] = useState(false);
   const url = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(reference)}&version=NVI-PT&interface=print`;
+  const externalUrl = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(reference)}&version=NVI-PT`;
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative w-full max-w-md mx-auto bg-card rounded-t-3xl sm:rounded-3xl shadow-2xl border border-border max-h-[85vh] flex flex-col animate-in slide-in-from-bottom duration-300">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">📖</span>
-            <h3 className="font-montserrat font-bold text-foreground text-sm truncate max-w-[250px]">{reference}</h3>
-          </div>
-          <div className="flex items-center gap-2">
-            <a
-              href={`https://www.biblegateway.com/passage/?search=${encodeURIComponent(reference)}&version=NVI-PT`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-8 h-8 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
-              title="Abrir no site"
-            >
-              <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
-            </a>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
-            >
-              <X className="w-4 h-4 text-muted-foreground" />
-            </button>
-          </div>
-        </div>
+      <div className="relative w-full max-w-md mx-auto max-h-[88vh] flex flex-col animate-in slide-in-from-bottom-8 duration-300">
+        {/* Decorative top bar */}
+        <div className="mx-auto w-12 h-1.5 rounded-full bg-white/30 mb-2 sm:hidden" />
 
-        {/* Content */}
-        <div className="flex-1 overflow-hidden min-h-[300px]">
-          {!iframeError ? (
-            <iframe
-              src={url}
-              className="w-full h-full min-h-[300px] border-0"
-              style={{ height: "60vh" }}
-              title={`Bíblia - ${reference}`}
-              onError={() => setIframeError(true)}
-              sandbox="allow-same-origin allow-scripts"
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-              <span className="text-4xl mb-4">📖</span>
-              <p className="font-montserrat font-bold text-foreground mb-2">Não foi possível carregar</p>
-              <p className="text-muted-foreground font-inter text-sm mb-4">
-                O texto não pôde ser exibido diretamente. Clique abaixo para abrir no navegador.
-              </p>
-              <a
-                href={`https://www.biblegateway.com/passage/?search=${encodeURIComponent(reference)}&version=NVI-PT`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-5 py-2.5 rounded-xl font-montserrat font-bold text-sm text-primary-foreground transition-all"
-                style={{ background: "var(--gradient-orange)" }}
-              >
-                Abrir no navegador
-              </a>
+        <div className="bg-card rounded-t-3xl sm:rounded-3xl shadow-2xl border border-border overflow-hidden flex flex-col max-h-[85vh]">
+          {/* Header with gradient */}
+          <div className="flex-shrink-0" style={{ background: "var(--gradient-hero)" }}>
+            <div className="flex items-center justify-between px-5 py-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center flex-shrink-0 border border-white/20">
+                  <BookOpen className="w-4.5 h-4.5 text-primary-foreground" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-primary-foreground/60 font-inter text-[10px] uppercase tracking-wider font-semibold">Bíblia NVI</p>
+                  <h3 className="font-montserrat font-bold text-primary-foreground text-sm truncate">{reference}</h3>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <a
+                  href={externalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
+                  title="Abrir no site"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-primary-foreground/80" />
+                </a>
+                <button
+                  onClick={onClose}
+                  className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
+                >
+                  <X className="w-4 h-4 text-primary-foreground/80" />
+                </button>
+              </div>
             </div>
-          )}
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-hidden">
+            {!iframeError ? (
+              <iframe
+                src={url}
+                className="w-full border-0"
+                style={{ height: "65vh" }}
+                title={`Bíblia - ${reference}`}
+                onError={() => setIframeError(true)}
+                sandbox="allow-same-origin allow-scripts"
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center p-10 text-center" style={{ minHeight: "40vh" }}>
+                <div className="w-16 h-16 rounded-2xl bg-secondary/10 flex items-center justify-center mb-5">
+                  <BookOpen className="w-7 h-7 text-secondary" />
+                </div>
+                <p className="font-montserrat font-bold text-foreground text-base mb-2">Não foi possível carregar</p>
+                <p className="text-muted-foreground font-inter text-sm mb-6 max-w-[260px]">
+                  O texto não pôde ser exibido aqui. Abra no navegador para ler.
+                </p>
+                <a
+                  href={externalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-6 py-3 rounded-xl font-montserrat font-bold text-sm text-primary-foreground shadow-md transition-all active:scale-95"
+                  style={{ background: "var(--gradient-orange)" }}
+                >
+                  Abrir no navegador →
+                </a>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
