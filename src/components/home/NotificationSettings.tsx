@@ -104,8 +104,8 @@ export default function NotificationSettings() {
     }
   }
 
-  function handleTestNotification() {
-    sendNotification(
+  async function handleTestNotification() {
+    await sendNotification(
       "🔔 Teste de Notificação",
       "Se você está vendo isso, as notificações estão funcionando! 🎉"
     );
