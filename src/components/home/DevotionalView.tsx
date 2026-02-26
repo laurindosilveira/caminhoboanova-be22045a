@@ -132,7 +132,7 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
             <p className="font-montserrat font-bold text-foreground text-sm">Texto Bíblico</p>
           </div>
           <div className="p-4">
-            <a href={`https://www.bibliaonline.com.br/nvi/${encodeURIComponent(content.bible_reference)}`} target="_blank" rel="noopener noreferrer" className="font-montserrat font-bold text-brand-green text-sm mb-2 hover:underline inline-flex items-center gap-1">📖 {content.bible_reference}</a>
+            <a href={`https://www.biblegateway.com/passage/?search=${encodeURIComponent(content.bible_reference)}&version=NVI-PT`} target="_blank" rel="noopener noreferrer" className="font-montserrat font-bold text-brand-green text-sm mb-2 hover:underline inline-flex items-center gap-1">📖 {content.bible_reference}</a>
             {content.bible_text && (
               <p className="text-foreground font-inter text-sm leading-relaxed italic whitespace-pre-wrap">
                 "{content.bible_text}"
