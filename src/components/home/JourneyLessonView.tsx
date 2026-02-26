@@ -614,7 +614,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
               {content.bible_texts.map(text => (
                 <a
                   key={text}
-                  href={`https://www.bibliaonline.com.br/nvi/${encodeURIComponent(text)}`}
+                  href={`https://www.biblegateway.com/passage/?search=${encodeURIComponent(text)}&version=NVI-PT`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1.5 px-3 py-2 bg-primary/10 rounded-xl text-primary font-inter text-sm font-medium hover:bg-primary/20 transition-colors"
