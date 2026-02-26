@@ -68,6 +68,33 @@ export type Database = {
         }
         Relationships: []
       }
+      area_pastors: {
+        Row: {
+          area: string
+          id: string
+          pastor_name: string
+          phone: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          area: string
+          id?: string
+          pastor_name?: string
+          phone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          area?: string
+          id?: string
+          pastor_name?: string
+          phone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       attendance: {
         Row: {
           created_at: string
@@ -467,6 +494,53 @@ export type Database = {
           {
             foreignKeyName: "events_linked_lesson_id_fkey"
             columns: ["linked_lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leader_meeting_notes: {
+        Row: {
+          created_at: string
+          follow_up_notes: string | null
+          id: string
+          leader_id: string
+          lesson_id: string
+          participation_notes: string | null
+          pastoral_care_notes: string | null
+          questions_notes: string | null
+          spiritual_notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          follow_up_notes?: string | null
+          id?: string
+          leader_id: string
+          lesson_id: string
+          participation_notes?: string | null
+          pastoral_care_notes?: string | null
+          questions_notes?: string | null
+          spiritual_notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          follow_up_notes?: string | null
+          id?: string
+          leader_id?: string
+          lesson_id?: string
+          participation_notes?: string | null
+          pastoral_care_notes?: string | null
+          questions_notes?: string | null
+          spiritual_notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leader_meeting_notes_lesson_id_fkey"
+            columns: ["lesson_id"]
             isOneToOne: false
             referencedRelation: "lessons"
             referencedColumns: ["id"]
