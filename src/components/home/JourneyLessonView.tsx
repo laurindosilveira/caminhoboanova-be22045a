@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import BibleModal from "./BibleModal";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ChevronLeft, BookOpen, MessageCircle, Target,
@@ -62,6 +63,7 @@ type Props = {
 export default function JourneyLessonView({ lesson, onBack, isAdmin = false, targetUserId }: Props) {
   const [content, setContent] = useState<LessonContent>(getDefaultContent(lesson.order_num));
   const [responses, setResponses] = useState<Response>({});
+  const [bibleRef, setBibleRef] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [contentLoaded, setContentLoaded] = useState(false);
@@ -612,18 +614,17 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
           <div className="p-4">
             <div className="flex flex-wrap gap-2">
               {content.bible_texts.map(text => (
-                <a
+                <button
                   key={text}
-                  href={`https://www.biblegateway.com/passage/?search=${encodeURIComponent(text)}&version=NVI-PT`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  onClick={() => setBibleRef(text)}
                   className="flex items-center gap-1.5 px-3 py-2 bg-primary/10 rounded-xl text-primary font-inter text-sm font-medium hover:bg-primary/20 transition-colors"
                 >
                   <span>📖</span>
                   <span>{text}</span>
-                </a>
+                </button>
               ))}
             </div>
+            <BibleModal reference={bibleRef || ""} open={!!bibleRef} onClose={() => setBibleRef(null)} />
           </div>
         </div>
       )}

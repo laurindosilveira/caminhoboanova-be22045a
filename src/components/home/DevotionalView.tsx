@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import BibleModal from "./BibleModal";
 import { supabase } from "@/integrations/supabase/client";
 import { ChevronLeft, BookOpen, Heart, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -27,6 +28,7 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
   const [content, setContent] = useState<DevotionalContent | null>(devotionalData ?? null);
   const [loading, setLoading] = useState(!devotionalData);
   const [completing, setCompleting] = useState(false);
+  const [bibleModalRef, setBibleModalRef] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [attempted, setAttempted] = useState(false);
 
@@ -132,7 +134,8 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
             <p className="font-montserrat font-bold text-foreground text-sm">Texto Bíblico</p>
           </div>
           <div className="p-4">
-            <a href={`https://www.biblegateway.com/passage/?search=${encodeURIComponent(content.bible_reference)}&version=NVI-PT`} target="_blank" rel="noopener noreferrer" className="font-montserrat font-bold text-brand-green text-sm mb-2 hover:underline inline-flex items-center gap-1">📖 {content.bible_reference}</a>
+            <button onClick={() => setBibleModalRef(content.bible_reference)} className="font-montserrat font-bold text-brand-green text-sm mb-2 hover:underline inline-flex items-center gap-1">📖 {content.bible_reference}</button>
+            <BibleModal reference={bibleModalRef || ""} open={!!bibleModalRef} onClose={() => setBibleModalRef(null)} />
             {content.bible_text && (
               <p className="text-foreground font-inter text-sm leading-relaxed italic whitespace-pre-wrap">
                 "{content.bible_text}"
