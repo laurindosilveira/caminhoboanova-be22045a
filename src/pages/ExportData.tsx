@@ -136,26 +136,47 @@ export default function ExportData() {
       sql += `-- PARTE 2: DADOS\n`;
       sql += `-- =============================================\n\n`;
 
+      // Disable triggers to avoid conflicts during import
+      sql += `-- Desabilitar triggers antes da inserção de dados\n`;
+      sql += `ALTER TABLE public.profiles DISABLE TRIGGER on_profile_created;\n`;
+      sql += `ALTER TABLE public.profiles DISABLE TRIGGER update_profiles_updated_at;\n`;
+      sql += `ALTER TABLE public.discipleship_plans DISABLE TRIGGER update_discipleship_plans_updated_at;\n`;
+      sql += `ALTER TABLE public.lesson_responses DISABLE TRIGGER update_lesson_responses_updated_at;\n`;
+      sql += `ALTER TABLE public.lesson_content DISABLE TRIGGER update_lesson_content_timestamp;\n`;
+      sql += `ALTER TABLE public.devotional_content DISABLE TRIGGER update_devotional_content_updated_at;\n`;
+      sql += `ALTER TABLE public.meeting_evaluations DISABLE TRIGGER update_meeting_evaluations_updated_at;\n`;
+      sql += `ALTER TABLE public.notification_preferences DISABLE TRIGGER update_notification_preferences_updated_at;\n`;
+      sql += `ALTER TABLE public.leader_meeting_notes DISABLE TRIGGER update_leader_meeting_notes_updated_at;\n`;
+      sql += `ALTER TABLE public.area_pastors DISABLE TRIGGER update_area_pastors_updated_at;\n\n`;
+
       // Order matters for foreign keys
-      // 1. Structure & content (no user FK dependencies)
+      // 1. Independent tables first (no FK dependencies)
       sql += buildInserts("courses", courses ?? []);
-      sql += buildInserts("lessons", lessons ?? []);
-      sql += buildInserts("lesson_content", lessonContent ?? []);
-      sql += buildInserts("devotional_content", devotionalContent ?? []);
       sql += buildInserts("activities", activities ?? []);
       sql += buildInserts("turmas", turmas ?? []);
-      sql += buildInserts("events", events ?? []);
       sql += buildInserts("community_settings", communitySettings ?? []);
-      sql += buildInserts("community_challenges", communityChallenges ?? []);
       sql += buildInserts("area_pastors", areaPastors ?? []);
+      sql += buildInserts("community_challenges", communityChallenges ?? []);
+
+      // 2. Tables depending on courses
+      sql += buildInserts("lessons", lessons ?? []);
+      sql += buildInserts("course_unlocks", courseUnlocks ?? []);
+      sql += buildInserts("ranking_seasons", rankingSeasons ?? []);
+
+      // 3. Tables depending on lessons
+      sql += buildInserts("lesson_content", lessonContent ?? []);
+      sql += buildInserts("devotional_content", devotionalContent ?? []);
+      sql += buildInserts("events", events ?? []);
+      sql += buildInserts("leader_meeting_notes", leaderMeetingNotes ?? []);
+
+      // 4. Tables depending on events
       sql += buildInserts("messages", messages ?? []);
 
-      // 2. User data (depends on profiles existing in target)
+      // 5. User data (profiles → user_roles → progress)
       sql += buildInserts("profiles", profiles ?? []);
       sql += buildInserts("user_roles", userRoles ?? []);
-      sql += buildInserts("course_unlocks", courseUnlocks ?? []);
 
-      // 3. User progress & activity data
+      // 6. User activity data (depends on profiles + content tables)
       sql += buildInserts("user_progress", userProgress ?? []);
       sql += buildInserts("lesson_responses", lessonResponses ?? []);
       sql += buildInserts("devotional_progress", devotionalProgress ?? []);
@@ -163,21 +184,32 @@ export default function ExportData() {
       sql += buildInserts("worship_attendance", worshipAttendance ?? []);
       sql += buildInserts("achievement_unlocks", achievementUnlocks ?? []);
       sql += buildInserts("challenge_participants", challengeParticipants ?? []);
+      sql += buildInserts("meeting_evaluations", meetingEvaluations ?? []);
+      sql += buildInserts("message_reactions", messageReactions ?? []);
 
-      // 4. Pastoral & admin data
+      // 7. Pastoral & admin data
       sql += buildInserts("discipleship_plans", discipleshipPlans ?? []);
       sql += buildInserts("pastoral_notes", pastoralNotes ?? []);
       sql += buildInserts("spiritual_assessments", spiritualAssessments ?? []);
-      sql += buildInserts("meeting_evaluations", meetingEvaluations ?? []);
-      sql += buildInserts("leader_meeting_notes", leaderMeetingNotes ?? []);
-      sql += buildInserts("ranking_seasons", rankingSeasons ?? []);
-      sql += buildInserts("message_reactions", messageReactions ?? []);
       sql += buildInserts("notification_preferences", notificationPreferences ?? []);
 
-      // 5. Community content (chat, prayers, testimonies)
+      // 8. Community content
       sql += buildInserts("community_chat", communityChat ?? []);
       sql += buildInserts("prayer_requests", prayerRequests ?? []);
       sql += buildInserts("testimonies", testimonies ?? []);
+
+      // Re-enable triggers after data import
+      sql += `\n-- Reabilitar triggers após inserção de dados\n`;
+      sql += `ALTER TABLE public.profiles ENABLE TRIGGER on_profile_created;\n`;
+      sql += `ALTER TABLE public.profiles ENABLE TRIGGER update_profiles_updated_at;\n`;
+      sql += `ALTER TABLE public.discipleship_plans ENABLE TRIGGER update_discipleship_plans_updated_at;\n`;
+      sql += `ALTER TABLE public.lesson_responses ENABLE TRIGGER update_lesson_responses_updated_at;\n`;
+      sql += `ALTER TABLE public.lesson_content ENABLE TRIGGER update_lesson_content_timestamp;\n`;
+      sql += `ALTER TABLE public.devotional_content ENABLE TRIGGER update_devotional_content_updated_at;\n`;
+      sql += `ALTER TABLE public.meeting_evaluations ENABLE TRIGGER update_meeting_evaluations_updated_at;\n`;
+      sql += `ALTER TABLE public.notification_preferences ENABLE TRIGGER update_notification_preferences_updated_at;\n`;
+      sql += `ALTER TABLE public.leader_meeting_notes ENABLE TRIGGER update_leader_meeting_notes_updated_at;\n`;
+      sql += `ALTER TABLE public.area_pastors ENABLE TRIGGER update_area_pastors_updated_at;\n`;
 
       // Download
       const blob = new Blob([sql], { type: "text/sql;charset=utf-8" });

@@ -418,6 +418,31 @@ CREATE TABLE public.turmas (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- area_pastors
+CREATE TABLE public.area_pastors (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  area text NOT NULL,
+  pastor_name text NOT NULL DEFAULT '',
+  phone text NOT NULL DEFAULT '',
+  updated_by uuid,
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+-- leader_meeting_notes
+CREATE TABLE public.leader_meeting_notes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  lesson_id uuid NOT NULL REFERENCES public.lessons(id) ON DELETE CASCADE,
+  leader_id uuid NOT NULL,
+  participation_notes text DEFAULT '',
+  spiritual_notes text DEFAULT '',
+  questions_notes text DEFAULT '',
+  pastoral_care_notes text DEFAULT '',
+  follow_up_notes text DEFAULT '',
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  UNIQUE(lesson_id, leader_id)
+);
+
 -- Add FK from profiles to turmas
 ALTER TABLE public.profiles ADD CONSTRAINT profiles_turma_id_fkey FOREIGN KEY (turma_id) REFERENCES public.turmas(id);
 
@@ -454,6 +479,8 @@ ALTER TABLE public.course_unlocks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.achievement_unlocks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notification_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.turmas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.area_pastors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.leader_meeting_notes ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
 -- SECURITY DEFINER FUNCTIONS
@@ -588,6 +615,12 @@ CREATE TRIGGER update_meeting_evaluations_updated_at BEFORE UPDATE ON public.mee
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 CREATE TRIGGER update_notification_preferences_updated_at BEFORE UPDATE ON public.notification_preferences
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TRIGGER update_leader_meeting_notes_updated_at BEFORE UPDATE ON public.leader_meeting_notes
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TRIGGER update_area_pastors_updated_at BEFORE UPDATE ON public.area_pastors
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 -- Auto-create profile from auth.users metadata
@@ -773,6 +806,14 @@ CREATE POLICY "Users can update their own notification preferences" ON public.no
 -- turmas
 CREATE POLICY "Admins can manage turmas" ON public.turmas FOR ALL USING (has_role(auth.uid(), 'admin')) WITH CHECK (has_role(auth.uid(), 'admin'));
 CREATE POLICY "Authenticated users can view turmas" ON public.turmas FOR SELECT USING (auth.uid() IS NOT NULL);
+
+-- area_pastors
+CREATE POLICY "Authenticated users can view area pastors" ON public.area_pastors FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Admins can manage area pastors" ON public.area_pastors FOR ALL USING (has_role(auth.uid(), 'admin')) WITH CHECK (has_role(auth.uid(), 'admin'));
+
+-- leader_meeting_notes
+CREATE POLICY "Leaders can manage their own notes" ON public.leader_meeting_notes FOR ALL USING (auth.uid() = leader_id) WITH CHECK (auth.uid() = leader_id);
+CREATE POLICY "Admins can view all leader notes" ON public.leader_meeting_notes FOR SELECT USING (has_role(auth.uid(), 'admin'));
 
 -- ============================================================
 -- REALTIME
