@@ -31,24 +31,29 @@ export default function ExportData() {
   const [status, setStatus] = useState("");
   const navigate = useNavigate();
 
-  async function handleExport() {
-    setLoading(true);
-    setStatus("Buscando dados...");
+  function downloadFile(content: string, filename: string) {
+    const blob = new Blob([content], { type: "text/sql;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
-    try {
-      // Batch 1: Content & structure tables
-      const [
-        { data: courses },
-        { data: lessons },
-        { data: lessonContent },
-        { data: devotionalContent },
-        { data: activities },
-        { data: turmas },
-        { data: events },
-        { data: communitySettings },
-        { data: communityChallenges },
-        { data: courseUnlocks },
-      ] = await Promise.all([
+  function buildHeader(type: string) {
+    return `-- =============================================\n-- ${type} - Caminho Boa Nova\n-- Gerado em: ${new Date().toISOString()}\n-- =============================================\n\n`;
+  }
+
+  const disableTriggers = `ALTER TABLE public.profiles DISABLE TRIGGER on_profile_created;\nALTER TABLE public.profiles DISABLE TRIGGER update_profiles_updated_at;\nALTER TABLE public.discipleship_plans DISABLE TRIGGER update_discipleship_plans_updated_at;\nALTER TABLE public.lesson_responses DISABLE TRIGGER update_lesson_responses_updated_at;\nALTER TABLE public.lesson_content DISABLE TRIGGER update_lesson_content_timestamp;\nALTER TABLE public.devotional_content DISABLE TRIGGER update_devotional_content_updated_at;\nALTER TABLE public.meeting_evaluations DISABLE TRIGGER update_meeting_evaluations_updated_at;\nALTER TABLE public.notification_preferences DISABLE TRIGGER update_notification_preferences_updated_at;\nALTER TABLE public.leader_meeting_notes DISABLE TRIGGER update_leader_meeting_notes_updated_at;\nALTER TABLE public.area_pastors DISABLE TRIGGER update_area_pastors_updated_at;\n\n`;
+
+  const enableTriggers = `\nALTER TABLE public.profiles ENABLE TRIGGER on_profile_created;\nALTER TABLE public.profiles ENABLE TRIGGER update_profiles_updated_at;\nALTER TABLE public.discipleship_plans ENABLE TRIGGER update_discipleship_plans_updated_at;\nALTER TABLE public.lesson_responses ENABLE TRIGGER update_lesson_responses_updated_at;\nALTER TABLE public.lesson_content ENABLE TRIGGER update_lesson_content_timestamp;\nALTER TABLE public.devotional_content ENABLE TRIGGER update_devotional_content_updated_at;\nALTER TABLE public.meeting_evaluations ENABLE TRIGGER update_meeting_evaluations_updated_at;\nALTER TABLE public.notification_preferences ENABLE TRIGGER update_notification_preferences_updated_at;\nALTER TABLE public.leader_meeting_notes ENABLE TRIGGER update_leader_meeting_notes_updated_at;\nALTER TABLE public.area_pastors ENABLE TRIGGER update_area_pastors_updated_at;\n`;
+
+  async function fetchAllData() {
+    const [b1, b2, b3] = await Promise.all([
+      Promise.all([
         supabase.from("courses").select("*").order("order_num"),
         supabase.from("lessons").select("*").order("course_id, order_num"),
         supabase.from("lesson_content").select("*"),
@@ -59,19 +64,8 @@ export default function ExportData() {
         supabase.from("community_settings").select("*"),
         supabase.from("community_challenges").select("*"),
         supabase.from("course_unlocks").select("*"),
-      ]);
-
-      // Batch 2: User data tables
-      const [
-        { data: profiles },
-        { data: userRoles },
-        { data: userProgress },
-        { data: lessonResponses },
-        { data: devotionalProgress },
-        { data: attendance },
-        { data: worshipAttendance },
-        { data: achievementUnlocks },
-      ] = await Promise.all([
+      ]),
+      Promise.all([
         supabase.from("profiles").select("*"),
         supabase.from("user_roles").select("*"),
         supabase.from("user_progress").select("*"),
@@ -80,25 +74,8 @@ export default function ExportData() {
         supabase.from("attendance").select("*"),
         supabase.from("worship_attendance").select("*"),
         supabase.from("achievement_unlocks").select("*"),
-      ]);
-
-      // Batch 3: Pastoral & community tables
-      const [
-        { data: discipleshipPlans },
-        { data: pastoralNotes },
-        { data: spiritualAssessments },
-        { data: meetingEvaluations },
-        { data: leaderMeetingNotes },
-        { data: messages },
-        { data: messageReactions },
-        { data: areaPastors },
-        { data: rankingSeasons },
-        { data: challengeParticipants },
-        { data: notificationPreferences },
-        { data: communityChat },
-        { data: prayerRequests },
-        { data: testimonies },
-      ] = await Promise.all([
+      ]),
+      Promise.all([
         supabase.from("discipleship_plans").select("*"),
         supabase.from("pastoral_notes").select("*"),
         supabase.from("spiritual_assessments").select("*"),
@@ -113,119 +90,77 @@ export default function ExportData() {
         supabase.from("community_chat").select("*"),
         supabase.from("prayer_requests").select("*"),
         supabase.from("testimonies").select("*"),
-      ]);
+      ]),
+    ]);
 
-      setStatus("Gerando SQL completo...");
+    const [courses, lessons, lessonContent, devotionalContent, activities, turmas, events, communitySettings, communityChallenges, courseUnlocks] = b1.map(r => r.data ?? []);
+    const [profiles, userRoles, userProgress, lessonResponses, devotionalProgress, attendance, worshipAttendance, achievementUnlocks] = b2.map(r => r.data ?? []);
+    const [discipleshipPlans, pastoralNotes, spiritualAssessments, meetingEvaluations, leaderMeetingNotes, messages, messageReactions, areaPastors, rankingSeasons, challengeParticipants, notificationPreferences, communityChat, prayerRequests, testimonies] = b3.map(r => r.data ?? []);
 
-      let sql = `-- =============================================\n`;
-      sql += `-- EXPORT COMPLETO - Caminho Boa Nova\n`;
-      sql += `-- Gerado em: ${new Date().toISOString()}\n`;
-      sql += `-- =============================================\n`;
-      sql += `-- Este arquivo contém TUDO: estrutura + dados.\n`;
-      sql += `-- Execute no SQL Editor do Supabase (projeto novo).\n`;
-      sql += `-- =============================================\n\n`;
+    let sql = "";
+    sql += disableTriggers;
+    sql += buildInserts("courses", courses);
+    sql += buildInserts("activities", activities);
+    sql += buildInserts("turmas", turmas);
+    sql += buildInserts("community_settings", communitySettings);
+    sql += buildInserts("area_pastors", areaPastors);
+    sql += buildInserts("community_challenges", communityChallenges);
+    sql += buildInserts("lessons", lessons);
+    sql += buildInserts("course_unlocks", courseUnlocks);
+    sql += buildInserts("ranking_seasons", rankingSeasons);
+    sql += buildInserts("lesson_content", lessonContent);
+    sql += buildInserts("devotional_content", devotionalContent);
+    sql += buildInserts("events", events);
+    sql += buildInserts("leader_meeting_notes", leaderMeetingNotes);
+    sql += buildInserts("messages", messages);
+    sql += buildInserts("profiles", profiles);
+    sql += buildInserts("user_roles", userRoles);
+    sql += buildInserts("user_progress", userProgress);
+    sql += buildInserts("lesson_responses", lessonResponses);
+    sql += buildInserts("devotional_progress", devotionalProgress);
+    sql += buildInserts("attendance", attendance);
+    sql += buildInserts("worship_attendance", worshipAttendance);
+    sql += buildInserts("achievement_unlocks", achievementUnlocks);
+    sql += buildInserts("challenge_participants", challengeParticipants);
+    sql += buildInserts("meeting_evaluations", meetingEvaluations);
+    sql += buildInserts("message_reactions", messageReactions);
+    sql += buildInserts("discipleship_plans", discipleshipPlans);
+    sql += buildInserts("pastoral_notes", pastoralNotes);
+    sql += buildInserts("spiritual_assessments", spiritualAssessments);
+    sql += buildInserts("notification_preferences", notificationPreferences);
+    sql += buildInserts("community_chat", communityChat);
+    sql += buildInserts("prayer_requests", prayerRequests);
+    sql += buildInserts("testimonies", testimonies);
+    sql += enableTriggers;
+    return sql;
+  }
 
-      // Part 1: Schema (tables, functions, RLS, triggers)
-      sql += `-- =============================================\n`;
-      sql += `-- PARTE 1: ESTRUTURA (Tabelas, Funções, RLS, Triggers)\n`;
-      sql += `-- =============================================\n\n`;
-      sql += SCHEMA_SQL;
+  async function handleExport(mode: "schema" | "data" | "all") {
+    setLoading(true);
+    try {
+      const date = new Date().toISOString().slice(0, 10);
 
-      // Part 2: Data
-      sql += `\n\n-- =============================================\n`;
-      sql += `-- PARTE 2: DADOS\n`;
-      sql += `-- =============================================\n\n`;
-
-      // Disable triggers to avoid conflicts during import
-      sql += `-- Desabilitar triggers antes da inserção de dados\n`;
-      sql += `ALTER TABLE public.profiles DISABLE TRIGGER on_profile_created;\n`;
-      sql += `ALTER TABLE public.profiles DISABLE TRIGGER update_profiles_updated_at;\n`;
-      sql += `ALTER TABLE public.discipleship_plans DISABLE TRIGGER update_discipleship_plans_updated_at;\n`;
-      sql += `ALTER TABLE public.lesson_responses DISABLE TRIGGER update_lesson_responses_updated_at;\n`;
-      sql += `ALTER TABLE public.lesson_content DISABLE TRIGGER update_lesson_content_timestamp;\n`;
-      sql += `ALTER TABLE public.devotional_content DISABLE TRIGGER update_devotional_content_updated_at;\n`;
-      sql += `ALTER TABLE public.meeting_evaluations DISABLE TRIGGER update_meeting_evaluations_updated_at;\n`;
-      sql += `ALTER TABLE public.notification_preferences DISABLE TRIGGER update_notification_preferences_updated_at;\n`;
-      sql += `ALTER TABLE public.leader_meeting_notes DISABLE TRIGGER update_leader_meeting_notes_updated_at;\n`;
-      sql += `ALTER TABLE public.area_pastors DISABLE TRIGGER update_area_pastors_updated_at;\n\n`;
-
-      // Order matters for foreign keys
-      // 1. Independent tables first (no FK dependencies)
-      sql += buildInserts("courses", courses ?? []);
-      sql += buildInserts("activities", activities ?? []);
-      sql += buildInserts("turmas", turmas ?? []);
-      sql += buildInserts("community_settings", communitySettings ?? []);
-      sql += buildInserts("area_pastors", areaPastors ?? []);
-      sql += buildInserts("community_challenges", communityChallenges ?? []);
-
-      // 2. Tables depending on courses
-      sql += buildInserts("lessons", lessons ?? []);
-      sql += buildInserts("course_unlocks", courseUnlocks ?? []);
-      sql += buildInserts("ranking_seasons", rankingSeasons ?? []);
-
-      // 3. Tables depending on lessons
-      sql += buildInserts("lesson_content", lessonContent ?? []);
-      sql += buildInserts("devotional_content", devotionalContent ?? []);
-      sql += buildInserts("events", events ?? []);
-      sql += buildInserts("leader_meeting_notes", leaderMeetingNotes ?? []);
-
-      // 4. Tables depending on events
-      sql += buildInserts("messages", messages ?? []);
-
-      // 5. User data (profiles → user_roles → progress)
-      sql += buildInserts("profiles", profiles ?? []);
-      sql += buildInserts("user_roles", userRoles ?? []);
-
-      // 6. User activity data (depends on profiles + content tables)
-      sql += buildInserts("user_progress", userProgress ?? []);
-      sql += buildInserts("lesson_responses", lessonResponses ?? []);
-      sql += buildInserts("devotional_progress", devotionalProgress ?? []);
-      sql += buildInserts("attendance", attendance ?? []);
-      sql += buildInserts("worship_attendance", worshipAttendance ?? []);
-      sql += buildInserts("achievement_unlocks", achievementUnlocks ?? []);
-      sql += buildInserts("challenge_participants", challengeParticipants ?? []);
-      sql += buildInserts("meeting_evaluations", meetingEvaluations ?? []);
-      sql += buildInserts("message_reactions", messageReactions ?? []);
-
-      // 7. Pastoral & admin data
-      sql += buildInserts("discipleship_plans", discipleshipPlans ?? []);
-      sql += buildInserts("pastoral_notes", pastoralNotes ?? []);
-      sql += buildInserts("spiritual_assessments", spiritualAssessments ?? []);
-      sql += buildInserts("notification_preferences", notificationPreferences ?? []);
-
-      // 8. Community content
-      sql += buildInserts("community_chat", communityChat ?? []);
-      sql += buildInserts("prayer_requests", prayerRequests ?? []);
-      sql += buildInserts("testimonies", testimonies ?? []);
-
-      // Re-enable triggers after data import
-      sql += `\n-- Reabilitar triggers após inserção de dados\n`;
-      sql += `ALTER TABLE public.profiles ENABLE TRIGGER on_profile_created;\n`;
-      sql += `ALTER TABLE public.profiles ENABLE TRIGGER update_profiles_updated_at;\n`;
-      sql += `ALTER TABLE public.discipleship_plans ENABLE TRIGGER update_discipleship_plans_updated_at;\n`;
-      sql += `ALTER TABLE public.lesson_responses ENABLE TRIGGER update_lesson_responses_updated_at;\n`;
-      sql += `ALTER TABLE public.lesson_content ENABLE TRIGGER update_lesson_content_timestamp;\n`;
-      sql += `ALTER TABLE public.devotional_content ENABLE TRIGGER update_devotional_content_updated_at;\n`;
-      sql += `ALTER TABLE public.meeting_evaluations ENABLE TRIGGER update_meeting_evaluations_updated_at;\n`;
-      sql += `ALTER TABLE public.notification_preferences ENABLE TRIGGER update_notification_preferences_updated_at;\n`;
-      sql += `ALTER TABLE public.leader_meeting_notes ENABLE TRIGGER update_leader_meeting_notes_updated_at;\n`;
-      sql += `ALTER TABLE public.area_pastors ENABLE TRIGGER update_area_pastors_updated_at;\n`;
-
-      // Download
-      const blob = new Blob([sql], { type: "text/sql;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `caminho-boa-nova-completo-${new Date().toISOString().slice(0, 10)}.sql`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      setStatus("✅ Arquivo completo gerado e baixado!");
+      if (mode === "schema") {
+        setStatus("Gerando schema...");
+        const sql = buildHeader("SCHEMA (Estrutura)") + SCHEMA_SQL;
+        downloadFile(sql, `schema-${date}.sql`);
+        setStatus("✅ Schema exportado!");
+      } else if (mode === "data") {
+        setStatus("Buscando dados...");
+        const dataSql = buildHeader("DADOS") + await fetchAllData();
+        downloadFile(dataSql, `dados-${date}.sql`);
+        setStatus("✅ Dados exportados!");
+      } else {
+        setStatus("Buscando dados...");
+        let sql = buildHeader("EXPORT COMPLETO");
+        sql += "-- PARTE 1: ESTRUTURA\n\n" + SCHEMA_SQL;
+        sql += "\n\n-- PARTE 2: DADOS\n\n" + await fetchAllData();
+        downloadFile(sql, `completo-${date}.sql`);
+        setStatus("✅ Arquivo completo exportado!");
+      }
     } catch (err) {
       console.error(err);
-      setStatus("❌ Erro ao exportar: " + String(err));
+      setStatus("❌ Erro: " + String(err));
     } finally {
       setLoading(false);
     }
@@ -237,14 +172,22 @@ export default function ExportData() {
         <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
           <span className="text-3xl">📦</span>
         </div>
-        <h1 className="font-montserrat font-black text-xl text-foreground">Exportar Banco Completo</h1>
+        <h1 className="font-montserrat font-black text-xl text-foreground">Exportar Banco de Dados</h1>
         <p className="text-muted-foreground font-inter text-sm">
-          Gera um arquivo SQL único com <strong>toda a estrutura</strong> (tabelas, funções, RLS, triggers) e <strong>todos os dados</strong> (todas as 30 tabelas: cursos, lições, devocionais, perfis, progresso, presença, dados pastorais, chat, testemunhos e mais) para backup completo ou migração.
+          Escolha o tipo de exportação para backup ou migração.
         </p>
 
-        <Button onClick={handleExport} disabled={loading} className="w-full" size="lg">
-          {loading ? "Exportando..." : "Gerar e Baixar SQL Completo"}
-        </Button>
+        <div className="space-y-3">
+          <Button onClick={() => handleExport("schema")} disabled={loading} className="w-full" size="lg" variant="outline">
+            📐 Exportar Schema (Estrutura)
+          </Button>
+          <Button onClick={() => handleExport("data")} disabled={loading} className="w-full" size="lg" variant="outline">
+            📊 Exportar Dados (Registros)
+          </Button>
+          <Button onClick={() => handleExport("all")} disabled={loading} className="w-full" size="lg">
+            📦 Exportar Tudo (Schema + Dados)
+          </Button>
+        </div>
 
         {status && (
           <p className="text-sm font-inter text-muted-foreground">{status}</p>
