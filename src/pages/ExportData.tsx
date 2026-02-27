@@ -95,6 +95,9 @@ export default function ExportData() {
         { data: rankingSeasons },
         { data: challengeParticipants },
         { data: notificationPreferences },
+        { data: communityChat },
+        { data: prayerRequests },
+        { data: testimonies },
       ] = await Promise.all([
         supabase.from("discipleship_plans").select("*"),
         supabase.from("pastoral_notes").select("*"),
@@ -107,6 +110,9 @@ export default function ExportData() {
         supabase.from("ranking_seasons").select("*"),
         supabase.from("challenge_participants").select("*"),
         supabase.from("notification_preferences").select("*"),
+        supabase.from("community_chat").select("*"),
+        supabase.from("prayer_requests").select("*"),
+        supabase.from("testimonies").select("*"),
       ]);
 
       setStatus("Gerando SQL completo...");
@@ -168,6 +174,11 @@ export default function ExportData() {
       sql += buildInserts("message_reactions", messageReactions ?? []);
       sql += buildInserts("notification_preferences", notificationPreferences ?? []);
 
+      // 5. Community content (chat, prayers, testimonies)
+      sql += buildInserts("community_chat", communityChat ?? []);
+      sql += buildInserts("prayer_requests", prayerRequests ?? []);
+      sql += buildInserts("testimonies", testimonies ?? []);
+
       // Download
       const blob = new Blob([sql], { type: "text/sql;charset=utf-8" });
       const url = URL.createObjectURL(blob);
@@ -196,7 +207,7 @@ export default function ExportData() {
         </div>
         <h1 className="font-montserrat font-black text-xl text-foreground">Exportar Banco Completo</h1>
         <p className="text-muted-foreground font-inter text-sm">
-          Gera um arquivo SQL único com <strong>toda a estrutura</strong> (tabelas, funções, RLS, triggers) e <strong>todos os dados</strong> (cursos, lições, devocionais, atividades, turmas, eventos) para importar em outro Supabase.
+          Gera um arquivo SQL único com <strong>toda a estrutura</strong> (tabelas, funções, RLS, triggers) e <strong>todos os dados</strong> (todas as 30 tabelas: cursos, lições, devocionais, perfis, progresso, presença, dados pastorais, chat, testemunhos e mais) para backup completo ou migração.
         </p>
 
         <Button onClick={handleExport} disabled={loading} className="w-full" size="lg">
