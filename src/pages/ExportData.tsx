@@ -36,6 +36,7 @@ export default function ExportData() {
     setStatus("Buscando dados...");
 
     try {
+      // Batch 1: Content & structure tables
       const [
         { data: courses },
         { data: lessons },
@@ -46,6 +47,7 @@ export default function ExportData() {
         { data: events },
         { data: communitySettings },
         { data: communityChallenges },
+        { data: courseUnlocks },
       ] = await Promise.all([
         supabase.from("courses").select("*").order("order_num"),
         supabase.from("lessons").select("*").order("course_id, order_num"),
@@ -56,6 +58,55 @@ export default function ExportData() {
         supabase.from("events").select("*").order("event_date"),
         supabase.from("community_settings").select("*"),
         supabase.from("community_challenges").select("*"),
+        supabase.from("course_unlocks").select("*"),
+      ]);
+
+      // Batch 2: User data tables
+      const [
+        { data: profiles },
+        { data: userRoles },
+        { data: userProgress },
+        { data: lessonResponses },
+        { data: devotionalProgress },
+        { data: attendance },
+        { data: worshipAttendance },
+        { data: achievementUnlocks },
+      ] = await Promise.all([
+        supabase.from("profiles").select("*"),
+        supabase.from("user_roles").select("*"),
+        supabase.from("user_progress").select("*"),
+        supabase.from("lesson_responses").select("*"),
+        supabase.from("devotional_progress").select("*"),
+        supabase.from("attendance").select("*"),
+        supabase.from("worship_attendance").select("*"),
+        supabase.from("achievement_unlocks").select("*"),
+      ]);
+
+      // Batch 3: Pastoral & community tables
+      const [
+        { data: discipleshipPlans },
+        { data: pastoralNotes },
+        { data: spiritualAssessments },
+        { data: meetingEvaluations },
+        { data: leaderMeetingNotes },
+        { data: messages },
+        { data: messageReactions },
+        { data: areaPastors },
+        { data: rankingSeasons },
+        { data: challengeParticipants },
+        { data: notificationPreferences },
+      ] = await Promise.all([
+        supabase.from("discipleship_plans").select("*"),
+        supabase.from("pastoral_notes").select("*"),
+        supabase.from("spiritual_assessments").select("*"),
+        supabase.from("meeting_evaluations").select("*"),
+        supabase.from("leader_meeting_notes").select("*"),
+        supabase.from("messages").select("*"),
+        supabase.from("message_reactions").select("*"),
+        supabase.from("area_pastors").select("*"),
+        supabase.from("ranking_seasons").select("*"),
+        supabase.from("challenge_participants").select("*"),
+        supabase.from("notification_preferences").select("*"),
       ]);
 
       setStatus("Gerando SQL completo...");
@@ -80,6 +131,7 @@ export default function ExportData() {
       sql += `-- =============================================\n\n`;
 
       // Order matters for foreign keys
+      // 1. Structure & content (no user FK dependencies)
       sql += buildInserts("courses", courses ?? []);
       sql += buildInserts("lessons", lessons ?? []);
       sql += buildInserts("lesson_content", lessonContent ?? []);
@@ -89,6 +141,32 @@ export default function ExportData() {
       sql += buildInserts("events", events ?? []);
       sql += buildInserts("community_settings", communitySettings ?? []);
       sql += buildInserts("community_challenges", communityChallenges ?? []);
+      sql += buildInserts("area_pastors", areaPastors ?? []);
+      sql += buildInserts("messages", messages ?? []);
+
+      // 2. User data (depends on profiles existing in target)
+      sql += buildInserts("profiles", profiles ?? []);
+      sql += buildInserts("user_roles", userRoles ?? []);
+      sql += buildInserts("course_unlocks", courseUnlocks ?? []);
+
+      // 3. User progress & activity data
+      sql += buildInserts("user_progress", userProgress ?? []);
+      sql += buildInserts("lesson_responses", lessonResponses ?? []);
+      sql += buildInserts("devotional_progress", devotionalProgress ?? []);
+      sql += buildInserts("attendance", attendance ?? []);
+      sql += buildInserts("worship_attendance", worshipAttendance ?? []);
+      sql += buildInserts("achievement_unlocks", achievementUnlocks ?? []);
+      sql += buildInserts("challenge_participants", challengeParticipants ?? []);
+
+      // 4. Pastoral & admin data
+      sql += buildInserts("discipleship_plans", discipleshipPlans ?? []);
+      sql += buildInserts("pastoral_notes", pastoralNotes ?? []);
+      sql += buildInserts("spiritual_assessments", spiritualAssessments ?? []);
+      sql += buildInserts("meeting_evaluations", meetingEvaluations ?? []);
+      sql += buildInserts("leader_meeting_notes", leaderMeetingNotes ?? []);
+      sql += buildInserts("ranking_seasons", rankingSeasons ?? []);
+      sql += buildInserts("message_reactions", messageReactions ?? []);
+      sql += buildInserts("notification_preferences", notificationPreferences ?? []);
 
       // Download
       const blob = new Blob([sql], { type: "text/sql;charset=utf-8" });
