@@ -20,6 +20,7 @@ import UserAgendaTab from "@/components/home/UserAgendaTab";
 import NotificationSettings from "@/components/home/NotificationSettings";
 import BottomNav, { type Tab } from "@/components/home/BottomNav";
 import { useUserStats } from "@/hooks/useUserStats";
+import { useAppNotifications } from "@/hooks/useAppNotifications";
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>("jornada");
@@ -27,6 +28,7 @@ export default function Index() {
   const { profile, role } = useAuth();
   const navigate = useNavigate();
   const stats = useUserStats();
+  useAppNotifications();
 
   // Listen for lesson navigation from agenda
   useEffect(() => {
