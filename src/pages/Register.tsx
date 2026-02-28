@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Eye, EyeOff, Mail, Lock, User, Phone, Calendar, ChevronLeft, ChevronDown } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, User, Phone, Calendar, ChevronLeft, ChevronDown, MessageCircle } from "lucide-react";
 import { z } from "zod";
 
 const COMMUNITIES = [
@@ -289,6 +289,18 @@ export default function Register() {
             </p>
           </div>
         </div>
+        {/* WhatsApp help */}
+        <a
+          href="https://wa.me/5555984395290?text=Oi!%20Estou%20tentando%20usar%20o%20app%20do%20Ensino%20Confirmat%C3%B3rio%20e%20estou%20tendo%20dificuldade.%20Pode%20me%20ajudar%3F"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 flex items-center gap-2 bg-[#25D366]/15 hover:bg-[#25D366]/25 rounded-2xl px-5 py-3 backdrop-blur transition-colors"
+        >
+          <MessageCircle className="w-5 h-5 text-[#25D366]" />
+          <span className="text-primary-foreground font-inter text-sm font-medium">
+            Precisa de ajuda? Fale conosco
+          </span>
+        </a>
       </div>
     </div>
   );
