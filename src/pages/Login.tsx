@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Eye, EyeOff, Mail, Lock, Flame, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, Flame, ShieldCheck, MessageCircle } from "lucide-react";
 import { z } from "zod";
 
 const loginSchema = z.object({
@@ -167,8 +167,21 @@ export default function Login() {
           </div>
         </div>
 
+        {/* WhatsApp help */}
+        <a
+          href="https://wa.me/5555984395290?text=Oi!%20Estou%20tentando%20usar%20o%20app%20do%20Ensino%20Confirmat%C3%B3rio%20e%20estou%20tendo%20dificuldade.%20Pode%20me%20ajudar%3F"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 flex items-center gap-2 bg-[#25D366]/15 hover:bg-[#25D366]/25 rounded-2xl px-5 py-3 backdrop-blur transition-colors"
+        >
+          <MessageCircle className="w-5 h-5 text-[#25D366]" />
+          <span className="text-primary-foreground font-inter text-sm font-medium">
+            Precisa de ajuda? Fale conosco
+          </span>
+        </a>
+
         {/* Bottom streak badge */}
-        <div className="mt-6 flex items-center gap-2 bg-white/10 rounded-2xl px-4 py-2 backdrop-blur">
+        <div className="mt-3 flex items-center gap-2 bg-white/10 rounded-2xl px-4 py-2 backdrop-blur">
           <Flame className="w-5 h-5 text-secondary" />
           <span className="text-primary-foreground font-inter text-sm">
             Profissão de fé - Paróquia Boa Nova
