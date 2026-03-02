@@ -8,8 +8,11 @@ const corsHeaders = {
 
 /**
  * Web Push notification sender.
- * Called by cron EVERY HOUR. Only sends to users whose preferred_hour
- * matches the current hour in their timezone.
+ * Called by cron EVERY HOUR. Sends:
+ * 1. Devotional reminders (at user's preferred hour)
+ * 2. Upcoming event reminders (48h before, at preferred hour)
+ * 3. Streak risk alerts (at preferred hour)
+ * 4. New pastor messages (at preferred hour)
  */
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -54,7 +57,32 @@ Deno.serve(async (req) => {
       .select("id");
     const totalDevotionals = allDevotionals?.length ?? 0;
 
+    // Get upcoming events (within next 48h)
     const nowUtc = new Date();
+    const in48h = new Date(nowUtc.getTime() + 48 * 60 * 60 * 1000);
+    const { data: upcomingEvents } = await supabase
+      .from("events")
+      .select("id, title, event_date, community, area")
+      .gte("event_date", nowUtc.toISOString())
+      .lte("event_date", in48h.toISOString());
+
+    // Get recent messages (last 24h)
+    const yesterday = new Date(nowUtc.getTime() - 24 * 60 * 60 * 1000);
+    const { data: recentMessages } = await supabase
+      .from("messages")
+      .select("id, title, community, area")
+      .gte("created_at", yesterday.toISOString());
+
+    // Get user profiles for community/area matching
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("user_id, community, area")
+      .in("user_id", userIds);
+
+    const profileMap = new Map(
+      (profiles ?? []).map((p: any) => [p.user_id, p])
+    );
+
     let sent = 0;
     let failed = 0;
     let skipped = 0;
@@ -62,62 +90,136 @@ Deno.serve(async (req) => {
 
     for (const sub of subscriptions) {
       const prefs = prefsMap.get(sub.user_id) as any;
+      const profile = profileMap.get(sub.user_id) as any;
 
       // Skip if master disabled
       if (prefs && !prefs.master_enabled) { skipped++; continue; }
-      const devocionalOn = prefs ? prefs.devocional : true;
-      if (!devocionalOn) { skipped++; continue; }
 
-      // Check if current hour matches user's preferred hour in their timezone
+      // Check if current hour matches user's preferred hour
       const tz = prefs?.timezone || "America/Sao_Paulo";
       const preferredHour = prefs?.preferred_hour ?? 7;
-
       const currentHourInTz = getCurrentHourInTimezone(nowUtc, tz);
-      if (currentHourInTz !== preferredHour) {
-        skipped++;
-        continue;
+      if (currentHourInTz !== preferredHour) { skipped++; continue; }
+
+      const notifications: Array<{ title: string; body: string; tag: string }> = [];
+
+      // 1. Devotional reminder
+      const devocionalOn = prefs ? prefs.devocional : true;
+      if (devocionalOn) {
+        const { data: userProgress } = await supabase
+          .from("devotional_progress")
+          .select("devotional_id")
+          .eq("user_id", sub.user_id);
+
+        const completedCount = userProgress?.length ?? 0;
+        const pendingCount = totalDevotionals - completedCount;
+
+        if (pendingCount > 0) {
+          notifications.push({
+            title: "📖 Hora do Devocional!",
+            body: pendingCount === 1
+              ? "Você tem 1 devocional esperando. Não perca sua caminhada!"
+              : `Você tem ${pendingCount} devocionais pendentes. Cada dia conta!`,
+            tag: "daily-devotional",
+          });
+        }
       }
 
-      // Check if user has pending devotionals
-      const { data: userProgress } = await supabase
-        .from("devotional_progress")
-        .select("devotional_id")
-        .eq("user_id", sub.user_id);
-
-      const completedCount = userProgress?.length ?? 0;
-      const pendingCount = totalDevotionals - completedCount;
-
-      if (pendingCount <= 0) { skipped++; continue; }
-
-      // Build notification payload
-      const payload = JSON.stringify({
-        title: "📖 Hora do Devocional!",
-        body:
-          pendingCount === 1
-            ? "Você tem 1 devocional esperando. Não perca sua caminhada!"
-            : `Você tem ${pendingCount} devocionais pendentes. Cada dia conta!`,
-        icon: "/pwa-192x192.png",
-        badge: "/pwa-192x192.png",
-        tag: "daily-devotional",
-        data: { url: "/" },
-      });
-
-      try {
-        await sendWebPush(
-          {
-            endpoint: sub.endpoint,
-            keys: { p256dh: sub.p256dh, auth: sub.auth },
-          },
-          payload,
-          VAPID_PUBLIC_KEY,
-          VAPID_PRIVATE_KEY
+      // 2. Upcoming events
+      const eventosOn = prefs ? prefs.eventos : true;
+      if (eventosOn && upcomingEvents && profile) {
+        const userEvents = upcomingEvents.filter((e: any) =>
+          (e.community === profile.community) ||
+          (e.area === profile.area) ||
+          (!e.community && !e.area)
         );
-        sent++;
-      } catch (err: any) {
-        console.error(`Push failed for ${sub.endpoint}:`, err.message);
-        failed++;
-        if (err.status === 410 || err.status === 404) {
-          failedEndpoints.push(sub.endpoint);
+        for (const evt of userEvents) {
+          const evtDate = new Date(evt.event_date);
+          const hoursUntil = Math.round((evtDate.getTime() - nowUtc.getTime()) / (1000 * 60 * 60));
+          notifications.push({
+            title: "📅 Evento Próximo!",
+            body: `"${evt.title}" em ${hoursUntil}h. Não falte!`,
+            tag: `event-${evt.id}`,
+          });
+        }
+      }
+
+      // 3. Streak risk
+      const streakOn = prefs ? prefs.streak : true;
+      if (streakOn) {
+        const twoDaysAgo = new Date(nowUtc.getTime() - 2 * 24 * 60 * 60 * 1000);
+        const { data: recentDevos } = await supabase
+          .from("devotional_progress")
+          .select("completed_at")
+          .eq("user_id", sub.user_id)
+          .gte("completed_at", twoDaysAgo.toISOString())
+          .limit(1);
+
+        // If no devotional in 2 days but they have some history, warn
+        if ((!recentDevos || recentDevos.length === 0)) {
+          const { count } = await supabase
+            .from("devotional_progress")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", sub.user_id);
+
+          if (count && count > 0) {
+            notifications.push({
+              title: "🔥 Sua sequência está em risco!",
+              body: "Faz 2 dias sem devocional. Não deixe sua caminhada esfriar!",
+              tag: "streak-risk",
+            });
+          }
+        }
+      }
+
+      // 4. New pastor messages
+      const mensagensOn = prefs ? prefs.mensagens : true;
+      if (mensagensOn && recentMessages && profile) {
+        const userMessages = recentMessages.filter((m: any) =>
+          (!m.area && !m.community) ||
+          (m.area === profile.area) ||
+          (m.community === profile.community)
+        );
+        if (userMessages.length > 0) {
+          const latest = userMessages[0];
+          notifications.push({
+            title: "💬 Nova Mensagem do Pastor",
+            body: latest.title.length > 60 ? latest.title.slice(0, 57) + "..." : latest.title,
+            tag: "pastor-message",
+          });
+        }
+      }
+
+      // Send all notifications for this user
+      if (notifications.length === 0) { skipped++; continue; }
+
+      for (const notif of notifications) {
+        const payload = JSON.stringify({
+          title: notif.title,
+          body: notif.body,
+          icon: "/pwa-192x192.png",
+          badge: "/pwa-192x192.png",
+          tag: notif.tag,
+          data: { url: "/" },
+        });
+
+        try {
+          await sendWebPush(
+            {
+              endpoint: sub.endpoint,
+              keys: { p256dh: sub.p256dh, auth: sub.auth },
+            },
+            payload,
+            VAPID_PUBLIC_KEY,
+            VAPID_PRIVATE_KEY
+          );
+          sent++;
+        } catch (err: any) {
+          console.error(`Push failed for ${sub.endpoint}:`, err.message);
+          failed++;
+          if (err.status === 410 || err.status === 404) {
+            failedEndpoints.push(sub.endpoint);
+          }
         }
       }
     }
@@ -158,7 +260,6 @@ function getCurrentHourInTimezone(date: Date, tz: string): number {
     }).format(date);
     return parseInt(formatted, 10);
   } catch {
-    // Fallback: assume BRT (UTC-3)
     const utcHour = date.getUTCHours();
     return (utcHour - 3 + 24) % 24;
   }
