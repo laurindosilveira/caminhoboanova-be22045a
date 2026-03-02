@@ -8,8 +8,8 @@ const corsHeaders = {
 
 /**
  * Web Push notification sender.
- * Called by cron daily or manually.
- * Uses the Web Push protocol with VAPID authentication.
+ * Called by cron EVERY HOUR. Only sends to users whose preferred_hour
+ * matches the current hour in their timezone.
  */
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-    // Get all push subscriptions with user notification preferences
+    // Get all push subscriptions
     const { data: subscriptions, error: subErr } = await supabase
       .from("push_subscriptions")
       .select("*");
@@ -48,23 +48,35 @@ Deno.serve(async (req) => {
       (allPrefs ?? []).map((p: any) => [p.user_id, p])
     );
 
-    // Check which users have pending devotionals
+    // Get all devotional content for pending check
     const { data: allDevotionals } = await supabase
       .from("devotional_content")
       .select("id");
-
     const totalDevotionals = allDevotionals?.length ?? 0;
 
+    const nowUtc = new Date();
     let sent = 0;
     let failed = 0;
+    let skipped = 0;
     const failedEndpoints: string[] = [];
 
     for (const sub of subscriptions) {
       const prefs = prefsMap.get(sub.user_id) as any;
+
       // Skip if master disabled
-      if (prefs && !prefs.master_enabled) continue;
+      if (prefs && !prefs.master_enabled) { skipped++; continue; }
       const devocionalOn = prefs ? prefs.devocional : true;
-      if (!devocionalOn) continue;
+      if (!devocionalOn) { skipped++; continue; }
+
+      // Check if current hour matches user's preferred hour in their timezone
+      const tz = prefs?.timezone || "America/Sao_Paulo";
+      const preferredHour = prefs?.preferred_hour ?? 7;
+
+      const currentHourInTz = getCurrentHourInTimezone(nowUtc, tz);
+      if (currentHourInTz !== preferredHour) {
+        skipped++;
+        continue;
+      }
 
       // Check if user has pending devotionals
       const { data: userProgress } = await supabase
@@ -75,7 +87,7 @@ Deno.serve(async (req) => {
       const completedCount = userProgress?.length ?? 0;
       const pendingCount = totalDevotionals - completedCount;
 
-      if (pendingCount <= 0) continue;
+      if (pendingCount <= 0) { skipped++; continue; }
 
       // Build notification payload
       const payload = JSON.stringify({
@@ -104,7 +116,6 @@ Deno.serve(async (req) => {
       } catch (err: any) {
         console.error(`Push failed for ${sub.endpoint}:`, err.message);
         failed++;
-        // If subscription is expired (410 Gone or 404), remove it
         if (err.status === 410 || err.status === 404) {
           failedEndpoints.push(sub.endpoint);
         }
@@ -123,6 +134,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         sent,
         failed,
+        skipped,
         cleaned: failedEndpoints.length,
         total: subscriptions.length,
       }),
@@ -137,6 +149,21 @@ Deno.serve(async (req) => {
   }
 });
 
+function getCurrentHourInTimezone(date: Date, tz: string): number {
+  try {
+    const formatted = new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      hour12: false,
+      timeZone: tz,
+    }).format(date);
+    return parseInt(formatted, 10);
+  } catch {
+    // Fallback: assume BRT (UTC-3)
+    const utcHour = date.getUTCHours();
+    return (utcHour - 3 + 24) % 24;
+  }
+}
+
 // ─── Web Push implementation using Web Crypto API ───
 
 async function sendWebPush(
@@ -147,11 +174,7 @@ async function sendWebPush(
 ) {
   const url = new URL(subscription.endpoint);
   const audience = `${url.protocol}//${url.host}`;
-
-  // Create VAPID JWT
   const jwt = await createVapidJwt(audience, vapidPublicKey, vapidPrivateKey);
-
-  // Encrypt the payload
   const encrypted = await encryptPayload(
     payload,
     subscription.keys.p256dh,
@@ -176,8 +199,6 @@ async function sendWebPush(
     (err as any).status = response.status;
     throw err;
   }
-
-  // Consume response body
   await response.text();
 }
 
@@ -205,7 +226,6 @@ async function createVapidJwt(
   const header = base64UrlEncode(
     new TextEncoder().encode(JSON.stringify({ typ: "JWT", alg: "ES256" }))
   );
-
   const now = Math.floor(Date.now() / 1000);
   const payload = base64UrlEncode(
     new TextEncoder().encode(
@@ -216,10 +236,7 @@ async function createVapidJwt(
       })
     )
   );
-
   const unsignedToken = `${header}.${payload}`;
-
-  // Import the private key
   const privateKeyBytes = base64UrlDecode(privateKeyB64);
   const key = await crypto.subtle.importKey(
     "pkcs8",
@@ -228,32 +245,21 @@ async function createVapidJwt(
     false,
     ["sign"]
   );
-
   const signature = await crypto.subtle.sign(
     { name: "ECDSA", hash: "SHA-256" },
     key,
     new TextEncoder().encode(unsignedToken)
   );
-
-  // Convert DER signature to raw r||s format
   const rawSig = derToRaw(new Uint8Array(signature));
-
   return `${unsignedToken}.${base64UrlEncode(rawSig)}`;
 }
 
 function buildPkcs8(rawPrivateKey: Uint8Array): ArrayBuffer {
-  // PKCS#8 wrapper for EC P-256 private key
   const prefix = new Uint8Array([
     0x30, 0x81, 0x87, 0x02, 0x01, 0x00, 0x30, 0x13, 0x06, 0x07, 0x2a, 0x86,
     0x48, 0xce, 0x3d, 0x02, 0x01, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d,
     0x03, 0x01, 0x07, 0x04, 0x6d, 0x30, 0x6b, 0x02, 0x01, 0x01, 0x04, 0x20,
   ]);
-  const suffix = new Uint8Array([
-    0xa1, 0x44, 0x03, 0x42, 0x00,
-  ]);
-
-  // We need to add the public key point too, but for signing we can use just the private scalar
-  // Simplified: just wrap the raw key
   const result = new Uint8Array(prefix.length + rawPrivateKey.length);
   result.set(prefix);
   result.set(rawPrivateKey, prefix.length);
@@ -261,13 +267,9 @@ function buildPkcs8(rawPrivateKey: Uint8Array): ArrayBuffer {
 }
 
 function derToRaw(der: Uint8Array): Uint8Array {
-  // DER encoded ECDSA signature to raw r||s (64 bytes)
-  if (der.length === 64) return der; // Already raw
-
+  if (der.length === 64) return der;
   const raw = new Uint8Array(64);
-  // Parse DER
-  let offset = 2; // skip SEQUENCE tag and length
-  // R
+  let offset = 2;
   if (der[offset] !== 0x02) return der;
   offset++;
   const rLen = der[offset++];
@@ -275,7 +277,6 @@ function derToRaw(der: Uint8Array): Uint8Array {
   const rDest = rLen > 32 ? 0 : 32 - rLen;
   raw.set(der.slice(rStart, offset + rLen), rDest);
   offset += rLen;
-  // S
   if (der[offset] !== 0x02) return der;
   offset++;
   const sLen = der[offset++];
@@ -291,24 +292,16 @@ async function encryptPayload(
   authSecret: string
 ): Promise<Uint8Array> {
   const payloadBytes = new TextEncoder().encode(payload);
-
-  // Decode subscription keys
   const clientPublicKey = base64UrlDecode(p256dhKey);
   const clientAuth = base64UrlDecode(authSecret);
-
-  // Generate a local ECDH key pair
   const localKeyPair = await crypto.subtle.generateKey(
     { name: "ECDH", namedCurve: "P-256" },
     true,
     ["deriveBits"]
   );
-
-  // Export local public key (uncompressed point)
   const localPublicKeyRaw = new Uint8Array(
     await crypto.subtle.exportKey("raw", localKeyPair.publicKey)
   );
-
-  // Import client public key
   const clientKey = await crypto.subtle.importKey(
     "raw",
     clientPublicKey,
@@ -316,8 +309,6 @@ async function encryptPayload(
     false,
     []
   );
-
-  // ECDH shared secret
   const sharedSecret = new Uint8Array(
     await crypto.subtle.deriveBits(
       { name: "ECDH", public: clientKey },
@@ -325,27 +316,17 @@ async function encryptPayload(
       256
     )
   );
-
-  // Generate 16-byte salt
   const salt = crypto.getRandomValues(new Uint8Array(16));
-
-  // HKDF to derive encryption key and nonce
-  // IKM = HKDF(auth_secret, shared_secret, "WebPush: info\0" || client_pub || server_pub)
   const authInfo = new Uint8Array([
     ...new TextEncoder().encode("WebPush: info\0"),
     ...clientPublicKey,
     ...localPublicKeyRaw,
   ]);
-
   const ikm = await hkdf(clientAuth, sharedSecret, authInfo, 32);
-
   const contentEncKeyInfo = new TextEncoder().encode("Content-Encoding: aes128gcm\0");
   const nonceInfo = new TextEncoder().encode("Content-Encoding: nonce\0");
-
   const contentEncKey = await hkdf(salt, ikm, contentEncKeyInfo, 16);
   const nonce = await hkdf(salt, ikm, nonceInfo, 12);
-
-  // Encrypt with AES-128-GCM
   const key = await crypto.subtle.importKey(
     "raw",
     contentEncKey,
@@ -353,12 +334,9 @@ async function encryptPayload(
     false,
     ["encrypt"]
   );
-
-  // Add padding delimiter (0x02 for last record)
   const paddedPayload = new Uint8Array(payloadBytes.length + 1);
   paddedPayload.set(payloadBytes);
-  paddedPayload[payloadBytes.length] = 2; // delimiter
-
+  paddedPayload[payloadBytes.length] = 2;
   const encrypted = new Uint8Array(
     await crypto.subtle.encrypt(
       { name: "AES-GCM", iv: nonce, tagLength: 128 },
@@ -366,12 +344,9 @@ async function encryptPayload(
       paddedPayload
     )
   );
-
-  // Build aes128gcm header: salt(16) + rs(4) + idlen(1) + keyid(65) + encrypted
   const recordSize = encrypted.length;
   const rs = new DataView(new ArrayBuffer(4));
-  rs.setUint32(0, recordSize + 86); // header + encrypted
-
+  rs.setUint32(0, recordSize + 86);
   const result = new Uint8Array(
     16 + 4 + 1 + localPublicKeyRaw.length + encrypted.length
   );
@@ -384,7 +359,6 @@ async function encryptPayload(
   result.set(localPublicKeyRaw, pos);
   pos += localPublicKeyRaw.length;
   result.set(encrypted, pos);
-
   return result;
 }
 
@@ -394,7 +368,6 @@ async function hkdf(
   info: Uint8Array,
   length: number
 ): Promise<Uint8Array> {
-  // Extract
   const key = await crypto.subtle.importKey(
     "raw",
     salt.length ? salt : new Uint8Array(32),
@@ -403,8 +376,6 @@ async function hkdf(
     ["sign"]
   );
   const prk = new Uint8Array(await crypto.subtle.sign("HMAC", key, ikm));
-
-  // Expand
   const expandKey = await crypto.subtle.importKey(
     "raw",
     prk,
@@ -412,14 +383,11 @@ async function hkdf(
     false,
     ["sign"]
   );
-
   const infoWithCounter = new Uint8Array(info.length + 1);
   infoWithCounter.set(info);
   infoWithCounter[info.length] = 1;
-
   const output = new Uint8Array(
     await crypto.subtle.sign("HMAC", expandKey, infoWithCounter)
   );
-
   return output.slice(0, length);
 }

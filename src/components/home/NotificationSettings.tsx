@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Bell, BellOff, BookOpen, CalendarDays, Flame, ChevronDown, ChevronUp, MessageSquare, AlertCircle, Send, Wifi } from "lucide-react";
+import { Bell, BellOff, BookOpen, CalendarDays, Flame, ChevronDown, ChevronUp, MessageSquare, AlertCircle, Send, Wifi, Clock } from "lucide-react";
 import { requestNotificationPermission, isNotificationEnabled, sendNotification } from "@/lib/notifications";
 import { subscribeToWebPush, unsubscribeFromWebPush, isWebPushSubscribed } from "@/lib/webPush";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,21 +19,24 @@ const defaultPrefs: NotifPrefs = {
   mensagens: true,
 };
 
-const NOTIF_OPTIONS = [
-  { key: "devocional" as const, label: "Devocional diário", desc: "Lembrete às 7h para o devocional", icon: BookOpen, color: "text-brand-green" },
-  { key: "eventos" as const, label: "Eventos e encontros", desc: "Avisos de eventos próximos", icon: CalendarDays, color: "text-primary" },
-  { key: "streak" as const, label: "Risco de perder sequência", desc: "Alerta quando sua sequência está em risco", icon: Flame, color: "text-secondary" },
-  { key: "mensagens" as const, label: "Mensagens do pastor", desc: "Novas mensagens e comunicados", icon: MessageSquare, color: "text-accent-foreground" },
-];
+const HOUR_OPTIONS = Array.from({ length: 18 }, (_, i) => i + 5); // 5h to 22h
 
 export default function NotificationSettings() {
   const { user } = useAuth();
   const [masterOn, setMasterOn] = useState(false);
   const [prefs, setPrefs] = useState<NotifPrefs>(defaultPrefs);
+  const [preferredHour, setPreferredHour] = useState(7);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [permissionError, setPermissionError] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
+
+  const NOTIF_OPTIONS = [
+    { key: "devocional" as const, label: "Devocional diário", desc: `Lembrete às ${preferredHour}h para o devocional`, icon: BookOpen, color: "text-brand-green" },
+    { key: "eventos" as const, label: "Eventos e encontros", desc: "Avisos de eventos próximos", icon: CalendarDays, color: "text-primary" },
+    { key: "streak" as const, label: "Risco de perder sequência", desc: "Alerta quando sua sequência está em risco", icon: Flame, color: "text-secondary" },
+    { key: "mensagens" as const, label: "Mensagens do pastor", desc: "Novas mensagens e comunicados", icon: MessageSquare, color: "text-accent-foreground" },
+  ];
 
   // Load prefs from DB
   useEffect(() => {
@@ -52,11 +55,10 @@ export default function NotificationSettings() {
           streak: data.streak,
           mensagens: data.mensagens,
         });
+        setPreferredHour((data as any).preferred_hour ?? 7);
       } else {
-        // Check localStorage for existing state and use browser permission
         setMasterOn(isNotificationEnabled());
       }
-      // Check Web Push status
       const isPushSub = await isWebPushSubscribed();
       setPushSubscribed(isPushSub);
       setLoading(false);
@@ -68,15 +70,17 @@ export default function NotificationSettings() {
 
   const activeCount = masterOn ? Object.values(prefs).filter(Boolean).length : 0;
 
-  async function saveToDb(master: boolean, newPrefs: NotifPrefs) {
+  async function saveToDb(master: boolean, newPrefs: NotifPrefs, hour?: number) {
     if (!user) return;
-    const payload = {
+    const payload: any = {
       user_id: user.id,
       master_enabled: master,
       devocional: newPrefs.devocional,
       eventos: newPrefs.eventos,
       streak: newPrefs.streak,
       mensagens: newPrefs.mensagens,
+      preferred_hour: hour ?? preferredHour,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo",
     };
     await supabase
       .from("notification_preferences")
@@ -99,7 +103,6 @@ export default function NotificationSettings() {
       try {
         const granted = await requestNotificationPermission();
         if (granted) {
-          // Subscribe to Web Push for background notifications
           await trySubscribeWebPush();
         } else if (Notification.permission === "denied") {
           setPermissionError(true);
@@ -133,6 +136,11 @@ export default function NotificationSettings() {
     const updated = { ...prefs, [key]: !prefs[key] };
     setPrefs(updated);
     await saveToDb(masterOn, updated);
+  }
+
+  async function handleHourChange(newHour: number) {
+    setPreferredHour(newHour);
+    await saveToDb(masterOn, prefs, newHour);
   }
 
   return (
@@ -201,6 +209,26 @@ export default function NotificationSettings() {
                 </div>
               </div>
             )}
+
+            {/* Preferred hour picker */}
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+              <Clock className="w-4 h-4 flex-shrink-0 text-brand-green" />
+              <div className="text-left flex-1">
+                <p className="font-inter text-sm text-foreground">Horário do lembrete</p>
+                <p className="text-muted-foreground text-[10px] font-inter">Escolha quando quer receber o aviso diário</p>
+              </div>
+              <select
+                value={preferredHour}
+                onChange={(e) => handleHourChange(Number(e.target.value))}
+                className="bg-muted rounded-lg px-2 py-1.5 text-xs font-inter font-bold text-foreground border-none outline-none cursor-pointer"
+              >
+                {HOUR_OPTIONS.map((h) => (
+                  <option key={h} value={h}>
+                    {String(h).padStart(2, "0")}:00
+                  </option>
+                ))}
+              </select>
+            </div>
 
             {NOTIF_OPTIONS.map(({ key, label, desc, icon: Icon, color }) => (
               <button
