@@ -129,9 +129,14 @@ Deno.serve(async (req) => {
     let failed = 0;
     const failedEndpoints: string[] = [];
 
+    console.log(`VAPID_PUBLIC_KEY length: ${VAPID_PUBLIC_KEY.length}, VAPID_PRIVATE_KEY length: ${VAPID_PRIVATE_KEY.length}`);
+
     for (const sub of subscriptions) {
       const prefs = prefsMap.get(sub.user_id) as any;
-      if (prefs && (!prefs.master_enabled || !prefs.mensagens)) continue;
+      if (prefs && (!prefs.master_enabled || !prefs.mensagens)) {
+        console.log(`Skipping user ${sub.user_id} - prefs disabled`);
+        continue;
+      }
 
       const payload = JSON.stringify({
         title,
@@ -150,8 +155,10 @@ Deno.serve(async (req) => {
           VAPID_PRIVATE_KEY
         );
         sent++;
+        console.log(`Push sent OK to ${sub.endpoint.slice(-20)}`);
       } catch (err: any) {
         failed++;
+        console.error(`Push FAILED to ${sub.endpoint.slice(-20)}: status=${err.status} message=${err.message}`);
         if (err.status === 410 || err.status === 404) {
           failedEndpoints.push(sub.endpoint);
         }
