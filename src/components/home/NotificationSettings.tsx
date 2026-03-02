@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Bell, BellOff, BookOpen, CalendarDays, Flame, ChevronDown, ChevronUp, MessageSquare, AlertCircle, Send } from "lucide-react";
-import { requestNotificationPermission, isNotificationEnabled, scheduleDailyReminder, sendNotification } from "@/lib/notifications";
+import { Bell, BellOff, BookOpen, CalendarDays, Flame, ChevronDown, ChevronUp, MessageSquare, AlertCircle, Send, Wifi } from "lucide-react";
+import { requestNotificationPermission, isNotificationEnabled, sendNotification } from "@/lib/notifications";
+import { subscribeToWebPush, unsubscribeFromWebPush, isWebPushSubscribed } from "@/lib/webPush";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -32,6 +33,7 @@ export default function NotificationSettings() {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [permissionError, setPermissionError] = useState(false);
+  const [pushSubscribed, setPushSubscribed] = useState(false);
 
   // Load prefs from DB
   useEffect(() => {
@@ -54,6 +56,9 @@ export default function NotificationSettings() {
         // Check localStorage for existing state and use browser permission
         setMasterOn(isNotificationEnabled());
       }
+      // Check Web Push status
+      const isPushSub = await isWebPushSubscribed();
+      setPushSubscribed(isPushSub);
       setLoading(false);
     }
     load();
@@ -94,13 +99,26 @@ export default function NotificationSettings() {
       try {
         const granted = await requestNotificationPermission();
         if (granted) {
-          scheduleDailyReminder();
+          // Subscribe to Web Push for background notifications
+          await trySubscribeWebPush();
         } else if (Notification.permission === "denied") {
           setPermissionError(true);
         }
       } catch {
         setPermissionError(true);
       }
+    }
+  }
+
+  async function trySubscribeWebPush() {
+    try {
+      const { data } = await supabase.functions.invoke("get-vapid-key");
+      if (data?.publicKey) {
+        const success = await subscribeToWebPush(data.publicKey);
+        setPushSubscribed(success);
+      }
+    } catch (err) {
+      console.warn("Web Push subscription failed:", err);
     }
   }
 
@@ -200,6 +218,29 @@ export default function NotificationSettings() {
                 </div>
               </button>
             ))}
+
+            {/* Web Push status */}
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+              <Wifi className={`w-4 h-4 flex-shrink-0 ${pushSubscribed ? "text-brand-green" : "text-muted-foreground"}`} />
+              <div className="text-left flex-1">
+                <p className={`font-inter text-sm ${pushSubscribed ? "text-foreground" : "text-muted-foreground"}`}>
+                  Notificações em segundo plano
+                </p>
+                <p className="text-muted-foreground text-[10px] font-inter">
+                  {pushSubscribed
+                    ? "✅ Ativo — você receberá avisos mesmo com o app fechado"
+                    : "Ative para receber avisos com o app fechado"}
+                </p>
+              </div>
+              {!pushSubscribed && (
+                <button
+                  onClick={trySubscribeWebPush}
+                  className="px-3 py-1 rounded-full text-[10px] font-inter font-bold bg-brand-green/15 text-brand-green hover:bg-brand-green/25 transition-colors"
+                >
+                  Ativar
+                </button>
+              )}
+            </div>
 
             {/* Test notification button */}
             <button

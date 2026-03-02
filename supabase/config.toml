@@ -2,3 +2,9 @@ project_id = "hmmbspebnqkueqwcqinr"
 
 [functions.weekly-progress-email]
 verify_jwt = false
+
+[functions.send-push-notifications]
+verify_jwt = false
+
+[functions.get-vapid-key]
+verify_jwt = false
