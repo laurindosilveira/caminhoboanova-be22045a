@@ -1,6 +1,6 @@
-import { BarChart3, BookOpen, UserCheck, Shield, ClipboardList } from "lucide-react";
+import { BarChart3, BookOpen, UserCheck, Shield, ClipboardList, Megaphone } from "lucide-react";
 
-export type AdminTab = "overview" | "attendance" | "courses" | "guide" | "users";
+export type AdminTab = "overview" | "attendance" | "courses" | "guide" | "users" | "push";
 
 type TabDef = { id: AdminTab; label: string; icon: typeof BarChart3 };
 
@@ -8,11 +8,12 @@ const ALL_TABS: TabDef[] = [
   { id: "overview", label: "Visão", icon: BarChart3 },
   { id: "attendance", label: "Encontros", icon: UserCheck },
   { id: "courses", label: "Cursos", icon: BookOpen },
+  { id: "push", label: "Push", icon: Megaphone },
   { id: "guide", label: "Líder", icon: ClipboardList },
   { id: "users", label: "Usuários", icon: Shield },
 ];
 
-const LIDER_TABS: AdminTab[] = ["courses", "guide", "users"];
+const LIDER_TABS: AdminTab[] = ["courses", "guide", "push", "users"];
 
 type Props = { active: AdminTab; onChange: (tab: AdminTab) => void; userRole?: "admin" | "lider" | null };
 
