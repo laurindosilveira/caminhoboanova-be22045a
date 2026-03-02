@@ -1,13 +1,22 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { isNotificationEnabled, sendNotification, scheduleDailyReminder } from "@/lib/notifications";
+import { isNotificationEnabled, sendNotification } from "@/lib/notifications";
 
 const NOTIF_SENT_PREFIX = "caminho_notif_sent_";
+const NOTIF_RUN_KEY = "caminho_notif_run_today";
 
 function wasSentToday(key: string): boolean {
   const last = localStorage.getItem(NOTIF_SENT_PREFIX + key);
   return last === new Date().toDateString();
+}
+
+function wasRunToday(): boolean {
+  return localStorage.getItem(NOTIF_RUN_KEY) === new Date().toDateString();
+}
+
+function markRunToday() {
+  localStorage.setItem(NOTIF_RUN_KEY, new Date().toDateString());
 }
 
 function markSentToday(key: string) {
@@ -16,16 +25,17 @@ function markSentToday(key: string) {
 
 /**
  * Hook that checks user activity and sends relevant push notifications
- * when the app is opened. Respects per-category notification preferences.
+ * every time the app is opened (once per day max).
+ * No more setTimeout-based scheduler — that doesn't work when the PWA is closed.
  */
 export function useAppNotifications() {
   const { user } = useAuth();
-  const hasRun = useRef(false);
 
   useEffect(() => {
-    if (!user || hasRun.current) return;
+    if (!user) return;
     if (!isNotificationEnabled()) return;
-    hasRun.current = true;
+    // Only run once per calendar day, but always run on fresh day
+    if (wasRunToday()) return;
 
     async function checkAndNotify() {
       // 1. Load notification preferences
@@ -43,11 +53,6 @@ export function useAppNotifications() {
       const eventosOn = prefs ? prefs.eventos : true;
       const streakOn = prefs ? prefs.streak : true;
       const mensagensOn = prefs ? prefs.mensagens : true;
-
-      // Schedule the daily 7AM devocional reminder (setTimeout-based)
-      if (devocionalOn) {
-        scheduleDailyReminder();
-      }
 
       // Run checks in parallel
       const checks: Promise<void>[] = [];
@@ -73,10 +78,11 @@ export function useAppNotifications() {
       }
 
       await Promise.allSettled(checks);
+      markRunToday();
     }
 
     // Small delay so the app has time to render
-    const timer = setTimeout(checkAndNotify, 3000);
+    const timer = setTimeout(checkAndNotify, 2000);
     return () => clearTimeout(timer);
   }, [user]);
 }
