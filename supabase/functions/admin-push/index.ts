@@ -14,8 +14,8 @@ Deno.serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY")!;
-    const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY")!;
+    const VAPID_PUBLIC_KEY = (Deno.env.get("VAPID_PUBLIC_KEY") ?? "").replace(/["\s,]/g, "");
+    const VAPID_PRIVATE_KEY = (Deno.env.get("VAPID_PRIVATE_KEY") ?? "").replace(/["\s,]/g, "");
 
     // Verify caller is admin/lider
     const authHeader = req.headers.get("Authorization");
@@ -66,26 +66,39 @@ Deno.serve(async (req) => {
     let targetUserIds: string[] = [];
 
     if (target === "all") {
-      const { data } = await supabase.from("push_subscriptions").select("user_id");
-      targetUserIds = [...new Set((data ?? []).map((d: any) => d.user_id))];
+      // For "all", just get all subscriptions directly
+      const { data: allSubs } = await supabase.from("push_subscriptions").select("user_id");
+      targetUserIds = [...new Set((allSubs ?? []).map((d: any) => d.user_id))];
+      console.log(`Target=all, found ${targetUserIds.length} unique users with subscriptions`);
     } else if (target === "area" && targetValue) {
       const { data: profiles } = await supabase
         .from("profiles")
         .select("user_id")
         .eq("area", targetValue);
       targetUserIds = (profiles ?? []).map((p: any) => p.user_id);
+      console.log(`Target=area(${targetValue}), found ${targetUserIds.length} profiles`);
     } else if (target === "community" && targetValue) {
       const { data: profiles } = await supabase
         .from("profiles")
         .select("user_id")
         .eq("community", targetValue);
       targetUserIds = (profiles ?? []).map((p: any) => p.user_id);
+      console.log(`Target=community(${targetValue}), found ${targetUserIds.length} profiles`);
     } else if (target === "turma" && targetValue) {
       const { data: profiles } = await supabase
         .from("profiles")
         .select("user_id")
         .eq("turma_id", targetValue);
       targetUserIds = (profiles ?? []).map((p: any) => p.user_id);
+      console.log(`Target=turma(${targetValue}), found ${targetUserIds.length} profiles`);
+    }
+
+    if (targetUserIds.length === 0) {
+      console.log("No target users found, returning 0");
+      return new Response(
+        JSON.stringify({ sent: 0, failed: 0, message: "No users found for target" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Get subscriptions for target users
@@ -93,6 +106,8 @@ Deno.serve(async (req) => {
       .from("push_subscriptions")
       .select("*")
       .in("user_id", targetUserIds);
+
+    console.log(`Found ${subscriptions?.length ?? 0} subscriptions for ${targetUserIds.length} users`);
 
     if (!subscriptions || subscriptions.length === 0) {
       return new Response(
