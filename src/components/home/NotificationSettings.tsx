@@ -192,29 +192,15 @@ export default function NotificationSettings() {
 
         {expanded && (
           <div className="border-t border-border animate-in fade-in slide-in-from-top-1 duration-200">
-            {/* Activate / Deactivate all button */}
-            <button
-              onClick={handleToggleMaster}
-              className={`w-full flex items-center justify-center gap-2 py-3 text-sm font-inter font-bold transition-colors ${
-                masterOn
-                  ? "text-destructive hover:bg-destructive/5"
-                  : "text-brand-green hover:bg-brand-green/5"
-              }`}
-            >
-              {masterOn ? (
-                <>
-                  <BellOff className="w-4 h-4" />
-                  Desativar todas as notificações
-                </>
-              ) : (
-                <>
-                  <Bell className="w-4 h-4" />
-                  Ativar todas as notificações
-                </>
-              )}
-            </button>
-
-            {masterOn && (
+            {!masterOn ? (
+              <button
+                onClick={handleToggleMaster}
+                className="w-full flex items-center justify-center gap-2 py-3 text-sm font-inter font-bold text-brand-green hover:bg-brand-green/5 transition-colors"
+              >
+                <Bell className="w-4 h-4" />
+                Ativar todas as notificações
+              </button>
+            ) : (
               <>
                 {/* Permission error banner */}
                 {permissionError && (
@@ -237,26 +223,6 @@ export default function NotificationSettings() {
                   </div>
                 )}
 
-                {/* Preferred hour picker */}
-                <div className="flex items-center gap-3 px-4 py-3 border-t border-border">
-                  <Clock className="w-4 h-4 flex-shrink-0 text-brand-green" />
-                  <div className="text-left flex-1">
-                    <p className="font-inter text-sm text-foreground">Horário do lembrete</p>
-                    <p className="text-muted-foreground text-[10px] font-inter">Escolha quando quer receber o aviso diário</p>
-                  </div>
-                  <select
-                    value={preferredHour}
-                    onChange={(e) => handleHourChange(Number(e.target.value))}
-                    className="bg-muted rounded-lg px-2 py-1.5 text-xs font-inter font-bold text-foreground border-none outline-none cursor-pointer"
-                  >
-                    {HOUR_OPTIONS.map((h) => (
-                      <option key={h} value={h}>
-                        {String(h).padStart(2, "0")}:00
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
                 {NOTIF_OPTIONS.map(({ key, label, desc, icon: Icon, color }) => (
                   <button
                     key={key}
@@ -265,45 +231,30 @@ export default function NotificationSettings() {
                   >
                     <Icon className={`w-4 h-4 flex-shrink-0 ${prefs[key] ? color : "text-muted-foreground"}`} />
                     <div className="text-left flex-1">
-                      <p className={`font-inter text-sm ${prefs[key] ? "text-foreground" : "text-muted-foreground"}`}>{label}</p>
+                      <p className={`font-inter text-sm font-semibold ${prefs[key] ? "text-foreground" : "text-muted-foreground"}`}>{label}</p>
                       <p className="text-muted-foreground text-[10px] font-inter">{desc}</p>
                     </div>
-                    <div className={`w-9 h-5 rounded-full relative transition-colors ${prefs[key] ? "bg-brand-green" : "bg-muted"}`}>
-                      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${prefs[key] ? "translate-x-4" : "translate-x-0.5"}`} />
+                    <div className={`w-11 h-6 rounded-full relative transition-colors ${prefs[key] ? "bg-brand-green" : "bg-muted"}`}>
+                      <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${prefs[key] ? "translate-x-[22px]" : "translate-x-0.5"}`} />
                     </div>
                   </button>
                 ))}
 
-                {/* Web Push status */}
-                <div className="flex items-center gap-3 px-4 py-3 border-t border-border">
-                  <Wifi className={`w-4 h-4 flex-shrink-0 ${pushSubscribed ? "text-brand-green" : "text-muted-foreground"}`} />
-                  <div className="text-left flex-1">
-                    <p className={`font-inter text-sm ${pushSubscribed ? "text-foreground" : "text-muted-foreground"}`}>
-                      Notificações em segundo plano
-                    </p>
-                    <p className="text-muted-foreground text-[10px] font-inter">
-                      {pushSubscribed
-                        ? "✅ Ativo — você receberá avisos mesmo com o app fechado"
-                        : "Ative para receber avisos com o app fechado"}
-                    </p>
-                  </div>
-                  {!pushSubscribed && (
-                    <button
-                      onClick={trySubscribeWebPush}
-                      className="px-3 py-1 rounded-full text-[10px] font-inter font-bold bg-brand-green/15 text-brand-green hover:bg-brand-green/25 transition-colors"
-                    >
-                      Ativar
-                    </button>
-                  )}
-                </div>
-
                 {/* Test notification button */}
                 <button
                   onClick={handleTestNotification}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 text-xs font-inter font-bold text-brand-green hover:bg-brand-green/5 transition-colors border-t border-border"
+                  className="w-full flex items-center justify-center gap-2 py-3 text-sm font-inter font-bold text-brand-green hover:bg-brand-green/5 transition-colors border-t border-border"
                 >
                   <Send className="w-3.5 h-3.5" />
                   Enviar notificação de teste
+                </button>
+
+                {/* Deactivate all - at the bottom */}
+                <button
+                  onClick={handleToggleMaster}
+                  className="w-full flex items-center justify-center gap-2 py-3 text-sm font-inter font-bold text-destructive hover:bg-destructive/5 transition-colors border-t border-border"
+                >
+                  Desativar todas as notificações
                 </button>
               </>
             )}
