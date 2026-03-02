@@ -115,13 +115,28 @@ export default function NotificationSettings() {
 
   async function trySubscribeWebPush() {
     try {
-      const { data } = await supabase.functions.invoke("get-vapid-key");
-      if (data?.publicKey) {
-        const success = await subscribeToWebPush(data.publicKey);
-        setPushSubscribed(success);
+      // Ensure notification permission first
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setPermissionError(true);
+        return;
+      }
+
+      const { data, error: fnError } = await supabase.functions.invoke("get-vapid-key");
+      if (fnError || !data?.publicKey) {
+        console.error("Failed to get VAPID key:", fnError, data);
+        setPermissionError(true);
+        return;
+      }
+
+      const success = await subscribeToWebPush(data.publicKey);
+      setPushSubscribed(success);
+      if (!success) {
+        console.warn("subscribeToWebPush returned false");
       }
     } catch (err) {
-      console.warn("Web Push subscription failed:", err);
+      console.error("Web Push subscription failed:", err);
+      setPermissionError(true);
     }
   }
 
