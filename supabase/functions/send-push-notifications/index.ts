@@ -22,8 +22,8 @@ Deno.serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY")!;
-    const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY")!;
+    const VAPID_PUBLIC_KEY = (Deno.env.get("VAPID_PUBLIC_KEY") ?? "").replace(/["\s,]/g, "");
+    const VAPID_PRIVATE_KEY = (Deno.env.get("VAPID_PRIVATE_KEY") ?? "").replace(/["\s,]/g, "");
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -338,10 +338,15 @@ async function createVapidJwt(
     )
   );
   const unsignedToken = `${header}.${payload}`;
-  const privateKeyBytes = base64UrlDecode(privateKeyB64);
+
+  // Extract x, y from uncompressed public key (65 bytes: 0x04 || x || y)
+  const pubKeyBytes = base64UrlDecode(publicKey);
+  const x = base64UrlEncode(pubKeyBytes.slice(1, 33));
+  const y = base64UrlEncode(pubKeyBytes.slice(33, 65));
+
   const key = await crypto.subtle.importKey(
-    "pkcs8",
-    buildPkcs8(privateKeyBytes),
+    "jwk",
+    { kty: "EC", crv: "P-256", d: privateKeyB64, x, y },
     { name: "ECDSA", namedCurve: "P-256" },
     false,
     ["sign"]
@@ -353,18 +358,6 @@ async function createVapidJwt(
   );
   const rawSig = derToRaw(new Uint8Array(signature));
   return `${unsignedToken}.${base64UrlEncode(rawSig)}`;
-}
-
-function buildPkcs8(rawPrivateKey: Uint8Array): ArrayBuffer {
-  const prefix = new Uint8Array([
-    0x30, 0x81, 0x87, 0x02, 0x01, 0x00, 0x30, 0x13, 0x06, 0x07, 0x2a, 0x86,
-    0x48, 0xce, 0x3d, 0x02, 0x01, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d,
-    0x03, 0x01, 0x07, 0x04, 0x6d, 0x30, 0x6b, 0x02, 0x01, 0x01, 0x04, 0x20,
-  ]);
-  const result = new Uint8Array(prefix.length + rawPrivateKey.length);
-  result.set(prefix);
-  result.set(rawPrivateKey, prefix.length);
-  return result.buffer;
 }
 
 function derToRaw(der: Uint8Array): Uint8Array {
