@@ -18,6 +18,7 @@ import NextMeetingCard from "@/components/home/NextMeetingCard";
 import StreakRiskReminder from "@/components/home/StreakRiskReminder";
 import UserAgendaTab from "@/components/home/UserAgendaTab";
 import NotificationSettings from "@/components/home/NotificationSettings";
+import InstallAppCard from "@/components/home/InstallAppCard";
 import BottomNav, { type Tab } from "@/components/home/BottomNav";
 import { useUserStats } from "@/hooks/useUserStats";
 import { useAppNotifications } from "@/hooks/useAppNotifications";
@@ -167,21 +168,7 @@ export default function Index() {
             <NotificationSettings />
 
             {/* Banner instalar app */}
-            <div className="px-5 mt-3">
-              <button
-                onClick={() => navigate("/instalar")}
-                className="w-full flex items-center gap-3 rounded-2xl border border-brand-green/20 bg-brand-green/5 p-4 hover:bg-brand-green/10 transition-colors"
-              >
-                <div className="w-10 h-10 rounded-xl bg-brand-green/15 flex items-center justify-center flex-shrink-0">
-                  <span className="text-xl">📲</span>
-                </div>
-                <div className="text-left flex-1">
-                  <p className="font-montserrat font-bold text-foreground text-sm">Instalar no celular</p>
-                  <p className="text-muted-foreground text-xs font-inter">Tenha o app sempre à mão, com notificações</p>
-                </div>
-                <span className="text-brand-green text-xs font-inter font-bold">Ver →</span>
-              </button>
-            </div>
+            <InstallAppCard />
 
             {/* Admin/Líder access */}
             {(role === "admin" || role === "lider") && (
