@@ -9,7 +9,9 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const publicKey = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
+  // Strip any stray quotes, spaces, or commas from the stored key
+  const raw = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
+  const publicKey = raw.replace(/["\s,]/g, "");
 
   return new Response(JSON.stringify({ publicKey }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
