@@ -783,7 +783,9 @@ export type Database = {
           id: string
           master_enabled: boolean
           mensagens: boolean
+          preferred_hour: number
           streak: boolean
+          timezone: string
           updated_at: string
           user_id: string
         }
@@ -794,7 +796,9 @@ export type Database = {
           id?: string
           master_enabled?: boolean
           mensagens?: boolean
+          preferred_hour?: number
           streak?: boolean
+          timezone?: string
           updated_at?: string
           user_id: string
         }
@@ -805,7 +809,9 @@ export type Database = {
           id?: string
           master_enabled?: boolean
           mensagens?: boolean
+          preferred_hour?: number
           streak?: boolean
+          timezone?: string
           updated_at?: string
           user_id?: string
         }
