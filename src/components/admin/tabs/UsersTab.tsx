@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Shield, User, Search, ShieldCheck, ShieldOff, CalendarDays, MapPin, ChevronRight, X, Save, Phone, Cake, Home, Users, GraduationCap, Clock, Download } from "lucide-react";
+import { Shield, User, Search, ShieldCheck, ShieldOff, CalendarDays, MapPin, ChevronRight, X, Save, Phone, Cake, Home, Users, GraduationCap, Clock, Download, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useNavigate } from "react-router-dom";
@@ -73,6 +74,8 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
   const [editForm, setEditForm] = useState({ full_name: "", phone: "", birth_date: "", community: "", area: "", father_name: "", mother_name: "", father_phone: "", mother_phone: "", address: "", turma_id: "" });
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingUser, setDeletingUser] = useState<UserEntry | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => { fetchUsers(); }, []);
 
@@ -214,6 +217,26 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
       setEditingUser(null);
     }
     setSavingEdit(false);
+  }
+
+  async function deleteUser() {
+    if (!deletingUser) return;
+    setIsDeleting(true);
+    try {
+      const res = await supabase.functions.invoke("delete-user", {
+        body: { user_id: deletingUser.user_id },
+      });
+      if (res.error || res.data?.error) {
+        toast({ title: "Erro ao deletar", description: res.data?.error || res.error?.message, variant: "destructive" });
+      } else {
+        setUsers(prev => prev.filter(u => u.user_id !== deletingUser.user_id));
+        toast({ title: "🗑️ Usuário deletado", description: `${deletingUser.full_name} foi removido do sistema.` });
+      }
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    }
+    setIsDeleting(false);
+    setDeletingUser(null);
   }
 
   const filtered = users.filter(u => {
@@ -442,14 +465,41 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
             </div>
           </div>
 
-          <button onClick={saveEditUser} disabled={savingEdit || !editForm.full_name}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-montserrat font-bold text-primary-foreground disabled:opacity-50 transition-opacity"
-            style={{ background: "var(--gradient-hero)" }}>
-            <Save className="w-4 h-4" />
-            {savingEdit ? "Salvando..." : "Salvar alterações"}
-          </button>
+          <div className="flex gap-2">
+            <button onClick={saveEditUser} disabled={savingEdit || !editForm.full_name}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-montserrat font-bold text-primary-foreground disabled:opacity-50 transition-opacity"
+              style={{ background: "var(--gradient-hero)" }}>
+              <Save className="w-4 h-4" />
+              {savingEdit ? "Salvando..." : "Salvar alterações"}
+            </button>
+            <button onClick={() => { setDeletingUser(editingUser); setEditingUser(null); }}
+              className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-montserrat font-bold text-destructive bg-destructive/10 border border-destructive/30 hover:bg-destructive/20 transition-all"
+              title="Deletar usuário">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deletingUser} onOpenChange={(open) => { if (!open) setDeletingUser(null); }}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-montserrat font-bold">Deletar usuário?</AlertDialogTitle>
+            <AlertDialogDescription className="font-inter text-sm">
+              Tem certeza que deseja deletar <span className="font-bold text-foreground">{deletingUser?.full_name}</span>? 
+              Esta ação é irreversível e removerá todos os dados do usuário.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl font-montserrat font-bold" disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteUser} disabled={isDeleting}
+              className="rounded-xl font-montserrat font-bold bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {isDeleting ? "Deletando..." : "Sim, deletar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {loading ? (
         <div className="space-y-2">
