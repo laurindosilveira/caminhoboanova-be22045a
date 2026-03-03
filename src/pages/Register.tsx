@@ -104,7 +104,7 @@ export default function Register() {
       return;
     }
 
-    navigate("/verificar-email");
+    navigate("/login?cadastro=sucesso");
   }
 
   return (

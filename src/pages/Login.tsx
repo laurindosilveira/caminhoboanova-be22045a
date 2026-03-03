@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Eye, EyeOff, Mail, Lock, Flame, ShieldCheck, MessageCircle } from "lucide-react";
 import { z } from "zod";
@@ -11,6 +11,8 @@ const loginSchema = z.object({
 
 export default function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const cadastroSucesso = searchParams.get("cadastro") === "sucesso";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -75,6 +77,14 @@ export default function Login() {
         <div className="w-full max-w-sm bg-card rounded-3xl shadow-2xl p-7">
           <h2 className="font-montserrat font-black text-foreground text-2xl mb-1">Entrar</h2>
           <p className="text-muted-foreground font-inter text-sm mb-6">Bem-vindo de volta à sua jornada!</p>
+
+          {cadastroSucesso && (
+            <div className="bg-brand-green/10 border border-brand-green/30 rounded-xl px-4 py-3 mb-4">
+              <p className="text-brand-green font-inter text-sm font-medium">
+                ✅ Conta criada com sucesso! Faça login para começar.
+              </p>
+            </div>
+          )}
 
           <form onSubmit={handleLogin} className="space-y-4">
             {/* Email */}
