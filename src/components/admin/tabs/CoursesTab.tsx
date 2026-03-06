@@ -78,6 +78,9 @@ export default function CoursesTab() {
     if (editMode.mode === "study") {
       return <LessonContentEditor lesson={editMode.lesson} onBack={() => { setEditMode(null); fetchCourses(); }} />;
     }
+    if (editMode.mode === "leader-guide") {
+      return <LeaderGuideEditor lesson={editMode.lesson} onBack={() => { setEditMode(null); fetchCourses(); }} />;
+    }
     return <LessonDevotionalEditor lesson={editMode.lesson} onBack={() => { setEditMode(null); fetchCourses(); }} />;
   }
 
