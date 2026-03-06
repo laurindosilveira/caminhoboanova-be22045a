@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { GraduationCap, ChevronDown, ChevronRight, BookOpen, Tag, Edit3 } from "lucide-react";
+import { GraduationCap, ChevronDown, ChevronRight, BookOpen, Tag, Edit3, FileText } from "lucide-react";
 import LessonContentEditor from "@/components/admin/tabs/LessonContentEditor";
 import LessonDevotionalEditor from "@/components/admin/tabs/LessonDevotionalEditor";
+import LeaderGuideEditor from "@/components/admin/tabs/LeaderGuideEditor";
 
 type Lesson = {
   id: string;
@@ -21,7 +22,7 @@ type Course = {
   lessons: Lesson[];
 };
 
-type EditMode = { lesson: Lesson; mode: "study" | "devotionals" } | null;
+type EditMode = { lesson: Lesson; mode: "study" | "devotionals" | "leader-guide" } | null;
 
 export default function CoursesTab() {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -76,6 +77,9 @@ export default function CoursesTab() {
   if (editMode) {
     if (editMode.mode === "study") {
       return <LessonContentEditor lesson={editMode.lesson} onBack={() => { setEditMode(null); fetchCourses(); }} />;
+    }
+    if (editMode.mode === "leader-guide") {
+      return <LeaderGuideEditor lesson={editMode.lesson} onBack={() => { setEditMode(null); fetchCourses(); }} />;
     }
     return <LessonDevotionalEditor lesson={editMode.lesson} onBack={() => { setEditMode(null); fetchCourses(); }} />;
   }
@@ -163,8 +167,8 @@ export default function CoursesTab() {
                           )}
                         </div>
 
-                        {/* Action buttons: Estudo + Devocionais */}
-                        <div className="flex gap-2 ml-10">
+                        {/* Action buttons: Estudo + Devocionais + Roteiro */}
+                        <div className="flex gap-2 ml-10 flex-wrap">
                           <button
                             onClick={() => setEditMode({ lesson, mode: "study" })}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors flex-shrink-0"
@@ -182,6 +186,13 @@ export default function CoursesTab() {
                             <span className="font-inter text-xs font-medium">
                               Devocionais {devCount > 0 && `(${devCount})`}
                             </span>
+                          </button>
+                          <button
+                            onClick={() => setEditMode({ lesson, mode: "leader-guide" })}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors flex-shrink-0"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span className="font-inter text-xs font-medium">Roteiro Líder</span>
                           </button>
                         </div>
                       </div>
