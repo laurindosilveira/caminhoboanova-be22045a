@@ -22,7 +22,7 @@ type Course = {
   lessons: Lesson[];
 };
 
-type EditMode = { lesson: Lesson; mode: "study" | "devotionals" } | null;
+type EditMode = { lesson: Lesson; mode: "study" | "devotionals" | "leader-guide" } | null;
 
 export default function CoursesTab() {
   const [courses, setCourses] = useState<Course[]>([]);
