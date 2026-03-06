@@ -69,18 +69,18 @@ export default function CourseGuideSubTab() {
   async function selectLesson(lesson: Lesson) {
     setSelectedLesson(lesson);
     setLoading(true);
-    const [{ data: contentData }, { data: notesData }] = await Promise.all([
-      supabase.from("lesson_content").select("*").eq("lesson_id", lesson.id).maybeSingle(),
+    const [{ data: guideData }, { data: notesData }] = await Promise.all([
+      supabase.from("leader_guide").select("*").eq("lesson_id", lesson.id).maybeSingle(),
       supabase.from("leader_meeting_notes").select("*").eq("lesson_id", lesson.id).eq("leader_id", profile?.user_id ?? "").maybeSingle(),
     ]);
-    setContent(contentData ? {
-      greeting: contentData.greeting || "",
-      icebreaker: contentData.icebreaker || "",
-      summary: contentData.summary || "",
-      bible_texts: contentData.bible_texts?.length ? contentData.bible_texts : [],
-      questions: contentData.questions?.length ? contentData.questions : [],
-      practice: contentData.practice || "",
-      prayer_prompt: contentData.prayer_prompt || "",
+    setContent(guideData ? {
+      greeting: guideData.greeting || "",
+      icebreaker: guideData.icebreaker || "",
+      summary: guideData.summary || "",
+      bible_texts: (guideData.bible_texts as string[])?.length ? (guideData.bible_texts as string[]) : [],
+      questions: (guideData.questions as string[])?.length ? (guideData.questions as string[]) : [],
+      practice: guideData.practice || "",
+      prayer_prompt: guideData.prayer_prompt || "",
     } : null);
     setNotes({
       participation_notes: notesData?.participation_notes || "",
