@@ -500,6 +500,56 @@ export type Database = {
           },
         ]
       }
+      leader_guide: {
+        Row: {
+          bible_texts: string[]
+          created_at: string
+          greeting: string
+          icebreaker: string
+          id: string
+          lesson_id: string
+          practice: string
+          prayer_prompt: string
+          questions: string[]
+          summary: string
+          updated_at: string
+        }
+        Insert: {
+          bible_texts?: string[]
+          created_at?: string
+          greeting?: string
+          icebreaker?: string
+          id?: string
+          lesson_id: string
+          practice?: string
+          prayer_prompt?: string
+          questions?: string[]
+          summary?: string
+          updated_at?: string
+        }
+        Update: {
+          bible_texts?: string[]
+          created_at?: string
+          greeting?: string
+          icebreaker?: string
+          id?: string
+          lesson_id?: string
+          practice?: string
+          prayer_prompt?: string
+          questions?: string[]
+          summary?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leader_guide_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: true
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leader_meeting_notes: {
         Row: {
           created_at: string
