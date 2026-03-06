@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { GraduationCap, ChevronDown, ChevronRight, BookOpen, Tag, Edit3 } from "lucide-react";
+import { GraduationCap, ChevronDown, ChevronRight, BookOpen, Tag, Edit3, FileText } from "lucide-react";
 import LessonContentEditor from "@/components/admin/tabs/LessonContentEditor";
 import LessonDevotionalEditor from "@/components/admin/tabs/LessonDevotionalEditor";
+import LeaderGuideEditor from "@/components/admin/tabs/LeaderGuideEditor";
 
 type Lesson = {
   id: string;
