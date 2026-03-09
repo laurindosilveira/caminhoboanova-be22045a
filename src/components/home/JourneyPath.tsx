@@ -58,8 +58,8 @@ export default function JourneyPath() {
   });
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (profile?.area) fetchData();
+  }, [profile?.area]);
 
   async function fetchData() {
     const { data: { user } } = await supabase.auth.getUser();
