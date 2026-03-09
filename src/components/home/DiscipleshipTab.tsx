@@ -132,6 +132,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
   const [recentEvents, setRecentEvents] = useState<EventRecord[]>([]);
   const [allAssessments, setAllAssessments] = useState<Assessment[]>([]);
   const [worshipCount, setWorshipCount] = useState(0);
+  const [unlockedCourseIds, setUnlockedCourseIds] = useState<Set<string>>(new Set());
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [helpType, setHelpType] = useState<"crise" | "conversar" | "oracao" | null>(null);
   const [helpMessage, setHelpMessage] = useState("");
