@@ -107,6 +107,10 @@ export default function AttendanceTab({ participants, activities, communities, i
   const [worshipRequests, setWorshipRequests] = useState<WorshipRequest[]>([]);
   const [savingWorship, setSavingWorship] = useState<string | null>(null);
 
+  // Year promotion state
+  const [promotionRequests, setPromotionRequests] = useState<{ id: string; user_id: string; from_year: number; to_year: number; status: string; requested_at: string; full_name?: string; community?: string }[]>([]);
+  const [generatingPromotions, setGeneratingPromotions] = useState(false);
+
   // Event creation (merged from AgendaTab)
   const [showEventForm, setShowEventForm] = useState(false);
   const [savingEvent, setSavingEvent] = useState(false);
