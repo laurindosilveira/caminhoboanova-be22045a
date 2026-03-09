@@ -122,6 +122,9 @@ export default function UserAgendaTab() {
         )}
       </div>
 
+      {/* ── CONFIRMAÇÃO DE PRESENÇA EM EVENTOS ──── */}
+      <WorshipConfirmation />
+
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => (
@@ -220,9 +223,6 @@ export default function UserAgendaTab() {
           </div>
         </div>
       )}
-
-      {/* ── CONFIRMAÇÃO DE PRESENÇA EM EVENTOS ──── */}
-      <WorshipConfirmation />
     </div>
   );
 }
