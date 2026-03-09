@@ -215,12 +215,26 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
   }
 
   // ── Delete handlers ──
+  async function logRemoval(activityType: string, activityId: string, activityTitle: string, pointsRemoved: number) {
+    if (!user) return;
+    await supabase.from("activity_removal_log" as any).insert({
+      removed_by: user.id,
+      target_user_id: p.user_id,
+      activity_type: activityType,
+      activity_id: activityId,
+      activity_title: activityTitle,
+      points_removed: pointsRemoved,
+    } as any);
+  }
+
   async function handleDeleteLesson(lessonId: string) {
     setDeletingType("estudo");
     setDeletingId(lessonId);
+    const lesson = lessonCompletions.find(l => l.lesson_id === lessonId);
     await supabase.from("lesson_responses").delete().eq("user_id", p.user_id).eq("lesson_id", lessonId);
+    await logRemoval("estudo", lessonId, lesson?.lesson_title ?? "", 20);
     setLessonCompletions(prev => prev.filter(l => l.lesson_id !== lessonId));
-    toast({ title: "Estudo removido", description: "Respostas e pontuação foram removidas." });
+    toast({ title: "Estudo removido", description: "Respostas e pontuação foram removidas. Registro salvo no log." });
     setDeletingType(null);
     setDeletingId(null);
     setConfirmDeleteKey(null);
@@ -230,9 +244,12 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
   async function handleDeleteDevotional(devotionalId: string) {
     setDeletingType("devocional");
     setDeletingId(devotionalId);
+    const dev = devotionalCompletions.find(d => d.devotional_id === devotionalId);
+    const pts = dev?.is_weekend ? 2 : 5;
     await supabase.from("devotional_progress").delete().eq("user_id", p.user_id).eq("devotional_id", devotionalId);
+    await logRemoval("devocional", devotionalId, dev?.title ?? "", pts);
     setDevotionalCompletions(prev => prev.filter(d => d.devotional_id !== devotionalId));
-    toast({ title: "Devocional removido", description: "Conclusão e pontuação foram removidas." });
+    toast({ title: "Devocional removido", description: "Conclusão e pontuação foram removidas. Registro salvo no log." });
     setDeletingType(null);
     setDeletingId(null);
     setConfirmDeleteKey(null);
@@ -242,9 +259,11 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
   async function handleDeleteAttendance(eventId: string) {
     setDeletingType("presenca");
     setDeletingId(eventId);
+    const att = attendanceRecords.find(a => a.event_id === eventId);
     await supabase.from("attendance").delete().eq("user_id", p.user_id).eq("event_id", eventId);
+    await logRemoval("presenca", eventId, att?.event_title ?? "", 10);
     setAttendanceRecords(prev => prev.filter(a => a.event_id !== eventId));
-    toast({ title: "Presença removida", description: "Registro de presença foi removido." });
+    toast({ title: "Presença removida", description: "Registro de presença foi removido. Registro salvo no log." });
     setDeletingType(null);
     setDeletingId(null);
     setConfirmDeleteKey(null);
