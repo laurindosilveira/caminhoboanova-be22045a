@@ -89,8 +89,6 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
   const [showAuditLog, setShowAuditLog] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
 
   // Real data states
   const [lessonCompletions, setLessonCompletions] = useState<RealLessonCompletion[]>([]);
