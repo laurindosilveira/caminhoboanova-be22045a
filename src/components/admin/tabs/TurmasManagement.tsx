@@ -408,15 +408,24 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
                       </button>
                     </div>
                   </div>
-                  {/* Archive button */}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setConfirmArchive(turma); }}
-                    disabled={archiving === turma.id}
-                    className="mt-3 w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-montserrat font-bold border-2 border-green-500/30 bg-green-500/5 text-green-700 hover:bg-green-500/10 hover:border-green-500/50 transition-all disabled:opacity-50"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    Grupo Confirmado — Arquivar
-                  </button>
+                  {/* Archive + Reset buttons */}
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setConfirmArchive(turma); }}
+                      disabled={archiving === turma.id}
+                      className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-montserrat font-bold border-2 border-green-500/30 bg-green-500/5 text-green-700 hover:bg-green-500/10 hover:border-green-500/50 transition-all disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      Grupo Confirmado
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setConfirmReset(turma); }}
+                      className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-montserrat font-bold border-2 border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/10 hover:border-destructive/50 transition-all"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Reiniciar Jornada
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
