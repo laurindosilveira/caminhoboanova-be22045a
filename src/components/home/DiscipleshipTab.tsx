@@ -833,11 +833,14 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
           {/* Course accordion */}
           {courses.map((course) => {
             const isOpen = expandedCourse === course.id;
+            const isCourseUnlocked = unlockedCourseIds.has(course.id);
             const doneLessons = course.lessons.filter(l => fullyCompletedLessonIds.has(l.id)).length;
             const totalLessons = course.lessons.length;
             const coursePct = totalLessons > 0 ? Math.round((doneLessons / totalLessons) * 100) : 0;
             return (
-              <div key={course.id} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+              <div key={course.id} className={`bg-card rounded-2xl border shadow-sm overflow-hidden ${
+                isCourseUnlocked ? "border-border" : "border-border opacity-75"
+              }`}>
                 {/* Course header */}
                 <button
                   onClick={() => setExpandedCourse(isOpen ? null : course.id)}
