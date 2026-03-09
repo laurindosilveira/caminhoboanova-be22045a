@@ -8,6 +8,7 @@ interface PointsBreakdown {
   worshipCount: number;
   activityPoints: number;
   achievementBonus: number;
+  devotionalPoints?: number;
   // Potential (max possible)
   totalLessons: number;
   totalDevotionals: number;
@@ -17,7 +18,7 @@ interface PointsBreakdown {
 export default function GameRulesDialog({ breakdown }: { breakdown: PointsBreakdown }) {
   const earned = {
     lessons: breakdown.lessonStudyCount * 20,
-    devotionals: breakdown.devotionalCount * 5,
+    devotionals: breakdown.devotionalPoints ?? (breakdown.devotionalCount * 5),
     attendance: breakdown.attendanceCount * 10,
     worship: breakdown.worshipCount * 5,
     activities: breakdown.activityPoints,
@@ -35,7 +36,8 @@ export default function GameRulesDialog({ breakdown }: { breakdown: PointsBreakd
 
   const rules = [
     { emoji: "🎓", label: "Estudo de lição", pts: "20 pts", desc: "cada lição estudada" },
-    { emoji: "📖", label: "Devocional", pts: "5 pts", desc: "cada devocional concluído" },
+    { emoji: "📖", label: "Devocional (semana)", pts: "5 pts", desc: "cada devocional feito seg-sex" },
+    { emoji: "📖", label: "Devocional (fim de sem.)", pts: "2 pts", desc: "cada devocional recuperado no sáb/dom" },
     { emoji: "📅", label: "Presença em encontro", pts: "10 pts", desc: "cada presença confirmada" },
     { emoji: "⛪", label: "Culto confirmado", pts: "5 pts", desc: "cada culto aprovado" },
     { emoji: "✅", label: "Atividade completa", pts: "variável", desc: "pontos definidos por atividade" },
