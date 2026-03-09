@@ -85,11 +85,17 @@ export function useUserStats(): UserStats {
         ...devProg.map(p => p.completed_at),
       ];
 
-      // New formula: Activity pts + Lesson study (20pts) + Devotionals (5pts) + Attendance (10pts) + Events (5pts)
+      // New formula: Activity pts + Lesson study (20pts) + Devotionals (5pts weekday / 2pts weekend) + Attendance (10pts) + Events (5pts)
       const activityPoints = acts
         .filter(a => completedIds.has(a.id))
         .reduce((sum, a) => sum + (a.points ?? 0), 0);
-      const devotionalPoints = devProg.length * 5;
+      // Devotional points: 5 pts if completed on weekday, 2 pts if completed on weekend (catch-up)
+      const devotionalPoints = devProg.reduce((sum, dp) => {
+        const completedDate = new Date(dp.completed_at);
+        const dow = completedDate.getDay(); // 0=Sun, 6=Sat
+        const isWeekend = dow === 0 || dow === 6;
+        return sum + (isWeekend ? 2 : 5);
+      }, 0);
       const lessonStudyPoints = new Set((lessonResponses ?? []).map(r => r.lesson_id)).size * 20;
       const attendancePoints = (attendance ?? []).filter(a => a.status === "presente").length * 10;
       const worshipPoints = (worshipData ?? []).length * 5;
