@@ -66,7 +66,7 @@ export function useUserStats(): UserStats {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setStats(s => ({ ...s, loading: false })); return; }
 
-      const [{ data: activities }, { data: progress }, { data: devProgress }, { data: lessonResponses }, { data: attendance }, { data: worshipData }, { data: achievementUnlocks }] = await Promise.all([
+      const [{ data: activities }, { data: progress }, { data: devProgress }, { data: lessonResponses }, { data: attendance }, { data: worshipData }, { data: achievementUnlocks }, { data: coursesData }, { data: lessonsData }] = await Promise.all([
         supabase.from("activities").select("id, type, title, subtitle, order_num, points").order("order_num"),
         supabase.from("user_progress").select("activity_id, completed_at").eq("user_id", user.id),
         supabase.from("devotional_progress").select("devotional_id, completed_at").eq("user_id", user.id),
@@ -74,6 +74,8 @@ export function useUserStats(): UserStats {
         supabase.from("attendance").select("event_id, status").eq("user_id", user.id),
         supabase.from("worship_attendance").select("id, status").eq("user_id", user.id).eq("status", "aprovado"),
         supabase.from("achievement_unlocks").select("achievement_key, bonus_points").eq("user_id", user.id),
+        supabase.from("courses").select("id"),
+        supabase.from("lessons").select("id, course_id"),
       ]);
 
       const acts = activities ?? [];
@@ -85,25 +87,34 @@ export function useUserStats(): UserStats {
         ...devProg.map(p => p.completed_at),
       ];
 
-      // Points formula — only count from REAL tracking tables to prevent phantom points
-      // Activity points: ONLY for types that don't have dedicated tracking (e.g., "desafio")
-      // Types with dedicated tracking (devocional, formacao, encontro) are counted via their respective tables below
+      // Points — only count from REAL tracking tables to prevent phantom points
       const activityPoints = acts
         .filter(a => completedIds.has(a.id) && a.type !== "devocional" && a.type !== "formacao" && a.type !== "encontro")
         .reduce((sum, a) => sum + (a.points ?? 0), 0);
 
-      // Devotional points: 5 pts if completed on weekday, 2 pts if completed on weekend (catch-up)
+      // Devotional points: 5 pts weekday, 2 pts weekend
       const devotionalPoints = devProg.reduce((sum, dp) => {
-        const completedDate = new Date(dp.completed_at);
-        const dow = completedDate.getDay(); // 0=Sun, 6=Sat
-        const isWeekend = dow === 0 || dow === 6;
-        return sum + (isWeekend ? 2 : 5);
+        const dow = new Date(dp.completed_at).getDay();
+        return sum + (dow === 0 || dow === 6 ? 2 : 5);
       }, 0);
-      const lessonStudyPoints = new Set((lessonResponses ?? []).map(r => r.lesson_id)).size * 20;
+
+      const completedLessonIds = new Set((lessonResponses ?? []).map(r => r.lesson_id));
+      const lessonStudyPoints = completedLessonIds.size * 20;
       const attendancePoints = (attendance ?? []).filter(a => a.status === "presente").length * 10;
       const worshipPoints = (worshipData ?? []).length * 5;
       const achievementBonusPoints = (achievementUnlocks ?? []).reduce((sum, a) => sum + (a.bonus_points ?? 0), 0);
-      const faithPoints = activityPoints + devotionalPoints + lessonStudyPoints + attendancePoints + worshipPoints + achievementBonusPoints;
+
+      // Course completion bonus: +100 per fully completed course
+      let courseBonusPoints = 0;
+      const allLessons = lessonsData ?? [];
+      (coursesData ?? []).forEach(course => {
+        const courseLessons = allLessons.filter(l => l.course_id === course.id);
+        if (courseLessons.length > 0 && courseLessons.every(l => completedLessonIds.has(l.id))) {
+          courseBonusPoints += 100;
+        }
+      });
+
+      const faithPoints = activityPoints + devotionalPoints + lessonStudyPoints + attendancePoints + worshipPoints + achievementBonusPoints + courseBonusPoints;
 
       const faithLevel = calculateLevel(faithPoints);
       const streakDays = calculateStreak(allDates);
