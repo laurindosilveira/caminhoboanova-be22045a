@@ -89,6 +89,11 @@ function calcAge(birthDate: string) {
 
 type Lesson = { id: string; title: string; order_num: number; objective: string | null; topics: string[] | null; course_id: string };
 
+const COMMUNITIES_LIST = ["Martim Lutero","Bom Pastor","Rincão Fundo","Rincão Frente","Linha Brasil","Iriá Pira 1","Iriá Pira 2"] as const;
+function getArea(community: string) {
+  return ["Rincão Frente","Rincão Fundo","Bom Pastor","Iriá Pira 1"].includes(community) ? "Área 1" : "Área 2";
+}
+
 export default function ParticipantSheet({ participant: p, activities, onBack }: {
   participant: Participant; activities: Activity[]; onBack: () => void;
 }) {
@@ -105,6 +110,9 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const [noteForm, setNoteForm] = useState({ note_type: "acompanhamento", content: "" });
   const [savingNote, setSavingNote] = useState(false);
   const [activeSection, setActiveSection] = useState<"overview"|"plan"|"notes"|"jornada"|"presenca"|"timeline"|"relatorio"|"parecer">("overview");
+  const [editingCommunity, setEditingCommunity] = useState(false);
+  const [newCommunity, setNewCommunity] = useState(p.community);
+  const [savingCommunity, setSavingCommunity] = useState(false);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -436,7 +444,10 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           </div>
           <div className="flex-1">
             <h2 className="font-montserrat font-black text-primary-foreground text-lg leading-tight">{p.full_name}</h2>
-            <p className="text-primary-foreground/70 font-inter text-xs">{p.community} · {p.area}{age ? ` · ${age} anos` : ""}</p>
+            <p className="text-primary-foreground/70 font-inter text-xs">
+              {p.community} · {p.area}{age ? ` · ${age} anos` : ""}
+              <button onClick={() => { setEditingCommunity(true); setNewCommunity(p.community); }} className="ml-1.5 text-primary-foreground/50 hover:text-primary-foreground underline text-[10px]">✏️ alterar</button>
+            </p>
             <p className="text-primary-foreground/60 font-inter text-xs">📞 {p.phone}</p>
           </div>
           <button onClick={() => setPlan(prev => ({ ...prev, is_priority: !prev.is_priority }))}
@@ -453,6 +464,51 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           <span className="px-2.5 py-1 rounded-lg text-xs font-inter font-semibold bg-white/20 text-primary-foreground">📅 {attendancePct}% presença</span>
         </div>
       </div>
+
+      {/* Edit community modal */}
+      {editingCommunity && (
+        <div className="bg-card rounded-2xl border border-border shadow-sm p-4 space-y-3">
+          <p className="font-montserrat font-bold text-foreground text-sm">Alterar Comunidade / Área</p>
+          <select
+            value={newCommunity}
+            onChange={(e) => setNewCommunity(e.target.value)}
+            className="w-full h-10 rounded-xl border border-input bg-background px-3 pr-8 text-sm text-foreground appearance-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {COMMUNITIES_LIST.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground font-inter">
+            Nova área: <strong className="text-foreground">{getArea(newCommunity)}</strong>
+          </p>
+          <div className="flex gap-2">
+            <button
+              disabled={savingCommunity}
+              onClick={async () => {
+                setSavingCommunity(true);
+                const newArea = getArea(newCommunity);
+                const { error } = await supabase.from("profiles").update({
+                  community: newCommunity as any,
+                  area: newArea as any,
+                }).eq("user_id", p.user_id);
+                setSavingCommunity(false);
+                if (!error) {
+                  p.community = newCommunity;
+                  p.area = newArea;
+                  setEditingCommunity(false);
+                }
+              }}
+              className="flex-1 h-9 rounded-xl font-inter text-xs font-bold text-primary-foreground disabled:opacity-60"
+              style={{ background: "var(--gradient-hero)" }}
+            >
+              {savingCommunity ? "Salvando..." : "Salvar"}
+            </button>
+            <button onClick={() => setEditingCommunity(false)} className="px-4 h-9 rounded-xl border border-border text-xs font-inter text-muted-foreground hover:text-foreground">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Quick action buttons */}
       <div className="grid grid-cols-2 gap-2">
