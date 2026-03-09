@@ -63,6 +63,7 @@ export default function EditProfileForm() {
       father_phone: profile?.father_phone ?? "",
       mother_phone: profile?.mother_phone ?? "",
       address: profile?.address ?? "",
+      confirmation_year: profile?.confirmation_year ? String(profile.confirmation_year) : "",
     },
   });
 
