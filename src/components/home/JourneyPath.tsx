@@ -184,9 +184,14 @@ export default function JourneyPath() {
 
         {/* Fase atual */}
         {(() => {
-          const currentCourse = courses.find(c =>
-            c.lessons.some(l => !fullyCompletedLessonIds.has(l.id))
-          ) ?? courses[courses.length - 1];
+          // Find current course: the LAST unlocked course with incomplete lessons
+          // This way, if user moved to course 2, it won't show course 1 just because of missing devotionals
+          const unlockedCoursesWithPending = courses.filter(c =>
+            unlockedCourseIds.has(c.id) && c.lessons.some(l => !fullyCompletedLessonIds.has(l.id))
+          );
+          const currentCourse = unlockedCoursesWithPending.length > 0
+            ? unlockedCoursesWithPending[unlockedCoursesWithPending.length - 1]
+            : courses[courses.length - 1];
           if (!currentCourse) return null;
           const currentLesson = currentCourse.lessons.find(l => !fullyCompletedLessonIds.has(l.id));
           return (
