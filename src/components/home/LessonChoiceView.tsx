@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ChevronLeft, BookOpen, GraduationCap, CheckCircle2, Star, LockKeyhole } from "lucide-react";
+import { ChevronLeft, BookOpen, GraduationCap, CheckCircle2, Star, LockKeyhole, Calendar } from "lucide-react";
 import DevotionalView from "@/components/home/DevotionalView";
 import { toast } from "sonner";
 
@@ -26,11 +26,145 @@ type DevotionalItem = {
   questions: string[];
 };
 
+type DevotionalStatus = "available" | "completed" | "locked" | "future";
+
 type Props = {
   lesson: Lesson;
   onBack: () => void;
   onOpenStudy: () => void;
 };
+
+/**
+ * Devotional schedule rules:
+ * - 1 devotional per weekday (Mon–Fri), mapped sequentially
+ * - If a weekday is missed, that devotional is locked
+ * - On Saturday/Sunday, all missed (locked) devotionals from the current week are unlocked
+ * - Future devotionals (not yet scheduled) are always locked
+ * - Only the current day's devotional is available on weekdays (can't do 2 in one day)
+ */
+function computeDevotionalStatuses(
+  devList: DevotionalItem[],
+  completedMap: Map<string, string>,
+): { statuses: Map<string, DevotionalStatus>; lockedSet: Set<string> } {
+  const statuses = new Map<string, DevotionalStatus>();
+  const lockedSet = new Set<string>();
+
+  if (devList.length === 0) return { statuses, lockedSet };
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dayOfWeek = today.getDay(); // 0=Sun, 6=Sat
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+  // Find when day 1 was completed to anchor the schedule
+  const day1Dev = devList.find(d => d.day_number === 1);
+  const day1CompletedAt = day1Dev ? completedMap.get(day1Dev.id) : null;
+
+  // If day 1 hasn't been completed yet, only day 1 is available
+  if (!day1CompletedAt) {
+    devList.forEach((dev, i) => {
+      if (i === 0) {
+        statuses.set(dev.id, "available");
+      } else {
+        statuses.set(dev.id, "future");
+        lockedSet.add(dev.id);
+      }
+    });
+    return { statuses, lockedSet };
+  }
+
+  // Anchor: the start date is the Monday of the week when day 1 was completed
+  const startDate = new Date(day1CompletedAt);
+  startDate.setHours(0, 0, 0, 0);
+
+  // Map each devotional (by day_number) to a specific calendar date
+  // Day 1 = startDate, then each subsequent day maps to the next weekday (Mon-Fri)
+  // We skip weekends for scheduling purposes
+  function getScheduledDate(dayNumber: number): Date {
+    // Day 1 is the startDate itself
+    // Subsequent days advance by 1 calendar day, but skip Sat/Sun
+    const date = new Date(startDate);
+    let assigned = 1;
+    while (assigned < dayNumber) {
+      date.setDate(date.getDate() + 1);
+      const dow = date.getDay();
+      if (dow !== 0 && dow !== 6) {
+        assigned++;
+      }
+    }
+    return date;
+  }
+
+  // Get the Monday of today's week
+  function getMondayOfWeek(d: Date): Date {
+    const mon = new Date(d);
+    const dow = mon.getDay();
+    const diff = dow === 0 ? -6 : 1 - dow;
+    mon.setDate(mon.getDate() + diff);
+    mon.setHours(0, 0, 0, 0);
+    return mon;
+  }
+
+  // Check if a devotional was already completed today
+  const completedToday = Array.from(completedMap.values()).some(dateStr => {
+    const d = new Date(dateStr);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime() === today.getTime();
+  });
+
+  const thisMonday = getMondayOfWeek(today);
+  const thisFriday = new Date(thisMonday);
+  thisFriday.setDate(thisFriday.getDate() + 4);
+
+  for (const dev of devList) {
+    // Already completed → always show as completed
+    if (completedMap.has(dev.id)) {
+      statuses.set(dev.id, "completed");
+      continue;
+    }
+
+    const scheduledDate = getScheduledDate(dev.day_number);
+    scheduledDate.setHours(0, 0, 0, 0);
+
+    // Future: scheduled date is after today → locked as future
+    if (scheduledDate > today) {
+      statuses.set(dev.id, "future");
+      lockedSet.add(dev.id);
+      continue;
+    }
+
+    if (isWeekend) {
+      // On weekends: unlock all missed devotionals from THIS week (Mon-Fri)
+      if (scheduledDate >= thisMonday && scheduledDate <= thisFriday) {
+        statuses.set(dev.id, "available");
+      } else if (scheduledDate < thisMonday) {
+        // From previous weeks → locked
+        statuses.set(dev.id, "locked");
+        lockedSet.add(dev.id);
+      } else {
+        statuses.set(dev.id, "future");
+        lockedSet.add(dev.id);
+      }
+    } else {
+      // Weekday logic
+      if (scheduledDate.getTime() === today.getTime()) {
+        // Today's devotional — available only if not already completed one today
+        if (completedToday) {
+          statuses.set(dev.id, "future");
+          lockedSet.add(dev.id);
+        } else {
+          statuses.set(dev.id, "available");
+        }
+      } else if (scheduledDate < today) {
+        // Past weekday missed → locked
+        statuses.set(dev.id, "locked");
+        lockedSet.add(dev.id);
+      }
+    }
+  }
+
+  return { statuses, lockedSet };
+}
 
 export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props) {
   const [devotionals, setDevotionals] = useState<DevotionalItem[]>([]);
@@ -40,6 +174,7 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [completedDates, setCompletedDates] = useState<Map<string, string>>(new Map());
   const [lockedIds, setLockedIds] = useState<Set<string>>(new Set());
+  const [devStatuses, setDevStatuses] = useState<Map<string, DevotionalStatus>>(new Map());
 
   useEffect(() => {
     async function load() {
@@ -57,38 +192,9 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
       setCompletedIds(new Set(progList.map((p: any) => p.devotional_id)));
       setCompletedDates(completedMap);
 
-      // Calculate locked devotionals based on sequential day logic
-      const locked = new Set<string>();
-      if (devList.length > 0) {
-        // Find the first completed devotional for this lesson to anchor the timeline
-        const lessonDevIds = new Set(devList.map(d => d.id));
-        const lessonCompleted = progList.filter((p: any) => lessonDevIds.has(p.devotional_id));
-        
-        if (lessonCompleted.length > 0) {
-          // Find the completion of day 1 (or earliest completed day)
-          const day1Dev = devList.find(d => d.day_number === 1);
-          const day1Completion = day1Dev ? completedMap.get(day1Dev.id) : null;
-          
-          if (day1Completion) {
-            const startDate = new Date(day1Completion);
-            startDate.setHours(0, 0, 0, 0);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-
-            for (const dev of devList) {
-              if (completedMap.has(dev.id)) continue; // Already completed
-              // Day N should be done on startDate + (N-1) days
-              const expectedDate = new Date(startDate);
-              expectedDate.setDate(expectedDate.getDate() + (dev.day_number - 1));
-              // If the expected date has passed, lock it
-              if (expectedDate < today) {
-                locked.add(dev.id);
-              }
-            }
-          }
-        }
-      }
-      setLockedIds(locked);
+      const { statuses, lockedSet } = computeDevotionalStatuses(devList, completedMap);
+      setDevStatuses(statuses);
+      setLockedIds(lockedSet);
       setDevotionals(devList);
       setLoading(false);
     }
@@ -98,19 +204,28 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
   async function handleCompleteDevotional(devotionalId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+    const now = new Date().toISOString();
     await supabase.from("devotional_progress").insert({
       user_id: user.id,
       devotional_id: devotionalId,
     });
+    // Update local state and recompute statuses
+    const newCompletedMap = new Map(completedDates);
+    newCompletedMap.set(devotionalId, now);
+    setCompletedDates(newCompletedMap);
     setCompletedIds(prev => new Set([...prev, devotionalId]));
+    const { statuses, lockedSet } = computeDevotionalStatuses(devotionals, newCompletedMap);
+    setDevStatuses(statuses);
+    setLockedIds(lockedSet);
     toast.success("Devocional concluído! +5 pontos de fé ⭐", {
       description: "Continue firme na sua caminhada!",
       duration: 3000,
     });
   }
 
-  const completedCount = devotionals.filter(d => completedIds.has(d.id) && !lockedIds.has(d.id)).length;
-  const lockedCount = lockedIds.size;
+  const completedCount = devotionals.filter(d => completedIds.has(d.id)).length;
+  const lockedCount = Array.from(devStatuses.values()).filter(s => s === "locked").length;
+  const futureCount = Array.from(devStatuses.values()).filter(s => s === "future").length;
   const totalCount = devotionals.length;
   const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
@@ -173,21 +288,27 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
         ) : (
           <div className="space-y-2">
             {devotionals.map((dev) => {
-              const done = completedIds.has(dev.id);
-              const locked = lockedIds.has(dev.id);
+              const status = devStatuses.get(dev.id) ?? "future";
+              const done = status === "completed";
+              const locked = status === "locked";
+              const future = status === "future";
+              const isDisabled = locked || future;
               return (
                 <button key={dev.id} 
-                  onClick={() => !locked && setViewingDevotional(dev)}
-                  disabled={locked}
+                  onClick={() => !isDisabled && setViewingDevotional(dev)}
+                  disabled={isDisabled}
                   className={`w-full flex items-center gap-3 p-4 bg-card rounded-2xl border shadow-sm text-left transition-colors ${
                     locked ? "border-destructive/20 bg-destructive/5 opacity-60 cursor-not-allowed" :
+                    future ? "border-border bg-muted/30 opacity-50 cursor-not-allowed" :
                     done ? "border-brand-green/30 bg-brand-green/5" : "border-border hover:bg-brand-green/5"
                   }`}>
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                    locked ? "bg-destructive/10" : done ? "bg-brand-green/20" : "bg-brand-green/10"
+                    locked ? "bg-destructive/10" : future ? "bg-muted" : done ? "bg-brand-green/20" : "bg-brand-green/10"
                   }`}>
                     {locked ? (
                       <LockKeyhole className="w-5 h-5 text-destructive/60" />
+                    ) : future ? (
+                      <Calendar className="w-5 h-5 text-muted-foreground/50" />
                     ) : done ? (
                       <CheckCircle2 className="w-5 h-5 text-brand-green" />
                     ) : (
@@ -196,15 +317,15 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className={`font-montserrat font-bold text-sm ${
-                      locked ? "text-destructive/60" : done ? "text-brand-green" : "text-foreground"
+                      locked ? "text-destructive/60" : future ? "text-muted-foreground" : done ? "text-brand-green" : "text-foreground"
                     }`}>
                       {dev.title || `Dia ${dev.day_number}`}
                     </p>
                     <p className="text-muted-foreground font-inter text-[10px] truncate">
-                      {locked ? "🔒 Bloqueado — dia perdido" : done ? "✅ Concluído" : dev.bible_reference ? `✝️ ${dev.bible_reference}` : ""}
+                      {locked ? "🔒 Bloqueado — dia perdido" : future ? "🔜 Disponível no próximo dia útil" : done ? "✅ Concluído" : dev.bible_reference ? `✝️ ${dev.bible_reference}` : "📖 Disponível hoje"}
                     </p>
                   </div>
-                  {!locked && <span className="text-muted-foreground text-xs">→</span>}
+                  {!isDisabled && <span className="text-muted-foreground text-xs">→</span>}
                 </button>
               );
             })}
