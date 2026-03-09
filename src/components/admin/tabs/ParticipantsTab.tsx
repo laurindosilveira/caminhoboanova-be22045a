@@ -86,6 +86,10 @@ type DetailProps = { participant: Participant; activities: Activity[]; onBack: (
 function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) {
   const [typeFilter, setTypeFilter] = useState("todos");
   const [loading, setLoading] = useState(true);
+  const [showAuditLog, setShowAuditLog] = useState(false);
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   // Real data states
