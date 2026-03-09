@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { CalendarDays, Plus, X, MapPin, Users, BookOpen } from "lucide-react";
+import { CalendarDays, Plus, X, MapPin, Users, BookOpen, Pencil, Check } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { toast } from "sonner";
 
 type Event = {
   id: string;
@@ -23,6 +24,7 @@ type LessonOption = {
   order_num: number;
   course_title: string;
   course_order: number;
+  course_id: string;
 };
 
 const EVENT_TYPES = [
@@ -45,6 +47,10 @@ export default function AgendaTab() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [editLessonId, setEditLessonId] = useState<string>("");
+  const [showCascadeDialog, setShowCascadeDialog] = useState(false);
+  const [cascadePending, setCascadePending] = useState<{ eventId: string; oldLessonId: string | null; newLessonId: string } | null>(null);
   const [form, setForm] = useState({
     title: "", description: "", event_date: "", location: "", type: "encontro", area: "", community: "", linked_lesson_id: "",
   });
@@ -68,7 +74,7 @@ export default function AgendaTab() {
     const options: LessonOption[] = [];
     courses.forEach(c => {
       lessonsList.filter(l => l.course_id === c.id).forEach(l => {
-        options.push({ id: l.id, title: l.title, order_num: l.order_num, course_title: c.title, course_order: c.order_num });
+        options.push({ id: l.id, title: l.title, order_num: l.order_num, course_title: c.title, course_order: c.order_num, course_id: c.id });
       });
     });
     setLessons(options);
@@ -100,7 +106,90 @@ export default function AgendaTab() {
     fetchEvents();
   }
 
-  // Get lesson info for display
+  // Start editing linked lesson on an event
+  function startEditLesson(event: Event) {
+    setEditingEventId(event.id);
+    setEditLessonId(event.linked_lesson_id ?? "");
+  }
+
+  // Save edited linked lesson
+  async function saveEditLesson(eventId: string) {
+    const event = events.find(e => e.id === eventId);
+    if (!event) return;
+
+    const oldLessonId = event.linked_lesson_id;
+    const newLessonId = editLessonId || null;
+
+    // If lesson changed and there are subsequent events with linked lessons, ask about cascade
+    if (oldLessonId !== newLessonId && newLessonId) {
+      const subsequentWithLessons = events.filter(
+        e => e.id !== eventId && e.event_date > event.event_date && e.linked_lesson_id
+      );
+      if (subsequentWithLessons.length > 0) {
+        setCascadePending({ eventId, oldLessonId, newLessonId });
+        setShowCascadeDialog(true);
+        return;
+      }
+    }
+
+    // No cascade needed, just update
+    await supabase.from("events").update({ linked_lesson_id: newLessonId }).eq("id", eventId);
+    setEditingEventId(null);
+    toast.success("Lição atualizada!");
+    fetchEvents();
+  }
+
+  // Execute cascade: shift subsequent events' lessons
+  async function executeCascade(doCascade: boolean) {
+    if (!cascadePending) return;
+    const { eventId, oldLessonId, newLessonId } = cascadePending;
+    const event = events.find(e => e.id === eventId);
+    if (!event) return;
+
+    // Update the changed event
+    await supabase.from("events").update({ linked_lesson_id: newLessonId }).eq("id", eventId);
+
+    if (doCascade) {
+      // Get subsequent events with linked lessons, ordered by date
+      const subsequent = events
+        .filter(e => e.id !== eventId && e.event_date > event.event_date && e.linked_lesson_id)
+        .sort((a, b) => a.event_date.localeCompare(b.event_date));
+
+      if (subsequent.length > 0) {
+        // Find the new lesson's position in the ordered list
+        const newLesson = lessons.find(l => l.id === newLessonId);
+        if (newLesson) {
+          // Get all lessons in order (across courses)
+          const allLessonsOrdered = [...lessons].sort((a, b) => {
+            if (a.course_order !== b.course_order) return a.course_order - b.course_order;
+            return a.order_num - b.order_num;
+          });
+
+          const newIdx = allLessonsOrdered.findIndex(l => l.id === newLessonId);
+          if (newIdx >= 0) {
+            // Assign subsequent events to sequential lessons starting from newIdx + 1
+            for (let i = 0; i < subsequent.length; i++) {
+              const nextLessonIdx = newIdx + 1 + i;
+              if (nextLessonIdx < allLessonsOrdered.length) {
+                await supabase.from("events")
+                  .update({ linked_lesson_id: allLessonsOrdered[nextLessonIdx].id })
+                  .eq("id", subsequent[i].id);
+              }
+            }
+            toast.success(`Lições atualizadas em ${subsequent.length + 1} eventos!`);
+          }
+        }
+      }
+    } else {
+      toast.success("Lição atualizada (sem cascata)!");
+    }
+
+    setShowCascadeDialog(false);
+    setCascadePending(null);
+    setEditingEventId(null);
+    fetchEvents();
+  }
+
   const getLessonLabel = (lessonId: string | null) => {
     if (!lessonId) return null;
     const lesson = lessons.find(l => l.id === lessonId);
@@ -120,6 +209,36 @@ export default function AgendaTab() {
           <Plus className="w-3.5 h-3.5" /> Novo evento
         </button>
       </div>
+
+      {/* Cascade confirmation dialog */}
+      {showCascadeDialog && cascadePending && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in" onClick={() => { setShowCascadeDialog(false); setCascadePending(null); }}>
+          <div className="w-full max-w-sm bg-card rounded-2xl p-5 mx-4 space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="text-center">
+              <span className="text-3xl">📅</span>
+              <h3 className="font-montserrat font-bold text-foreground text-base mt-2">Prorrogar estudos?</h3>
+              <p className="text-muted-foreground font-inter text-xs mt-2 leading-relaxed">
+                Você mudou a lição deste encontro. Deseja que as próximas datas sejam atualizadas automaticamente com as lições seguintes?
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => executeCascade(false)}
+                className="flex-1 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm font-medium"
+              >
+                Só este evento
+              </button>
+              <button
+                onClick={() => executeCascade(true)}
+                className="flex-1 py-2.5 rounded-xl text-primary-foreground font-inter text-sm font-medium"
+                style={{ background: "var(--gradient-hero)" }}
+              >
+                Prorrogar todos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Form */}
       {showForm && (
@@ -143,24 +262,22 @@ export default function AgendaTab() {
             {EVENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
 
-          {/* Lesson selector for confirmatorio events */}
-          {form.type === "confirmatorio" && (
-            <div className="space-y-1">
-              <label className="font-inter text-xs font-medium text-muted-foreground">📖 Vincular a um estudo (opcional)</label>
-              <select
-                value={form.linked_lesson_id}
-                onChange={e => setForm(f => ({ ...f, linked_lesson_id: e.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
-              >
-                <option value="">Sem vínculo</option>
-                {lessons.map(l => (
-                  <option key={l.id} value={l.id}>
-                    Curso {l.course_order} — Lição {l.order_num}: {l.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Lesson selector — available for any event type */}
+          <div className="space-y-1">
+            <label className="font-inter text-xs font-medium text-muted-foreground">📖 Vincular a um estudo (opcional)</label>
+            <select
+              value={form.linked_lesson_id}
+              onChange={e => setForm(f => ({ ...f, linked_lesson_id: e.target.value }))}
+              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+            >
+              <option value="">Sem vínculo</option>
+              {lessons.map(l => (
+                <option key={l.id} value={l.id}>
+                  Curso {l.course_order} — Lição {l.order_num}: {l.title}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div className="flex gap-2">
             <button onClick={handleSave} disabled={saving || !form.title || !form.event_date}
@@ -190,6 +307,7 @@ export default function AgendaTab() {
             const typeInfo = EVENT_TYPES.find(t => t.value === event.type);
             const dateObj = new Date(event.event_date);
             const lessonLabel = getLessonLabel(event.linked_lesson_id);
+            const isEditing = editingEventId === event.id;
             return (
               <div key={event.id} className="bg-card rounded-2xl border border-border p-4 shadow-sm">
                 <div className="flex items-start gap-3">
@@ -215,14 +333,48 @@ export default function AgendaTab() {
                         </span>
                       )}
                     </div>
-                    {lessonLabel && (
-                      <div className="flex items-center gap-1.5 mt-2 px-2.5 py-1.5 rounded-lg bg-secondary/10">
-                        <BookOpen className="w-3.5 h-3.5 text-secondary flex-shrink-0" />
-                        <p className="font-inter text-[10px] text-secondary font-medium truncate">
-                          📖 {lessonLabel}
-                        </p>
+
+                    {/* Linked lesson display / edit */}
+                    {isEditing ? (
+                      <div className="mt-2 flex items-center gap-2">
+                        <select
+                          value={editLessonId}
+                          onChange={e => setEditLessonId(e.target.value)}
+                          className="flex-1 px-2 py-1.5 rounded-lg border border-border bg-background text-foreground font-inter text-[10px] focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                        >
+                          <option value="">Sem vínculo</option>
+                          {lessons.map(l => (
+                            <option key={l.id} value={l.id}>
+                              C{l.course_order} — L{l.order_num}: {l.title}
+                            </option>
+                          ))}
+                        </select>
+                        <button onClick={() => saveEditLesson(event.id)} className="w-7 h-7 rounded-lg bg-brand-green/15 flex items-center justify-center">
+                          <Check className="w-3.5 h-3.5 text-brand-green" />
+                        </button>
+                        <button onClick={() => setEditingEventId(null)} className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center">
+                          <X className="w-3.5 h-3.5 text-muted-foreground" />
+                        </button>
                       </div>
+                    ) : lessonLabel ? (
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <div className="flex-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-secondary/10">
+                          <BookOpen className="w-3.5 h-3.5 text-secondary flex-shrink-0" />
+                          <p className="font-inter text-[10px] text-secondary font-medium truncate">
+                            📖 {lessonLabel}
+                          </p>
+                        </div>
+                        <button onClick={() => startEditLesson(event)} className="w-7 h-7 rounded-lg bg-muted/50 flex items-center justify-center hover:bg-muted transition-colors">
+                          <Pencil className="w-3 h-3 text-muted-foreground" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => startEditLesson(event)} className="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+                        <BookOpen className="w-3 h-3 text-muted-foreground" />
+                        <span className="font-inter text-[10px] text-muted-foreground">+ Vincular lição</span>
+                      </button>
                     )}
+
                     {event.description && <p className="text-muted-foreground font-inter text-xs mt-1.5">{event.description}</p>}
                   </div>
                   <button onClick={() => handleDelete(event.id)} className="w-7 h-7 rounded-lg bg-destructive/10 flex items-center justify-center flex-shrink-0">
