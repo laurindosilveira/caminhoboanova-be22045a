@@ -109,13 +109,8 @@ export default function Index() {
             {/* Próximo encontro */}
             <NextMeetingCard onNavigateToAgenda={() => setActiveTab("agenda")} />
 
-            {/* Próxima atividade — oculto para evitar confusão com devocionais dos cursos */}
-            {/* <MissionCard
-              nextActivity={stats.nextActivity}
-              completedCount={stats.completedCount}
-              totalActivities={stats.totalActivities}
-              onComplete={handleCompleteActivity}
-            /> */}
+            {/* Próxima etapa do curso ativo */}
+            <NextCourseActivityCard onNavigateToDiscipulado={() => setActiveTab("discipulado")} />
 
             {/* Caminho da jornada */}
             <JourneyPath />
