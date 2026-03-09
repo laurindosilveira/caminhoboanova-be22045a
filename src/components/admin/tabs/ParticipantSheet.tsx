@@ -150,6 +150,14 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       setNotes(notesData ?? []);
       setLessons(lessonsData ?? []);
 
+      // Fetch turmas
+      const { data: turmasData } = await supabase.from("turmas").select("id, name, area").eq("is_active", true).order("area").order("name");
+      setTurmas(turmasData ?? []);
+      if (p.turma_id) {
+        const t = (turmasData ?? []).find(t => t.id === p.turma_id);
+        setCurrentTurmaName(t?.name ?? null);
+      }
+
       // Fetch event details for attendance
       const attArr = attendanceData ?? [];
       if (attArr.length > 0) {
