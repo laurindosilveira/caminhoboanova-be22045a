@@ -101,7 +101,11 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     async function fetchQualitative() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const [{ count: devC }, { count: worC }, { data: attD }, { count: chatC }, { count: prayerC }, { data: planData }, { data: existingUnlocks }, { count: totalLessonsC }, { count: totalDevsC }, { count: totalEventsC }, { data: lessonResps }, { data: allActs }, { data: userProg }, { data: achUnlocks }] = await Promise.all([
+      const fifteenDaysAgo = new Date(Date.now() - 15 * 86400000).toISOString();
+      const [{ count: devC }, { count: worC }, { data: attD }, { count: chatC }, { count: prayerC }, { data: planData }, { data: existingUnlocks }, { count: totalLessonsC }, { count: totalDevsC }, { count: totalEventsC }, { data: lessonResps }, { data: allActs }, { data: userProg }, { data: achUnlocks },
+        // Biweekly streak data
+        { data: recentEvents }, { data: recentAttendance }, { data: recentDevContent }, { data: recentDevProgress }, { data: recentLessonResps },
+      ] = await Promise.all([
         supabase.from("devotional_progress").select("id", { count: "exact", head: true }).eq("user_id", user.id),
         supabase.from("worship_attendance").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "aprovado"),
         supabase.from("attendance").select("event_id").eq("user_id", user.id).eq("status", "presente"),
@@ -116,6 +120,13 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
         supabase.from("activities").select("id, points"),
         supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
         supabase.from("achievement_unlocks").select("bonus_points").eq("user_id", user.id),
+        // Biweekly: events in last 15 days for user's area
+        supabase.from("events").select("id, linked_lesson_id").gte("event_date", fifteenDaysAgo).or(`area.eq.${profile!.area},area.is.null`),
+        supabase.from("attendance").select("event_id, status").eq("user_id", user.id).eq("status", "presente"),
+        // Devotionals linked to lessons that have events in last 15 days
+        supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null),
+        supabase.from("devotional_progress").select("devotional_id, completed_at").eq("user_id", user.id).gte("completed_at", fifteenDaysAgo),
+        supabase.from("lesson_responses").select("lesson_id, created_at").eq("user_id", user.id).gte("created_at", fifteenDaysAgo),
       ]);
       setDevCount(devC ?? 0);
       setWorshipCount(worC ?? 0);
@@ -133,6 +144,31 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
       const actPts = (allActs ?? []).filter(a => completedActIds.has(a.id)).reduce((s, a) => s + (a.points ?? 0), 0);
       setActivityPoints(actPts);
       setAchievementBonus((achUnlocks ?? []).reduce((s, a) => s + (a.bonus_points ?? 0), 0));
+
+      // Calculate biweekly streak
+      const recentEventIds = (recentEvents ?? []).map(e => e.id);
+      const recentEventLessonIds = (recentEvents ?? []).filter(e => e.linked_lesson_id).map(e => e.linked_lesson_id!);
+      const attendedEventIds = new Set((recentAttendance ?? []).map(a => a.event_id));
+      const attendedAllRecentEvents = recentEventIds.length > 0 && recentEventIds.every(id => attendedEventIds.has(id));
+
+      // Devotionals from lessons linked to recent events
+      const recentDevCompletedIds = new Set((recentDevProgress ?? []).map(p => p.devotional_id));
+      const devsForRecentLessons = (recentDevContent ?? []).filter(d => d.lesson_id && recentEventLessonIds.includes(d.lesson_id));
+      const allRecentDevsDone = devsForRecentLessons.length > 0 && devsForRecentLessons.every(d => recentDevCompletedIds.has(d.id));
+      const recentDevsCompleted = devsForRecentLessons.filter(d => recentDevCompletedIds.has(d.id)).length;
+
+      // Lesson study for recent event lessons
+      const recentStudiedLessons = new Set((recentLessonResps ?? []).map(r => r.lesson_id));
+      const allRecentLessonsStudied = recentEventLessonIds.length > 0 && recentEventLessonIds.every(id => recentStudiedLessons.has(id));
+
+      const streakComplete = recentEventIds.length > 0 && attendedAllRecentEvents && allRecentDevsDone && allRecentLessonsStudied;
+      setBiweeklyStreakDone(streakComplete);
+      setBiweeklyProgress({
+        devsDone: recentDevsCompleted,
+        devsTotal: devsForRecentLessons.length,
+        studyDone: allRecentLessonsStudied,
+        attendanceDone: attendedAllRecentEvents,
+      });
     }
     fetchQualitative();
   }, [profile]);
