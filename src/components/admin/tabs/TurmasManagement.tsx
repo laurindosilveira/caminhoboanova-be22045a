@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Trash2, GraduationCap, Calendar, Pencil, Archive, CheckCircle2, RotateCcw, ChevronDown, ChevronUp, Download } from "lucide-react";
+import { Plus, Trash2, GraduationCap, Calendar, Pencil, Archive, CheckCircle2, RotateCcw, ChevronDown, ChevronUp, Download, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
