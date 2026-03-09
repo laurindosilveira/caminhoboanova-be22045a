@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   CalendarDays, Users, CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp,
   Star, BookOpen, FileText, Save, Church, Plus, MapPin, X as XIcon,
-  Heart, GraduationCap, MessageSquare, ClipboardList, ArrowUpCircle,
+  Heart, GraduationCap, MessageSquare, ClipboardList, ArrowUpCircle, RefreshCw,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -110,6 +110,8 @@ export default function AttendanceTab({ participants, activities, communities, i
   // Year promotion state
   const [promotionRequests, setPromotionRequests] = useState<{ id: string; user_id: string; from_year: number; to_year: number; status: string; requested_at: string; full_name?: string; community?: string }[]>([]);
   const [generatingPromotions, setGeneratingPromotions] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resettingJourney, setResettingJourney] = useState(false);
 
   // Event creation (merged from AgendaTab)
   const [showEventForm, setShowEventForm] = useState(false);
@@ -1053,6 +1055,52 @@ export default function AttendanceTab({ participants, activities, communities, i
           </div>
         )}
       </div>
+
+      {/* ─── REINICIAR JORNADA ─── */}
+      <div className="mt-6 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-destructive/10 flex items-center justify-center">
+              <RefreshCw className="w-5 h-5 text-destructive" />
+            </div>
+            <div>
+              <h3 className="font-montserrat font-bold text-foreground text-sm">Reiniciar Jornada</h3>
+              <p className="text-muted-foreground text-[10px] font-inter">Zerar progresso de toda a turma</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-inter font-medium border-2 border-destructive/30 text-destructive hover:bg-destructive/10 transition-all"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Reiniciar
+          </button>
+        </div>
+        {showResetConfirm && (
+          <div className="bg-destructive/5 border-2 border-destructive/20 rounded-2xl p-4 space-y-3">
+            <p className="text-destructive font-inter text-xs font-medium">
+              ⚠️ Ação irreversível! Todo o progresso de {participants.length} aluno(s) será apagado:
+            </p>
+            <ul className="text-muted-foreground font-inter text-xs space-y-1 pl-2">
+              <li>• Atividades, lições e devocionais</li>
+              <li>• Conquistas e pontos da fé</li>
+            </ul>
+            <div className="flex gap-2">
+              <button onClick={() => setShowResetConfirm(false)}
+                className="flex-1 py-2 rounded-xl text-xs font-montserrat font-bold bg-muted text-muted-foreground border border-border">
+                Cancelar
+              </button>
+              <button
+                onClick={handleResetJourney}
+                disabled={resettingJourney}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-montserrat font-bold text-destructive-foreground bg-destructive hover:bg-destructive/90 disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                {resettingJourney ? "Reiniciando..." : "Confirmar reinício"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 
@@ -1140,5 +1188,32 @@ export default function AttendanceTab({ participants, activities, communities, i
     setPromotionRequests(prev =>
       prev.map(r => r.id === requestId ? { ...r, status: action } : r)
     );
+  }
+
+  async function handleResetJourney() {
+    setResettingJourney(true);
+    const userIds = participants.map(p => p.user_id);
+    
+    if (userIds.length === 0) {
+      toast({ title: "Nenhum membro", description: "Esta turma não possui membros.", variant: "destructive" });
+      setResettingJourney(false);
+      setShowResetConfirm(false);
+      return;
+    }
+
+    await Promise.all([
+      supabase.from("user_progress").delete().in("user_id", userIds),
+      supabase.from("lesson_responses").delete().in("user_id", userIds),
+      supabase.from("devotional_progress").delete().in("user_id", userIds),
+      supabase.from("achievement_unlocks").delete().in("user_id", userIds),
+    ]);
+
+    toast({ 
+      title: "🔄 Jornada reiniciada!", 
+      description: `Progresso de ${userIds.length} aluno(s) foi zerado com sucesso.` 
+    });
+    
+    setResettingJourney(false);
+    setShowResetConfirm(false);
   }
 }

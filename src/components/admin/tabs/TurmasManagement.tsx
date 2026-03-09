@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Trash2, GraduationCap, Calendar, Pencil, Archive, CheckCircle2, RotateCcw, ChevronDown, ChevronUp, Download } from "lucide-react";
+import { Plus, Trash2, GraduationCap, Calendar, Pencil, Archive, CheckCircle2, RotateCcw, ChevronDown, ChevronUp, Download, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -35,6 +35,8 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
   const [showArchive, setShowArchive] = useState(false);
   const [archivedPdfData, setArchivedPdfData] = useState<Record<string, { participants: any[]; activities: any[] }>>({});
   const [loadingPdf, setLoadingPdf] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState<Turma | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   async function loadArchivedTurmaData(turmaId: string) {
     if (archivedPdfData[turmaId]) return;
@@ -130,14 +132,12 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
       .eq("turma_id", turma.id);
     
     const allProfiles = turmaProfiles ?? [];
-    const firstYearUsers = allProfiles.filter(p => (p as any).confirmation_year !== 2);
     const secondYearUsers = allProfiles.filter(p => (p as any).confirmation_year === 2);
 
-    if (firstYearUsers.length > 0 && secondYearUsers.length === 0) {
-      // All are 1st year — cannot archive
+    if (secondYearUsers.length === 0) {
       toast({ 
-        title: "Não é possível arquivar", 
-        description: `Todos os ${firstYearUsers.length} membros estão no 1º ano. Somente alunos do 2º ano são arquivados.`, 
+        title: "Nenhum aluno do 2º ano", 
+        description: "Não há alunos do 2º ano para confirmar nesta turma.", 
         variant: "destructive" 
       });
       setArchiving(null);
@@ -145,26 +145,79 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
       return;
     }
 
-    // Archive the turma
-    const { error } = await supabase.from("turmas").update({ is_active: false }).eq("id", turma.id);
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
-      // If there are 1st year users, remove them from this archived turma (they stay active without turma)
-      if (firstYearUsers.length > 0) {
-        await supabase.from("profiles").update({ turma_id: null } as any)
-          .in("user_id", firstYearUsers.map(p => p.user_id));
-        toast({ 
-          title: "📦 Grupo confirmado!", 
-          description: `"${turma.name}" arquivada. ${secondYearUsers.length} aluno(s) do 2º ano arquivados. ${firstYearUsers.length} aluno(s) do 1º ano permanecem ativos (sem turma).` 
-        });
-      } else {
-        toast({ title: "📦 Grupo confirmado!", description: `"${turma.name}" foi arquivada com sucesso.` });
-      }
-      fetchTurmas();
+    // Create an archived copy turma for the 2nd year students
+    const { data: user } = await supabase.auth.getUser();
+    const archiveName = `${turma.name} — CONFIRMADOS`;
+    const { data: newTurma, error: createError } = await supabase.from("turmas").insert({
+      name: archiveName,
+      area: turma.area,
+      year: turma.year,
+      description: `Grupo confirmado em ${new Date().toLocaleDateString("pt-BR")}. ${secondYearUsers.length} confirmando(s).`,
+      is_active: false,
+      created_by: user.user?.id,
+    }).select("id").single();
+
+    if (createError || !newTurma) {
+      toast({ title: "Erro ao criar arquivo", description: createError?.message ?? "Erro desconhecido", variant: "destructive" });
+      setArchiving(null);
+      setConfirmArchive(null);
+      return;
     }
+
+    // Move 2nd year users to the archived turma
+    await supabase.from("profiles").update({ turma_id: newTurma.id } as any)
+      .in("user_id", secondYearUsers.map(p => p.user_id));
+
+    // 1st year users stay in the original turma (unchanged)
+    const firstYearCount = allProfiles.length - secondYearUsers.length;
+
+    toast({ 
+      title: "📦 Grupo confirmado!", 
+      description: `"${archiveName}" criado com ${secondYearUsers.length} confirmando(s). ${firstYearCount} aluno(s) do 1º ano permanecem na turma "${turma.name}".`
+    });
+    
+    fetchTurmas();
     setArchiving(null);
     setConfirmArchive(null);
+  }
+
+  async function handleResetJourney(turma: Turma) {
+    setResetting(true);
+    
+    // Get all user IDs in this turma
+    const { data: turmaProfiles } = await supabase
+      .from("profiles")
+      .select("user_id")
+      .eq("turma_id", turma.id);
+    
+    const userIds = (turmaProfiles ?? []).map(p => p.user_id);
+    
+    if (userIds.length === 0) {
+      toast({ title: "Nenhum membro", description: "Esta turma não possui membros.", variant: "destructive" });
+      setResetting(false);
+      setConfirmReset(null);
+      return;
+    }
+
+    // Delete all progress, lesson responses, devotional progress, achievement unlocks for these users
+    await Promise.all([
+      supabase.from("user_progress").delete().in("user_id", userIds),
+      supabase.from("lesson_responses").delete().in("user_id", userIds),
+      supabase.from("devotional_progress").delete().in("user_id", userIds),
+      supabase.from("achievement_unlocks").delete().in("user_id", userIds),
+    ]);
+
+    // Close ranking seasons for the communities involved
+    const { data: profiles } = await supabase.from("profiles").select("community").in("user_id", userIds);
+    const communities = [...new Set((profiles ?? []).map(p => p.community))];
+    
+    toast({ 
+      title: "🔄 Jornada reiniciada!", 
+      description: `Progresso de ${userIds.length} aluno(s) da turma "${turma.name}" foi zerado.` 
+    });
+    
+    setResetting(false);
+    setConfirmReset(null);
   }
 
   async function handleReactivate(turma: Turma) {
@@ -292,7 +345,7 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
               </div>
             </div>
             <p className="text-muted-foreground font-inter text-xs leading-relaxed">
-              Ao confirmar este grupo, a turma será <strong>arquivada</strong> e não aparecerá mais na seleção de turmas ativas. Os dados dos participantes serão mantidos para consulta.
+              Os alunos do <strong>2º ano</strong> serão movidos para um arquivo chamado "<strong>{confirmArchive?.name} — CONFIRMADOS</strong>". Os alunos do <strong>1º ano permanecerão na turma</strong> original.
             </p>
             <div className="flex gap-2">
               <button onClick={() => setConfirmArchive(null)}
@@ -304,6 +357,50 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-montserrat font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors">
                 <CheckCircle2 className="w-4 h-4" />
                 {archiving === confirmArchive?.id ? "Arquivando..." : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm reset journey dialog */}
+      <Dialog open={!!confirmReset} onOpenChange={(open) => !open && setConfirmReset(null)}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-montserrat font-bold text-foreground text-base">Reiniciar Jornada</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center">
+                <RefreshCw className="w-6 h-6 text-destructive" />
+              </div>
+              <div>
+                <p className="font-montserrat font-bold text-foreground text-sm">{confirmReset?.name}</p>
+                <p className="text-muted-foreground font-inter text-xs mt-0.5">
+                  {confirmReset?.member_count ?? 0} membro{(confirmReset?.member_count ?? 0) !== 1 ? "s" : ""}
+                </p>
+              </div>
+            </div>
+            <p className="text-destructive font-inter text-xs leading-relaxed font-medium">
+              ⚠️ Esta ação é <strong>irreversível</strong>! Todo o progresso dos alunos será apagado:
+            </p>
+            <ul className="text-muted-foreground font-inter text-xs space-y-1 pl-4">
+              <li>• Atividades concluídas</li>
+              <li>• Respostas das lições</li>
+              <li>• Devocionais completados</li>
+              <li>• Conquistas desbloqueadas</li>
+              <li>• Ranking / Pontos da Fé</li>
+            </ul>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmReset(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-montserrat font-bold bg-muted text-muted-foreground border border-border">
+                Cancelar
+              </button>
+              <button onClick={() => confirmReset && handleResetJourney(confirmReset)}
+                disabled={resetting}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-montserrat font-bold text-destructive-foreground bg-destructive hover:bg-destructive/90 disabled:opacity-50 transition-colors">
+                <RefreshCw className="w-4 h-4" />
+                {resetting ? "Reiniciando..." : "Reiniciar tudo"}
               </button>
             </div>
           </div>
@@ -355,15 +452,24 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
                       </button>
                     </div>
                   </div>
-                  {/* Archive button */}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setConfirmArchive(turma); }}
-                    disabled={archiving === turma.id}
-                    className="mt-3 w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-montserrat font-bold border-2 border-green-500/30 bg-green-500/5 text-green-700 hover:bg-green-500/10 hover:border-green-500/50 transition-all disabled:opacity-50"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    Grupo Confirmado — Arquivar
-                  </button>
+                  {/* Archive + Reset buttons */}
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setConfirmArchive(turma); }}
+                      disabled={archiving === turma.id}
+                      className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-montserrat font-bold border-2 border-green-500/30 bg-green-500/5 text-green-700 hover:bg-green-500/10 hover:border-green-500/50 transition-all disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      Grupo Confirmado
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setConfirmReset(turma); }}
+                      className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-montserrat font-bold border-2 border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/10 hover:border-destructive/50 transition-all"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Reiniciar Jornada
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
