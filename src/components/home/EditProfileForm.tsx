@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Pencil, Save, X, User, Phone, Calendar, MapPin, ChevronDown, Home, Users } from "lucide-react";
+import { Pencil, Save, X, User, Phone, Calendar, MapPin, ChevronDown, Home, Users, Camera } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -36,6 +36,8 @@ export default function EditProfileForm() {
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
     register,
@@ -72,6 +74,42 @@ export default function EditProfileForm() {
     setIsEditing(false);
   }
 
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !user?.id) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Foto muito grande", description: "Máximo de 5MB.", variant: "destructive" });
+      return;
+    }
+    setUploadingPhoto(true);
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${user.id}/avatar.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, { upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
+      const avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ avatar_url: avatarUrl })
+        .eq("user_id", user.id);
+      if (updateError) throw updateError;
+
+      await refreshProfile();
+      toast({ title: "Foto atualizada!" });
+    } catch (err) {
+      console.error("Erro ao enviar foto:", err);
+      toast({ title: "Erro ao enviar foto", description: "Tente novamente.", variant: "destructive" });
+    } finally {
+      setUploadingPhoto(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   async function onSubmit(values: ProfileFormValues) {
     if (!user?.id) return;
     setSaving(true);
@@ -80,7 +118,6 @@ export default function EditProfileForm() {
         ? "Área 1"
         : "Área 2";
 
-      // Use upsert so it works whether or not a profile row exists yet
       const { error } = await supabase
         .from("profiles")
         .upsert(
@@ -101,10 +138,7 @@ export default function EditProfileForm() {
         );
 
       if (error) throw error;
-
-      // Refresh the profile in context so the header name updates
       await refreshProfile();
-
       toast({ title: "Perfil atualizado!", description: "Suas informações foram salvas com sucesso." });
       setIsEditing(false);
     } catch (err: unknown) {
@@ -114,6 +148,37 @@ export default function EditProfileForm() {
       setSaving(false);
     }
   }
+
+  const avatarUrl = (profile as any)?.avatar_url;
+
+  const PhotoSection = () => (
+    <div className="flex flex-col items-center gap-2 py-4">
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={uploadingPhoto}
+        className="relative w-20 h-20 rounded-full border-2 border-dashed border-border bg-muted flex items-center justify-center overflow-hidden hover:border-secondary transition-colors group"
+      >
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="Foto" className="w-full h-full object-cover" />
+        ) : (
+          <User className="w-8 h-8 text-muted-foreground" />
+        )}
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-full">
+          <Camera className="w-5 h-5 text-white" />
+        </div>
+        {uploadingPhoto && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-full">
+            <span className="animate-spin w-5 h-5 border-2 border-white/40 border-t-white rounded-full" />
+          </div>
+        )}
+      </button>
+      <span className="text-xs text-muted-foreground font-inter">
+        {avatarUrl ? "Toque para alterar a foto" : "Adicionar foto"}
+      </span>
+      <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+    </div>
+  );
 
   if (!isEditing) {
     return (
@@ -133,6 +198,8 @@ export default function EditProfileForm() {
               Editar
             </button>
           </div>
+
+          <PhotoSection />
 
           {/* Info list */}
           <div className="divide-y divide-border">
@@ -178,6 +245,8 @@ export default function EditProfileForm() {
             Cancelar
           </button>
         </div>
+
+        <PhotoSection />
 
         <div className="p-4 space-y-4">
           {/* Nome */}
