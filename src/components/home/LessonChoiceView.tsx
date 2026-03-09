@@ -279,21 +279,27 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
         ) : (
           <div className="space-y-2">
             {devotionals.map((dev) => {
-              const done = completedIds.has(dev.id);
-              const locked = lockedIds.has(dev.id);
+              const status = devStatuses.get(dev.id) ?? "future";
+              const done = status === "completed";
+              const locked = status === "locked";
+              const future = status === "future";
+              const isDisabled = locked || future;
               return (
                 <button key={dev.id} 
-                  onClick={() => !locked && setViewingDevotional(dev)}
-                  disabled={locked}
+                  onClick={() => !isDisabled && setViewingDevotional(dev)}
+                  disabled={isDisabled}
                   className={`w-full flex items-center gap-3 p-4 bg-card rounded-2xl border shadow-sm text-left transition-colors ${
                     locked ? "border-destructive/20 bg-destructive/5 opacity-60 cursor-not-allowed" :
+                    future ? "border-border bg-muted/30 opacity-50 cursor-not-allowed" :
                     done ? "border-brand-green/30 bg-brand-green/5" : "border-border hover:bg-brand-green/5"
                   }`}>
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                    locked ? "bg-destructive/10" : done ? "bg-brand-green/20" : "bg-brand-green/10"
+                    locked ? "bg-destructive/10" : future ? "bg-muted" : done ? "bg-brand-green/20" : "bg-brand-green/10"
                   }`}>
                     {locked ? (
                       <LockKeyhole className="w-5 h-5 text-destructive/60" />
+                    ) : future ? (
+                      <Calendar className="w-5 h-5 text-muted-foreground/50" />
                     ) : done ? (
                       <CheckCircle2 className="w-5 h-5 text-brand-green" />
                     ) : (
@@ -302,15 +308,15 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className={`font-montserrat font-bold text-sm ${
-                      locked ? "text-destructive/60" : done ? "text-brand-green" : "text-foreground"
+                      locked ? "text-destructive/60" : future ? "text-muted-foreground" : done ? "text-brand-green" : "text-foreground"
                     }`}>
                       {dev.title || `Dia ${dev.day_number}`}
                     </p>
                     <p className="text-muted-foreground font-inter text-[10px] truncate">
-                      {locked ? "🔒 Bloqueado — dia perdido" : done ? "✅ Concluído" : dev.bible_reference ? `✝️ ${dev.bible_reference}` : ""}
+                      {locked ? "🔒 Bloqueado — dia perdido" : future ? "🔜 Disponível no próximo dia útil" : done ? "✅ Concluído" : dev.bible_reference ? `✝️ ${dev.bible_reference}` : "📖 Disponível hoje"}
                     </p>
                   </div>
-                  {!locked && <span className="text-muted-foreground text-xs">→</span>}
+                  {!isDisabled && <span className="text-muted-foreground text-xs">→</span>}
                 </button>
               );
             })}
