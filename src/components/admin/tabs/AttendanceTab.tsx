@@ -1189,4 +1189,31 @@ export default function AttendanceTab({ participants, activities, communities, i
       prev.map(r => r.id === requestId ? { ...r, status: action } : r)
     );
   }
+
+  async function handleResetJourney() {
+    setResettingJourney(true);
+    const userIds = participants.map(p => p.user_id);
+    
+    if (userIds.length === 0) {
+      toast({ title: "Nenhum membro", description: "Esta turma não possui membros.", variant: "destructive" });
+      setResettingJourney(false);
+      setShowResetConfirm(false);
+      return;
+    }
+
+    await Promise.all([
+      supabase.from("user_progress").delete().in("user_id", userIds),
+      supabase.from("lesson_responses").delete().in("user_id", userIds),
+      supabase.from("devotional_progress").delete().in("user_id", userIds),
+      supabase.from("achievement_unlocks").delete().in("user_id", userIds),
+    ]);
+
+    toast({ 
+      title: "🔄 Jornada reiniciada!", 
+      description: `Progresso de ${userIds.length} aluno(s) foi zerado com sucesso.` 
+    });
+    
+    setResettingJourney(false);
+    setShowResetConfirm(false);
+  }
 }
