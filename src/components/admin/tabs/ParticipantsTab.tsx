@@ -98,7 +98,7 @@ function AuditLogSection({ targetUserId, userName }: { targetUserId: string; use
       setLogs(items);
 
       // Fetch admin names
-      const adminIds = [...new Set(items.map((l: any) => l.removed_by))];
+      const adminIds = [...new Set(items.map((l: any) => l.removed_by))] as string[];
       if (adminIds.length > 0) {
         const { data: profs } = await supabase.from("profiles").select("user_id, full_name").in("user_id", adminIds);
         const map: Record<string, string> = {};
