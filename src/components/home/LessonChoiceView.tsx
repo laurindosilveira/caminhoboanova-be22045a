@@ -229,6 +229,28 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
   const totalCount = devotionals.length;
   const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
+  // Compute scheduled dates for weekday labels
+  const weekdayNames = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+  const scheduledDateMap = new Map<string, Date>();
+  if (devotionals.length > 0) {
+    const day1Dev = devotionals.find(d => d.day_number === 1);
+    const day1Date = day1Dev ? completedDates.get(day1Dev.id) : null;
+    if (day1Date) {
+      const anchor = new Date(day1Date);
+      anchor.setHours(0, 0, 0, 0);
+      for (const dev of devotionals) {
+        const date = new Date(anchor);
+        let assigned = 1;
+        while (assigned < dev.day_number) {
+          date.setDate(date.getDate() + 1);
+          const dow = date.getDay();
+          if (dow !== 0 && dow !== 6) assigned++;
+        }
+        scheduledDateMap.set(dev.id, new Date(date));
+      }
+    }
+  }
+
   // Viewing a specific devotional
   if (viewingDevotional) {
     const isCompleted = completedIds.has(viewingDevotional.id);
