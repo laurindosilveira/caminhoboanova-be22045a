@@ -204,19 +204,28 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
   async function handleCompleteDevotional(devotionalId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+    const now = new Date().toISOString();
     await supabase.from("devotional_progress").insert({
       user_id: user.id,
       devotional_id: devotionalId,
     });
+    // Update local state and recompute statuses
+    const newCompletedMap = new Map(completedDates);
+    newCompletedMap.set(devotionalId, now);
+    setCompletedDates(newCompletedMap);
     setCompletedIds(prev => new Set([...prev, devotionalId]));
+    const { statuses, lockedSet } = computeDevotionalStatuses(devotionals, newCompletedMap);
+    setDevStatuses(statuses);
+    setLockedIds(lockedSet);
     toast.success("Devocional concluído! +5 pontos de fé ⭐", {
       description: "Continue firme na sua caminhada!",
       duration: 3000,
     });
   }
 
-  const completedCount = devotionals.filter(d => completedIds.has(d.id) && !lockedIds.has(d.id)).length;
-  const lockedCount = lockedIds.size;
+  const completedCount = devotionals.filter(d => completedIds.has(d.id)).length;
+  const lockedCount = Array.from(devStatuses.values()).filter(s => s === "locked").length;
+  const futureCount = Array.from(devStatuses.values()).filter(s => s === "future").length;
   const totalCount = devotionals.length;
   const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
