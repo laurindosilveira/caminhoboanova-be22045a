@@ -143,6 +143,13 @@ export default function Register() {
       return;
     }
 
+    // Detect duplicate email: Supabase returns user with empty identities when email already exists
+    if (authData.user && authData.user.identities && authData.user.identities.length === 0) {
+      setError("Este email já está cadastrado. Faça login ou use outro email.");
+      setLoading(false);
+      return;
+    }
+
     // Upload photo if provided
     if (photo && authData.user) {
       const ext = photo.name.split(".").pop() || "jpg";
