@@ -89,6 +89,11 @@ function calcAge(birthDate: string) {
 
 type Lesson = { id: string; title: string; order_num: number; objective: string | null; topics: string[] | null; course_id: string };
 
+const COMMUNITIES_LIST = ["Martim Lutero","Bom Pastor","Rincão Fundo","Rincão Frente","Linha Brasil","Iriá Pira 1","Iriá Pira 2"] as const;
+function getArea(community: string) {
+  return ["Rincão Frente","Rincão Fundo","Bom Pastor","Iriá Pira 1"].includes(community) ? "Área 1" : "Área 2";
+}
+
 export default function ParticipantSheet({ participant: p, activities, onBack }: {
   participant: Participant; activities: Activity[]; onBack: () => void;
 }) {
@@ -105,6 +110,9 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const [noteForm, setNoteForm] = useState({ note_type: "acompanhamento", content: "" });
   const [savingNote, setSavingNote] = useState(false);
   const [activeSection, setActiveSection] = useState<"overview"|"plan"|"notes"|"jornada"|"presenca"|"timeline"|"relatorio"|"parecer">("overview");
+  const [editingCommunity, setEditingCommunity] = useState(false);
+  const [newCommunity, setNewCommunity] = useState(p.community);
+  const [savingCommunity, setSavingCommunity] = useState(false);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
