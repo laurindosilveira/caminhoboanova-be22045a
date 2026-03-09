@@ -109,7 +109,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
         supabase.from("achievement_unlocks").select("achievement_key").eq("user_id", user.id),
         supabase.from("lessons").select("id", { count: "exact", head: true }),
         supabase.from("devotional_content").select("id", { count: "exact", head: true }),
-        supabase.from("events").select("id", { count: "exact", head: true }).gte("event_date", new Date(Date.now() - 90 * 86400000).toISOString()),
+        supabase.from("events").select("id", { count: "exact", head: true }).gte("event_date", new Date(Date.now() - 90 * 86400000).toISOString()).or(`area.eq.${profile!.area},area.is.null`),
         supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
         supabase.from("activities").select("id, points"),
         supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
