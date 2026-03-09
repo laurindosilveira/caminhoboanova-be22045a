@@ -17,6 +17,7 @@ interface Profile {
   mother_phone?: string;
   address?: string;
   avatar_url?: string;
+  confirmation_year?: number | null;
 }
 
 interface AuthContextType {

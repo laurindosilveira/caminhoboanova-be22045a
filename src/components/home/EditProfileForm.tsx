@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Pencil, Save, X, User, Phone, Calendar, MapPin, ChevronDown, Home, Users, Camera } from "lucide-react";
+import { Pencil, Save, X, User, Phone, Calendar, MapPin, ChevronDown, Home, Users, Camera, GraduationCap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";

@@ -578,6 +578,49 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         </div>
       )}
 
+      {/* Edit confirmation year */}
+      {editingConfYear && (
+        <div className="bg-card rounded-2xl border border-border shadow-sm p-4 space-y-3">
+          <p className="font-montserrat font-bold text-foreground text-sm">Ano do Ensino Confirmatório</p>
+          <div className="flex gap-2">
+            {[{ val: null, label: "Não definido" }, { val: 1, label: "1º Ano" }, { val: 2, label: "2º Ano" }].map(opt => (
+              <button
+                key={String(opt.val)}
+                onClick={() => setNewConfYear(opt.val)}
+                className={`flex-1 py-2.5 rounded-xl text-xs font-montserrat font-bold border transition-all ${
+                  newConfYear === opt.val ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <button
+              disabled={savingConfYear}
+              onClick={async () => {
+                setSavingConfYear(true);
+                const { error } = await supabase.from("profiles").update({
+                  confirmation_year: newConfYear,
+                } as any).eq("user_id", p.user_id);
+                setSavingConfYear(false);
+                if (!error) {
+                  (p as any).confirmation_year = newConfYear;
+                  setEditingConfYear(false);
+                }
+              }}
+              className="flex-1 h-9 rounded-xl font-inter text-xs font-bold text-primary-foreground disabled:opacity-60"
+              style={{ background: "var(--gradient-hero)" }}
+            >
+              {savingConfYear ? "Salvando..." : "Salvar"}
+            </button>
+            <button onClick={() => setEditingConfYear(false)} className="px-4 h-9 rounded-xl border border-border text-xs font-inter text-muted-foreground hover:text-foreground">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Quick action buttons */}
       <div className="grid grid-cols-2 gap-2">
         {[
