@@ -142,7 +142,8 @@ export default function EditProfileForm() {
             father_phone: values.father_phone ?? "",
             mother_phone: values.mother_phone ?? "",
             address: values.address ?? "",
-          },
+            confirmation_year: values.confirmation_year ? parseInt(values.confirmation_year) : null,
+          } as any,
           { onConflict: "user_id" }
         );
 
