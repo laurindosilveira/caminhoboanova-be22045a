@@ -41,6 +41,7 @@ export default function GameRulesDialog({ breakdown }: { breakdown: PointsBreakd
     { emoji: "✅", label: "Atividade completa", pts: "variável", desc: "pontos definidos por atividade" },
     { emoji: "🏆", label: "Conquista desbloqueada", pts: "+10 a +50", desc: "bônus por conquista" },
     { emoji: "🔥", label: "Sequência (streak)", pts: "—", desc: "dias consecutivos com atividade" },
+    { emoji: "🏅", label: "Quinzena perfeita", pts: "+30 pts", desc: "completar estudo + devocionais + presença nos últimos 15 dias" },
   ];
 
   return (
