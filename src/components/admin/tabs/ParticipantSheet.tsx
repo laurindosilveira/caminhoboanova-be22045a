@@ -120,6 +120,9 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const [editingTurma, setEditingTurma] = useState(false);
   const [newTurmaId, setNewTurmaId] = useState(p.turma_id ?? "");
   const [savingTurma, setSavingTurma] = useState(false);
+  const [editingConfYear, setEditingConfYear] = useState(false);
+  const [newConfYear, setNewConfYear] = useState<number | null>(p.confirmation_year ?? null);
+  const [savingConfYear, setSavingConfYear] = useState(false);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
