@@ -132,6 +132,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
   const [recentEvents, setRecentEvents] = useState<EventRecord[]>([]);
   const [allAssessments, setAllAssessments] = useState<Assessment[]>([]);
   const [worshipCount, setWorshipCount] = useState(0);
+  const [unlockedCourseIds, setUnlockedCourseIds] = useState<Set<string>>(new Set());
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [helpType, setHelpType] = useState<"crise" | "conversar" | "oracao" | null>(null);
   const [helpMessage, setHelpMessage] = useState("");
@@ -173,7 +174,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }, { data: responsesData }, { data: eventsData }, { data: attendanceData }, { data: allAssess }, { data: devContentData }, { data: devProgressData }, { data: worshipData }] = await Promise.all([
+    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }, { data: responsesData }, { data: eventsData }, { data: attendanceData }, { data: allAssess }, { data: devContentData }, { data: devProgressData }, { data: worshipData }, { data: unlocksData }] = await Promise.all([
       supabase.from("activities").select("id, type, title, points"),
       supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
       supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).eq("month", month).eq("year", year).maybeSingle(),
@@ -187,6 +188,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
       supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null),
       supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
       supabase.from("worship_attendance").select("id").eq("user_id", user.id).eq("status", "aprovado"),
+      supabase.from("course_unlocks").select("course_id").eq("area", profile?.area ?? ""),
     ]);
 
     setActivities(acts ?? []);
@@ -225,8 +227,12 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
       lessons: (lessonsData ?? []).filter(l => l.course_id === c.id),
     }));
     setCourses(courseList);
-    // Auto-expand first course
-    if (courseList.length > 0) setExpandedCourse(courseList[0].id);
+    setUnlockedCourseIds(new Set((unlocksData ?? []).map((u: any) => u.course_id)));
+    // Auto-expand first unlocked course
+    const unlockedSet = new Set((unlocksData ?? []).map((u: any) => u.course_id));
+    const firstUnlocked = courseList.find(c => unlockedSet.has(c.id));
+    if (firstUnlocked) setExpandedCourse(firstUnlocked.id);
+    else if (courseList.length > 0) setExpandedCourse(courseList[0].id);
 
     // Attendance history
     setRecentEvents((eventsData ?? []) as EventRecord[]);
@@ -827,45 +833,60 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
           {/* Course accordion */}
           {courses.map((course) => {
             const isOpen = expandedCourse === course.id;
+            const isCourseUnlocked = unlockedCourseIds.has(course.id);
             const doneLessons = course.lessons.filter(l => fullyCompletedLessonIds.has(l.id)).length;
             const totalLessons = course.lessons.length;
             const coursePct = totalLessons > 0 ? Math.round((doneLessons / totalLessons) * 100) : 0;
             return (
-              <div key={course.id} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+              <div key={course.id} className={`bg-card rounded-2xl border shadow-sm overflow-hidden ${
+                isCourseUnlocked ? "border-border" : "border-border opacity-75"
+              }`}>
                 {/* Course header */}
                 <button
-                  onClick={() => setExpandedCourse(isOpen ? null : course.id)}
-                  className="w-full flex items-center gap-3 p-4 text-left"
+                  onClick={() => isCourseUnlocked ? setExpandedCourse(isOpen ? null : course.id) : toast.info("🔒 Este curso ainda não foi liberado pelo seu líder.")}
+                  className={`w-full flex items-center gap-3 p-4 text-left ${!isCourseUnlocked ? "cursor-default" : ""}`}
                 >
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "var(--gradient-hero)" }}>
-                    <span className="font-montserrat font-black text-primary-foreground text-sm">#{course.order_num}</span>
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                    isCourseUnlocked ? "" : "bg-muted"
+                  }`} style={isCourseUnlocked ? { background: "var(--gradient-hero)" } : {}}>
+                    {isCourseUnlocked
+                      ? <span className="font-montserrat font-black text-primary-foreground text-sm">#{course.order_num}</span>
+                      : <Lock className="w-4 h-4 text-muted-foreground" />
+                    }
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-montserrat font-bold text-foreground text-sm">{course.title}</p>
-                    {course.subtitle && <p className="text-muted-foreground font-inter text-xs truncate">{course.subtitle}</p>}
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{
-                            width: `${coursePct}%`,
-                            background: coursePct === 100 ? "var(--gradient-green)" : "var(--gradient-hero)",
-                          }}
-                        />
-                      </div>
-                      <span className={`font-inter text-[10px] font-semibold flex-shrink-0 ${coursePct === 100 ? "text-brand-green" : "text-muted-foreground"}`}>
-                        {doneLessons}/{totalLessons}
-                      </span>
-                    </div>
+                    {isCourseUnlocked ? (
+                      <>
+                        {course.subtitle && <p className="text-muted-foreground font-inter text-xs truncate">{course.subtitle}</p>}
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{
+                                width: `${coursePct}%`,
+                                background: coursePct === 100 ? "var(--gradient-green)" : "var(--gradient-hero)",
+                              }}
+                            />
+                          </div>
+                          <span className={`font-inter text-[10px] font-semibold flex-shrink-0 ${coursePct === 100 ? "text-brand-green" : "text-muted-foreground"}`}>
+                            {doneLessons}/{totalLessons}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground font-inter text-xs mt-0.5">🔒 Curso ainda não liberado pelo líder</p>
+                    )}
                   </div>
-                  {isOpen
-                    ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                    : <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                  }
+                  {isCourseUnlocked && (
+                    isOpen
+                      ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                      : <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                  )}
                 </button>
 
                 {/* Lessons list */}
-                {isOpen && (
+                {isOpen && isCourseUnlocked && (
                   <div className="border-t border-border">
                     {course.lessons.length === 0 ? (
                       <p className="px-4 py-3 text-muted-foreground font-inter text-xs text-center">Nenhuma lição cadastrada ainda.</p>
