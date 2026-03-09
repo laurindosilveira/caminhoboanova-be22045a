@@ -194,9 +194,22 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     <div className="px-5 pt-2 pb-4 space-y-5">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-montserrat font-black text-foreground text-xl">🏆 Conquistas</h2>
-        <span className="text-xs font-inter text-muted-foreground bg-muted rounded-full px-3 py-1">
-          {unlockedCount}/{achievements.length} desbloqueadas
-        </span>
+        <div className="flex items-center gap-2">
+          <GameRulesDialog breakdown={{
+            lessonStudyCount,
+            devotionalCount: devCount,
+            attendanceCount,
+            worshipCount,
+            activityPoints,
+            achievementBonus,
+            totalLessons,
+            totalDevotionals,
+            totalEvents,
+          }} />
+          <span className="text-xs font-inter text-muted-foreground bg-muted rounded-full px-3 py-1">
+            {unlockedCount}/{achievements.length}
+          </span>
+        </div>
       </div>
 
       {/* Winner Banner */}
