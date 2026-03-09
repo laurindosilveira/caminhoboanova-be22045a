@@ -987,6 +987,158 @@ export default function AttendanceTab({ participants, activities, communities, i
           </div>
         );
       })()}
+
+      {/* ─── PROMOÇÃO DE ANO ─── */}
+      <div className="mt-6 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <ArrowUpCircle className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-montserrat font-bold text-foreground text-sm">Promoção de Ano</h3>
+              <p className="text-muted-foreground text-[10px] font-inter">Promover alunos do 1º para o 2º ano</p>
+            </div>
+          </div>
+          <button
+            onClick={handleGeneratePromotions}
+            disabled={generatingPromotions}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-inter font-medium text-primary-foreground disabled:opacity-50"
+            style={{ background: "var(--gradient-hero)" }}
+          >
+            {generatingPromotions ? "Gerando..." : "Gerar promoções"}
+          </button>
+        </div>
+
+        {promotionRequests.length === 0 ? (
+          <div className="text-center py-6 bg-muted/30 rounded-2xl">
+            <p className="text-muted-foreground font-inter text-xs">Nenhuma promoção pendente.</p>
+            <p className="text-muted-foreground font-inter text-[10px] mt-1">Clique em "Gerar promoções" para verificar alunos do 1º ano elegíveis.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {promotionRequests.map(req => (
+              <div key={req.id} className="bg-card border border-border rounded-xl p-3 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <span className="text-sm font-bold">{req.from_year}→{req.to_year}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-montserrat font-bold text-foreground text-xs truncate">{req.full_name ?? "—"}</p>
+                  <p className="text-muted-foreground text-[10px] font-inter">{req.community ?? ""} · {new Date(req.requested_at).toLocaleDateString("pt-BR")}</p>
+                </div>
+                {req.status === "pendente" ? (
+                  <div className="flex gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => handlePromotionAction(req.id, req.user_id, "aprovado")}
+                      className="px-3 py-1.5 rounded-lg text-xs font-montserrat font-bold bg-brand-green/10 text-brand-green border border-brand-green/30 hover:bg-brand-green/20"
+                    >
+                      ✅ Aprovar
+                    </button>
+                    <button
+                      onClick={() => handlePromotionAction(req.id, req.user_id, "rejeitado")}
+                      className="px-3 py-1.5 rounded-lg text-xs font-montserrat font-bold bg-destructive/10 text-destructive border border-destructive/30 hover:bg-destructive/20"
+                    >
+                      ❌ Rejeitar
+                    </button>
+                  </div>
+                ) : (
+                  <span className={`px-2.5 py-1 rounded-lg text-[10px] font-inter font-semibold ${
+                    req.status === "aprovado" ? "bg-brand-green/10 text-brand-green" : "bg-destructive/10 text-destructive"
+                  }`}>
+                    {req.status === "aprovado" ? "✅ Aprovado" : "❌ Rejeitado"}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
+
+  async function fetchPromotionRequests() {
+    const { data } = await supabase
+      .from("year_promotion_requests")
+      .select("*")
+      .order("requested_at", { ascending: false })
+      .limit(50);
+    const enriched = (data ?? []).map((r: any) => {
+      const p = participants.find(p => p.user_id === r.user_id);
+      return { ...r, full_name: p?.full_name, community: p?.community };
+    });
+    setPromotionRequests(enriched);
+  }
+
+  async function handleGeneratePromotions() {
+    setGeneratingPromotions(true);
+    const currentYear = new Date().getFullYear();
+    const isEndOfYear = new Date().getMonth() >= 10; // November or December
+    
+    // Find all 1st year participants in this turma
+    const firstYearParticipants = participants.filter(p => (p as any).confirmation_year === 1);
+    
+    if (firstYearParticipants.length === 0) {
+      toast({ title: "Nenhum aluno elegível", description: "Não há alunos do 1º ano nesta turma." });
+      setGeneratingPromotions(false);
+      return;
+    }
+
+    if (!isEndOfYear) {
+      toast({ title: "Fora do período", description: "As promoções são geradas no final do ano (novembro/dezembro). Deseja continuar mesmo assim?" });
+    }
+
+    // Check for existing pending requests
+    const existingUserIds = promotionRequests.filter(r => r.status === "pendente").map(r => r.user_id);
+    const newParticipants = firstYearParticipants.filter(p => !existingUserIds.includes(p.user_id));
+
+    if (newParticipants.length === 0) {
+      toast({ title: "Já existem promoções pendentes", description: "Todos os alunos do 1º ano já têm solicitações pendentes." });
+      setGeneratingPromotions(false);
+      return;
+    }
+
+    const { data: user } = await supabase.auth.getUser();
+    const inserts = newParticipants.map(p => ({
+      user_id: p.user_id,
+      from_year: 1,
+      to_year: 2,
+      turma_id: (p as any).turma_id ?? null,
+      status: "pendente",
+    }));
+
+    const { error } = await supabase.from("year_promotion_requests").insert(inserts as any);
+    if (error) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: `📋 ${newParticipants.length} promoção(ões) gerada(s)`, description: "Revise e aprove cada uma." });
+      await fetchPromotionRequests();
+    }
+    setGeneratingPromotions(false);
+  }
+
+  async function handlePromotionAction(requestId: string, userId: string, action: "aprovado" | "rejeitado") {
+    const { data: user } = await supabase.auth.getUser();
+    const { error } = await supabase.from("year_promotion_requests").update({
+      status: action,
+      reviewed_by: user.user?.id,
+      reviewed_at: new Date().toISOString(),
+    } as any).eq("id", requestId);
+
+    if (error) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    if (action === "aprovado") {
+      // Update the user's confirmation_year to 2
+      await supabase.from("profiles").update({ confirmation_year: 2 } as any).eq("user_id", userId);
+      toast({ title: "✅ Promoção aprovada", description: "Aluno promovido para o 2º ano." });
+    } else {
+      toast({ title: "Promoção rejeitada" });
+    }
+
+    setPromotionRequests(prev =>
+      prev.map(r => r.id === requestId ? { ...r, status: action } : r)
+    );
+  }
 }
