@@ -110,6 +110,8 @@ export default function AttendanceTab({ participants, activities, communities, i
   // Year promotion state
   const [promotionRequests, setPromotionRequests] = useState<{ id: string; user_id: string; from_year: number; to_year: number; status: string; requested_at: string; full_name?: string; community?: string }[]>([]);
   const [generatingPromotions, setGeneratingPromotions] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resettingJourney, setResettingJourney] = useState(false);
 
   // Event creation (merged from AgendaTab)
   const [showEventForm, setShowEventForm] = useState(false);
