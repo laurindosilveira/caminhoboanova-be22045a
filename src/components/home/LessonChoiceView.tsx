@@ -204,21 +204,23 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
   async function handleCompleteDevotional(devotionalId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const now = new Date().toISOString();
+    const now = new Date();
+    const isWeekend = now.getDay() === 0 || now.getDay() === 6;
+    const pts = isWeekend ? 2 : 5;
     await supabase.from("devotional_progress").insert({
       user_id: user.id,
       devotional_id: devotionalId,
     });
     // Update local state and recompute statuses
     const newCompletedMap = new Map(completedDates);
-    newCompletedMap.set(devotionalId, now);
+    newCompletedMap.set(devotionalId, now.toISOString());
     setCompletedDates(newCompletedMap);
     setCompletedIds(prev => new Set([...prev, devotionalId]));
     const { statuses, lockedSet } = computeDevotionalStatuses(devotionals, newCompletedMap);
     setDevStatuses(statuses);
     setLockedIds(lockedSet);
-    toast.success("Devocional concluído! +5 pontos de fé ⭐", {
-      description: "Continue firme na sua caminhada!",
+    toast.success(`Devocional concluído! +${pts} pontos de fé ⭐`, {
+      description: isWeekend ? "Recuperação de fim de semana (2 pts)" : "Continue firme na sua caminhada!",
       duration: 3000,
     });
   }
