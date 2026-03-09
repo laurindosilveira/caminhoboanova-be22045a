@@ -132,14 +132,12 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
       .eq("turma_id", turma.id);
     
     const allProfiles = turmaProfiles ?? [];
-    const firstYearUsers = allProfiles.filter(p => (p as any).confirmation_year !== 2);
     const secondYearUsers = allProfiles.filter(p => (p as any).confirmation_year === 2);
 
-    if (firstYearUsers.length > 0 && secondYearUsers.length === 0) {
-      // All are 1st year — cannot archive
+    if (secondYearUsers.length === 0) {
       toast({ 
-        title: "Não é possível arquivar", 
-        description: `Todos os ${firstYearUsers.length} membros estão no 1º ano. Somente alunos do 2º ano são arquivados.`, 
+        title: "Nenhum aluno do 2º ano", 
+        description: "Não há alunos do 2º ano para confirmar nesta turma.", 
         variant: "destructive" 
       });
       setArchiving(null);
@@ -147,26 +145,79 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
       return;
     }
 
-    // Archive the turma
-    const { error } = await supabase.from("turmas").update({ is_active: false }).eq("id", turma.id);
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
-      // If there are 1st year users, remove them from this archived turma (they stay active without turma)
-      if (firstYearUsers.length > 0) {
-        await supabase.from("profiles").update({ turma_id: null } as any)
-          .in("user_id", firstYearUsers.map(p => p.user_id));
-        toast({ 
-          title: "📦 Grupo confirmado!", 
-          description: `"${turma.name}" arquivada. ${secondYearUsers.length} aluno(s) do 2º ano arquivados. ${firstYearUsers.length} aluno(s) do 1º ano permanecem ativos (sem turma).` 
-        });
-      } else {
-        toast({ title: "📦 Grupo confirmado!", description: `"${turma.name}" foi arquivada com sucesso.` });
-      }
-      fetchTurmas();
+    // Create an archived copy turma for the 2nd year students
+    const { data: user } = await supabase.auth.getUser();
+    const archiveName = `${turma.name} — CONFIRMADOS`;
+    const { data: newTurma, error: createError } = await supabase.from("turmas").insert({
+      name: archiveName,
+      area: turma.area,
+      year: turma.year,
+      description: `Grupo confirmado em ${new Date().toLocaleDateString("pt-BR")}. ${secondYearUsers.length} confirmando(s).`,
+      is_active: false,
+      created_by: user.user?.id,
+    }).select("id").single();
+
+    if (createError || !newTurma) {
+      toast({ title: "Erro ao criar arquivo", description: createError?.message ?? "Erro desconhecido", variant: "destructive" });
+      setArchiving(null);
+      setConfirmArchive(null);
+      return;
     }
+
+    // Move 2nd year users to the archived turma
+    await supabase.from("profiles").update({ turma_id: newTurma.id } as any)
+      .in("user_id", secondYearUsers.map(p => p.user_id));
+
+    // 1st year users stay in the original turma (unchanged)
+    const firstYearCount = allProfiles.length - secondYearUsers.length;
+
+    toast({ 
+      title: "📦 Grupo confirmado!", 
+      description: `"${archiveName}" criado com ${secondYearUsers.length} confirmando(s). ${firstYearCount} aluno(s) do 1º ano permanecem na turma "${turma.name}".`
+    });
+    
+    fetchTurmas();
     setArchiving(null);
     setConfirmArchive(null);
+  }
+
+  async function handleResetJourney(turma: Turma) {
+    setResetting(true);
+    
+    // Get all user IDs in this turma
+    const { data: turmaProfiles } = await supabase
+      .from("profiles")
+      .select("user_id")
+      .eq("turma_id", turma.id);
+    
+    const userIds = (turmaProfiles ?? []).map(p => p.user_id);
+    
+    if (userIds.length === 0) {
+      toast({ title: "Nenhum membro", description: "Esta turma não possui membros.", variant: "destructive" });
+      setResetting(false);
+      setConfirmReset(null);
+      return;
+    }
+
+    // Delete all progress, lesson responses, devotional progress, achievement unlocks for these users
+    await Promise.all([
+      supabase.from("user_progress").delete().in("user_id", userIds),
+      supabase.from("lesson_responses").delete().in("user_id", userIds),
+      supabase.from("devotional_progress").delete().in("user_id", userIds),
+      supabase.from("achievement_unlocks").delete().in("user_id", userIds),
+    ]);
+
+    // Close ranking seasons for the communities involved
+    const { data: profiles } = await supabase.from("profiles").select("community").in("user_id", userIds);
+    const communities = [...new Set((profiles ?? []).map(p => p.community))];
+    
+    toast({ 
+      title: "🔄 Jornada reiniciada!", 
+      description: `Progresso de ${userIds.length} aluno(s) da turma "${turma.name}" foi zerado.` 
+    });
+    
+    setResetting(false);
+    setConfirmReset(null);
   }
 
   async function handleReactivate(turma: Turma) {
