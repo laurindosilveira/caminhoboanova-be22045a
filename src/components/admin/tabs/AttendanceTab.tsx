@@ -1234,6 +1234,8 @@ export default function AttendanceTab({ participants, activities, communities, i
       supabase.from("lesson_responses").delete().in("user_id", userIds),
       supabase.from("devotional_progress").delete().in("user_id", userIds),
       supabase.from("achievement_unlocks").delete().in("user_id", userIds),
+      supabase.from("attendance").delete().in("user_id", userIds),
+      supabase.from("worship_attendance").delete().in("user_id", userIds),
     ]);
 
     toast({ 
