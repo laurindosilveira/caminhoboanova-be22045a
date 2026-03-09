@@ -940,6 +940,7 @@ export type Database = {
           avatar_url: string | null
           birth_date: string
           community: Database["public"]["Enums"]["community_name"]
+          confirmation_year: number | null
           created_at: string
           father_name: string | null
           father_phone: string | null
@@ -958,6 +959,7 @@ export type Database = {
           avatar_url?: string | null
           birth_date: string
           community: Database["public"]["Enums"]["community_name"]
+          confirmation_year?: number | null
           created_at?: string
           father_name?: string | null
           father_phone?: string | null
@@ -976,6 +978,7 @@ export type Database = {
           avatar_url?: string | null
           birth_date?: string
           community?: Database["public"]["Enums"]["community_name"]
+          confirmation_year?: number | null
           created_at?: string
           father_name?: string | null
           father_phone?: string | null
@@ -1262,6 +1265,50 @@ export type Database = {
           worship_time?: string
         }
         Relationships: []
+      }
+      year_promotion_requests: {
+        Row: {
+          from_year: number
+          id: string
+          requested_at: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          to_year: number
+          turma_id: string | null
+          user_id: string
+        }
+        Insert: {
+          from_year?: number
+          id?: string
+          requested_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          to_year?: number
+          turma_id?: string | null
+          user_id: string
+        }
+        Update: {
+          from_year?: number
+          id?: string
+          requested_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          to_year?: number
+          turma_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "year_promotion_requests_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

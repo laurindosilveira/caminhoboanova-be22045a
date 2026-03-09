@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Pencil, Save, X, User, Phone, Calendar, MapPin, ChevronDown, Home, Users, Camera } from "lucide-react";
+import { Pencil, Save, X, User, Phone, Calendar, MapPin, ChevronDown, Home, Users, Camera, GraduationCap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -17,6 +17,12 @@ const COMMUNITIES = [
   "Iriá Pira 2",
 ] as const;
 
+const CONFIRMATION_YEARS = [
+  { value: "", label: "Não definido" },
+  { value: "1", label: "1º Ano" },
+  { value: "2", label: "2º Ano" },
+];
+
 const profileSchema = z.object({
   full_name: z.string().trim().min(3, "Nome deve ter ao menos 3 caracteres").max(100),
   phone: z.string().trim().min(8, "Telefone inválido").max(20),
@@ -27,6 +33,7 @@ const profileSchema = z.object({
   father_phone: z.string().max(20).optional(),
   mother_phone: z.string().max(20).optional(),
   address: z.string().max(200).optional(),
+  confirmation_year: z.string().optional(),
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
@@ -56,6 +63,7 @@ export default function EditProfileForm() {
       father_phone: profile?.father_phone ?? "",
       mother_phone: profile?.mother_phone ?? "",
       address: profile?.address ?? "",
+      confirmation_year: profile?.confirmation_year ? String(profile.confirmation_year) : "",
     },
   });
 
@@ -70,6 +78,7 @@ export default function EditProfileForm() {
       father_phone: profile?.father_phone ?? "",
       mother_phone: profile?.mother_phone ?? "",
       address: profile?.address ?? "",
+      confirmation_year: profile?.confirmation_year ? String(profile.confirmation_year) : "",
     });
     setIsEditing(false);
   }
@@ -133,7 +142,8 @@ export default function EditProfileForm() {
             father_phone: values.father_phone ?? "",
             mother_phone: values.mother_phone ?? "",
             address: values.address ?? "",
-          },
+            confirmation_year: values.confirmation_year ? parseInt(values.confirmation_year) : null,
+          } as any,
           { onConflict: "user_id" }
         );
 
@@ -217,6 +227,7 @@ export default function EditProfileForm() {
             <InfoRow icon={<MapPin className="w-4 h-4 text-muted-foreground" />} label="Comunidade" value={profile?.community ?? "—"} />
             <InfoRow icon={<MapPin className="w-4 h-4 text-muted-foreground" />} label="Área" value={profile?.area ?? "—"} />
             <InfoRow icon={<Home className="w-4 h-4 text-muted-foreground" />} label="Endereço" value={profile?.address || "—"} />
+            <InfoRow icon={<GraduationCap className="w-4 h-4 text-muted-foreground" />} label="Ano do Ensino Confirmatório" value={profile?.confirmation_year ? `${profile.confirmation_year}º Ano` : "Não definido"} />
             <InfoRow icon={<Users className="w-4 h-4 text-muted-foreground" />} label="Nome do pai" value={profile?.father_name || "—"} />
             <InfoRow icon={<Phone className="w-4 h-4 text-muted-foreground" />} label="Contato do pai" value={profile?.father_phone || "—"} />
             <InfoRow icon={<Users className="w-4 h-4 text-muted-foreground" />} label="Nome da mãe" value={profile?.mother_name || "—"} />
@@ -308,6 +319,22 @@ export default function EditProfileForm() {
               placeholder="Rua, nº, bairro, cidade"
               className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
+          </div>
+
+          {/* Ano do Ensino Confirmatório */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-inter font-medium text-muted-foreground">Ano do Ensino Confirmatório</label>
+            <div className="relative">
+              <select
+                {...register("confirmation_year")}
+                className="w-full h-10 rounded-xl border border-input bg-background px-3 pr-8 text-sm text-foreground appearance-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {CONFIRMATION_YEARS.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            </div>
           </div>
 
           {/* Nome do Pai */}

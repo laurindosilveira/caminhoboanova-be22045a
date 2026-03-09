@@ -122,11 +122,45 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
 
   async function handleArchive(turma: Turma) {
     setArchiving(turma.id);
+    
+    // Fetch profiles in this turma with their confirmation_year
+    const { data: turmaProfiles } = await supabase
+      .from("profiles")
+      .select("user_id, confirmation_year")
+      .eq("turma_id", turma.id);
+    
+    const allProfiles = turmaProfiles ?? [];
+    const firstYearUsers = allProfiles.filter(p => (p as any).confirmation_year !== 2);
+    const secondYearUsers = allProfiles.filter(p => (p as any).confirmation_year === 2);
+
+    if (firstYearUsers.length > 0 && secondYearUsers.length === 0) {
+      // All are 1st year — cannot archive
+      toast({ 
+        title: "Não é possível arquivar", 
+        description: `Todos os ${firstYearUsers.length} membros estão no 1º ano. Somente alunos do 2º ano são arquivados.`, 
+        variant: "destructive" 
+      });
+      setArchiving(null);
+      setConfirmArchive(null);
+      return;
+    }
+
+    // Archive the turma
     const { error } = await supabase.from("turmas").update({ is_active: false }).eq("id", turma.id);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "📦 Grupo confirmado!", description: `"${turma.name}" foi arquivada com sucesso.` });
+      // If there are 1st year users, remove them from this archived turma (they stay active without turma)
+      if (firstYearUsers.length > 0) {
+        await supabase.from("profiles").update({ turma_id: null } as any)
+          .in("user_id", firstYearUsers.map(p => p.user_id));
+        toast({ 
+          title: "📦 Grupo confirmado!", 
+          description: `"${turma.name}" arquivada. ${secondYearUsers.length} aluno(s) do 2º ano arquivados. ${firstYearUsers.length} aluno(s) do 1º ano permanecem ativos (sem turma).` 
+        });
+      } else {
+        toast({ title: "📦 Grupo confirmado!", description: `"${turma.name}" foi arquivada com sucesso.` });
+      }
       fetchTurmas();
     }
     setArchiving(null);
