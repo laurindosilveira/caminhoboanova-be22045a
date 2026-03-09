@@ -344,7 +344,13 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
                       {dev.title || `Dia ${dev.day_number}`}
                     </p>
                     <p className="text-muted-foreground font-inter text-[10px] truncate">
-                      {locked ? "🔒 Bloqueado — dia perdido" : future ? "🔜 Disponível no próximo dia útil" : done ? "✅ Concluído" : dev.bible_reference ? `✝️ ${dev.bible_reference}` : "📖 Disponível hoje"}
+                      {locked ? "🔒 Bloqueado — dia perdido" : future ? (() => {
+                        const sched = scheduledDateMap.get(dev.id);
+                        return sched ? `🔜 ${weekdayNames[sched.getDay()]}-feira, ${sched.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}` : "🔜 Disponível no próximo dia útil";
+                      })() : done ? "✅ Concluído" : (() => {
+                        const sched = scheduledDateMap.get(dev.id);
+                        return sched ? `📖 Disponível hoje (${weekdayNames[sched.getDay()]})` : "📖 Disponível hoje";
+                      })()}
                     </p>
                   </div>
                   {!isDisabled && <span className="text-muted-foreground text-xs">→</span>}
