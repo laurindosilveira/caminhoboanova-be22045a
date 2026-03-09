@@ -834,6 +834,19 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
             </div>
           </div>
 
+          {/* Waiting message when no events are scheduled */}
+          {!agendaSchedule.loading && !agendaSchedule.hasScheduledEvents && (
+            <div className="bg-accent/10 rounded-2xl p-4 border border-accent/20 flex items-start gap-3">
+              <CalendarDays className="w-5 h-5 text-accent-foreground flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-montserrat font-bold text-foreground text-sm">Aguardando programação</p>
+                <p className="text-muted-foreground font-inter text-xs mt-0.5">
+                  Seu líder ainda não agendou os próximos estudos. Os devocionais e lições serão liberados conforme a agenda. 📅
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Course accordion */}
           {courses.map((course) => {
             const isOpen = expandedCourse === course.id;
