@@ -718,6 +718,19 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
           </div>
         )}
       </div>
+
+      {/* Audit log button */}
+      <div className="mt-4">
+        <button
+          onClick={() => setShowAuditLog(!showAuditLog)}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-border text-muted-foreground font-inter text-xs font-medium hover:bg-muted/50 transition-colors"
+        >
+          <History className="w-4 h-4" />
+          {showAuditLog ? "Ocultar" : "Ver"} histórico de remoções
+        </button>
+
+        {showAuditLog && <AuditLogSection targetUserId={p.user_id} userName={p.full_name} />}
+      </div>
     </div>
   );
 }
