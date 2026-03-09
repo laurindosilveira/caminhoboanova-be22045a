@@ -321,6 +321,22 @@ export default function EditProfileForm() {
             />
           </div>
 
+          {/* Ano do Ensino Confirmatório */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-inter font-medium text-muted-foreground">Ano do Ensino Confirmatório</label>
+            <div className="relative">
+              <select
+                {...register("confirmation_year")}
+                className="w-full h-10 rounded-xl border border-input bg-background px-3 pr-8 text-sm text-foreground appearance-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {CONFIRMATION_YEARS.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            </div>
+          </div>
+
           {/* Nome do Pai */}
           <div className="space-y-1.5">
             <label className="text-xs font-inter font-medium text-muted-foreground">Nome do pai</label>
