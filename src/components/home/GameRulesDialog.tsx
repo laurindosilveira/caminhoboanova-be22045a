@@ -8,6 +8,7 @@ interface PointsBreakdown {
   worshipCount: number;
   activityPoints: number;
   achievementBonus: number;
+  devotionalPoints?: number;
   // Potential (max possible)
   totalLessons: number;
   totalDevotionals: number;
