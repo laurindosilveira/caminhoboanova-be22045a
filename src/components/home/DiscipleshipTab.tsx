@@ -911,16 +911,40 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
                       course.lessons.map((lesson, lessonIndex) => {
                         const isDone = completedLessonIds.has(lesson.id);
                         const isFullyDone = fullyCompletedLessonIds.has(lesson.id);
-                        // First lesson is always unlocked; subsequent ones require previous to be fully completed
-                        const prevLesson = lessonIndex > 0 ? course.lessons[lessonIndex - 1] : null;
-                        const isLocked = prevLesson ? !fullyCompletedLessonIds.has(prevLesson.id) : false;
+                        
+                        // Schedule-based locking: lesson must be in schedule and window must be open
+                        const isScheduled = agendaSchedule.scheduledLessonIds.has(lesson.id);
+                        const isReleased = agendaSchedule.releasedLessonIds.has(lesson.id);
+                        const eventDate = agendaSchedule.lessonEventDate.get(lesson.id);
+                        const isPastEvent = eventDate ? eventDate < new Date() : false;
+                        
+                        // A lesson is accessible if: released (window open) OR event already passed OR fully completed
+                        const isAccessible = isReleased || isPastEvent || isFullyDone;
+                        // Locked if: has scheduled events but this lesson isn't accessible
+                        const isLocked = agendaSchedule.hasScheduledEvents && !isAccessible && !isFullyDone;
+                        // Not yet scheduled
+                        const isNotScheduled = agendaSchedule.hasScheduledEvents && !isScheduled && !isFullyDone;
+                        
+                        let lockMessage = "";
+                        if (isNotScheduled) {
+                          lockMessage = "📅 Aguardando agendamento";
+                        } else if (isLocked && !isReleased) {
+                          const entry = agendaSchedule.schedule.find(e => e.lessonId === lesson.id);
+                          if (entry) {
+                            lockMessage = `🔜 Liberada em ${entry.windowStart.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
+                          } else {
+                            lockMessage = "🔒 Ainda não liberada";
+                          }
+                        }
+
                         return (
                           <button
                             key={lesson.id}
                             onClick={() => {
-                              if (isLocked) {
-                                toast.info("🔒 Complete todas as tarefas da lição anterior primeiro!", {
-                                  description: "Termine o estudo e todos os devocionais para desbloquear.",
+                              if (isLocked || isNotScheduled) {
+                                toast.info(isNotScheduled
+                                  ? "📅 Esta lição ainda não foi agendada pelo seu líder."
+                                  : "🔒 Esta lição ainda não foi liberada. Aguarde a data da agenda!", {
                                   duration: 3000,
                                 });
                                 return;
@@ -929,36 +953,36 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
                               setSelectedLessonMode("choice");
                             }}
                             className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border last:border-b-0 transition-colors ${
-                              isLocked ? "opacity-50 cursor-not-allowed" : "hover:bg-primary/5"
+                              (isLocked || isNotScheduled) ? "opacity-50 cursor-not-allowed" : "hover:bg-primary/5"
                             } ${isFullyDone ? "bg-brand-green/5" : isDone ? "bg-secondary/5" : ""}`}
                           >
                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                              isFullyDone ? "bg-brand-green/15" : isLocked ? "bg-muted" : "bg-secondary/10"
+                              isFullyDone ? "bg-brand-green/15" : (isLocked || isNotScheduled) ? "bg-muted" : "bg-secondary/10"
                             }`}>
                               {isFullyDone
                                 ? <CheckCircle2 className="w-4 h-4 text-brand-green" />
-                                : isLocked
+                                : (isLocked || isNotScheduled)
                                 ? <Lock className="w-3.5 h-3.5 text-muted-foreground" />
                                 : <span className="font-montserrat font-bold text-secondary text-xs">{lesson.order_num}</span>
                               }
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className={`font-inter text-sm ${isFullyDone ? "text-brand-green font-medium" : isLocked ? "text-muted-foreground" : "text-foreground"}`}>{lesson.title}</p>
+                              <p className={`font-inter text-sm ${isFullyDone ? "text-brand-green font-medium" : (isLocked || isNotScheduled) ? "text-muted-foreground" : "text-foreground"}`}>{lesson.title}</p>
                               {lesson.objective && (
                                 <p className="font-inter text-[10px] text-muted-foreground truncate mt-0.5">{lesson.objective}</p>
                               )}
-                              {isLocked && (
-                                <p className="font-inter text-[10px] text-muted-foreground mt-0.5">🔒 Complete a lição anterior</p>
+                              {lockMessage && (
+                                <p className="font-inter text-[10px] text-muted-foreground mt-0.5">{lockMessage}</p>
                               )}
-                              {isDone && !isFullyDone && !isLocked && (
+                              {isDone && !isFullyDone && !(isLocked || isNotScheduled) && (
                                 <p className="font-inter text-[10px] text-secondary mt-0.5">⏳ Faltam devocionais ou estudo</p>
                               )}
                             </div>
                             {isFullyDone
                               ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-brand-green/15 text-brand-green px-2 py-0.5 rounded-full">✓ Completa</span>
-                              : isDone && !isLocked
+                              : isDone && !(isLocked || isNotScheduled)
                               ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-secondary/15 text-secondary px-2 py-0.5 rounded-full">Em andamento</span>
-                              : isLocked
+                              : (isLocked || isNotScheduled)
                               ? <Lock className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                               : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                             }
