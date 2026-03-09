@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import JourneyLessonView from "@/components/home/JourneyLessonView";
 import LessonChoiceView from "@/components/home/LessonChoiceView";
+import { useAgendaSchedule } from "@/hooks/useAgendaSchedule";
 
 import { toast } from "sonner";
 
