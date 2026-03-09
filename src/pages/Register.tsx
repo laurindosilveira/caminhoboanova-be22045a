@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Eye, EyeOff, Mail, Lock, User, Phone, Calendar, ChevronLeft, ChevronDown, MessageCircle } from "lucide-react";
+import {
+  Eye, EyeOff, Mail, Lock, User, Phone, Calendar,
+  ChevronLeft, ChevronDown, MessageCircle, Camera, Users
+} from "lucide-react";
 import { z } from "zod";
 
 const COMMUNITIES = [
@@ -25,14 +28,20 @@ const registerSchema = z.object({
   fullName: z.string().trim().min(3, "Nome deve ter pelo menos 3 caracteres").max(100),
   birthDate: z.string().min(1, "Data de nascimento é obrigatória"),
   phone: z.string().trim().min(8, "Telefone inválido").max(20),
+  fatherName: z.string().trim().max(100).optional(),
+  motherName: z.string().trim().max(100).optional(),
+  fatherPhone: z.string().trim().max(20).optional(),
+  motherPhone: z.string().trim().max(20).optional(),
   email: z.string().trim().email("Email inválido").max(255),
   password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres").max(128),
   community: z.enum(COMMUNITIES, { required_error: "Selecione sua comunidade" }),
 });
 
+const inputClass = "w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all";
+
 export default function Register() {
   const navigate = useNavigate();
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,11 +49,30 @@ export default function Register() {
   const [fullName, setFullName] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [phone, setPhone] = useState("");
+  const [fatherName, setFatherName] = useState("");
+  const [motherName, setMotherName] = useState("");
+  const [fatherPhone, setFatherPhone] = useState("");
+  const [motherPhone, setMotherPhone] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [community, setCommunity] = useState<Community | "">("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  function handleNextStep(e: React.FormEvent) {
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setError("A foto deve ter no máximo 5MB.");
+      return;
+    }
+    setPhoto(file);
+    setPhotoPreview(URL.createObjectURL(file));
+    setError(null);
+  }
+
+  function handleStep1(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (!fullName.trim() || fullName.trim().length < 3) {
@@ -62,6 +90,13 @@ export default function Register() {
     setStep(2);
   }
 
+  function handleStep2(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    // Parent fields and photo are optional, just proceed
+    setStep(3);
+  }
+
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -71,7 +106,10 @@ export default function Register() {
       return;
     }
 
-    const parsed = registerSchema.safeParse({ fullName, birthDate, phone, email, password, community });
+    const parsed = registerSchema.safeParse({
+      fullName, birthDate, phone, fatherName, motherName,
+      fatherPhone, motherPhone, email, password, community,
+    });
     if (!parsed.success) {
       setError(parsed.error.errors[0].message);
       return;
@@ -80,10 +118,7 @@ export default function Register() {
     setLoading(true);
     const area = getCommunityArea(community as Community);
 
-    // Pass all profile data as user metadata.
-    // A database trigger (handle_new_user) reads this metadata and
-    // auto-creates the profile row — bypassing RLS, no session needed.
-    const { error: authError } = await supabase.auth.signUp({
+    const { data: authData, error: authError } = await supabase.auth.signUp({
       email: parsed.data.email,
       password: parsed.data.password,
       options: {
@@ -94,6 +129,10 @@ export default function Register() {
           phone: parsed.data.phone,
           community: parsed.data.community,
           area: area,
+          father_name: parsed.data.fatherName || "",
+          mother_name: parsed.data.motherName || "",
+          father_phone: parsed.data.fatherPhone || "",
+          mother_phone: parsed.data.motherPhone || "",
         },
       },
     });
@@ -104,16 +143,35 @@ export default function Register() {
       return;
     }
 
+    // Upload photo if provided
+    if (photo && authData.user) {
+      const ext = photo.name.split(".").pop() || "jpg";
+      const path = `${authData.user.id}/avatar.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, photo, { upsert: true });
+
+      if (!uploadError) {
+        const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
+        // Update profile with avatar URL
+        await supabase.from("profiles").update({ avatar_url: urlData.publicUrl }).eq("user_id", authData.user.id);
+      }
+    }
+
+    setLoading(false);
     navigate("/login?cadastro=sucesso");
   }
+
+  const totalSteps = 3;
+  const stepTitles = ["Seus dados", "Família e foto", "Acesso e comunidade"];
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--gradient-hero)" }}>
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
         {/* Header */}
         <div className="w-full max-w-sm mb-6 flex items-center gap-3">
-          {step === 2 ? (
-            <button onClick={() => setStep(1)} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
+          {step > 1 ? (
+            <button onClick={() => setStep((step - 1) as 1 | 2 | 3)} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
               <ChevronLeft className="w-5 h-5 text-primary-foreground" />
             </button>
           ) : (
@@ -123,62 +181,98 @@ export default function Register() {
           )}
           <div>
             <h1 className="font-montserrat font-black text-primary-foreground text-xl">
-              {step === 1 ? "Seus dados" : "Acesso e comunidade"}
+              {stepTitles[step - 1]}
             </h1>
-            <p className="text-primary-foreground/60 font-inter text-xs">Passo {step} de 2</p>
+            <p className="text-primary-foreground/60 font-inter text-xs">Passo {step} de {totalSteps}</p>
           </div>
-          {/* Step indicator */}
           <div className="ml-auto flex gap-1.5">
-            <div className={`h-2 rounded-full transition-all ${step === 1 ? "w-6 bg-secondary" : "w-3 bg-white/30"}`} />
-            <div className={`h-2 rounded-full transition-all ${step === 2 ? "w-6 bg-secondary" : "w-3 bg-white/30"}`} />
+            {[1, 2, 3].map((s) => (
+              <div key={s} className={`h-2 rounded-full transition-all ${step === s ? "w-6 bg-secondary" : "w-3 bg-white/30"}`} />
+            ))}
           </div>
         </div>
 
         {/* Card */}
         <div className="w-full max-w-sm bg-card rounded-3xl shadow-2xl p-7">
-          {step === 1 ? (
-            <form onSubmit={handleNextStep} className="space-y-4">
+          {step === 1 && (
+            <form onSubmit={handleStep1} className="space-y-4">
               <div>
                 <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Nome completo</label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Seu nome completo"
-                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all"
-                    required
-                  />
+                  <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Seu nome completo" className={inputClass} required />
                 </div>
               </div>
-
               <div>
                 <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Data de nascimento</label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="date"
-                    value={birthDate}
-                    onChange={(e) => setBirthDate(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all"
-                    required
-                  />
+                  <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className={inputClass} required />
                 </div>
               </div>
-
               <div>
                 <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Telefone / WhatsApp</label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="(51) 9 9999-9999"
-                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all"
-                    required
-                  />
+                  <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(51) 9 9999-9999" className={inputClass} required />
+                </div>
+              </div>
+              {error && (
+                <div className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3">
+                  <p className="text-destructive font-inter text-sm">{error}</p>
+                </div>
+              )}
+              <button type="submit" className="w-full py-3.5 rounded-xl font-montserrat font-bold text-primary-foreground text-base transition-all active:scale-95 shadow-md" style={{ background: "var(--gradient-orange)" }}>
+                Continuar →
+              </button>
+            </form>
+          )}
+
+          {step === 2 && (
+            <form onSubmit={handleStep2} className="space-y-4">
+              {/* Photo upload */}
+              <div className="flex flex-col items-center gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="relative w-24 h-24 rounded-full border-2 border-dashed border-border bg-muted flex items-center justify-center overflow-hidden hover:border-secondary transition-colors"
+                >
+                  {photoPreview ? (
+                    <img src={photoPreview} alt="Foto" className="w-full h-full object-cover" />
+                  ) : (
+                    <Camera className="w-8 h-8 text-muted-foreground" />
+                  )}
+                </button>
+                <span className="text-xs text-muted-foreground font-inter">Sua foto (opcional)</span>
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Nome do pai</label>
+                <div className="relative">
+                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input type="text" value={fatherName} onChange={(e) => setFatherName(e.target.value)} placeholder="Nome completo do pai" className={inputClass} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Telefone do pai</label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input type="tel" value={fatherPhone} onChange={(e) => setFatherPhone(e.target.value)} placeholder="(51) 9 9999-9999" className={inputClass} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Nome da mãe</label>
+                <div className="relative">
+                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input type="text" value={motherName} onChange={(e) => setMotherName(e.target.value)} placeholder="Nome completo da mãe" className={inputClass} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Telefone da mãe</label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input type="tel" value={motherPhone} onChange={(e) => setMotherPhone(e.target.value)} placeholder="(51) 9 9999-9999" className={inputClass} />
                 </div>
               </div>
 
@@ -187,33 +281,21 @@ export default function Register() {
                   <p className="text-destructive font-inter text-sm">{error}</p>
                 </div>
               )}
-
-              <button
-                type="submit"
-                className="w-full py-3.5 rounded-xl font-montserrat font-bold text-primary-foreground text-base transition-all active:scale-95 shadow-md"
-                style={{ background: "var(--gradient-orange)" }}
-              >
+              <button type="submit" className="w-full py-3.5 rounded-xl font-montserrat font-bold text-primary-foreground text-base transition-all active:scale-95 shadow-md" style={{ background: "var(--gradient-orange)" }}>
                 Continuar →
               </button>
             </form>
-          ) : (
+          )}
+
+          {step === 3 && (
             <form onSubmit={handleRegister} className="space-y-4">
               <div>
                 <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Email</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="seu@email.com"
-                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all"
-                    autoComplete="email"
-                    required
-                  />
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="seu@email.com" className={inputClass} autoComplete="email" required />
                 </div>
               </div>
-
               <div>
                 <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Senha</label>
                 <div className="relative">
@@ -227,16 +309,11 @@ export default function Register() {
                     autoComplete="new-password"
                     required
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  >
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
-
               <div>
                 <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Sua comunidade</label>
                 <div className="relative">
@@ -262,13 +339,11 @@ export default function Register() {
                   </div>
                 )}
               </div>
-
               {error && (
                 <div className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3">
                   <p className="text-destructive font-inter text-sm">{error}</p>
                 </div>
               )}
-
               <button
                 type="submit"
                 disabled={loading}
@@ -283,12 +358,11 @@ export default function Register() {
           <div className="mt-5 text-center">
             <p className="text-muted-foreground font-inter text-sm">
               Já tem conta?{" "}
-              <Link to="/login" className="text-secondary font-bold hover:underline">
-                Entrar
-              </Link>
+              <Link to="/login" className="text-secondary font-bold hover:underline">Entrar</Link>
             </p>
           </div>
         </div>
+
         {/* WhatsApp help */}
         <a
           href="https://wa.me/5555984395290?text=Oi!%20Estou%20tentando%20usar%20o%20app%20do%20Ensino%20Confirmat%C3%B3rio%20e%20estou%20tendo%20dificuldade.%20Pode%20me%20ajudar%3F"
@@ -297,9 +371,7 @@ export default function Register() {
           className="mt-4 flex items-center gap-2 bg-[#25D366]/15 hover:bg-[#25D366]/25 rounded-2xl px-5 py-3 backdrop-blur transition-colors"
         >
           <MessageCircle className="w-5 h-5 text-[#25D366]" />
-          <span className="text-primary-foreground font-inter text-sm font-medium">
-            Precisa de ajuda? Fale conosco
-          </span>
+          <span className="text-primary-foreground font-inter text-sm font-medium">Precisa de ajuda? Fale conosco</span>
         </a>
       </div>
     </div>
