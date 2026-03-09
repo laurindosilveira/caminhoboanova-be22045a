@@ -413,6 +413,8 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
         lesson={selectedLesson}
         onBack={() => { setSelectedLesson(null); setSelectedLessonMode("choice"); }}
         onOpenStudy={() => setSelectedLessonMode("study")}
+        scheduledDevotionalDates={agendaSchedule.lessonDevotionalDates.get(selectedLesson.id)}
+        eventDate={agendaSchedule.lessonEventDate.get(selectedLesson.id) ?? undefined}
       />
     );
   }
