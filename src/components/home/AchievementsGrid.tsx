@@ -188,6 +188,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     { id: 14, key: "chat_5", icon: "🎤", title: "Compartilhou testemunho", desc: "5 mensagens no chat", unlocked: chatCount >= 5, current: chatCount, target: 5, bonusPoints: 10 },
     { id: 15, key: "prayer_3", icon: "🙏", title: "Intercessor", desc: "3 pedidos de oração", unlocked: prayerCount >= 3, current: prayerCount, target: 3, bonusPoints: 10 },
     { id: 16, key: "chat_20", icon: "💬", title: "Voz ativa", desc: "20 mensagens no chat", unlocked: chatCount >= 20, current: chatCount, target: 20, bonusPoints: 10 },
+    { id: 18, key: "biweekly_streak", icon: "🏅", title: "Quinzena perfeita", desc: "Completou estudo, devocionais e presença nos últimos 15 dias!", unlocked: biweeklyStreakDone, current: biweeklyStreakDone ? 1 : 0, target: 1, bonusPoints: 30 },
     { id: 7, key: "streak_14", icon: "🛡️", title: "Guardião da Fé", desc: "14 dias seguidos de dedicação!", unlocked: streakDays >= 14, current: streakDays, target: 14, secret: true, bonusPoints: 25 },
     { id: 8, key: "streak_30", icon: "👁️‍🗨️", title: "Constância Invisível", desc: "30 dias seguidos — lendário!", unlocked: streakDays >= 30, current: streakDays, target: 30, secret: true, bonusPoints: 25 },
     { id: 17, key: "apto", icon: "✝️", title: "Pronto para a Profissão de Fé", desc: "Seu pastor confirmou: você está pronto!", unlocked: isApto, current: isApto ? 1 : 0, target: 1, secret: true, bonusPoints: 50 },
