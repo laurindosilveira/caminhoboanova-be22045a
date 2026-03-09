@@ -80,6 +80,72 @@ function calcAge(birthDate: string) {
   return age;
 }
 
+// ─── Audit Log Section ───────────────────────────────────
+function AuditLogSection({ targetUserId, userName }: { targetUserId: string; userName: string }) {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [profiles, setProfiles] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetch() {
+      setLoading(true);
+      const { data } = await supabase
+        .from("activity_removal_log" as any)
+        .select("*")
+        .eq("target_user_id", targetUserId)
+        .order("removed_at", { ascending: false }) as any;
+      const items = data ?? [];
+      setLogs(items);
+
+      // Fetch admin names
+      const adminIds = [...new Set(items.map((l: any) => l.removed_by))];
+      if (adminIds.length > 0) {
+        const { data: profs } = await supabase.from("profiles").select("user_id, full_name").in("user_id", adminIds);
+        const map: Record<string, string> = {};
+        (profs ?? []).forEach((p: any) => { map[p.user_id] = p.full_name; });
+        setProfiles(map);
+      }
+      setLoading(false);
+    }
+    fetch();
+  }, [targetUserId]);
+
+  const typeEmoji: Record<string, string> = { estudo: "🎓", devocional: "📖", presenca: "📅" };
+
+  if (loading) return <p className="text-center text-muted-foreground font-inter text-xs py-4 animate-pulse">Carregando log...</p>;
+
+  if (logs.length === 0) return (
+    <div className="text-center py-6 mt-3">
+      <History className="w-6 h-6 text-muted-foreground mx-auto mb-2 opacity-40" />
+      <p className="font-inter text-xs text-muted-foreground">Nenhuma remoção registrada para {userName}.</p>
+    </div>
+  );
+
+  return (
+    <div className="mt-3 bg-card rounded-2xl border border-border p-4 space-y-2">
+      <p className="font-montserrat font-bold text-foreground text-sm mb-2">📋 Log de remoções</p>
+      {logs.map((log: any) => (
+        <div key={log.id} className="bg-muted/30 rounded-xl p-3 border border-border">
+          <div className="flex items-start gap-2">
+            <span className="text-base">{typeEmoji[log.activity_type] ?? "🗑️"}</span>
+            <div className="flex-1 min-w-0">
+              <p className="font-inter text-xs text-foreground font-medium truncate">
+                {log.activity_title || log.activity_type}
+              </p>
+              <p className="font-inter text-[10px] text-muted-foreground">
+                Removido por <strong>{profiles[log.removed_by] ?? "Admin"}</strong> · -{log.points_removed}pts
+              </p>
+              <p className="font-inter text-[10px] text-muted-foreground">
+                {new Date(log.removed_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+              </p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── ParticipantDetail (rebuilt with REAL data) ──────────
 type DetailProps = { participant: Participant; activities: Activity[]; onBack: () => void };
 
