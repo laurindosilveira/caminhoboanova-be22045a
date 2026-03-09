@@ -5,6 +5,7 @@ import { ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 import HeroHeader from "@/components/home/HeroHeader";
+import NextCourseActivityCard from "@/components/home/NextCourseActivityCard";
 import MissionCard from "@/components/home/MissionCard";
 import JourneyPath from "@/components/home/JourneyPath";
 import AchievementsGrid from "@/components/home/AchievementsGrid";
@@ -108,13 +109,8 @@ export default function Index() {
             {/* Próximo encontro */}
             <NextMeetingCard onNavigateToAgenda={() => setActiveTab("agenda")} />
 
-            {/* Próxima atividade — oculto para evitar confusão com devocionais dos cursos */}
-            {/* <MissionCard
-              nextActivity={stats.nextActivity}
-              completedCount={stats.completedCount}
-              totalActivities={stats.totalActivities}
-              onComplete={handleCompleteActivity}
-            /> */}
+            {/* Próxima etapa do curso ativo */}
+            <NextCourseActivityCard onNavigateToDiscipulado={() => setActiveTab("discipulado")} />
 
             {/* Caminho da jornada */}
             <JourneyPath />
