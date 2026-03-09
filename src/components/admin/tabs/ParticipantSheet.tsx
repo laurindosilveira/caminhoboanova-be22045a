@@ -528,6 +528,48 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         </div>
       )}
 
+      {/* Edit turma modal */}
+      {editingTurma && (
+        <div className="bg-card rounded-2xl border border-border shadow-sm p-4 space-y-3">
+          <p className="font-montserrat font-bold text-foreground text-sm">Alterar Turma</p>
+          <select
+            value={newTurmaId}
+            onChange={(e) => setNewTurmaId(e.target.value)}
+            className="w-full h-10 rounded-xl border border-input bg-background px-3 pr-8 text-sm text-foreground appearance-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="">Sem turma</option>
+            {turmas.map((t) => (
+              <option key={t.id} value={t.id}>{t.name} ({t.area ?? "Geral"})</option>
+            ))}
+          </select>
+          <div className="flex gap-2">
+            <button
+              disabled={savingTurma}
+              onClick={async () => {
+                setSavingTurma(true);
+                const { error } = await supabase.from("profiles").update({
+                  turma_id: newTurmaId || null,
+                }).eq("user_id", p.user_id);
+                setSavingTurma(false);
+                if (!error) {
+                  p.turma_id = newTurmaId || null;
+                  const t = turmas.find(t => t.id === newTurmaId);
+                  setCurrentTurmaName(t?.name ?? null);
+                  setEditingTurma(false);
+                }
+              }}
+              className="flex-1 h-9 rounded-xl font-inter text-xs font-bold text-primary-foreground disabled:opacity-60"
+              style={{ background: "var(--gradient-hero)" }}
+            >
+              {savingTurma ? "Salvando..." : "Salvar"}
+            </button>
+            <button onClick={() => setEditingTurma(false)} className="px-4 h-9 rounded-xl border border-border text-xs font-inter text-muted-foreground hover:text-foreground">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Quick action buttons */}
       <div className="grid grid-cols-2 gap-2">
         {[
