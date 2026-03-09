@@ -444,7 +444,10 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           </div>
           <div className="flex-1">
             <h2 className="font-montserrat font-black text-primary-foreground text-lg leading-tight">{p.full_name}</h2>
-            <p className="text-primary-foreground/70 font-inter text-xs">{p.community} · {p.area}{age ? ` · ${age} anos` : ""}</p>
+            <p className="text-primary-foreground/70 font-inter text-xs">
+              {p.community} · {p.area}{age ? ` · ${age} anos` : ""}
+              <button onClick={() => { setEditingCommunity(true); setNewCommunity(p.community); }} className="ml-1.5 text-primary-foreground/50 hover:text-primary-foreground underline text-[10px]">✏️ alterar</button>
+            </p>
             <p className="text-primary-foreground/60 font-inter text-xs">📞 {p.phone}</p>
           </div>
           <button onClick={() => setPlan(prev => ({ ...prev, is_priority: !prev.is_priority }))}
