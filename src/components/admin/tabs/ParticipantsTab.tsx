@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   Search, ChevronDown, Filter, Users, CheckCircle, Clock, BookOpen,
   GraduationCap, CalendarDays, Zap, ChevronLeft, Phone, MapPin, Calendar, Star, AlertTriangle,
-  Trash2, Eye, X, ChevronRight
+  Trash2, Eye, X, ChevronRight, Church
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -19,12 +19,47 @@ type StatusReason = {
   severity: "high" | "medium" | "low";
 };
 
+// ─── Real completion data types ───────────────────────────
+type RealLessonCompletion = {
+  lesson_id: string;
+  lesson_title: string;
+  course_title: string;
+  responses: { question: string; response: string }[];
+  completed_at: string | null;
+};
+
+type RealDevotionalCompletion = {
+  devotional_id: string;
+  title: string;
+  day_number: number;
+  lesson_title: string;
+  bible_reference: string;
+  questions: string[];
+  completed_at: string;
+  is_weekend: boolean;
+};
+
+type RealAttendanceRecord = {
+  event_id: string;
+  event_title: string;
+  event_date: string;
+  event_type: string;
+  status: string;
+};
+
+type RealWorshipRecord = {
+  id: string;
+  event_type: string;
+  worship_date: string;
+  status: string;
+};
+
 const ACTIVITY_TYPES = [
   { value: "todos", label: "Todos os tipos" },
   { value: "devocional", label: "📖 Devocionais" },
-  { value: "formacao", label: "🎓 Formações" },
-  { value: "encontro", label: "📅 Encontros" },
-  { value: "desafio", label: "✨ Desafios" },
+  { value: "estudo", label: "🎓 Estudos de lição" },
+  { value: "presenca", label: "📅 Presenças" },
+  { value: "culto", label: "⛪ Cultos" },
 ];
 
 function getStatusInfo(completed: number, total: number) {
@@ -33,20 +68,6 @@ function getStatusInfo(completed: number, total: number) {
   if (pct < 34) return { label: "Iniciando", color: "text-destructive", bg: "bg-destructive/10", dot: "bg-destructive" };
   if (pct < 70) return { label: "Em andamento", color: "text-accent-foreground", bg: "bg-accent/30", dot: "bg-accent" };
   return { label: "Avançado", color: "text-brand-green", bg: "bg-brand-green/10", dot: "bg-brand-green" };
-}
-
-function getTypeIcon(type: string) {
-  if (type === "devocional") return <BookOpen className="w-3.5 h-3.5" />;
-  if (type === "formacao") return <GraduationCap className="w-3.5 h-3.5" />;
-  if (type === "encontro") return <CalendarDays className="w-3.5 h-3.5" />;
-  return <Zap className="w-3.5 h-3.5" />;
-}
-
-function getTypeColor(type: string) {
-  if (type === "devocional") return "text-brand-green bg-brand-green/10";
-  if (type === "formacao") return "text-secondary bg-secondary/10";
-  if (type === "encontro") return "text-primary bg-primary/10";
-  return "text-accent-foreground bg-accent/20";
 }
 
 function calcAge(birthDate: string) {
@@ -58,365 +79,456 @@ function calcAge(birthDate: string) {
   return age;
 }
 
-type WorshipInfo = { event_type: string; worship_date: string };
-
-type ActivityResponse = {
-  question: string;
-  response: string;
-};
-
-type DevotionalDetail = {
-  title: string;
-  day_number: number;
-  bible_reference: string;
-  questions: string[];
-  completed_at: string | null;
-};
-
+// ─── ParticipantDetail (rebuilt with REAL data) ──────────
 type DetailProps = { participant: Participant; activities: Activity[]; onBack: () => void };
 
 function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) {
   const [typeFilter, setTypeFilter] = useState("todos");
-  const [worshipRecords, setWorshipRecords] = useState<WorshipInfo[]>([]);
-  const [activityTitleMap, setActivityTitleMap] = useState<Map<string, string>>(new Map());
-  const [viewingActivity, setViewingActivity] = useState<Activity | null>(null);
-  const [activityResponses, setActivityResponses] = useState<ActivityResponse[]>([]);
-  const [devotionalDetail, setDevotionalDetail] = useState<DevotionalDetail | null>(null);
-  const [loadingResponses, setLoadingResponses] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set(p.completed_activity_ids));
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
+  // Real data states
+  const [lessonCompletions, setLessonCompletions] = useState<RealLessonCompletion[]>([]);
+  const [devotionalCompletions, setDevotionalCompletions] = useState<RealDevotionalCompletion[]>([]);
+  const [attendanceRecords, setAttendanceRecords] = useState<RealAttendanceRecord[]>([]);
+  const [worshipRecords, setWorshipRecords] = useState<RealWorshipRecord[]>([]);
+
+  // Viewing detail
+  const [viewingLesson, setViewingLesson] = useState<RealLessonCompletion | null>(null);
+  const [viewingDevotional, setViewingDevotional] = useState<RealDevotionalCompletion | null>(null);
+
+  // Delete states
+  const [deletingType, setDeletingType] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
+
   useEffect(() => {
-    async function fetchTitles() {
-      const [{ data: worshipData }, { data: devData }, { data: lessonData }] = await Promise.all([
-        supabase.from("worship_attendance").select("event_type, worship_date").eq("user_id", p.user_id).eq("status", "aprovado").order("worship_date", { ascending: true }),
-        supabase.from("devotional_content").select("activity_id, day_number, lesson_id").not("activity_id", "is", null),
-        supabase.from("lessons").select("id, title"),
-      ]);
+    fetchRealData();
+  }, [p.user_id]);
 
-      setWorshipRecords(worshipData ?? []);
+  async function fetchRealData() {
+    setLoading(true);
 
-      const lessonMap = new Map<string, string>();
-      (lessonData ?? []).forEach(l => lessonMap.set(l.id, l.title));
+    const [
+      { data: lessonResps },
+      { data: devProgress },
+      { data: attData },
+      { data: worshipData },
+      { data: lessonsData },
+      { data: coursesData },
+      { data: lessonContentData },
+      { data: devContentData },
+      { data: eventsData },
+    ] = await Promise.all([
+      supabase.from("lesson_responses").select("lesson_id, question_key, response, created_at").eq("user_id", p.user_id).order("created_at"),
+      supabase.from("devotional_progress").select("devotional_id, completed_at").eq("user_id", p.user_id).order("completed_at"),
+      supabase.from("attendance").select("event_id, status, created_at").eq("user_id", p.user_id).order("created_at", { ascending: false }),
+      supabase.from("worship_attendance").select("id, event_type, worship_date, status").eq("user_id", p.user_id).eq("status", "aprovado").order("worship_date"),
+      supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
+      supabase.from("courses").select("id, title, order_num").order("order_num"),
+      supabase.from("lesson_content").select("lesson_id, questions"),
+      supabase.from("devotional_content").select("id, lesson_id, title, day_number, bible_reference, questions"),
+      supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false }),
+    ]);
 
-      const titleMap = new Map<string, string>();
+    // Build lesson completions
+    const courseMap = new Map((coursesData ?? []).map(c => [c.id, c.title]));
+    const lessonContentMap = new Map((lessonContentData ?? []).map(lc => [lc.lesson_id, lc.questions as string[]]));
+    const respsByLesson = new Map<string, Map<string, { response: string; created_at: string }>>();
+    (lessonResps ?? []).forEach(r => {
+      if (!respsByLesson.has(r.lesson_id)) respsByLesson.set(r.lesson_id, new Map());
+      respsByLesson.get(r.lesson_id)!.set(r.question_key, { response: r.response, created_at: r.created_at });
+    });
 
-      (devData ?? []).forEach(d => {
-        if (d.activity_id) {
-          const lessonTitle = d.lesson_id ? lessonMap.get(d.lesson_id) : null;
-          titleMap.set(d.activity_id, lessonTitle ? `Devocional dia ${d.day_number} - ${lessonTitle}` : `Devocional dia ${d.day_number}`);
+    const lCompletions: RealLessonCompletion[] = [];
+    (lessonsData ?? []).forEach(lesson => {
+      const respMap = respsByLesson.get(lesson.id);
+      if (!respMap || respMap.size === 0) return;
+      const questions = lessonContentMap.get(lesson.id) ?? [];
+      const responses = questions.map((q, i) => ({
+        question: q,
+        response: respMap.get(`q${i}`)?.response ?? respMap.get(`question_${i}`)?.response ?? respMap.get(String(i))?.response ?? "",
+      }));
+      // Also add any responses not matching questions
+      respMap.forEach((val, key) => {
+        if (!responses.some(r => r.response === val.response && r.response !== "")) {
+          if (val.response) responses.push({ question: key, response: val.response });
         }
       });
-
-      const formacaoActivities = activities.filter(a => a.type === "formacao").sort((a, b) => a.order_num - b.order_num);
-      const { data: orderedLessons } = await supabase.from("lessons").select("id, title, order_num, course_id").order("course_id").order("order_num");
-      if (orderedLessons) {
-        formacaoActivities.forEach((act, idx) => {
-          if (orderedLessons[idx]) {
-            titleMap.set(act.id, orderedLessons[idx].title);
-          }
-        });
-      }
-
-      const encontroActivities = activities.filter(a => a.type === "encontro").sort((a, b) => a.order_num - b.order_num);
-      encontroActivities.forEach((act, idx) => {
-        if (p.completed_activity_ids.includes(act.id) && (worshipData ?? [])[idx]) {
-          const w = (worshipData ?? [])[idx];
-          const label = w.event_type === "jemiac" ? "JEMIAC" : w.event_type === "retiro" ? "Retiro" : "Culto";
-          titleMap.set(act.id, label);
-        }
+      const firstResp = Array.from(respMap.values())[0];
+      lCompletions.push({
+        lesson_id: lesson.id,
+        lesson_title: lesson.title,
+        course_title: courseMap.get(lesson.course_id) ?? "",
+        responses: responses.filter(r => r.response),
+        completed_at: firstResp?.created_at ?? null,
       });
+    });
+    setLessonCompletions(lCompletions);
 
-      setActivityTitleMap(titleMap);
-    }
-    fetchTitles();
-  }, [p.user_id, activities]);
+    // Build devotional completions
+    const devContentMap = new Map((devContentData ?? []).map(d => [d.id, d]));
+    const lessonTitleMap = new Map((lessonsData ?? []).map(l => [l.id, l.title]));
+    const dCompletions: RealDevotionalCompletion[] = [];
+    (devProgress ?? []).forEach(dp => {
+      const content = devContentMap.get(dp.devotional_id);
+      if (!content) return;
+      const completedDate = new Date(dp.completed_at);
+      const dow = completedDate.getDay();
+      dCompletions.push({
+        devotional_id: dp.devotional_id,
+        title: content.title || `Dia ${content.day_number}`,
+        day_number: content.day_number,
+        lesson_title: content.lesson_id ? (lessonTitleMap.get(content.lesson_id) ?? "") : "",
+        bible_reference: content.bible_reference,
+        questions: content.questions ?? [],
+        completed_at: dp.completed_at,
+        is_weekend: dow === 0 || dow === 6,
+      });
+    });
+    setDevotionalCompletions(dCompletions);
 
-  async function handleViewActivity(activity: Activity) {
-    if (!completedIds.has(activity.id)) return;
-    setViewingActivity(activity);
-    setLoadingResponses(true);
-    setActivityResponses([]);
-    setDevotionalDetail(null);
+    // Build attendance records
+    const eventMap = new Map((eventsData ?? []).map(e => [e.id, e]));
+    const aRecords: RealAttendanceRecord[] = [];
+    (attData ?? []).forEach(a => {
+      const event = eventMap.get(a.event_id);
+      aRecords.push({
+        event_id: a.event_id,
+        event_title: event?.title ?? "Evento",
+        event_date: event?.event_date ?? a.created_at,
+        event_type: event?.type ?? "encontro",
+        status: a.status,
+      });
+    });
+    setAttendanceRecords(aRecords);
 
-    if (activity.type === "devocional") {
-      // Find the devotional_content linked to this activity
-      const { data: devContent } = await supabase
-        .from("devotional_content")
-        .select("id, title, day_number, bible_reference, questions")
-        .eq("activity_id", activity.id)
-        .maybeSingle();
+    // Worship
+    setWorshipRecords((worshipData ?? []) as RealWorshipRecord[]);
 
-      if (devContent) {
-        // Check if user completed it
-        const { data: devProgress } = await supabase
-          .from("devotional_progress")
-          .select("completed_at")
-          .eq("user_id", p.user_id)
-          .eq("devotional_id", devContent.id)
-          .maybeSingle();
-
-        setDevotionalDetail({
-          title: devContent.title,
-          day_number: devContent.day_number,
-          bible_reference: devContent.bible_reference,
-          questions: devContent.questions ?? [],
-          completed_at: devProgress?.completed_at ?? null,
-        });
-      }
-    } else if (activity.type === "formacao") {
-      // Find the lesson linked to this activity (by order mapping)
-      const formacaoActivities = activities.filter(a => a.type === "formacao").sort((a, b) => a.order_num - b.order_num);
-      const idx = formacaoActivities.findIndex(a => a.id === activity.id);
-      
-      const { data: orderedLessons } = await supabase
-        .from("lessons").select("id, title, order_num, course_id")
-        .order("course_id").order("order_num");
-
-      if (orderedLessons && orderedLessons[idx]) {
-        const lessonId = orderedLessons[idx].id;
-        
-        // Get lesson content questions
-        const { data: lessonContent } = await supabase
-          .from("lesson_content")
-          .select("questions")
-          .eq("lesson_id", lessonId)
-          .maybeSingle();
-
-        // Get user responses
-        const { data: responses } = await supabase
-          .from("lesson_responses")
-          .select("question_key, response")
-          .eq("user_id", p.user_id)
-          .eq("lesson_id", lessonId)
-          .order("question_key");
-
-        const questions = lessonContent?.questions ?? [];
-        const responseMap = new Map((responses ?? []).map(r => [r.question_key, r.response]));
-
-        const mapped: ActivityResponse[] = questions.map((q, i) => ({
-          question: q,
-          response: responseMap.get(`q${i}`) ?? responseMap.get(`question_${i}`) ?? responseMap.get(String(i)) ?? "",
-        }));
-
-        // Also add any responses with keys not matching questions
-        (responses ?? []).forEach(r => {
-          const exists = mapped.some(m => m.response === r.response && m.response !== "");
-          if (!exists && r.response) {
-            mapped.push({ question: r.question_key, response: r.response });
-          }
-        });
-
-        setActivityResponses(mapped.filter(m => m.response));
-      }
-    }
-
-    setLoadingResponses(false);
+    setLoading(false);
   }
 
-  async function handleDeleteActivity(activityId: string) {
-    setDeletingId(activityId);
-    const activity = activities.find(a => a.id === activityId);
-
-    try {
-      // Delete from user_progress
-      await supabase.from("user_progress").delete().eq("user_id", p.user_id).eq("activity_id", activityId);
-
-      // If devotional, also delete devotional_progress
-      if (activity?.type === "devocional") {
-        const { data: devContent } = await supabase
-          .from("devotional_content")
-          .select("id")
-          .eq("activity_id", activityId)
-          .maybeSingle();
-        if (devContent) {
-          await supabase.from("devotional_progress").delete().eq("user_id", p.user_id).eq("devotional_id", devContent.id);
-        }
-      }
-
-      // If formacao, also delete lesson_responses
-      if (activity?.type === "formacao") {
-        const formacaoActivities = activities.filter(a => a.type === "formacao").sort((a, b) => a.order_num - b.order_num);
-        const idx = formacaoActivities.findIndex(a => a.id === activityId);
-        const { data: orderedLessons } = await supabase
-          .from("lessons").select("id").order("course_id").order("order_num");
-        if (orderedLessons && orderedLessons[idx]) {
-          await supabase.from("lesson_responses").delete().eq("user_id", p.user_id).eq("lesson_id", orderedLessons[idx].id);
-        }
-      }
-
-      // Update local state
-      const newCompleted = new Set(completedIds);
-      newCompleted.delete(activityId);
-      setCompletedIds(newCompleted);
-      p.completed_activity_ids = [...newCompleted];
-      p.completed_count = newCompleted.size;
-
-      toast({ title: "Atividade removida", description: `Pontuação de "${activity?.title ?? "atividade"}" foi retirada.` });
-    } catch (err) {
-      toast({ title: "Erro ao remover", description: "Não foi possível remover a atividade.", variant: "destructive" });
-    }
-
+  // ── Delete handlers ──
+  async function handleDeleteLesson(lessonId: string) {
+    setDeletingType("estudo");
+    setDeletingId(lessonId);
+    await supabase.from("lesson_responses").delete().eq("user_id", p.user_id).eq("lesson_id", lessonId);
+    setLessonCompletions(prev => prev.filter(l => l.lesson_id !== lessonId));
+    toast({ title: "Estudo removido", description: "Respostas e pontuação foram removidas." });
+    setDeletingType(null);
     setDeletingId(null);
-    setConfirmDeleteId(null);
-    setViewingActivity(null);
+    setConfirmDeleteKey(null);
+    setViewingLesson(null);
   }
 
-  const pct = activities.length > 0 ? Math.round((completedIds.size / activities.length) * 100) : 0;
-  const status = getStatusInfo(completedIds.size, activities.length);
-  const totalPts = activities.filter(a => completedIds.has(a.id)).reduce((s, a) => s + a.points, 0);
+  async function handleDeleteDevotional(devotionalId: string) {
+    setDeletingType("devocional");
+    setDeletingId(devotionalId);
+    await supabase.from("devotional_progress").delete().eq("user_id", p.user_id).eq("devotional_id", devotionalId);
+    setDevotionalCompletions(prev => prev.filter(d => d.devotional_id !== devotionalId));
+    toast({ title: "Devocional removido", description: "Conclusão e pontuação foram removidas." });
+    setDeletingType(null);
+    setDeletingId(null);
+    setConfirmDeleteKey(null);
+    setViewingDevotional(null);
+  }
+
+  async function handleDeleteAttendance(eventId: string) {
+    setDeletingType("presenca");
+    setDeletingId(eventId);
+    await supabase.from("attendance").delete().eq("user_id", p.user_id).eq("event_id", eventId);
+    setAttendanceRecords(prev => prev.filter(a => a.event_id !== eventId));
+    toast({ title: "Presença removida", description: "Registro de presença foi removido." });
+    setDeletingType(null);
+    setDeletingId(null);
+    setConfirmDeleteKey(null);
+  }
+
+  // ── Points calculation (real data) ──
+  const lessonPts = lessonCompletions.length * 20;
+  const devPts = devotionalCompletions.reduce((s, d) => s + (d.is_weekend ? 2 : 5), 0);
+  const attendancePts = attendanceRecords.filter(a => a.status === "presente").length * 10;
+  const worshipPts = worshipRecords.length * 5;
+  const totalPts = lessonPts + devPts + attendancePts + worshipPts;
+
+  const totalRealActivities = lessonCompletions.length + devotionalCompletions.length + attendanceRecords.filter(a => a.status === "presente").length + worshipRecords.length;
+
   const age = calcAge(p.birth_date);
 
-  const filteredActivities = typeFilter === "todos" ? activities : activities.filter(a => a.type === typeFilter);
-
-  const byType = (type: string) => {
-    const list = activities.filter(a => a.type === type);
-    const done = list.filter(a => completedIds.has(a.id)).length;
-    return { total: list.length, done };
-  };
-
-  // Activity response viewer modal
-  if (viewingActivity) {
-    const done = completedIds.has(viewingActivity.id);
+  // ── Viewing lesson detail ──
+  if (viewingLesson) {
     return (
       <div>
-        <button onClick={() => { setViewingActivity(null); setActivityResponses([]); setDevotionalDetail(null); }}
-          className="flex items-center gap-2 text-muted-foreground font-inter text-sm mb-4 hover:text-foreground transition-colors">
+        <button onClick={() => { setViewingLesson(null); }} className="flex items-center gap-2 text-muted-foreground font-inter text-sm mb-4 hover:text-foreground transition-colors">
           <ChevronLeft className="w-4 h-4" /> Voltar às atividades
         </button>
 
         <div className="bg-card rounded-2xl border border-border p-5 mb-4 shadow-sm">
           <div className="flex items-center gap-3 mb-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${getTypeColor(viewingActivity.type)}`}>
-              {getTypeIcon(viewingActivity.type)}
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-secondary/10 text-secondary">
+              <GraduationCap className="w-5 h-5" />
             </div>
             <div className="flex-1">
-              <h3 className="font-montserrat font-bold text-foreground text-sm">
-                {activityTitleMap.get(viewingActivity.id) ?? viewingActivity.title}
-              </h3>
+              <h3 className="font-montserrat font-bold text-foreground text-sm">{viewingLesson.lesson_title}</h3>
               <p className="font-inter text-[10px] text-muted-foreground">
-                {viewingActivity.type === "devocional" ? "📖 Devocional" : viewingActivity.type === "formacao" ? "🎓 Formação" : viewingActivity.type === "encontro" ? "📅 Encontro" : "✨ Desafio"}
-                {" · "}{viewingActivity.points} pts
+                🎓 Estudo de lição · {viewingLesson.course_title} · +20 pts
               </p>
             </div>
-            {done && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-green/10 text-brand-green">✅ Concluída</span>
-            )}
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-green/10 text-brand-green">✅ Concluída</span>
           </div>
 
-          {loadingResponses ? (
-            <div className="py-8 text-center">
-              <p className="text-muted-foreground font-inter text-sm animate-pulse">Carregando respostas...</p>
+          {viewingLesson.completed_at && (
+            <div className="bg-brand-green/5 rounded-xl p-3 border border-brand-green/20 mb-3">
+              <p className="font-inter text-xs text-brand-green">
+                ✅ Respondido em {new Date(viewingLesson.completed_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+              </p>
+            </div>
+          )}
+
+          {viewingLesson.responses.length > 0 ? (
+            <div className="space-y-3">
+              <p className="font-montserrat font-bold text-foreground text-xs">Respostas do aluno:</p>
+              {viewingLesson.responses.map((r, i) => (
+                <div key={i} className="bg-muted/30 rounded-xl p-3 border border-border space-y-1.5">
+                  <p className="font-inter text-xs text-muted-foreground font-medium">📝 {r.question}</p>
+                  <p className="font-inter text-sm text-foreground leading-relaxed whitespace-pre-wrap">{r.response}</p>
+                </div>
+              ))}
             </div>
           ) : (
-            <>
-              {/* Devotional detail */}
-              {devotionalDetail && (
-                <div className="space-y-3">
-                  <div className="bg-muted/50 rounded-xl p-3">
-                    <p className="font-inter text-xs text-muted-foreground mb-1">📖 Referência bíblica</p>
-                    <p className="font-inter text-sm text-foreground">{devotionalDetail.bible_reference || "Não informada"}</p>
-                  </div>
-                  {devotionalDetail.completed_at && (
-                    <div className="bg-brand-green/5 rounded-xl p-3 border border-brand-green/20">
-                      <p className="font-inter text-xs text-brand-green">
-                        ✅ Concluído em {new Date(devotionalDetail.completed_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                      </p>
-                    </div>
-                  )}
-                  {devotionalDetail.questions.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="font-montserrat font-bold text-foreground text-xs">Perguntas do devocional:</p>
-                      {devotionalDetail.questions.map((q, i) => (
-                        <div key={i} className="bg-muted/30 rounded-xl p-3 border border-border">
-                          <p className="font-inter text-xs text-muted-foreground mb-1">Pergunta {i + 1}:</p>
-                          <p className="font-inter text-sm text-foreground">{q}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {!devotionalDetail.completed_at && (
-                    <div className="bg-accent/10 rounded-xl p-3 border border-accent/20">
-                      <p className="font-inter text-xs text-accent-foreground">⚠️ Este devocional está marcado como atividade concluída, mas sem registro de conclusão detalhado.</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Lesson responses */}
-              {activityResponses.length > 0 && (
-                <div className="space-y-3">
-                  <p className="font-montserrat font-bold text-foreground text-xs">Respostas do aluno:</p>
-                  {activityResponses.map((r, i) => (
-                    <div key={i} className="bg-muted/30 rounded-xl p-3 border border-border space-y-1.5">
-                      <p className="font-inter text-xs text-muted-foreground font-medium">📝 {r.question}</p>
-                      <p className="font-inter text-sm text-foreground leading-relaxed whitespace-pre-wrap">{r.response}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* No responses found */}
-              {!devotionalDetail && activityResponses.length === 0 && viewingActivity.type !== "encontro" && viewingActivity.type !== "desafio" && (
-                <div className="text-center py-6">
-                  <Eye className="w-8 h-8 text-muted-foreground mx-auto mb-2 opacity-40" />
-                  <p className="font-inter text-sm text-muted-foreground">Nenhuma resposta salva para esta atividade.</p>
-                  <p className="font-inter text-[10px] text-muted-foreground mt-1">O aluno pode ter concluído sem registrar respostas detalhadas.</p>
-                </div>
-              )}
-
-              {(viewingActivity.type === "encontro" || viewingActivity.type === "desafio") && (
-                <div className="text-center py-6">
-                  <p className="font-inter text-sm text-muted-foreground">
-                    {viewingActivity.type === "encontro" ? "📅 Atividade de presença em encontro." : "✨ Atividade de desafio comunitário."}
-                  </p>
-                  <p className="font-inter text-[10px] text-muted-foreground mt-1">Este tipo de atividade não possui respostas escritas.</p>
-                </div>
-              )}
-            </>
+            <div className="text-center py-6">
+              <Eye className="w-8 h-8 text-muted-foreground mx-auto mb-2 opacity-40" />
+              <p className="font-inter text-sm text-muted-foreground">Nenhuma resposta encontrada para esta lição.</p>
+            </div>
           )}
         </div>
 
-        {/* Delete action */}
-        {done && (
-          <div className="bg-destructive/5 border border-destructive/20 rounded-2xl p-4">
-            {confirmDeleteId === viewingActivity.id ? (
-              <div className="space-y-3">
-                <p className="font-inter text-sm text-destructive font-medium">⚠️ Tem certeza que deseja remover esta atividade?</p>
-                <p className="font-inter text-xs text-muted-foreground">
-                  Isso irá remover a pontuação (+{viewingActivity.points}pts) e todas as respostas associadas de <strong>{p.full_name}</strong>.
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleDeleteActivity(viewingActivity.id)}
-                    disabled={deletingId === viewingActivity.id}
-                    className="flex-1 py-2.5 rounded-xl bg-destructive text-destructive-foreground font-inter text-sm font-medium disabled:opacity-50"
-                  >
-                    {deletingId === viewingActivity.id ? "Removendo..." : "🗑️ Confirmar remoção"}
-                  </button>
-                  <button
-                    onClick={() => setConfirmDeleteId(null)}
-                    className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm"
-                  >
-                    Cancelar
-                  </button>
-                </div>
+        {/* Delete */}
+        <div className="bg-destructive/5 border border-destructive/20 rounded-2xl p-4">
+          {confirmDeleteKey === `lesson-${viewingLesson.lesson_id}` ? (
+            <div className="space-y-3">
+              <p className="font-inter text-sm text-destructive font-medium">⚠️ Tem certeza que deseja remover este estudo?</p>
+              <p className="font-inter text-xs text-muted-foreground">Isso irá remover as respostas e -20pts de <strong>{p.full_name}</strong>.</p>
+              <div className="flex gap-2">
+                <button onClick={() => handleDeleteLesson(viewingLesson.lesson_id)}
+                  disabled={deletingId === viewingLesson.lesson_id}
+                  className="flex-1 py-2.5 rounded-xl bg-destructive text-destructive-foreground font-inter text-sm font-medium disabled:opacity-50">
+                  {deletingId === viewingLesson.lesson_id ? "Removendo..." : "🗑️ Confirmar remoção"}
+                </button>
+                <button onClick={() => setConfirmDeleteKey(null)} className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm">Cancelar</button>
               </div>
-            ) : (
-              <button
-                onClick={() => setConfirmDeleteId(viewingActivity.id)}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-destructive/30 text-destructive font-inter text-sm font-medium hover:bg-destructive/10 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" /> Remover atividade e pontuação
-              </button>
-            )}
-          </div>
-        )}
+            </div>
+          ) : (
+            <button onClick={() => setConfirmDeleteKey(`lesson-${viewingLesson.lesson_id}`)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-destructive/30 text-destructive font-inter text-sm font-medium hover:bg-destructive/10 transition-colors">
+              <Trash2 className="w-4 h-4" /> Remover estudo e pontuação
+            </button>
+          )}
+        </div>
       </div>
     );
   }
+
+  // ── Viewing devotional detail ──
+  if (viewingDevotional) {
+    return (
+      <div>
+        <button onClick={() => setViewingDevotional(null)} className="flex items-center gap-2 text-muted-foreground font-inter text-sm mb-4 hover:text-foreground transition-colors">
+          <ChevronLeft className="w-4 h-4" /> Voltar às atividades
+        </button>
+
+        <div className="bg-card rounded-2xl border border-border p-5 mb-4 shadow-sm">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-green/10 text-brand-green">
+              <BookOpen className="w-5 h-5" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-montserrat font-bold text-foreground text-sm">{viewingDevotional.title}</h3>
+              <p className="font-inter text-[10px] text-muted-foreground">
+                📖 Devocional · {viewingDevotional.lesson_title} · +{viewingDevotional.is_weekend ? 2 : 5} pts
+                {viewingDevotional.is_weekend && <span className="text-accent-foreground ml-1">(fim de semana)</span>}
+              </p>
+            </div>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-green/10 text-brand-green">✅ Concluído</span>
+          </div>
+
+          <div className="space-y-3">
+            <div className="bg-muted/50 rounded-xl p-3">
+              <p className="font-inter text-xs text-muted-foreground mb-1">📖 Referência bíblica</p>
+              <p className="font-inter text-sm text-foreground">{viewingDevotional.bible_reference || "Não informada"}</p>
+            </div>
+            <div className="bg-brand-green/5 rounded-xl p-3 border border-brand-green/20">
+              <p className="font-inter text-xs text-brand-green">
+                ✅ Concluído em {new Date(viewingDevotional.completed_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                {viewingDevotional.is_weekend && " (recuperação de fim de semana)"}
+              </p>
+            </div>
+            {viewingDevotional.questions.length > 0 && (
+              <div className="space-y-2">
+                <p className="font-montserrat font-bold text-foreground text-xs">Perguntas do devocional:</p>
+                {viewingDevotional.questions.filter(q => q.trim()).map((q, i) => (
+                  <div key={i} className="bg-muted/30 rounded-xl p-3 border border-border">
+                    <p className="font-inter text-xs text-muted-foreground mb-1">Pergunta {i + 1}:</p>
+                    <p className="font-inter text-sm text-foreground">{q}</p>
+                    <p className="font-inter text-[10px] text-muted-foreground mt-1 italic">⚠️ Respostas de devocionais não são salvas no banco</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Delete */}
+        <div className="bg-destructive/5 border border-destructive/20 rounded-2xl p-4">
+          {confirmDeleteKey === `dev-${viewingDevotional.devotional_id}` ? (
+            <div className="space-y-3">
+              <p className="font-inter text-sm text-destructive font-medium">⚠️ Tem certeza que deseja remover este devocional?</p>
+              <p className="font-inter text-xs text-muted-foreground">Isso irá remover a conclusão e -{viewingDevotional.is_weekend ? 2 : 5}pts de <strong>{p.full_name}</strong>.</p>
+              <div className="flex gap-2">
+                <button onClick={() => handleDeleteDevotional(viewingDevotional.devotional_id)}
+                  disabled={deletingId === viewingDevotional.devotional_id}
+                  className="flex-1 py-2.5 rounded-xl bg-destructive text-destructive-foreground font-inter text-sm font-medium disabled:opacity-50">
+                  {deletingId === viewingDevotional.devotional_id ? "Removendo..." : "🗑️ Confirmar remoção"}
+                </button>
+                <button onClick={() => setConfirmDeleteKey(null)} className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm">Cancelar</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmDeleteKey(`dev-${viewingDevotional.devotional_id}`)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-destructive/30 text-destructive font-inter text-sm font-medium hover:bg-destructive/10 transition-colors">
+              <Trash2 className="w-4 h-4" /> Remover devocional e pontuação
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
+          <BookOpen className="w-5 h-5 text-primary" />
+        </div>
+        <p className="text-muted-foreground font-inter text-sm">Carregando dados reais...</p>
+      </div>
+    );
+  }
+
+  // ── Filtered items for the list ──
+  type ListItem = {
+    key: string;
+    type: "estudo" | "devocional" | "presenca" | "culto";
+    title: string;
+    subtitle: string;
+    pts: number;
+    date: string | null;
+    onClick: () => void;
+    onDelete: () => void;
+    isWeekend?: boolean;
+  };
+
+  const items: ListItem[] = [];
+
+  // Lessons studied
+  lessonCompletions.forEach(l => {
+    items.push({
+      key: `lesson-${l.lesson_id}`,
+      type: "estudo",
+      title: l.lesson_title,
+      subtitle: l.course_title,
+      pts: 20,
+      date: l.completed_at,
+      onClick: () => setViewingLesson(l),
+      onDelete: () => { setConfirmDeleteKey(`lesson-${l.lesson_id}`); },
+    });
+  });
+
+  // Devotionals completed
+  devotionalCompletions.forEach(d => {
+    items.push({
+      key: `dev-${d.devotional_id}`,
+      type: "devocional",
+      title: d.title,
+      subtitle: d.lesson_title ? `${d.lesson_title} · Dia ${d.day_number}` : `Dia ${d.day_number}`,
+      pts: d.is_weekend ? 2 : 5,
+      date: d.completed_at,
+      onClick: () => setViewingDevotional(d),
+      onDelete: () => { setConfirmDeleteKey(`dev-${d.devotional_id}`); },
+      isWeekend: d.is_weekend,
+    });
+  });
+
+  // Attendance
+  attendanceRecords.filter(a => a.status === "presente").forEach(a => {
+    items.push({
+      key: `att-${a.event_id}`,
+      type: "presenca",
+      title: a.event_title,
+      subtitle: new Date(a.event_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }),
+      pts: 10,
+      date: a.event_date,
+      onClick: () => {},
+      onDelete: () => { setConfirmDeleteKey(`att-${a.event_id}`); },
+    });
+  });
+
+  // Worship
+  worshipRecords.forEach(w => {
+    const label = w.event_type === "jemiac" ? "JEMIAC" : w.event_type === "retiro" ? "Retiro" : "Culto";
+    items.push({
+      key: `worship-${w.id}`,
+      type: "culto",
+      title: label,
+      subtitle: new Date(w.worship_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }),
+      pts: 5,
+      date: w.worship_date,
+      onClick: () => {},
+      onDelete: () => {},
+    });
+  });
+
+  const filteredItems = typeFilter === "todos" ? items : items.filter(i => i.type === typeFilter);
+
+  const typeIcon = (type: string) => {
+    if (type === "devocional") return <BookOpen className="w-3.5 h-3.5" />;
+    if (type === "estudo") return <GraduationCap className="w-3.5 h-3.5" />;
+    if (type === "presenca") return <CalendarDays className="w-3.5 h-3.5" />;
+    if (type === "culto") return <Church className="w-3.5 h-3.5" />;
+    return <Zap className="w-3.5 h-3.5" />;
+  };
+
+  const typeColor = (type: string) => {
+    if (type === "devocional") return "text-brand-green bg-brand-green/10";
+    if (type === "estudo") return "text-secondary bg-secondary/10";
+    if (type === "presenca") return "text-primary bg-primary/10";
+    if (type === "culto") return "text-accent-foreground bg-accent/20";
+    return "text-muted-foreground bg-muted";
+  };
+
+  const typeLabel = (type: string) => {
+    if (type === "devocional") return "devocional";
+    if (type === "estudo") return "estudo";
+    if (type === "presenca") return "presença";
+    if (type === "culto") return "culto";
+    return type;
+  };
+
+  // Status based on real data
+  const totalPossibleLessons = activities.filter(a => a.type === "formacao").length || 1;
+  const realPct = Math.min(100, Math.round(
+    ((lessonCompletions.length / Math.max(totalPossibleLessons, 1)) * 50) +
+    ((devotionalCompletions.length / Math.max(1, 1)) * 20) +
+    ((attendanceRecords.filter(a => a.status === "presente").length / Math.max(1, 1)) * 30)
+  ));
+  const status = totalRealActivities === 0
+    ? { label: "Não iniciou", color: "text-muted-foreground", bg: "bg-muted" }
+    : totalRealActivities < 5
+    ? { label: "Iniciando", color: "text-destructive", bg: "bg-destructive/10" }
+    : totalRealActivities < 15
+    ? { label: "Em andamento", color: "text-accent-foreground", bg: "bg-accent/30" }
+    : { label: "Avançado", color: "text-brand-green", bg: "bg-brand-green/10" };
 
   return (
     <div>
@@ -459,92 +571,136 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
             <span>{totalPts} pontos</span>
           </div>
         </div>
+      </div>
 
-        {/* Progress bar */}
-        <div className="mt-4">
-          <div className="flex justify-between mb-1.5">
-            <span className="text-muted-foreground font-inter text-xs">{completedIds.size}/{activities.length} atividades</span>
-            <span className="font-montserrat font-bold text-foreground text-xs">{pct}%</span>
+      {/* Mini stats by real data */}
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        {[
+          { label: "Devocionais", icon: "📖", done: devotionalCompletions.length },
+          { label: "Estudos", icon: "🎓", done: lessonCompletions.length },
+          { label: "Presenças", icon: "📅", done: attendanceRecords.filter(a => a.status === "presente").length },
+          { label: "Cultos", icon: "⛪", done: worshipRecords.length },
+        ].map(({ label, icon, done }) => (
+          <div key={label} className="bg-card rounded-xl border border-border p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-base">{icon}</span>
+              <span className="font-inter text-xs text-muted-foreground">{label}</span>
+            </div>
+            <p className="font-montserrat font-black text-foreground text-lg leading-none">{done}</p>
           </div>
-          <div className="h-2.5 bg-muted rounded-full overflow-hidden">
-            <div className="h-full rounded-full transition-all" style={{
-              width: `${pct}%`,
-              background: pct >= 70 ? "var(--gradient-green)" : pct >= 34 ? "var(--gradient-orange)" : "hsl(var(--destructive))",
-            }} />
+        ))}
+      </div>
+
+      {/* Pontuação detalhada */}
+      <div className="bg-card rounded-2xl border border-border p-4 mb-4">
+        <p className="font-montserrat font-bold text-foreground text-sm mb-2">📊 Detalhamento de pontos</p>
+        <div className="space-y-1.5">
+          <div className="flex justify-between font-inter text-xs">
+            <span className="text-muted-foreground">Estudos ({lessonCompletions.length} × 20pts)</span>
+            <span className="text-brand-green font-bold">+{lessonPts}</span>
+          </div>
+          <div className="flex justify-between font-inter text-xs">
+            <span className="text-muted-foreground">
+              Devocionais ({devotionalCompletions.filter(d => !d.is_weekend).length} × 5pts
+              {devotionalCompletions.filter(d => d.is_weekend).length > 0 && ` + ${devotionalCompletions.filter(d => d.is_weekend).length} × 2pts fim de sem.`})
+            </span>
+            <span className="text-brand-green font-bold">+{devPts}</span>
+          </div>
+          <div className="flex justify-between font-inter text-xs">
+            <span className="text-muted-foreground">Presenças ({attendanceRecords.filter(a => a.status === "presente").length} × 10pts)</span>
+            <span className="text-brand-green font-bold">+{attendancePts}</span>
+          </div>
+          <div className="flex justify-between font-inter text-xs">
+            <span className="text-muted-foreground">Cultos ({worshipRecords.length} × 5pts)</span>
+            <span className="text-brand-green font-bold">+{worshipPts}</span>
+          </div>
+          <div className="border-t border-border pt-1.5 mt-1.5 flex justify-between">
+            <span className="font-montserrat font-bold text-foreground text-sm">Total verificado</span>
+            <span className="font-montserrat font-black text-brand-green text-sm">+{totalPts} pts</span>
           </div>
         </div>
       </div>
 
-      {/* Mini stats by type */}
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        {[
-          { type: "devocional", label: "Devocionais", icon: "📖" },
-          { type: "formacao", label: "Formações", icon: "🎓" },
-          { type: "encontro", label: "Encontros", icon: "📅" },
-          { type: "desafio", label: "Desafios", icon: "✨" },
-        ].map(({ type, label, icon }) => {
-          const { total, done } = byType(type);
-          return (
-            <div key={type} className="bg-card rounded-xl border border-border p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-base">{icon}</span>
-                <span className="font-inter text-xs text-muted-foreground">{label}</span>
-              </div>
-              <p className="font-montserrat font-black text-foreground text-lg leading-none">{done}<span className="text-muted-foreground font-inter text-xs font-normal">/{total}</span></p>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Activity detail */}
+      {/* Activity list */}
       <div className="bg-card rounded-2xl border border-border p-4">
         <div className="flex items-center justify-between mb-1">
-          <p className="font-montserrat font-bold text-foreground text-sm">Atividades</p>
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="text-xs font-inter border border-border rounded-lg px-2 py-1 bg-background text-foreground focus:outline-none"
-          >
+          <p className="font-montserrat font-bold text-foreground text-sm">Atividades verificadas</p>
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
+            className="text-xs font-inter border border-border rounded-lg px-2 py-1 bg-background text-foreground focus:outline-none">
             {ACTIVITY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
         </div>
-        <p className="font-inter text-[10px] text-muted-foreground mb-3">Clique em uma atividade concluída para ver as respostas</p>
-        <div className="space-y-2">
-          {filteredActivities.map((activity) => {
-            const done = completedIds.has(activity.id);
-            return (
-              <div key={activity.id}
-                onClick={() => done && handleViewActivity(activity)}
-                className={`flex items-center gap-3 rounded-xl p-2 transition-all ${
-                  done ? "cursor-pointer hover:bg-muted/50 hover:border-primary/20" : ""
-                }`}
-              >
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${done ? "bg-brand-green/10" : "bg-muted"}`}>
-                  {done ? <CheckCircle className="w-4 h-4 text-brand-green" /> : <Clock className="w-4 h-4 text-muted-foreground" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={`font-inter text-xs truncate ${done ? "text-foreground" : "text-muted-foreground"}`}>{activityTitleMap.get(activity.id) ?? activity.title}</p>
-                </div>
-                <span className={`px-2 py-0.5 rounded-md text-[10px] font-medium flex items-center gap-1 ${getTypeColor(activity.type)}`}>
-                  {getTypeIcon(activity.type)} {activity.type}
-                </span>
-                {done ? (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-inter text-accent font-bold">+{activity.points}pts</span>
-                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+        <p className="font-inter text-[10px] text-muted-foreground mb-3">
+          Somente atividades com dados reais registrados · Clique para ver respostas
+        </p>
+
+        {filteredItems.length === 0 ? (
+          <div className="text-center py-8">
+            <Eye className="w-8 h-8 text-muted-foreground mx-auto mb-2 opacity-40" />
+            <p className="font-inter text-sm text-muted-foreground">Nenhuma atividade verificada encontrada.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredItems.map((item) => (
+              <div key={item.key} className="relative">
+                <div
+                  onClick={item.onClick}
+                  className={`flex items-center gap-3 rounded-xl p-2.5 transition-all ${
+                    item.type === "estudo" || item.type === "devocional" ? "cursor-pointer hover:bg-muted/50" : ""
+                  }`}
+                >
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-brand-green/10">
+                    <CheckCircle className="w-4 h-4 text-brand-green" />
                   </div>
-                ) : (
-                  <span className="text-[10px] font-inter text-muted-foreground">pendente</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-inter text-xs text-foreground truncate">{item.title}</p>
+                    <p className="font-inter text-[10px] text-muted-foreground truncate">{item.subtitle}</p>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-medium flex items-center gap-1 ${typeColor(item.type)}`}>
+                    {typeIcon(item.type)} {typeLabel(item.type)}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-[10px] font-inter font-bold ${item.isWeekend ? "text-accent-foreground" : "text-accent"}`}>
+                      +{item.pts}pts{item.isWeekend ? "⚠️" : ""}
+                    </span>
+                    {(item.type === "estudo" || item.type === "devocional") && (
+                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                    )}
+                  </div>
+                </div>
+
+                {/* Inline delete confirmation */}
+                {confirmDeleteKey === item.key && (
+                  <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-3 mt-1 space-y-2">
+                    <p className="font-inter text-xs text-destructive">⚠️ Remover esta atividade de {p.full_name}?</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          if (item.type === "estudo") handleDeleteLesson(item.key.replace("lesson-", ""));
+                          else if (item.type === "devocional") handleDeleteDevotional(item.key.replace("dev-", ""));
+                          else if (item.type === "presenca") handleDeleteAttendance(item.key.replace("att-", ""));
+                        }}
+                        disabled={!!deletingId}
+                        className="flex-1 py-2 rounded-lg bg-destructive text-destructive-foreground font-inter text-xs font-medium disabled:opacity-50"
+                      >
+                        {deletingId ? "Removendo..." : "🗑️ Confirmar"}
+                      </button>
+                      <button onClick={() => setConfirmDeleteKey(null)} className="px-3 py-2 rounded-lg bg-muted text-foreground font-inter text-xs">
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
+// ─── Main ParticipantsTab ────────────────────────────────
 type Props = {
   participants: Participant[];
   activities: Activity[];
@@ -743,26 +899,12 @@ export default function ParticipantsTab({ participants, activities, communities 
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                           <span className="text-muted-foreground font-inter text-xs">{p.community}</span>
                           {age !== null && <><span className="text-muted-foreground">·</span><span className="text-muted-foreground font-inter text-xs">{age} anos</span></>}
-                          <span className="text-muted-foreground">·</span>
-                          <span className="text-accent font-inter text-xs font-medium">⭐ {totalPts}pts</span>
                         </div>
                       </div>
                     </div>
                     <span className={`px-2.5 py-1 rounded-lg text-xs font-inter font-medium flex-shrink-0 ${status.bg} ${status.color}`}>
                       {status.label}
                     </span>
-                  </div>
-                  <div className="mt-3">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-muted-foreground font-inter text-xs">{p.completed_count}/{activities.length} atividades</span>
-                      <span className="font-montserrat font-bold text-foreground text-xs">{pct}%</span>
-                    </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div className="h-full rounded-full transition-all" style={{
-                        width: `${pct}%`,
-                        background: pct >= 70 ? "var(--gradient-green)" : pct >= 34 ? "var(--gradient-orange)" : "hsl(var(--destructive))",
-                      }} />
-                    </div>
                   </div>
                   {/* Status reasons */}
                   {statusReasons[p.user_id] && statusReasons[p.user_id].length > 0 && (

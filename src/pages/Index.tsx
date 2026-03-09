@@ -45,16 +45,9 @@ export default function Index() {
     return () => window.removeEventListener("navigate-to-lesson", handler);
   }, []);
 
-  async function handleCompleteActivity(activityId: string) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase.from("user_progress").insert({
-      user_id: user.id,
-      activity_id: activityId,
-    });
-    // Reload stats
-    window.location.reload();
-  }
+  // Activity completion is now handled by the real tracking tables
+  // (lesson_responses, devotional_progress, attendance, worship_attendance)
+  // Not by the legacy user_progress table
 
   return (
     <div className="min-h-screen bg-background flex flex-col max-w-md mx-auto relative">

@@ -85,10 +85,13 @@ export function useUserStats(): UserStats {
         ...devProg.map(p => p.completed_at),
       ];
 
-      // New formula: Activity pts + Lesson study (20pts) + Devotionals (5pts weekday / 2pts weekend) + Attendance (10pts) + Events (5pts)
+      // Points formula — only count from REAL tracking tables to prevent phantom points
+      // Activity points: ONLY for types that don't have dedicated tracking (e.g., "desafio")
+      // Types with dedicated tracking (devocional, formacao, encontro) are counted via their respective tables below
       const activityPoints = acts
-        .filter(a => completedIds.has(a.id))
+        .filter(a => completedIds.has(a.id) && a.type !== "devocional" && a.type !== "formacao" && a.type !== "encontro")
         .reduce((sum, a) => sum + (a.points ?? 0), 0);
+
       // Devotional points: 5 pts if completed on weekday, 2 pts if completed on weekend (catch-up)
       const devotionalPoints = devProg.reduce((sum, dp) => {
         const completedDate = new Date(dp.completed_at);
