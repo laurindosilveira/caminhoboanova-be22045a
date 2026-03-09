@@ -345,7 +345,7 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
               </div>
             </div>
             <p className="text-muted-foreground font-inter text-xs leading-relaxed">
-              Ao confirmar este grupo, a turma será <strong>arquivada</strong> e não aparecerá mais na seleção de turmas ativas. Os dados dos participantes serão mantidos para consulta.
+              Os alunos do <strong>2º ano</strong> serão movidos para um arquivo chamado "<strong>{confirmArchive?.name} — CONFIRMADOS</strong>". Os alunos do <strong>1º ano permanecerão na turma</strong> original.
             </p>
             <div className="flex gap-2">
               <button onClick={() => setConfirmArchive(null)}
