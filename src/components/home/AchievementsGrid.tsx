@@ -99,7 +99,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     async function fetchQualitative() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const [{ count: devC }, { count: worC }, { data: attD }, { count: chatC }, { count: prayerC }, { data: planData }, { data: existingUnlocks }] = await Promise.all([
+      const [{ count: devC }, { count: worC }, { data: attD }, { count: chatC }, { count: prayerC }, { data: planData }, { data: existingUnlocks }, { count: totalLessonsC }, { count: totalDevsC }, { count: totalEventsC }, { data: lessonResps }, { data: allActs }, { data: userProg }, { data: achUnlocks }] = await Promise.all([
         supabase.from("devotional_progress").select("id", { count: "exact", head: true }).eq("user_id", user.id),
         supabase.from("worship_attendance").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "aprovado"),
         supabase.from("attendance").select("event_id").eq("user_id", user.id).eq("status", "presente"),
@@ -107,6 +107,13 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
         supabase.from("prayer_requests").select("id", { count: "exact", head: true }).eq("user_id", user.id),
         supabase.from("discipleship_plans").select("aptidao").eq("user_id", user.id).limit(1),
         supabase.from("achievement_unlocks").select("achievement_key").eq("user_id", user.id),
+        supabase.from("lessons").select("id", { count: "exact", head: true }),
+        supabase.from("devotional_content").select("id", { count: "exact", head: true }),
+        supabase.from("events").select("id", { count: "exact", head: true }).gte("event_date", new Date(Date.now() - 90 * 86400000).toISOString()),
+        supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
+        supabase.from("activities").select("id, points"),
+        supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
+        supabase.from("achievement_unlocks").select("bonus_points").eq("user_id", user.id),
       ]);
       setDevCount(devC ?? 0);
       setWorshipCount(worC ?? 0);
@@ -115,6 +122,15 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
       setPrayerCount(prayerC ?? 0);
       setIsApto(planData?.[0]?.aptidao === "apto");
       setUnlockedKeys(new Set((existingUnlocks ?? []).map(u => u.achievement_key)));
+      setTotalLessons(totalLessonsC ?? 0);
+      setTotalDevotionals(totalDevsC ?? 0);
+      setTotalEvents(totalEventsC ?? 0);
+      setLessonStudyCount(new Set((lessonResps ?? []).map(r => r.lesson_id)).size);
+      
+      const completedActIds = new Set((userProg ?? []).map(p => p.activity_id));
+      const actPts = (allActs ?? []).filter(a => completedActIds.has(a.id)).reduce((s, a) => s + (a.points ?? 0), 0);
+      setActivityPoints(actPts);
+      setAchievementBonus((achUnlocks ?? []).reduce((s, a) => s + (a.bonus_points ?? 0), 0));
     }
     fetchQualitative();
   }, [profile]);
