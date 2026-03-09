@@ -227,8 +227,12 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
       lessons: (lessonsData ?? []).filter(l => l.course_id === c.id),
     }));
     setCourses(courseList);
-    // Auto-expand first course
-    if (courseList.length > 0) setExpandedCourse(courseList[0].id);
+    setUnlockedCourseIds(new Set((unlocksData ?? []).map((u: any) => u.course_id)));
+    // Auto-expand first unlocked course
+    const unlockedSet = new Set((unlocksData ?? []).map((u: any) => u.course_id));
+    const firstUnlocked = courseList.find(c => unlockedSet.has(c.id));
+    if (firstUnlocked) setExpandedCourse(firstUnlocked.id);
+    else if (courseList.length > 0) setExpandedCourse(courseList[0].id);
 
     // Attendance history
     setRecentEvents((eventsData ?? []) as EventRecord[]);
