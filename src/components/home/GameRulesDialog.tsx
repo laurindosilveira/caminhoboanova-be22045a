@@ -17,7 +17,7 @@ interface PointsBreakdown {
 export default function GameRulesDialog({ breakdown }: { breakdown: PointsBreakdown }) {
   const earned = {
     lessons: breakdown.lessonStudyCount * 20,
-    devotionals: breakdown.devotionalCount * 5,
+    devotionals: breakdown.devotionalPoints ?? (breakdown.devotionalCount * 5),
     attendance: breakdown.attendanceCount * 10,
     worship: breakdown.worshipCount * 5,
     activities: breakdown.activityPoints,
