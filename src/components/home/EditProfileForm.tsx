@@ -227,6 +227,7 @@ export default function EditProfileForm() {
             <InfoRow icon={<MapPin className="w-4 h-4 text-muted-foreground" />} label="Comunidade" value={profile?.community ?? "—"} />
             <InfoRow icon={<MapPin className="w-4 h-4 text-muted-foreground" />} label="Área" value={profile?.area ?? "—"} />
             <InfoRow icon={<Home className="w-4 h-4 text-muted-foreground" />} label="Endereço" value={profile?.address || "—"} />
+            <InfoRow icon={<GraduationCap className="w-4 h-4 text-muted-foreground" />} label="Ano do Ensino Confirmatório" value={profile?.confirmation_year ? `${profile.confirmation_year}º Ano` : "Não definido"} />
             <InfoRow icon={<Users className="w-4 h-4 text-muted-foreground" />} label="Nome do pai" value={profile?.father_name || "—"} />
             <InfoRow icon={<Phone className="w-4 h-4 text-muted-foreground" />} label="Contato do pai" value={profile?.father_phone || "—"} />
             <InfoRow icon={<Users className="w-4 h-4 text-muted-foreground" />} label="Nome da mãe" value={profile?.mother_name || "—"} />
