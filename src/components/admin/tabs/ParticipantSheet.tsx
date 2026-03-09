@@ -114,6 +114,11 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const [editingCommunity, setEditingCommunity] = useState(false);
   const [newCommunity, setNewCommunity] = useState(p.community);
   const [savingCommunity, setSavingCommunity] = useState(false);
+  const [turmas, setTurmas] = useState<{ id: string; name: string; area: string | null }[]>([]);
+  const [currentTurmaName, setCurrentTurmaName] = useState<string | null>(null);
+  const [editingTurma, setEditingTurma] = useState(false);
+  const [newTurmaId, setNewTurmaId] = useState(p.turma_id ?? "");
+  const [savingTurma, setSavingTurma] = useState(false);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
