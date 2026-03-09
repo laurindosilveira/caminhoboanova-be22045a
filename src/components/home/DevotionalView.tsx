@@ -239,13 +239,27 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
       {/* Complete button */}
       {!isCompleted && !hideCompleteButton && (
         <div className="space-y-2">
-          <button onClick={handleComplete} disabled={completing}
-            className={`w-full py-3.5 rounded-2xl font-montserrat text-sm font-black text-primary-foreground disabled:opacity-60 shadow-lg active:scale-95 transition-all ${
-              canComplete ? "shadow-secondary/30" : "opacity-70"
-            }`}
-            style={{ background: "var(--gradient-orange)" }}>
-            {completing ? "Marcando..." : `Concluir Devocional · +${activity.points} pts →`}
-          </button>
+          {(() => {
+            const now = new Date();
+            const isWeekend = now.getDay() === 0 || now.getDay() === 6;
+            const pts = isWeekend ? 2 : activity.points;
+            return (
+              <>
+                <button onClick={handleComplete} disabled={completing}
+                  className={`w-full py-3.5 rounded-2xl font-montserrat text-sm font-black text-primary-foreground disabled:opacity-60 shadow-lg active:scale-95 transition-all ${
+                    canComplete ? "shadow-secondary/30" : "opacity-70"
+                  }`}
+                  style={{ background: "var(--gradient-orange)" }}>
+                  {completing ? "Marcando..." : `Concluir Devocional · +${pts} pts →`}
+                </button>
+                {isWeekend && (
+                  <p className="text-center text-accent-foreground font-inter text-[10px]">
+                    ⚠️ Recuperação de fim de semana: 2 pts ao invés de {activity.points} pts
+                  </p>
+                )}
+              </>
+            );
+          })()}
           <p className="text-center text-muted-foreground font-inter text-[10px]">
             ⭐ Responda as perguntas para ganhar seus pontos de fé!
           </p>

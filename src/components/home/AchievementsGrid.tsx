@@ -157,12 +157,26 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
       const allRecentDevsDone = devsForRecentLessons.length > 0 && devsForRecentLessons.every(d => recentDevCompletedIds.has(d.id));
       const recentDevsCompleted = devsForRecentLessons.filter(d => recentDevCompletedIds.has(d.id)).length;
 
+      // Check if any devotional was completed on a weekend (catch-up) — breaks perfect streak
+      const hasWeekendCatchUp = (recentDevProgress ?? []).some(p => {
+        const d = new Date(p.completed_at);
+        const dow = d.getDay();
+        return dow === 0 || dow === 6;
+      });
+
       // Lesson study for recent event lessons
       const recentStudiedLessons = new Set((recentLessonResps ?? []).map(r => r.lesson_id));
       const allRecentLessonsStudied = recentEventLessonIds.length > 0 && recentEventLessonIds.every(id => recentStudiedLessons.has(id));
 
-      const streakComplete = recentEventIds.length > 0 && attendedAllRecentEvents && allRecentDevsDone && allRecentLessonsStudied;
+      // Biweekly streak: must have all done AND no weekend catch-ups
+      const streakComplete = recentEventIds.length > 0 && attendedAllRecentEvents && allRecentDevsDone && allRecentLessonsStudied && !hasWeekendCatchUp;
       setBiweeklyStreakDone(streakComplete);
+      setBiweeklyProgress({
+        devsDone: recentDevsCompleted,
+        devsTotal: devsForRecentLessons.length,
+        studyDone: allRecentLessonsStudied,
+        attendanceDone: attendedAllRecentEvents,
+      });
       setBiweeklyProgress({
         devsDone: recentDevsCompleted,
         devsTotal: devsForRecentLessons.length,
