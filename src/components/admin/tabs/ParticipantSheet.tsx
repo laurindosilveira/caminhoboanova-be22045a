@@ -471,6 +471,10 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
               🎓 {currentTurmaName ?? "Sem turma"}
               <button onClick={() => { setEditingTurma(true); setNewTurmaId(p.turma_id ?? ""); }} className="ml-1.5 text-primary-foreground/50 hover:text-primary-foreground underline text-[10px]">✏️ alterar</button>
             </p>
+            <p className="text-primary-foreground/60 font-inter text-xs">
+              📖 {p.confirmation_year ? `${p.confirmation_year}º ano do Ensino Confirmatório` : "Ano não definido"}
+              <button onClick={() => { setEditingConfYear(true); setNewConfYear(p.confirmation_year ?? null); }} className="ml-1.5 text-primary-foreground/50 hover:text-primary-foreground underline text-[10px]">✏️ alterar</button>
+            </p>
           </div>
           <button onClick={() => setPlan(prev => ({ ...prev, is_priority: !prev.is_priority }))}
             className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-all ${plan.is_priority ? "bg-accent border-accent/50" : "bg-white/10 border-white/20"}`}
