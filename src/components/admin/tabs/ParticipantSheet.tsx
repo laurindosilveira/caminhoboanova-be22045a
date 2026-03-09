@@ -56,6 +56,7 @@ type TimelineItem = {
 export type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
+  turma_id?: string | null;
 };
 
 export type Activity = { id: string; type: string; points: number; title: string; order_num: number; subtitle: string | null };
@@ -113,6 +114,11 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const [editingCommunity, setEditingCommunity] = useState(false);
   const [newCommunity, setNewCommunity] = useState(p.community);
   const [savingCommunity, setSavingCommunity] = useState(false);
+  const [turmas, setTurmas] = useState<{ id: string; name: string; area: string | null }[]>([]);
+  const [currentTurmaName, setCurrentTurmaName] = useState<string | null>(null);
+  const [editingTurma, setEditingTurma] = useState(false);
+  const [newTurmaId, setNewTurmaId] = useState(p.turma_id ?? "");
+  const [savingTurma, setSavingTurma] = useState(false);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -143,6 +149,14 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       if (planData) setPlan(prev => ({ ...prev, ...planData }));
       setNotes(notesData ?? []);
       setLessons(lessonsData ?? []);
+
+      // Fetch turmas
+      const { data: turmasData } = await supabase.from("turmas").select("id, name, area").eq("is_active", true).order("area").order("name");
+      setTurmas(turmasData ?? []);
+      if (p.turma_id) {
+        const t = (turmasData ?? []).find(t => t.id === p.turma_id);
+        setCurrentTurmaName(t?.name ?? null);
+      }
 
       // Fetch event details for attendance
       const attArr = attendanceData ?? [];
@@ -449,6 +463,10 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
               <button onClick={() => { setEditingCommunity(true); setNewCommunity(p.community); }} className="ml-1.5 text-primary-foreground/50 hover:text-primary-foreground underline text-[10px]">✏️ alterar</button>
             </p>
             <p className="text-primary-foreground/60 font-inter text-xs">📞 {p.phone}</p>
+            <p className="text-primary-foreground/60 font-inter text-xs">
+              🎓 {currentTurmaName ?? "Sem turma"}
+              <button onClick={() => { setEditingTurma(true); setNewTurmaId(p.turma_id ?? ""); }} className="ml-1.5 text-primary-foreground/50 hover:text-primary-foreground underline text-[10px]">✏️ alterar</button>
+            </p>
           </div>
           <button onClick={() => setPlan(prev => ({ ...prev, is_priority: !prev.is_priority }))}
             className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-all ${plan.is_priority ? "bg-accent border-accent/50" : "bg-white/10 border-white/20"}`}
@@ -504,6 +522,48 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
               {savingCommunity ? "Salvando..." : "Salvar"}
             </button>
             <button onClick={() => setEditingCommunity(false)} className="px-4 h-9 rounded-xl border border-border text-xs font-inter text-muted-foreground hover:text-foreground">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit turma modal */}
+      {editingTurma && (
+        <div className="bg-card rounded-2xl border border-border shadow-sm p-4 space-y-3">
+          <p className="font-montserrat font-bold text-foreground text-sm">Alterar Turma</p>
+          <select
+            value={newTurmaId}
+            onChange={(e) => setNewTurmaId(e.target.value)}
+            className="w-full h-10 rounded-xl border border-input bg-background px-3 pr-8 text-sm text-foreground appearance-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="">Sem turma</option>
+            {turmas.map((t) => (
+              <option key={t.id} value={t.id}>{t.name} ({t.area ?? "Geral"})</option>
+            ))}
+          </select>
+          <div className="flex gap-2">
+            <button
+              disabled={savingTurma}
+              onClick={async () => {
+                setSavingTurma(true);
+                const { error } = await supabase.from("profiles").update({
+                  turma_id: newTurmaId || null,
+                }).eq("user_id", p.user_id);
+                setSavingTurma(false);
+                if (!error) {
+                  p.turma_id = newTurmaId || null;
+                  const t = turmas.find(t => t.id === newTurmaId);
+                  setCurrentTurmaName(t?.name ?? null);
+                  setEditingTurma(false);
+                }
+              }}
+              className="flex-1 h-9 rounded-xl font-inter text-xs font-bold text-primary-foreground disabled:opacity-60"
+              style={{ background: "var(--gradient-hero)" }}
+            >
+              {savingTurma ? "Salvando..." : "Salvar"}
+            </button>
+            <button onClick={() => setEditingTurma(false)} className="px-4 h-9 rounded-xl border border-border text-xs font-inter text-muted-foreground hover:text-foreground">
               Cancelar
             </button>
           </div>
