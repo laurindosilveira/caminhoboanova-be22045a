@@ -363,6 +363,50 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
         </DialogContent>
       </Dialog>
 
+      {/* Confirm reset journey dialog */}
+      <Dialog open={!!confirmReset} onOpenChange={(open) => !open && setConfirmReset(null)}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-montserrat font-bold text-foreground text-base">Reiniciar Jornada</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center">
+                <RefreshCw className="w-6 h-6 text-destructive" />
+              </div>
+              <div>
+                <p className="font-montserrat font-bold text-foreground text-sm">{confirmReset?.name}</p>
+                <p className="text-muted-foreground font-inter text-xs mt-0.5">
+                  {confirmReset?.member_count ?? 0} membro{(confirmReset?.member_count ?? 0) !== 1 ? "s" : ""}
+                </p>
+              </div>
+            </div>
+            <p className="text-destructive font-inter text-xs leading-relaxed font-medium">
+              ⚠️ Esta ação é <strong>irreversível</strong>! Todo o progresso dos alunos será apagado:
+            </p>
+            <ul className="text-muted-foreground font-inter text-xs space-y-1 pl-4">
+              <li>• Atividades concluídas</li>
+              <li>• Respostas das lições</li>
+              <li>• Devocionais completados</li>
+              <li>• Conquistas desbloqueadas</li>
+              <li>• Ranking / Pontos da Fé</li>
+            </ul>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmReset(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-montserrat font-bold bg-muted text-muted-foreground border border-border">
+                Cancelar
+              </button>
+              <button onClick={() => confirmReset && handleResetJourney(confirmReset)}
+                disabled={resetting}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-montserrat font-bold text-destructive-foreground bg-destructive hover:bg-destructive/90 disabled:opacity-50 transition-colors">
+                <RefreshCw className="w-4 h-4" />
+                {resetting ? "Reiniciando..." : "Reiniciar tudo"}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Active Turmas list */}
       {loading ? (
         <div className="space-y-2">
