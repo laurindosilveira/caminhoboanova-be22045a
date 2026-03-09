@@ -56,6 +56,8 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
   const [lessonStudyCount, setLessonStudyCount] = useState(0);
   const [activityPoints, setActivityPoints] = useState(0);
   const [achievementBonus, setAchievementBonus] = useState(0);
+  const [biweeklyStreakDone, setBiweeklyStreakDone] = useState(false);
+  const [biweeklyProgress, setBiweeklyProgress] = useState({ devsDone: 0, devsTotal: 0, studyDone: false, attendanceDone: false });
 
   const fireCelebration = useCallback(() => {
     if (celebrationFired) return;
@@ -99,7 +101,11 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     async function fetchQualitative() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const [{ count: devC }, { count: worC }, { data: attD }, { count: chatC }, { count: prayerC }, { data: planData }, { data: existingUnlocks }, { count: totalLessonsC }, { count: totalDevsC }, { count: totalEventsC }, { data: lessonResps }, { data: allActs }, { data: userProg }, { data: achUnlocks }] = await Promise.all([
+      const fifteenDaysAgo = new Date(Date.now() - 15 * 86400000).toISOString();
+      const [{ count: devC }, { count: worC }, { data: attD }, { count: chatC }, { count: prayerC }, { data: planData }, { data: existingUnlocks }, { count: totalLessonsC }, { count: totalDevsC }, { count: totalEventsC }, { data: lessonResps }, { data: allActs }, { data: userProg }, { data: achUnlocks },
+        // Biweekly streak data
+        { data: recentEvents }, { data: recentAttendance }, { data: recentDevContent }, { data: recentDevProgress }, { data: recentLessonResps },
+      ] = await Promise.all([
         supabase.from("devotional_progress").select("id", { count: "exact", head: true }).eq("user_id", user.id),
         supabase.from("worship_attendance").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "aprovado"),
         supabase.from("attendance").select("event_id").eq("user_id", user.id).eq("status", "presente"),
@@ -114,6 +120,13 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
         supabase.from("activities").select("id, points"),
         supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
         supabase.from("achievement_unlocks").select("bonus_points").eq("user_id", user.id),
+        // Biweekly: events in last 15 days for user's area
+        supabase.from("events").select("id, linked_lesson_id").gte("event_date", fifteenDaysAgo).or(`area.eq.${profile!.area},area.is.null`),
+        supabase.from("attendance").select("event_id, status").eq("user_id", user.id).eq("status", "presente"),
+        // Devotionals linked to lessons that have events in last 15 days
+        supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null),
+        supabase.from("devotional_progress").select("devotional_id, completed_at").eq("user_id", user.id).gte("completed_at", fifteenDaysAgo),
+        supabase.from("lesson_responses").select("lesson_id, created_at").eq("user_id", user.id).gte("created_at", fifteenDaysAgo),
       ]);
       setDevCount(devC ?? 0);
       setWorshipCount(worC ?? 0);
@@ -131,6 +144,31 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
       const actPts = (allActs ?? []).filter(a => completedActIds.has(a.id)).reduce((s, a) => s + (a.points ?? 0), 0);
       setActivityPoints(actPts);
       setAchievementBonus((achUnlocks ?? []).reduce((s, a) => s + (a.bonus_points ?? 0), 0));
+
+      // Calculate biweekly streak
+      const recentEventIds = (recentEvents ?? []).map(e => e.id);
+      const recentEventLessonIds = (recentEvents ?? []).filter(e => e.linked_lesson_id).map(e => e.linked_lesson_id!);
+      const attendedEventIds = new Set((recentAttendance ?? []).map(a => a.event_id));
+      const attendedAllRecentEvents = recentEventIds.length > 0 && recentEventIds.every(id => attendedEventIds.has(id));
+
+      // Devotionals from lessons linked to recent events
+      const recentDevCompletedIds = new Set((recentDevProgress ?? []).map(p => p.devotional_id));
+      const devsForRecentLessons = (recentDevContent ?? []).filter(d => d.lesson_id && recentEventLessonIds.includes(d.lesson_id));
+      const allRecentDevsDone = devsForRecentLessons.length > 0 && devsForRecentLessons.every(d => recentDevCompletedIds.has(d.id));
+      const recentDevsCompleted = devsForRecentLessons.filter(d => recentDevCompletedIds.has(d.id)).length;
+
+      // Lesson study for recent event lessons
+      const recentStudiedLessons = new Set((recentLessonResps ?? []).map(r => r.lesson_id));
+      const allRecentLessonsStudied = recentEventLessonIds.length > 0 && recentEventLessonIds.every(id => recentStudiedLessons.has(id));
+
+      const streakComplete = recentEventIds.length > 0 && attendedAllRecentEvents && allRecentDevsDone && allRecentLessonsStudied;
+      setBiweeklyStreakDone(streakComplete);
+      setBiweeklyProgress({
+        devsDone: recentDevsCompleted,
+        devsTotal: devsForRecentLessons.length,
+        studyDone: allRecentLessonsStudied,
+        attendanceDone: attendedAllRecentEvents,
+      });
     }
     fetchQualitative();
   }, [profile]);
@@ -150,6 +188,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     { id: 14, key: "chat_5", icon: "🎤", title: "Compartilhou testemunho", desc: "5 mensagens no chat", unlocked: chatCount >= 5, current: chatCount, target: 5, bonusPoints: 10 },
     { id: 15, key: "prayer_3", icon: "🙏", title: "Intercessor", desc: "3 pedidos de oração", unlocked: prayerCount >= 3, current: prayerCount, target: 3, bonusPoints: 10 },
     { id: 16, key: "chat_20", icon: "💬", title: "Voz ativa", desc: "20 mensagens no chat", unlocked: chatCount >= 20, current: chatCount, target: 20, bonusPoints: 10 },
+    { id: 18, key: "biweekly_streak", icon: "🏅", title: "Quinzena perfeita", desc: "Completou estudo, devocionais e presença nos últimos 15 dias!", unlocked: biweeklyStreakDone, current: biweeklyStreakDone ? 1 : 0, target: 1, bonusPoints: 30 },
     { id: 7, key: "streak_14", icon: "🛡️", title: "Guardião da Fé", desc: "14 dias seguidos de dedicação!", unlocked: streakDays >= 14, current: streakDays, target: 14, secret: true, bonusPoints: 25 },
     { id: 8, key: "streak_30", icon: "👁️‍🗨️", title: "Constância Invisível", desc: "30 dias seguidos — lendário!", unlocked: streakDays >= 30, current: streakDays, target: 30, secret: true, bonusPoints: 25 },
     { id: 17, key: "apto", icon: "✝️", title: "Pronto para a Profissão de Fé", desc: "Seu pastor confirmou: você está pronto!", unlocked: isApto, current: isApto ? 1 : 0, target: 1, secret: true, bonusPoints: 50 },
