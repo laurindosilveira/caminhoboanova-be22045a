@@ -937,6 +937,7 @@ export type Database = {
         Row: {
           address: string | null
           area: Database["public"]["Enums"]["area_name"]
+          avatar_url: string | null
           birth_date: string
           community: Database["public"]["Enums"]["community_name"]
           created_at: string
@@ -954,6 +955,7 @@ export type Database = {
         Insert: {
           address?: string | null
           area: Database["public"]["Enums"]["area_name"]
+          avatar_url?: string | null
           birth_date: string
           community: Database["public"]["Enums"]["community_name"]
           created_at?: string
@@ -971,6 +973,7 @@ export type Database = {
         Update: {
           address?: string | null
           area?: Database["public"]["Enums"]["area_name"]
+          avatar_url?: string | null
           birth_date?: string
           community?: Database["public"]["Enums"]["community_name"]
           created_at?: string
