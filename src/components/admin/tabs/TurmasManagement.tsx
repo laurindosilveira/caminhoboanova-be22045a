@@ -35,6 +35,8 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
   const [showArchive, setShowArchive] = useState(false);
   const [archivedPdfData, setArchivedPdfData] = useState<Record<string, { participants: any[]; activities: any[] }>>({});
   const [loadingPdf, setLoadingPdf] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState<Turma | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   async function loadArchivedTurmaData(turmaId: string) {
     if (archivedPdfData[turmaId]) return;
