@@ -25,14 +25,23 @@ export default function DevotionalReminder({ onNavigateToDiscipulado }: Props) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
 
-      const [{ data: lessons }, { data: devs }, { data: prog }] = await Promise.all([
-        supabase.from("lessons").select("id, title, order_num").order("order_num"),
+      // Get user profile for area
+      const { data: profileData } = await supabase.from("profiles").select("area").eq("user_id", user.id).maybeSingle();
+      const userArea = profileData?.area;
+
+      const [{ data: lessons }, { data: devs }, { data: prog }, { data: unlocks }] = await Promise.all([
+        supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
         supabase.from("devotional_content").select("id, lesson_id"),
         supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
+        supabase.from("course_unlocks").select("course_id").eq("area", userArea ?? ""),
       ]);
 
+      const unlockedCourseIds = new Set((unlocks ?? []).map(u => u.course_id));
       const completedSet = new Set((prog ?? []).map((p: any) => p.devotional_id));
       const totalCompleted = completedSet.size;
+
+      // Only consider lessons from unlocked courses
+      const accessibleLessons = (lessons ?? []).filter((l: any) => unlockedCourseIds.has(l.course_id));
 
       // Group devotionals by lesson
       const lessonDevMap: Record<string, { total: number; completed: number }> = {};
@@ -43,9 +52,9 @@ export default function DevotionalReminder({ onNavigateToDiscipulado }: Props) {
         if (completedSet.has(d.id)) lessonDevMap[d.lesson_id].completed++;
       });
 
-      // Find the FIRST lesson with pending devotionals (current active lesson)
+      // Find the FIRST accessible lesson with pending devotionals
       let currentLesson: DevotionalStats | null = null;
-      for (const l of (lessons ?? []) as any[]) {
+      for (const l of accessibleLessons as any[]) {
         const info = lessonDevMap[l.id];
         if (info && info.completed < info.total) {
           currentLesson = {
