@@ -123,7 +123,7 @@ export default function AttendanceTab({ participants, activities, communities, i
   type LessonOption = { id: string; title: string; order_num: number; course_title: string; course_order: number };
   const [lessonOptions, setLessonOptions] = useState<LessonOption[]>([]);
 
-  useEffect(() => { fetchEvents(); fetchWorshipRequests(); fetchLessonOptions(); }, []);
+  useEffect(() => { fetchEvents(); fetchWorshipRequests(); fetchLessonOptions(); fetchPromotionRequests(); }, []);
 
   async function fetchLessonOptions() {
     const [{ data: coursesData }, { data: lessonsData }] = await Promise.all([
