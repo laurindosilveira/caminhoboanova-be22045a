@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Search, ChevronDown, Filter, Users, CheckCircle, Clock, BookOpen,
-  GraduationCap, CalendarDays, Zap, ChevronLeft, Phone, MapPin, Calendar, Star, AlertTriangle
+  GraduationCap, CalendarDays, Zap, ChevronLeft, Phone, MapPin, Calendar, Star, AlertTriangle,
+  Trash2, Eye, X, ChevronRight
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 type Activity = { id: string; type: string; title: string; points: number; order_num: number; subtitle: string | null };
 type Participant = {
@@ -58,12 +60,33 @@ function calcAge(birthDate: string) {
 
 type WorshipInfo = { event_type: string; worship_date: string };
 
+type ActivityResponse = {
+  question: string;
+  response: string;
+};
+
+type DevotionalDetail = {
+  title: string;
+  day_number: number;
+  bible_reference: string;
+  questions: string[];
+  completed_at: string | null;
+};
+
 type DetailProps = { participant: Participant; activities: Activity[]; onBack: () => void };
 
 function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) {
   const [typeFilter, setTypeFilter] = useState("todos");
   const [worshipRecords, setWorshipRecords] = useState<WorshipInfo[]>([]);
   const [activityTitleMap, setActivityTitleMap] = useState<Map<string, string>>(new Map());
+  const [viewingActivity, setViewingActivity] = useState<Activity | null>(null);
+  const [activityResponses, setActivityResponses] = useState<ActivityResponse[]>([]);
+  const [devotionalDetail, setDevotionalDetail] = useState<DevotionalDetail | null>(null);
+  const [loadingResponses, setLoadingResponses] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set(p.completed_activity_ids));
+  const { toast } = useToast();
 
   useEffect(() => {
     async function fetchTitles() {
@@ -80,7 +103,6 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
 
       const titleMap = new Map<string, string>();
 
-      // Devotional titles: "Devocional dia X - Lesson Title"
       (devData ?? []).forEach(d => {
         if (d.activity_id) {
           const lessonTitle = d.lesson_id ? lessonMap.get(d.lesson_id) : null;
@@ -88,15 +110,7 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
         }
       });
 
-      // Formação titles: use linked lesson title
-      // Activities of type "formacao" are ordered, lessons are ordered - match by order
       const formacaoActivities = activities.filter(a => a.type === "formacao").sort((a, b) => a.order_num - b.order_num);
-      const allLessons = (lessonData ?? []).sort((a, b) => {
-        // We don't have order_num here, so just use the array order
-        return 0;
-      });
-      // Better approach: check if there's a direct link via devotional_content's lesson references
-      // For now, fetch lessons with order to map formacao activities
       const { data: orderedLessons } = await supabase.from("lessons").select("id, title, order_num, course_id").order("course_id").order("order_num");
       if (orderedLessons) {
         formacaoActivities.forEach((act, idx) => {
@@ -106,7 +120,6 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
         });
       }
 
-      // Encontro titles from worship records
       const encontroActivities = activities.filter(a => a.type === "encontro").sort((a, b) => a.order_num - b.order_num);
       encontroActivities.forEach((act, idx) => {
         if (p.completed_activity_ids.includes(act.id) && (worshipData ?? [])[idx]) {
@@ -121,18 +134,289 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
     fetchTitles();
   }, [p.user_id, activities]);
 
-  const pct = activities.length > 0 ? Math.round((p.completed_count / activities.length) * 100) : 0;
-  const status = getStatusInfo(p.completed_count, activities.length);
-  const totalPts = activities.filter(a => p.completed_activity_ids.includes(a.id)).reduce((s, a) => s + a.points, 0);
+  async function handleViewActivity(activity: Activity) {
+    if (!completedIds.has(activity.id)) return;
+    setViewingActivity(activity);
+    setLoadingResponses(true);
+    setActivityResponses([]);
+    setDevotionalDetail(null);
+
+    if (activity.type === "devocional") {
+      // Find the devotional_content linked to this activity
+      const { data: devContent } = await supabase
+        .from("devotional_content")
+        .select("id, title, day_number, bible_reference, questions")
+        .eq("activity_id", activity.id)
+        .maybeSingle();
+
+      if (devContent) {
+        // Check if user completed it
+        const { data: devProgress } = await supabase
+          .from("devotional_progress")
+          .select("completed_at")
+          .eq("user_id", p.user_id)
+          .eq("devotional_id", devContent.id)
+          .maybeSingle();
+
+        setDevotionalDetail({
+          title: devContent.title,
+          day_number: devContent.day_number,
+          bible_reference: devContent.bible_reference,
+          questions: devContent.questions ?? [],
+          completed_at: devProgress?.completed_at ?? null,
+        });
+      }
+    } else if (activity.type === "formacao") {
+      // Find the lesson linked to this activity (by order mapping)
+      const formacaoActivities = activities.filter(a => a.type === "formacao").sort((a, b) => a.order_num - b.order_num);
+      const idx = formacaoActivities.findIndex(a => a.id === activity.id);
+      
+      const { data: orderedLessons } = await supabase
+        .from("lessons").select("id, title, order_num, course_id")
+        .order("course_id").order("order_num");
+
+      if (orderedLessons && orderedLessons[idx]) {
+        const lessonId = orderedLessons[idx].id;
+        
+        // Get lesson content questions
+        const { data: lessonContent } = await supabase
+          .from("lesson_content")
+          .select("questions")
+          .eq("lesson_id", lessonId)
+          .maybeSingle();
+
+        // Get user responses
+        const { data: responses } = await supabase
+          .from("lesson_responses")
+          .select("question_key, response")
+          .eq("user_id", p.user_id)
+          .eq("lesson_id", lessonId)
+          .order("question_key");
+
+        const questions = lessonContent?.questions ?? [];
+        const responseMap = new Map((responses ?? []).map(r => [r.question_key, r.response]));
+
+        const mapped: ActivityResponse[] = questions.map((q, i) => ({
+          question: q,
+          response: responseMap.get(`q${i}`) ?? responseMap.get(`question_${i}`) ?? responseMap.get(String(i)) ?? "",
+        }));
+
+        // Also add any responses with keys not matching questions
+        (responses ?? []).forEach(r => {
+          const exists = mapped.some(m => m.response === r.response && m.response !== "");
+          if (!exists && r.response) {
+            mapped.push({ question: r.question_key, response: r.response });
+          }
+        });
+
+        setActivityResponses(mapped.filter(m => m.response));
+      }
+    }
+
+    setLoadingResponses(false);
+  }
+
+  async function handleDeleteActivity(activityId: string) {
+    setDeletingId(activityId);
+    const activity = activities.find(a => a.id === activityId);
+
+    try {
+      // Delete from user_progress
+      await supabase.from("user_progress").delete().eq("user_id", p.user_id).eq("activity_id", activityId);
+
+      // If devotional, also delete devotional_progress
+      if (activity?.type === "devocional") {
+        const { data: devContent } = await supabase
+          .from("devotional_content")
+          .select("id")
+          .eq("activity_id", activityId)
+          .maybeSingle();
+        if (devContent) {
+          await supabase.from("devotional_progress").delete().eq("user_id", p.user_id).eq("devotional_id", devContent.id);
+        }
+      }
+
+      // If formacao, also delete lesson_responses
+      if (activity?.type === "formacao") {
+        const formacaoActivities = activities.filter(a => a.type === "formacao").sort((a, b) => a.order_num - b.order_num);
+        const idx = formacaoActivities.findIndex(a => a.id === activityId);
+        const { data: orderedLessons } = await supabase
+          .from("lessons").select("id").order("course_id").order("order_num");
+        if (orderedLessons && orderedLessons[idx]) {
+          await supabase.from("lesson_responses").delete().eq("user_id", p.user_id).eq("lesson_id", orderedLessons[idx].id);
+        }
+      }
+
+      // Update local state
+      const newCompleted = new Set(completedIds);
+      newCompleted.delete(activityId);
+      setCompletedIds(newCompleted);
+      p.completed_activity_ids = [...newCompleted];
+      p.completed_count = newCompleted.size;
+
+      toast({ title: "Atividade removida", description: `Pontuação de "${activity?.title ?? "atividade"}" foi retirada.` });
+    } catch (err) {
+      toast({ title: "Erro ao remover", description: "Não foi possível remover a atividade.", variant: "destructive" });
+    }
+
+    setDeletingId(null);
+    setConfirmDeleteId(null);
+    setViewingActivity(null);
+  }
+
+  const pct = activities.length > 0 ? Math.round((completedIds.size / activities.length) * 100) : 0;
+  const status = getStatusInfo(completedIds.size, activities.length);
+  const totalPts = activities.filter(a => completedIds.has(a.id)).reduce((s, a) => s + a.points, 0);
   const age = calcAge(p.birth_date);
 
   const filteredActivities = typeFilter === "todos" ? activities : activities.filter(a => a.type === typeFilter);
 
   const byType = (type: string) => {
     const list = activities.filter(a => a.type === type);
-    const done = list.filter(a => p.completed_activity_ids.includes(a.id)).length;
+    const done = list.filter(a => completedIds.has(a.id)).length;
     return { total: list.length, done };
   };
+
+  // Activity response viewer modal
+  if (viewingActivity) {
+    const done = completedIds.has(viewingActivity.id);
+    return (
+      <div>
+        <button onClick={() => { setViewingActivity(null); setActivityResponses([]); setDevotionalDetail(null); }}
+          className="flex items-center gap-2 text-muted-foreground font-inter text-sm mb-4 hover:text-foreground transition-colors">
+          <ChevronLeft className="w-4 h-4" /> Voltar às atividades
+        </button>
+
+        <div className="bg-card rounded-2xl border border-border p-5 mb-4 shadow-sm">
+          <div className="flex items-center gap-3 mb-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${getTypeColor(viewingActivity.type)}`}>
+              {getTypeIcon(viewingActivity.type)}
+            </div>
+            <div className="flex-1">
+              <h3 className="font-montserrat font-bold text-foreground text-sm">
+                {activityTitleMap.get(viewingActivity.id) ?? viewingActivity.title}
+              </h3>
+              <p className="font-inter text-[10px] text-muted-foreground">
+                {viewingActivity.type === "devocional" ? "📖 Devocional" : viewingActivity.type === "formacao" ? "🎓 Formação" : viewingActivity.type === "encontro" ? "📅 Encontro" : "✨ Desafio"}
+                {" · "}{viewingActivity.points} pts
+              </p>
+            </div>
+            {done && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-green/10 text-brand-green">✅ Concluída</span>
+            )}
+          </div>
+
+          {loadingResponses ? (
+            <div className="py-8 text-center">
+              <p className="text-muted-foreground font-inter text-sm animate-pulse">Carregando respostas...</p>
+            </div>
+          ) : (
+            <>
+              {/* Devotional detail */}
+              {devotionalDetail && (
+                <div className="space-y-3">
+                  <div className="bg-muted/50 rounded-xl p-3">
+                    <p className="font-inter text-xs text-muted-foreground mb-1">📖 Referência bíblica</p>
+                    <p className="font-inter text-sm text-foreground">{devotionalDetail.bible_reference || "Não informada"}</p>
+                  </div>
+                  {devotionalDetail.completed_at && (
+                    <div className="bg-brand-green/5 rounded-xl p-3 border border-brand-green/20">
+                      <p className="font-inter text-xs text-brand-green">
+                        ✅ Concluído em {new Date(devotionalDetail.completed_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </div>
+                  )}
+                  {devotionalDetail.questions.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="font-montserrat font-bold text-foreground text-xs">Perguntas do devocional:</p>
+                      {devotionalDetail.questions.map((q, i) => (
+                        <div key={i} className="bg-muted/30 rounded-xl p-3 border border-border">
+                          <p className="font-inter text-xs text-muted-foreground mb-1">Pergunta {i + 1}:</p>
+                          <p className="font-inter text-sm text-foreground">{q}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!devotionalDetail.completed_at && (
+                    <div className="bg-accent/10 rounded-xl p-3 border border-accent/20">
+                      <p className="font-inter text-xs text-accent-foreground">⚠️ Este devocional está marcado como atividade concluída, mas sem registro de conclusão detalhado.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Lesson responses */}
+              {activityResponses.length > 0 && (
+                <div className="space-y-3">
+                  <p className="font-montserrat font-bold text-foreground text-xs">Respostas do aluno:</p>
+                  {activityResponses.map((r, i) => (
+                    <div key={i} className="bg-muted/30 rounded-xl p-3 border border-border space-y-1.5">
+                      <p className="font-inter text-xs text-muted-foreground font-medium">📝 {r.question}</p>
+                      <p className="font-inter text-sm text-foreground leading-relaxed whitespace-pre-wrap">{r.response}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* No responses found */}
+              {!devotionalDetail && activityResponses.length === 0 && viewingActivity.type !== "encontro" && viewingActivity.type !== "desafio" && (
+                <div className="text-center py-6">
+                  <Eye className="w-8 h-8 text-muted-foreground mx-auto mb-2 opacity-40" />
+                  <p className="font-inter text-sm text-muted-foreground">Nenhuma resposta salva para esta atividade.</p>
+                  <p className="font-inter text-[10px] text-muted-foreground mt-1">O aluno pode ter concluído sem registrar respostas detalhadas.</p>
+                </div>
+              )}
+
+              {(viewingActivity.type === "encontro" || viewingActivity.type === "desafio") && (
+                <div className="text-center py-6">
+                  <p className="font-inter text-sm text-muted-foreground">
+                    {viewingActivity.type === "encontro" ? "📅 Atividade de presença em encontro." : "✨ Atividade de desafio comunitário."}
+                  </p>
+                  <p className="font-inter text-[10px] text-muted-foreground mt-1">Este tipo de atividade não possui respostas escritas.</p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Delete action */}
+        {done && (
+          <div className="bg-destructive/5 border border-destructive/20 rounded-2xl p-4">
+            {confirmDeleteId === viewingActivity.id ? (
+              <div className="space-y-3">
+                <p className="font-inter text-sm text-destructive font-medium">⚠️ Tem certeza que deseja remover esta atividade?</p>
+                <p className="font-inter text-xs text-muted-foreground">
+                  Isso irá remover a pontuação (+{viewingActivity.points}pts) e todas as respostas associadas de <strong>{p.full_name}</strong>.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleDeleteActivity(viewingActivity.id)}
+                    disabled={deletingId === viewingActivity.id}
+                    className="flex-1 py-2.5 rounded-xl bg-destructive text-destructive-foreground font-inter text-sm font-medium disabled:opacity-50"
+                  >
+                    {deletingId === viewingActivity.id ? "Removendo..." : "🗑️ Confirmar remoção"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteId(null)}
+                    className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDeleteId(viewingActivity.id)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-destructive/30 text-destructive font-inter text-sm font-medium hover:bg-destructive/10 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" /> Remover atividade e pontuação
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -179,7 +463,7 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
         {/* Progress bar */}
         <div className="mt-4">
           <div className="flex justify-between mb-1.5">
-            <span className="text-muted-foreground font-inter text-xs">{p.completed_count}/{activities.length} atividades</span>
+            <span className="text-muted-foreground font-inter text-xs">{completedIds.size}/{activities.length} atividades</span>
             <span className="font-montserrat font-bold text-foreground text-xs">{pct}%</span>
           </div>
           <div className="h-2.5 bg-muted rounded-full overflow-hidden">
@@ -214,7 +498,7 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
 
       {/* Activity detail */}
       <div className="bg-card rounded-2xl border border-border p-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-1">
           <p className="font-montserrat font-bold text-foreground text-sm">Atividades</p>
           <select
             value={typeFilter}
@@ -224,11 +508,17 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
             {ACTIVITY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
         </div>
+        <p className="font-inter text-[10px] text-muted-foreground mb-3">Clique em uma atividade concluída para ver as respostas</p>
         <div className="space-y-2">
           {filteredActivities.map((activity) => {
-            const done = p.completed_activity_ids.includes(activity.id);
+            const done = completedIds.has(activity.id);
             return (
-              <div key={activity.id} className="flex items-center gap-3">
+              <div key={activity.id}
+                onClick={() => done && handleViewActivity(activity)}
+                className={`flex items-center gap-3 rounded-xl p-2 transition-all ${
+                  done ? "cursor-pointer hover:bg-muted/50 hover:border-primary/20" : ""
+                }`}
+              >
                 <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${done ? "bg-brand-green/10" : "bg-muted"}`}>
                   {done ? <CheckCircle className="w-4 h-4 text-brand-green" /> : <Clock className="w-4 h-4 text-muted-foreground" />}
                 </div>
@@ -238,9 +528,14 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
                 <span className={`px-2 py-0.5 rounded-md text-[10px] font-medium flex items-center gap-1 ${getTypeColor(activity.type)}`}>
                   {getTypeIcon(activity.type)} {activity.type}
                 </span>
-                <span className={`text-[10px] font-inter ${done ? "text-accent font-bold" : "text-muted-foreground"}`}>
-                  {done ? `+${activity.points}pts` : "pendente"}
-                </span>
+                {done ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-inter text-accent font-bold">+{activity.points}pts</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                  </div>
+                ) : (
+                  <span className="text-[10px] font-inter text-muted-foreground">pendente</span>
+                )}
               </div>
             );
           })}
