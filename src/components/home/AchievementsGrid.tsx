@@ -50,6 +50,12 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
   const [prayerCount, setPrayerCount] = useState(0);
   const [isApto, setIsApto] = useState(false);
   const [unlockedKeys, setUnlockedKeys] = useState<Set<string>>(new Set());
+  const [totalLessons, setTotalLessons] = useState(0);
+  const [totalDevotionals, setTotalDevotionals] = useState(0);
+  const [totalEvents, setTotalEvents] = useState(0);
+  const [lessonStudyCount, setLessonStudyCount] = useState(0);
+  const [activityPoints, setActivityPoints] = useState(0);
+  const [achievementBonus, setAchievementBonus] = useState(0);
 
   const fireCelebration = useCallback(() => {
     if (celebrationFired) return;
