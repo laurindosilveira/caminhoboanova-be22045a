@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Zap, Clock, ChevronRight, BookOpen, GraduationCap } from "lucide-react";
+import { Zap, Clock, ChevronRight, BookOpen, GraduationCap, CalendarDays } from "lucide-react";
+import { useAgendaSchedule } from "@/hooks/useAgendaSchedule";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 type NextItem = {
   type: "lesson" | "devotional";
@@ -13,6 +16,7 @@ type NextItem = {
   devotionalDay?: number;
   totalDevotionals?: number;
   completedDevotionals?: number;
+  eventDate?: Date;
 };
 
 export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { onNavigateToDiscipulado: () => void }) {
@@ -20,6 +24,8 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
   const [nextItem, setNextItem] = useState<NextItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState("");
+  const [noSchedule, setNoSchedule] = useState(false);
+  const agendaSchedule = useAgendaSchedule();
 
   useEffect(() => {
     const update = () => {
@@ -37,35 +43,30 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
   }, []);
 
   useEffect(() => {
-    if (!profile?.area) return;
+    if (!profile?.area || agendaSchedule.loading) return;
     fetchNext();
-  }, [profile?.area]);
+  }, [profile?.area, agendaSchedule.loading, agendaSchedule.schedule]);
 
   async function fetchNext() {
+    if (!agendaSchedule.hasScheduledEvents) {
+      setNoSchedule(true);
+      setLoading(false);
+      return;
+    }
+    setNoSchedule(false);
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [
-      { data: courses },
-      { data: lessons },
-      { data: unlocks },
-      { data: responses },
-      { data: devContent },
-      { data: devProgress },
-    ] = await Promise.all([
-      supabase.from("courses").select("id, title, order_num").order("order_num"),
-      supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
-      supabase.from("course_unlocks").select("course_id").eq("area", profile?.area ?? ""),
+    const [{ data: responses }, { data: devContent }, { data: devProgress }] = await Promise.all([
       supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
       supabase.from("devotional_content").select("id, lesson_id, day_number, title, bible_reference").not("lesson_id", "is", null),
       supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
     ]);
 
-    const unlockedIds = new Set((unlocks ?? []).map(u => u.course_id));
     const studiedLessons = new Set((responses ?? []).map(r => r.lesson_id));
     const completedDevIds = new Set((devProgress ?? []).map(p => p.devotional_id));
 
-    // Group devotionals by lesson
     const devsByLesson: Record<string, typeof devContent> = {};
     (devContent ?? []).forEach(d => {
       if (!d.lesson_id) return;
@@ -73,71 +74,76 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
       devsByLesson[d.lesson_id]!.push(d);
     });
 
-    // Check if a lesson is fully complete (studied + all devs done)
-    const isLessonFullyDone = (lessonId: string) => {
-      if (!studiedLessons.has(lessonId)) return false;
-      const devs = devsByLesson[lessonId] ?? [];
-      return devs.length === 0 || devs.every(d => completedDevIds.has(d.id));
-    };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    // Build ordered course list with lessons
-    const courseList = (courses ?? [])
-      .filter(c => unlockedIds.has(c.id))
-      .map(c => ({
-        ...c,
-        lessons: (lessons ?? []).filter(l => l.course_id === c.id),
-      }));
+    // Iterate through schedule entries to find next action
+    for (const entry of agendaSchedule.schedule) {
+      // Skip entries whose window hasn't opened yet
+      if (today < entry.windowStart) continue;
 
-    // Find the next activity: iterate through unlocked courses in order
-    for (const course of courseList) {
-      for (let i = 0; i < course.lessons.length; i++) {
-        const lesson = course.lessons[i];
-        // Check if previous lesson is done (sequential lock)
-        if (i > 0 && !isLessonFullyDone(course.lessons[i - 1].id)) break;
+      const lessonId = entry.lessonId;
 
-        // If lesson not studied yet → next activity is to study this lesson
-        if (!studiedLessons.has(lesson.id)) {
-          setNextItem({
-            type: "lesson",
-            title: `Lição ${lesson.order_num}: ${lesson.title}`,
-            subtitle: "Estude esta lição para avançar na jornada",
-            courseTitle: course.title,
-            courseOrder: course.order_num,
-            lessonOrder: lesson.order_num,
-          });
-          setLoading(false);
-          return;
-        }
+      // If lesson not studied yet → study it
+      if (!studiedLessons.has(lessonId)) {
+        setNextItem({
+          type: "lesson",
+          title: `Lição ${entry.lessonOrder}: ${entry.lessonTitle}`,
+          subtitle: "Estude esta lição para avançar na jornada",
+          courseTitle: entry.courseTitle,
+          courseOrder: entry.courseOrder,
+          lessonOrder: entry.lessonOrder,
+          eventDate: entry.eventDate,
+        });
+        setLoading(false);
+        return;
+      }
 
-        // Lesson studied — check devotionals
-        const lessonDevs = (devsByLesson[lesson.id] ?? []).sort((a, b) => a.day_number - b.day_number);
-        const pendingDev = lessonDevs.find(d => !completedDevIds.has(d.id));
-        if (pendingDev) {
+      // Lesson studied — check devotionals
+      const lessonDevs = (devsByLesson[lessonId] ?? []).sort((a, b) => a.day_number - b.day_number);
+      const devDates = entry.devotionalDates;
+
+      for (let i = 0; i < lessonDevs.length; i++) {
+        const dev = lessonDevs[i];
+        if (completedDevIds.has(dev.id)) continue;
+
+        // Check if this devotional is released (today >= its scheduled date)
+        const devDate = devDates[i];
+        if (devDate && today >= devDate) {
           const completedCount = lessonDevs.filter(d => completedDevIds.has(d.id)).length;
           setNextItem({
             type: "devotional",
-            title: pendingDev.title || `Devocional ${pendingDev.day_number}`,
-            subtitle: pendingDev.bible_reference || "",
-            courseTitle: course.title,
-            courseOrder: course.order_num,
-            lessonOrder: lesson.order_num,
-            devotionalDay: pendingDev.day_number,
+            title: dev.title || `Devocional ${dev.day_number}`,
+            subtitle: dev.bible_reference || "",
+            courseTitle: entry.courseTitle,
+            courseOrder: entry.courseOrder,
+            lessonOrder: entry.lessonOrder,
+            devotionalDay: dev.day_number,
             totalDevotionals: lessonDevs.length,
             completedDevotionals: completedCount,
+            eventDate: entry.eventDate,
           });
           setLoading(false);
           return;
         }
-        // This lesson is fully done, continue to next
       }
+      // All devotionals done or future for this entry, continue
     }
 
-    // All done
+    // Check for future scheduled events
+    const futureEntry = agendaSchedule.schedule.find(e => today < e.windowStart);
+    if (futureEntry) {
+      setNextItem(null);
+      setNoSchedule(false);
+      setLoading(false);
+      return;
+    }
+
     setNextItem(null);
     setLoading(false);
   }
 
-  if (loading) {
+  if (loading || agendaSchedule.loading) {
     return (
       <div className="px-5 pt-5">
         <div className="h-48 rounded-3xl bg-muted animate-pulse" />
@@ -145,7 +151,60 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
     );
   }
 
+  // No events scheduled — waiting message
+  if (noSchedule) {
+    return (
+      <div className="px-5 pt-5">
+        <div className="rounded-3xl shadow-xl border border-border overflow-hidden bg-card">
+          <div className="bg-gradient-orange px-5 py-3 flex items-center gap-2">
+            <Zap className="w-5 h-5 text-primary-foreground fill-primary-foreground" />
+            <span className="font-montserrat font-bold text-primary-foreground text-sm tracking-wide">SUA PRÓXIMA ETAPA</span>
+          </div>
+          <div className="p-5 text-center">
+            <CalendarDays className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+            <p className="font-montserrat font-bold text-foreground text-base">Aguardando programação</p>
+            <p className="text-muted-foreground font-inter text-sm mt-1">
+              Seu líder ainda não agendou os próximos estudos. Fique atento à agenda! 📅
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!nextItem) {
+    // Check if there's a future event window not yet open
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const futureEntry = agendaSchedule.schedule.find(e => today < e.windowStart);
+    if (futureEntry) {
+      return (
+        <div className="px-5 pt-5">
+          <div className="rounded-3xl shadow-xl border border-border overflow-hidden bg-card">
+            <div className="bg-gradient-orange px-5 py-3 flex items-center gap-2">
+              <Zap className="w-5 h-5 text-primary-foreground fill-primary-foreground" />
+              <span className="font-montserrat font-bold text-primary-foreground text-sm tracking-wide">SUA PRÓXIMA ETAPA</span>
+            </div>
+            <div className="p-5 text-center">
+              <span className="text-3xl block mb-2">⏳</span>
+              <p className="font-montserrat font-bold text-foreground text-base">
+                Próximo estudo: {futureEntry.lessonTitle}
+              </p>
+              <p className="text-muted-foreground font-inter text-sm mt-1">
+                Os devocionais serão liberados a partir de{" "}
+                <span className="font-semibold text-foreground">
+                  {format(futureEntry.windowStart, "d 'de' MMMM", { locale: ptBR })}
+                </span>
+              </p>
+              <p className="text-muted-foreground font-inter text-xs mt-2">
+                📅 Encontro: {format(futureEntry.eventDate, "d 'de' MMMM 'às' HH:mm", { locale: ptBR })}
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="px-5 pt-5">
         <div className="rounded-3xl shadow-xl border border-border overflow-hidden bg-card">
@@ -185,7 +244,7 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
 
         <div className="p-5">
           {/* Course context */}
-          <div className="flex items-center gap-1.5 mb-3">
+          <div className="flex items-center gap-1.5 mb-3 flex-wrap">
             <span className="text-[10px] font-inter font-semibold text-secondary bg-secondary/10 px-2 py-0.5 rounded-full">
               Curso {nextItem.courseOrder} — {nextItem.courseTitle}
             </span>
@@ -193,6 +252,16 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
               · Lição {nextItem.lessonOrder}
             </span>
           </div>
+
+          {/* Event date badge */}
+          {nextItem.eventDate && (
+            <div className="flex items-center gap-1.5 mb-3 px-2.5 py-1.5 rounded-lg bg-primary/5 border border-primary/10">
+              <CalendarDays className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+              <p className="font-inter text-[10px] text-primary font-medium">
+                Encontro: {format(nextItem.eventDate, "d 'de' MMMM 'às' HH:mm", { locale: ptBR })}
+              </p>
+            </div>
+          )}
 
           {/* Content */}
           <div className="flex items-start gap-4 mb-4">

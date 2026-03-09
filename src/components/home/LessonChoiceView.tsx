@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { ChevronLeft, BookOpen, GraduationCap, CheckCircle2, Star, LockKeyhole, Calendar } from "lucide-react";
 import DevotionalView from "@/components/home/DevotionalView";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 type Lesson = {
   id: string;
@@ -32,19 +34,19 @@ type Props = {
   lesson: Lesson;
   onBack: () => void;
   onOpenStudy: () => void;
+  /** Schedule-based devotional dates (from agenda). If provided, overrides default anchoring. */
+  scheduledDevotionalDates?: Date[];
+  /** Event date for display */
+  eventDate?: Date;
 };
 
 /**
- * Devotional schedule rules:
- * - 1 devotional per weekday (Mon–Fri), mapped sequentially
- * - If a weekday is missed, that devotional is locked
- * - On Saturday/Sunday, all missed (locked) devotionals from the current week are unlocked
- * - Future devotionals (not yet scheduled) are always locked
- * - Only the current day's devotional is available on weekdays (can't do 2 in one day)
+ * Compute devotional statuses based on scheduled dates from the agenda.
  */
 function computeDevotionalStatuses(
   devList: DevotionalItem[],
   completedMap: Map<string, string>,
+  scheduledDates?: Date[],
 ): { statuses: Map<string, DevotionalStatus>; lockedSet: Set<string> } {
   const statuses = new Map<string, DevotionalStatus>();
   const lockedSet = new Set<string>();
@@ -53,14 +55,74 @@ function computeDevotionalStatuses(
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const dayOfWeek = today.getDay(); // 0=Sun, 6=Sat
+  const dayOfWeek = today.getDay();
   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-  // Find when day 1 was completed to anchor the schedule
+  // Check if user already completed a devotional today
+  const completedToday = Array.from(completedMap.values()).some(dateStr => {
+    const d = new Date(dateStr);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime() === today.getTime();
+  });
+
+  // Get Monday of current week
+  function getMondayOfWeek(d: Date): Date {
+    const mon = new Date(d);
+    const dow = mon.getDay();
+    const diff = dow === 0 ? -6 : 1 - dow;
+    mon.setDate(mon.getDate() + diff);
+    mon.setHours(0, 0, 0, 0);
+    return mon;
+  }
+
+  const thisMonday = getMondayOfWeek(today);
+  const thisFriday = new Date(thisMonday);
+  thisFriday.setDate(thisFriday.getDate() + 4);
+
+  // === SCHEDULE-BASED MODE (from agenda) ===
+  if (scheduledDates && scheduledDates.length > 0) {
+    for (const dev of devList) {
+      if (completedMap.has(dev.id)) {
+        statuses.set(dev.id, "completed");
+        continue;
+      }
+
+      const idx = dev.day_number - 1;
+      const scheduledDate = idx < scheduledDates.length ? new Date(scheduledDates[idx]) : null;
+      if (!scheduledDate) {
+        statuses.set(dev.id, "future");
+        lockedSet.add(dev.id);
+        continue;
+      }
+      scheduledDate.setHours(0, 0, 0, 0);
+
+      if (scheduledDate > today) {
+        statuses.set(dev.id, "future");
+        lockedSet.add(dev.id);
+      } else if (scheduledDate.getTime() === today.getTime()) {
+        if (completedToday) {
+          statuses.set(dev.id, "future");
+          lockedSet.add(dev.id);
+        } else {
+          statuses.set(dev.id, "available");
+        }
+      } else {
+        // Past — check weekend recovery
+        if (isWeekend && scheduledDate >= thisMonday && scheduledDate <= thisFriday) {
+          statuses.set(dev.id, "available");
+        } else {
+          statuses.set(dev.id, "locked");
+          lockedSet.add(dev.id);
+        }
+      }
+    }
+    return { statuses, lockedSet };
+  }
+
+  // === FALLBACK: anchor from day1 completion ===
   const day1Dev = devList.find(d => d.day_number === 1);
   const day1CompletedAt = day1Dev ? completedMap.get(day1Dev.id) : null;
 
-  // If day 1 hasn't been completed yet, only day 1 is available
   if (!day1CompletedAt) {
     devList.forEach((dev, i) => {
       if (i === 0) {
@@ -73,51 +135,21 @@ function computeDevotionalStatuses(
     return { statuses, lockedSet };
   }
 
-  // Anchor: the start date is the Monday of the week when day 1 was completed
   const startDate = new Date(day1CompletedAt);
   startDate.setHours(0, 0, 0, 0);
 
-  // Map each devotional (by day_number) to a specific calendar date
-  // Day 1 = startDate, then each subsequent day maps to the next weekday (Mon-Fri)
-  // We skip weekends for scheduling purposes
   function getScheduledDate(dayNumber: number): Date {
-    // Day 1 is the startDate itself
-    // Subsequent days advance by 1 calendar day, but skip Sat/Sun
     const date = new Date(startDate);
     let assigned = 1;
     while (assigned < dayNumber) {
       date.setDate(date.getDate() + 1);
       const dow = date.getDay();
-      if (dow !== 0 && dow !== 6) {
-        assigned++;
-      }
+      if (dow !== 0 && dow !== 6) assigned++;
     }
     return date;
   }
 
-  // Get the Monday of today's week
-  function getMondayOfWeek(d: Date): Date {
-    const mon = new Date(d);
-    const dow = mon.getDay();
-    const diff = dow === 0 ? -6 : 1 - dow;
-    mon.setDate(mon.getDate() + diff);
-    mon.setHours(0, 0, 0, 0);
-    return mon;
-  }
-
-  // Check if a devotional was already completed today
-  const completedToday = Array.from(completedMap.values()).some(dateStr => {
-    const d = new Date(dateStr);
-    d.setHours(0, 0, 0, 0);
-    return d.getTime() === today.getTime();
-  });
-
-  const thisMonday = getMondayOfWeek(today);
-  const thisFriday = new Date(thisMonday);
-  thisFriday.setDate(thisFriday.getDate() + 4);
-
   for (const dev of devList) {
-    // Already completed → always show as completed
     if (completedMap.has(dev.id)) {
       statuses.set(dev.id, "completed");
       continue;
@@ -126,19 +158,13 @@ function computeDevotionalStatuses(
     const scheduledDate = getScheduledDate(dev.day_number);
     scheduledDate.setHours(0, 0, 0, 0);
 
-    // Future: scheduled date is after today → locked as future
     if (scheduledDate > today) {
       statuses.set(dev.id, "future");
       lockedSet.add(dev.id);
-      continue;
-    }
-
-    if (isWeekend) {
-      // On weekends: unlock all missed devotionals from THIS week (Mon-Fri)
+    } else if (isWeekend) {
       if (scheduledDate >= thisMonday && scheduledDate <= thisFriday) {
         statuses.set(dev.id, "available");
       } else if (scheduledDate < thisMonday) {
-        // From previous weeks → locked
         statuses.set(dev.id, "locked");
         lockedSet.add(dev.id);
       } else {
@@ -146,9 +172,7 @@ function computeDevotionalStatuses(
         lockedSet.add(dev.id);
       }
     } else {
-      // Weekday logic
       if (scheduledDate.getTime() === today.getTime()) {
-        // Today's devotional — available only if not already completed one today
         if (completedToday) {
           statuses.set(dev.id, "future");
           lockedSet.add(dev.id);
@@ -156,7 +180,6 @@ function computeDevotionalStatuses(
           statuses.set(dev.id, "available");
         }
       } else if (scheduledDate < today) {
-        // Past weekday missed → locked
         statuses.set(dev.id, "locked");
         lockedSet.add(dev.id);
       }
@@ -166,7 +189,7 @@ function computeDevotionalStatuses(
   return { statuses, lockedSet };
 }
 
-export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props) {
+export default function LessonChoiceView({ lesson, onBack, onOpenStudy, scheduledDevotionalDates, eventDate }: Props) {
   const [devotionals, setDevotionals] = useState<DevotionalItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDevotionals, setShowDevotionals] = useState(false);
@@ -192,14 +215,14 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
       setCompletedIds(new Set(progList.map((p: any) => p.devotional_id)));
       setCompletedDates(completedMap);
 
-      const { statuses, lockedSet } = computeDevotionalStatuses(devList, completedMap);
+      const { statuses, lockedSet } = computeDevotionalStatuses(devList, completedMap, scheduledDevotionalDates);
       setDevStatuses(statuses);
       setLockedIds(lockedSet);
       setDevotionals(devList);
       setLoading(false);
     }
     load();
-  }, [lesson.id]);
+  }, [lesson.id, scheduledDevotionalDates]);
 
   async function handleCompleteDevotional(devotionalId: string) {
     const { data: { user } } = await supabase.auth.getUser();
@@ -211,12 +234,11 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
       user_id: user.id,
       devotional_id: devotionalId,
     });
-    // Update local state and recompute statuses
     const newCompletedMap = new Map(completedDates);
     newCompletedMap.set(devotionalId, now.toISOString());
     setCompletedDates(newCompletedMap);
     setCompletedIds(prev => new Set([...prev, devotionalId]));
-    const { statuses, lockedSet } = computeDevotionalStatuses(devotionals, newCompletedMap);
+    const { statuses, lockedSet } = computeDevotionalStatuses(devotionals, newCompletedMap, scheduledDevotionalDates);
     setDevStatuses(statuses);
     setLockedIds(lockedSet);
     toast.success(`Devocional concluído! +${pts} pontos de fé ⭐`, {
@@ -227,33 +249,43 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
 
   const completedCount = devotionals.filter(d => completedIds.has(d.id)).length;
   const lockedCount = Array.from(devStatuses.values()).filter(s => s === "locked").length;
-  const futureCount = Array.from(devStatuses.values()).filter(s => s === "future").length;
   const totalCount = devotionals.length;
   const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
-  // Compute scheduled dates for weekday labels
+  // Compute display dates for devotionals
   const weekdayNames = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
   const scheduledDateMap = new Map<string, Date>();
+
   if (devotionals.length > 0) {
-    const day1Dev = devotionals.find(d => d.day_number === 1);
-    const day1Date = day1Dev ? completedDates.get(day1Dev.id) : null;
-    if (day1Date) {
-      const anchor = new Date(day1Date);
-      anchor.setHours(0, 0, 0, 0);
-      for (const dev of devotionals) {
-        const date = new Date(anchor);
-        let assigned = 1;
-        while (assigned < dev.day_number) {
-          date.setDate(date.getDate() + 1);
-          const dow = date.getDay();
-          if (dow !== 0 && dow !== 6) assigned++;
+    if (scheduledDevotionalDates && scheduledDevotionalDates.length > 0) {
+      // Use agenda-based dates
+      devotionals.forEach(dev => {
+        const idx = dev.day_number - 1;
+        if (idx < scheduledDevotionalDates.length) {
+          scheduledDateMap.set(dev.id, scheduledDevotionalDates[idx]);
         }
-        scheduledDateMap.set(dev.id, new Date(date));
+      });
+    } else {
+      // Fallback: compute from day1 completion
+      const day1Dev = devotionals.find(d => d.day_number === 1);
+      const day1Date = day1Dev ? completedDates.get(day1Dev.id) : null;
+      if (day1Date) {
+        const anchor = new Date(day1Date);
+        anchor.setHours(0, 0, 0, 0);
+        for (const dev of devotionals) {
+          const date = new Date(anchor);
+          let assigned = 1;
+          while (assigned < dev.day_number) {
+            date.setDate(date.getDate() + 1);
+            const dow = date.getDay();
+            if (dow !== 0 && dow !== 6) assigned++;
+          }
+          scheduledDateMap.set(dev.id, new Date(date));
+        }
       }
     }
   }
 
-  // Viewing a specific devotional
   if (viewingDevotional) {
     const isCompleted = completedIds.has(viewingDevotional.id);
     return (
@@ -282,7 +314,6 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
     );
   }
 
-  // Show devotionals list
   if (showDevotionals) {
     return (
       <div className="px-5 pt-5 pb-6 space-y-4">
@@ -296,6 +327,11 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
           <p className="text-primary-foreground/70 font-inter text-xs mt-1">
             {completedCount}/{totalCount} concluídos{lockedCount > 0 ? ` · ${lockedCount} bloqueado${lockedCount > 1 ? "s" : ""}` : ""}
           </p>
+          {eventDate && (
+            <p className="text-primary-foreground/60 font-inter text-[10px] mt-1">
+              📅 Encontro: {format(eventDate, "d 'de' MMMM", { locale: ptBR })}
+            </p>
+          )}
           {totalCount > 0 && (
             <div className="mt-2 h-1.5 bg-white/20 rounded-full overflow-hidden">
               <div className="h-full bg-white/80 rounded-full transition-all" style={{ width: `${progressPct}%` }} />
@@ -317,8 +353,9 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
               const locked = status === "locked";
               const future = status === "future";
               const isDisabled = locked || future;
+              const sched = scheduledDateMap.get(dev.id);
               return (
-                <button key={dev.id} 
+                <button key={dev.id}
                   onClick={() => !isDisabled && setViewingDevotional(dev)}
                   disabled={isDisabled}
                   className={`w-full flex items-center gap-3 p-4 bg-card rounded-2xl border shadow-sm text-left transition-colors ${
@@ -346,13 +383,11 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
                       {dev.title || `Dia ${dev.day_number}`}
                     </p>
                     <p className="text-muted-foreground font-inter text-[10px] truncate">
-                      {locked ? "🔒 Bloqueado — dia perdido" : future ? (() => {
-                        const sched = scheduledDateMap.get(dev.id);
-                        return sched ? `🔜 ${weekdayNames[sched.getDay()]}-feira, ${sched.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}` : "🔜 Disponível no próximo dia útil";
-                      })() : done ? "✅ Concluído" : (() => {
-                        const sched = scheduledDateMap.get(dev.id);
-                        return sched ? `📖 Disponível hoje (${weekdayNames[sched.getDay()]})` : "📖 Disponível hoje";
-                      })()}
+                      {locked ? "🔒 Bloqueado — dia perdido" : future ? (
+                        sched ? `🔜 ${weekdayNames[sched.getDay()]}, ${sched.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}` : "🔜 Disponível em breve"
+                      ) : done ? "✅ Concluído" : (
+                        sched ? `📖 Disponível hoje (${weekdayNames[sched.getDay()]})` : "📖 Disponível hoje"
+                      )}
                     </p>
                   </div>
                   {!isDisabled && <span className="text-muted-foreground text-xs">→</span>}
@@ -365,7 +400,6 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
     );
   }
 
-  // Choice screen: Devocionais vs Estudo
   return (
     <div className="px-5 pt-5 pb-6 space-y-4">
       <button onClick={onBack} className="flex items-center gap-1.5 text-muted-foreground font-inter text-sm hover:text-foreground transition-colors">
@@ -377,6 +411,11 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
         <h2 className="font-montserrat font-black text-primary-foreground text-xl leading-tight">{lesson.title}</h2>
         {lesson.objective && (
           <p className="text-primary-foreground/70 font-inter text-xs mt-2">{lesson.objective}</p>
+        )}
+        {eventDate && (
+          <p className="text-primary-foreground/50 font-inter text-[10px] mt-2">
+            📅 Encontro: {format(eventDate, "d 'de' MMMM 'às' HH:mm", { locale: ptBR })}
+          </p>
         )}
       </div>
 
@@ -413,12 +452,12 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy }: Props)
             <GraduationCap className="w-7 h-7 text-secondary" />
           </div>
           <div className="flex-1">
-            <p className="font-montserrat font-bold text-foreground text-base">📝 Estudo</p>
+            <p className="font-montserrat font-bold text-foreground text-base">🎓 Estudo da Lição</p>
             <p className="text-muted-foreground font-inter text-xs mt-0.5">
-              Conteúdo completo do encontro
+              Responda as perguntas e registre sua reflexão
             </p>
             <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
-              Saudação, vídeo, perguntas, prática e oração
+              +20 pontos de fé ao completar
             </p>
           </div>
           <span className="text-secondary font-montserrat font-bold text-lg">→</span>
