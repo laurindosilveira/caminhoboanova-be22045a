@@ -17,6 +17,12 @@ const COMMUNITIES = [
   "Iriá Pira 2",
 ] as const;
 
+const CONFIRMATION_YEARS = [
+  { value: "", label: "Não definido" },
+  { value: "1", label: "1º Ano" },
+  { value: "2", label: "2º Ano" },
+];
+
 const profileSchema = z.object({
   full_name: z.string().trim().min(3, "Nome deve ter ao menos 3 caracteres").max(100),
   phone: z.string().trim().min(8, "Telefone inválido").max(20),
@@ -27,6 +33,7 @@ const profileSchema = z.object({
   father_phone: z.string().max(20).optional(),
   mother_phone: z.string().max(20).optional(),
   address: z.string().max(200).optional(),
+  confirmation_year: z.string().optional(),
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
