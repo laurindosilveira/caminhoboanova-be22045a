@@ -1055,6 +1055,52 @@ export default function AttendanceTab({ participants, activities, communities, i
           </div>
         )}
       </div>
+
+      {/* ─── REINICIAR JORNADA ─── */}
+      <div className="mt-6 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-destructive/10 flex items-center justify-center">
+              <RefreshCw className="w-5 h-5 text-destructive" />
+            </div>
+            <div>
+              <h3 className="font-montserrat font-bold text-foreground text-sm">Reiniciar Jornada</h3>
+              <p className="text-muted-foreground text-[10px] font-inter">Zerar progresso de toda a turma</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-inter font-medium border-2 border-destructive/30 text-destructive hover:bg-destructive/10 transition-all"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Reiniciar
+          </button>
+        </div>
+        {showResetConfirm && (
+          <div className="bg-destructive/5 border-2 border-destructive/20 rounded-2xl p-4 space-y-3">
+            <p className="text-destructive font-inter text-xs font-medium">
+              ⚠️ Ação irreversível! Todo o progresso de {participants.length} aluno(s) será apagado:
+            </p>
+            <ul className="text-muted-foreground font-inter text-xs space-y-1 pl-2">
+              <li>• Atividades, lições e devocionais</li>
+              <li>• Conquistas e pontos da fé</li>
+            </ul>
+            <div className="flex gap-2">
+              <button onClick={() => setShowResetConfirm(false)}
+                className="flex-1 py-2 rounded-xl text-xs font-montserrat font-bold bg-muted text-muted-foreground border border-border">
+                Cancelar
+              </button>
+              <button
+                onClick={handleResetJourney}
+                disabled={resettingJourney}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-montserrat font-bold text-destructive-foreground bg-destructive hover:bg-destructive/90 disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                {resettingJourney ? "Reiniciando..." : "Confirmar reinício"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 
