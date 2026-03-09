@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Trophy, Lock, Flame } from "lucide-react";
 import { toast } from "sonner";
+import GameRulesDialog from "./GameRulesDialog";
 
 interface AchievementsGridProps {
   faithPoints: number;
