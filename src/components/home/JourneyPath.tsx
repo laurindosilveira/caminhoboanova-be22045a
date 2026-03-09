@@ -84,7 +84,7 @@ export default function JourneyPath() {
       supabase.from("events").select("id").gte("event_date", new Date(Date.now() - 90 * 86400000).toISOString()),
       supabase.from("attendance").select("event_id, status").eq("user_id", user.id),
       supabase.from("worship_attendance").select("id, status").eq("user_id", user.id).eq("status", "aprovado"),
-      supabase.from("course_unlocks").select("course_id"),
+      supabase.from("course_unlocks").select("course_id").eq("area", profile?.area ?? ""),
     ]);
 
     const lessons = lessonsData ?? [];
