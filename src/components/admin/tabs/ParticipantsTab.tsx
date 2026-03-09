@@ -3,9 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   Search, ChevronDown, Filter, Users, CheckCircle, Clock, BookOpen,
   GraduationCap, CalendarDays, Zap, ChevronLeft, Phone, MapPin, Calendar, Star, AlertTriangle,
-  Trash2, Eye, X, ChevronRight, Church
+  Trash2, Eye, X, ChevronRight, Church, History
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 type Activity = { id: string; type: string; title: string; points: number; order_num: number; subtitle: string | null };
 type Participant = {
@@ -79,13 +80,81 @@ function calcAge(birthDate: string) {
   return age;
 }
 
+// ─── Audit Log Section ───────────────────────────────────
+function AuditLogSection({ targetUserId, userName }: { targetUserId: string; userName: string }) {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [profiles, setProfiles] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetch() {
+      setLoading(true);
+      const { data } = await supabase
+        .from("activity_removal_log" as any)
+        .select("*")
+        .eq("target_user_id", targetUserId)
+        .order("removed_at", { ascending: false }) as any;
+      const items = data ?? [];
+      setLogs(items);
+
+      // Fetch admin names
+      const adminIds = [...new Set(items.map((l: any) => l.removed_by))] as string[];
+      if (adminIds.length > 0) {
+        const { data: profs } = await supabase.from("profiles").select("user_id, full_name").in("user_id", adminIds);
+        const map: Record<string, string> = {};
+        (profs ?? []).forEach((p: any) => { map[p.user_id] = p.full_name; });
+        setProfiles(map);
+      }
+      setLoading(false);
+    }
+    fetch();
+  }, [targetUserId]);
+
+  const typeEmoji: Record<string, string> = { estudo: "🎓", devocional: "📖", presenca: "📅" };
+
+  if (loading) return <p className="text-center text-muted-foreground font-inter text-xs py-4 animate-pulse">Carregando log...</p>;
+
+  if (logs.length === 0) return (
+    <div className="text-center py-6 mt-3">
+      <History className="w-6 h-6 text-muted-foreground mx-auto mb-2 opacity-40" />
+      <p className="font-inter text-xs text-muted-foreground">Nenhuma remoção registrada para {userName}.</p>
+    </div>
+  );
+
+  return (
+    <div className="mt-3 bg-card rounded-2xl border border-border p-4 space-y-2">
+      <p className="font-montserrat font-bold text-foreground text-sm mb-2">📋 Log de remoções</p>
+      {logs.map((log: any) => (
+        <div key={log.id} className="bg-muted/30 rounded-xl p-3 border border-border">
+          <div className="flex items-start gap-2">
+            <span className="text-base">{typeEmoji[log.activity_type] ?? "🗑️"}</span>
+            <div className="flex-1 min-w-0">
+              <p className="font-inter text-xs text-foreground font-medium truncate">
+                {log.activity_title || log.activity_type}
+              </p>
+              <p className="font-inter text-[10px] text-muted-foreground">
+                Removido por <strong>{profiles[log.removed_by] ?? "Admin"}</strong> · -{log.points_removed}pts
+              </p>
+              <p className="font-inter text-[10px] text-muted-foreground">
+                {new Date(log.removed_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+              </p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── ParticipantDetail (rebuilt with REAL data) ──────────
 type DetailProps = { participant: Participant; activities: Activity[]; onBack: () => void };
 
 function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) {
   const [typeFilter, setTypeFilter] = useState("todos");
   const [loading, setLoading] = useState(true);
+  const [showAuditLog, setShowAuditLog] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   // Real data states
   const [lessonCompletions, setLessonCompletions] = useState<RealLessonCompletion[]>([]);
@@ -210,12 +279,26 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
   }
 
   // ── Delete handlers ──
+  async function logRemoval(activityType: string, activityId: string, activityTitle: string, pointsRemoved: number) {
+    if (!user) return;
+    await supabase.from("activity_removal_log" as any).insert({
+      removed_by: user.id,
+      target_user_id: p.user_id,
+      activity_type: activityType,
+      activity_id: activityId,
+      activity_title: activityTitle,
+      points_removed: pointsRemoved,
+    } as any);
+  }
+
   async function handleDeleteLesson(lessonId: string) {
     setDeletingType("estudo");
     setDeletingId(lessonId);
+    const lesson = lessonCompletions.find(l => l.lesson_id === lessonId);
     await supabase.from("lesson_responses").delete().eq("user_id", p.user_id).eq("lesson_id", lessonId);
+    await logRemoval("estudo", lessonId, lesson?.lesson_title ?? "", 20);
     setLessonCompletions(prev => prev.filter(l => l.lesson_id !== lessonId));
-    toast({ title: "Estudo removido", description: "Respostas e pontuação foram removidas." });
+    toast({ title: "Estudo removido", description: "Respostas e pontuação foram removidas. Registro salvo no log." });
     setDeletingType(null);
     setDeletingId(null);
     setConfirmDeleteKey(null);
@@ -225,9 +308,12 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
   async function handleDeleteDevotional(devotionalId: string) {
     setDeletingType("devocional");
     setDeletingId(devotionalId);
+    const dev = devotionalCompletions.find(d => d.devotional_id === devotionalId);
+    const pts = dev?.is_weekend ? 2 : 5;
     await supabase.from("devotional_progress").delete().eq("user_id", p.user_id).eq("devotional_id", devotionalId);
+    await logRemoval("devocional", devotionalId, dev?.title ?? "", pts);
     setDevotionalCompletions(prev => prev.filter(d => d.devotional_id !== devotionalId));
-    toast({ title: "Devocional removido", description: "Conclusão e pontuação foram removidas." });
+    toast({ title: "Devocional removido", description: "Conclusão e pontuação foram removidas. Registro salvo no log." });
     setDeletingType(null);
     setDeletingId(null);
     setConfirmDeleteKey(null);
@@ -237,9 +323,11 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
   async function handleDeleteAttendance(eventId: string) {
     setDeletingType("presenca");
     setDeletingId(eventId);
+    const att = attendanceRecords.find(a => a.event_id === eventId);
     await supabase.from("attendance").delete().eq("user_id", p.user_id).eq("event_id", eventId);
+    await logRemoval("presenca", eventId, att?.event_title ?? "", 10);
     setAttendanceRecords(prev => prev.filter(a => a.event_id !== eventId));
-    toast({ title: "Presença removida", description: "Registro de presença foi removido." });
+    toast({ title: "Presença removida", description: "Registro de presença foi removido. Registro salvo no log." });
     setDeletingType(null);
     setDeletingId(null);
     setConfirmDeleteKey(null);
@@ -695,6 +783,19 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
             ))}
           </div>
         )}
+      </div>
+
+      {/* Audit log button */}
+      <div className="mt-4">
+        <button
+          onClick={() => setShowAuditLog(!showAuditLog)}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-border text-muted-foreground font-inter text-xs font-medium hover:bg-muted/50 transition-colors"
+        >
+          <History className="w-4 h-4" />
+          {showAuditLog ? "Ocultar" : "Ver"} histórico de remoções
+        </button>
+
+        {showAuditLog && <AuditLogSection targetUserId={p.user_id} userName={p.full_name} />}
       </div>
     </div>
   );

@@ -68,6 +68,42 @@ export type Database = {
         }
         Relationships: []
       }
+      activity_removal_log: {
+        Row: {
+          activity_id: string
+          activity_title: string
+          activity_type: string
+          id: string
+          notes: string | null
+          points_removed: number
+          removed_at: string
+          removed_by: string
+          target_user_id: string
+        }
+        Insert: {
+          activity_id: string
+          activity_title?: string
+          activity_type: string
+          id?: string
+          notes?: string | null
+          points_removed?: number
+          removed_at?: string
+          removed_by: string
+          target_user_id: string
+        }
+        Update: {
+          activity_id?: string
+          activity_title?: string
+          activity_type?: string
+          id?: string
+          notes?: string | null
+          points_removed?: number
+          removed_at?: string
+          removed_by?: string
+          target_user_id?: string
+        }
+        Relationships: []
+      }
       area_pastors: {
         Row: {
           area: string
