@@ -184,26 +184,38 @@ export default function JourneyPath() {
 
         {/* Fase atual */}
         {(() => {
-          // Find current course: the LAST unlocked course with incomplete lessons
-          // This way, if user moved to course 2, it won't show course 1 just because of missing devotionals
-          const unlockedCoursesWithPending = courses.filter(c =>
-            unlockedCourseIds.has(c.id) && c.lessons.some(l => !fullyCompletedLessonIds.has(l.id))
+          // Only consider unlocked courses
+          const unlockedCourses = courses.filter(c => unlockedCourseIds.has(c.id));
+          if (unlockedCourses.length === 0) return null;
+
+          // Find the highest-order unlocked course that still has pending lessons
+          const withPending = unlockedCourses.filter(c =>
+            c.lessons.some(l => !fullyCompletedLessonIds.has(l.id))
           );
-          const currentCourse = unlockedCoursesWithPending.length > 0
-            ? unlockedCoursesWithPending[unlockedCoursesWithPending.length - 1]
-            : courses[courses.length - 1];
-          if (!currentCourse) return null;
+
+          // If all unlocked courses are fully done, show the last unlocked as completed
+          const currentCourse = withPending.length > 0
+            ? withPending[withPending.length - 1]
+            : unlockedCourses[unlockedCourses.length - 1];
+
           const currentLesson = currentCourse.lessons.find(l => !fullyCompletedLessonIds.has(l.id));
+          const allDone = withPending.length === 0;
+
           return (
-            <div className="mt-2 flex items-center gap-2 bg-secondary/10 rounded-xl px-3 py-2">
-              <span className="text-sm">📍</span>
+            <div className={`mt-2 flex items-center gap-2 rounded-xl px-3 py-2 ${allDone ? "bg-brand-green/10" : "bg-secondary/10"}`}>
+              <span className="text-sm">{allDone ? "🏆" : "📍"}</span>
               <div className="min-w-0">
                 <p className="font-montserrat font-bold text-foreground text-xs">
-                  Fase atual: Curso {currentCourse.order_num} — {currentCourse.title}
+                  {allDone ? "Completo" : "Fase atual"}: Curso {currentCourse.order_num} — {currentCourse.title}
                 </p>
-                {currentLesson && (
+                {currentLesson && !allDone && (
                   <p className="font-inter text-[10px] text-muted-foreground truncate">
                     Próxima: Lição {currentLesson.order_num} — {currentLesson.title}
+                  </p>
+                )}
+                {allDone && (
+                  <p className="font-inter text-[10px] text-brand-green truncate">
+                    Todas as lições concluídas! 🎉
                   </p>
                 )}
               </div>
