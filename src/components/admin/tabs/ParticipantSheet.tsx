@@ -465,6 +465,51 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         </div>
       </div>
 
+      {/* Edit community modal */}
+      {editingCommunity && (
+        <div className="bg-card rounded-2xl border border-border shadow-sm p-4 space-y-3">
+          <p className="font-montserrat font-bold text-foreground text-sm">Alterar Comunidade / Área</p>
+          <select
+            value={newCommunity}
+            onChange={(e) => setNewCommunity(e.target.value)}
+            className="w-full h-10 rounded-xl border border-input bg-background px-3 pr-8 text-sm text-foreground appearance-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {COMMUNITIES_LIST.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground font-inter">
+            Nova área: <strong className="text-foreground">{getArea(newCommunity)}</strong>
+          </p>
+          <div className="flex gap-2">
+            <button
+              disabled={savingCommunity}
+              onClick={async () => {
+                setSavingCommunity(true);
+                const newArea = getArea(newCommunity);
+                const { error } = await supabase.from("profiles").update({
+                  community: newCommunity as any,
+                  area: newArea as any,
+                }).eq("user_id", p.user_id);
+                setSavingCommunity(false);
+                if (!error) {
+                  p.community = newCommunity;
+                  p.area = newArea;
+                  setEditingCommunity(false);
+                }
+              }}
+              className="flex-1 h-9 rounded-xl font-inter text-xs font-bold text-primary-foreground disabled:opacity-60"
+              style={{ background: "var(--gradient-hero)" }}
+            >
+              {savingCommunity ? "Salvando..." : "Salvar"}
+            </button>
+            <button onClick={() => setEditingCommunity(false)} className="px-4 h-9 rounded-xl border border-border text-xs font-inter text-muted-foreground hover:text-foreground">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Quick action buttons */}
       <div className="grid grid-cols-2 gap-2">
         {[
