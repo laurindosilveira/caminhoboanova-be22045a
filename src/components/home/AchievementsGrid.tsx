@@ -56,6 +56,8 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
   const [lessonStudyCount, setLessonStudyCount] = useState(0);
   const [activityPoints, setActivityPoints] = useState(0);
   const [achievementBonus, setAchievementBonus] = useState(0);
+  const [biweeklyStreakDone, setBiweeklyStreakDone] = useState(false);
+  const [biweeklyProgress, setBiweeklyProgress] = useState({ devsDone: 0, devsTotal: 0, studyDone: false, attendanceDone: false });
 
   const fireCelebration = useCallback(() => {
     if (celebrationFired) return;
