@@ -12,6 +12,7 @@ type Activity = { id: string; type: string; title: string; points: number; order
 type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
+  confirmation_year?: number | null;
 };
 
 type StatusReason = {
