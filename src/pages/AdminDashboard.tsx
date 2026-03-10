@@ -26,6 +26,7 @@ type Activity = {
 type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
+  confirmation_year?: number | null;
 };
 type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
 type Turma = { id: string; name: string; area: string | null; year: number; is_active: boolean; description: string | null };

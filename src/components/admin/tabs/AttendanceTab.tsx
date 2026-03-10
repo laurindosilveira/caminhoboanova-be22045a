@@ -26,6 +26,7 @@ type Event = {
 type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
+  confirmation_year?: number | null;
 };
 type Activity = {
   id: string; title: string; type: string; order_num: number; points: number; subtitle: string | null;
@@ -103,6 +104,7 @@ export default function AttendanceTab({ participants, activities, communities, i
   const [selectedParticipant, setSelectedParticipant] = useState<string | null>(null);
   const [savingEval, setSavingEval] = useState(false);
   const [filterType, setFilterType] = useState<string | null>(null);
+  const [filterYear, setFilterYear] = useState<number | null>(null);
 
   // Worship attendance requests
   const [worshipRequests, setWorshipRequests] = useState<WorshipRequest[]>([]);
@@ -426,7 +428,8 @@ export default function AttendanceTab({ participants, activities, communities, i
 
   function getParticipantsForEvent(event: Event) {
     return participants.filter(p => {
-      if (event.community) return p.community === event.community;
+      if (event.community && p.community !== event.community) return false;
+      if (filterYear && p.confirmation_year !== filterYear) return false;
       return true;
     });
   }
@@ -712,6 +715,27 @@ export default function AttendanceTab({ participants, activities, communities, i
             }`}
           >
             {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Year filter */}
+      <div className="flex gap-1.5">
+        {[
+          { value: null, label: "Todas as turmas" },
+          { value: 1, label: "1º Ano" },
+          { value: 2, label: "2º Ano" },
+        ].map(y => (
+          <button
+            key={y.label}
+            onClick={() => setFilterYear(y.value)}
+            className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-inter font-medium transition-all ${
+              filterYear === y.value
+                ? "bg-accent text-accent-foreground shadow-sm"
+                : "bg-muted text-muted-foreground hover:bg-accent/10"
+            }`}
+          >
+            🎓 {y.label}
           </button>
         ))}
       </div>
