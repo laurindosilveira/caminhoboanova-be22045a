@@ -12,6 +12,7 @@ type Activity = { id: string; type: string; title: string; points: number; order
 type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
+  confirmation_year?: number | null;
 };
 
 type StatusReason = {
@@ -814,6 +815,7 @@ export default function ParticipantsTab({ participants, activities, communities 
   const [search, setSearch] = useState("");
   const [communityFilter, setCommunityFilter] = useState("todas");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("todos");
+  const [yearFilter, setYearFilter] = useState<string>("todos");
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
 
   const [statusReasons, setStatusReasons] = useState<Record<string, StatusReason[]>>({});
@@ -916,6 +918,7 @@ export default function ParticipantsTab({ participants, activities, communities 
   const filtered = participants.filter((p) => {
     if (search && !p.full_name.toLowerCase().includes(search.toLowerCase()) && !p.community.toLowerCase().includes(search.toLowerCase())) return false;
     if (communityFilter !== "todas" && p.community !== communityFilter) return false;
+    if (yearFilter !== "todos" && p.confirmation_year !== Number(yearFilter)) return false;
     const pct = activities.length > 0 ? (p.completed_count / activities.length) * 100 : 0;
     if (statusFilter === "iniciando" && (pct === 0 || pct >= 34)) return false;
     if (statusFilter === "andamento" && (pct < 34 || pct >= 70)) return false;
@@ -935,12 +938,12 @@ export default function ParticipantsTab({ participants, activities, communities 
             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all"
           />
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <div className="relative">
             <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <select value={communityFilter} onChange={(e) => setCommunityFilter(e.target.value)}
               className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none">
-              <option value="todas">Todas as comunidades</option>
+              <option value="todas">Todas comunidades</option>
               {communities.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
@@ -948,10 +951,19 @@ export default function ParticipantsTab({ participants, activities, communities 
             <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
               className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none">
-              <option value="todos">Qualquer status</option>
+              <option value="todos">Status</option>
               <option value="iniciando">Iniciando</option>
               <option value="andamento">Em andamento</option>
               <option value="avancado">Avançado</option>
+            </select>
+          </div>
+          <div className="relative">
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}
+              className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none">
+              <option value="todos">Todos anos</option>
+              <option value="1">1º Ano</option>
+              <option value="2">2º Ano</option>
             </select>
           </div>
         </div>
@@ -960,8 +972,8 @@ export default function ParticipantsTab({ participants, activities, communities 
           <span className="text-muted-foreground font-inter text-xs">
             {filtered.length} participante{filtered.length !== 1 ? "s" : ""} encontrado{filtered.length !== 1 ? "s" : ""}
           </span>
-          {(communityFilter !== "todas" || statusFilter !== "todos" || search) && (
-            <button onClick={() => { setCommunityFilter("todas"); setStatusFilter("todos"); setSearch(""); }}
+          {(communityFilter !== "todas" || statusFilter !== "todos" || yearFilter !== "todos" || search) && (
+            <button onClick={() => { setCommunityFilter("todas"); setStatusFilter("todos"); setYearFilter("todos"); setSearch(""); }}
               className="ml-auto text-secondary font-inter text-xs font-medium">
               Limpar filtros
             </button>
