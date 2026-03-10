@@ -719,6 +719,27 @@ export default function AttendanceTab({ participants, activities, communities, i
         ))}
       </div>
 
+      {/* Year filter */}
+      <div className="flex gap-1.5">
+        {[
+          { value: null, label: "Todas as turmas" },
+          { value: 1, label: "1º Ano" },
+          { value: 2, label: "2º Ano" },
+        ].map(y => (
+          <button
+            key={y.label}
+            onClick={() => setFilterYear(y.value)}
+            className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-inter font-medium transition-all ${
+              filterYear === y.value
+                ? "bg-accent text-accent-foreground shadow-sm"
+                : "bg-muted text-muted-foreground hover:bg-accent/10"
+            }`}
+          >
+            🎓 {y.label}
+          </button>
+        ))}
+      </div>
+
       {/* Event attendance requests - filtered by event type */}
       {(() => {
         const TYPE_EMOJI_LOCAL: Record<string, string> = {
