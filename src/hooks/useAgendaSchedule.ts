@@ -145,6 +145,7 @@ export function useAgendaSchedule() {
     schedule,
     loading,
     releasedLessonIds,
+    studyOpenLessonIds,
     scheduledLessonIds,
     lessonDevotionalDates,
     lessonEventDate,
