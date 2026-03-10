@@ -85,6 +85,36 @@ export default function UserAgendaTab() {
     if (profile) fetch();
   }, [profile]);
 
+  // Realtime: re-fetch when events change
+  useEffect(() => {
+    const channel = supabase
+      .channel('user-agenda-events-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'events' },
+        () => {
+          // Re-run fetch without showing loading spinner
+          async function refetch() {
+            const { data: { user } } = await supabase.auth.getUser();
+            const [{ data: eventsData }] = await Promise.all([
+              supabase.from("events").select("*").order("event_date"),
+            ]);
+            const all = (eventsData ?? []) as Event[];
+            const filtered = all.filter(e =>
+              !e.area ||
+              e.area === profile?.area ||
+              e.community === profile?.community
+            );
+            setEvents(filtered);
+          }
+          if (profile) refetch();
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [profile]);
+
   const now = new Date();
   const upcoming = events.filter(e => new Date(e.event_date) >= now);
   const past = events.filter(e => new Date(e.event_date) < now);
