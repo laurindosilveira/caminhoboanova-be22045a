@@ -918,6 +918,7 @@ export default function ParticipantsTab({ participants, activities, communities 
   const filtered = participants.filter((p) => {
     if (search && !p.full_name.toLowerCase().includes(search.toLowerCase()) && !p.community.toLowerCase().includes(search.toLowerCase())) return false;
     if (communityFilter !== "todas" && p.community !== communityFilter) return false;
+    if (yearFilter !== "todos" && p.confirmation_year !== Number(yearFilter)) return false;
     const pct = activities.length > 0 ? (p.completed_count / activities.length) * 100 : 0;
     if (statusFilter === "iniciando" && (pct === 0 || pct >= 34)) return false;
     if (statusFilter === "andamento" && (pct < 34 || pct >= 70)) return false;
