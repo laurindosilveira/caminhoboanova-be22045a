@@ -113,9 +113,10 @@ export default function AttendanceTab({ participants, activities, communities, i
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resettingJourney, setResettingJourney] = useState(false);
 
-  // Event creation (merged from AgendaTab)
+  // Event creation/editing
   const [showEventForm, setShowEventForm] = useState(false);
   const [savingEvent, setSavingEvent] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [eventForm, setEventForm] = useState({
     title: "", description: "", event_date: "", location: "", type: "encontro", area: adminArea ?? "", community: "", linked_lesson_id: "",
   });
