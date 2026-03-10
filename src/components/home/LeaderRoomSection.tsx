@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Users, BarChart3, CalendarDays, MessageSquare, Megaphone, ChevronDown, ChevronUp } from "lucide-react";
+import { Users, BarChart3, CalendarDays, MessageSquare, Megaphone, ChevronDown, ChevronUp, Clock } from "lucide-react";
 import StudentListSection from "@/components/home/StudentListSection";
 import OverviewTab from "@/components/admin/tabs/OverviewTab";
 import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
 import MessagesTab from "@/components/admin/tabs/MessagesTab";
 import AdminPushTab from "@/components/admin/tabs/AdminPushTab";
+import LeaderWaitingRoom from "@/components/home/LeaderWaitingRoom";
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
 const AREA_2_COMMUNITIES = ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"];
@@ -23,10 +24,11 @@ type Participant = {
 type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
 type Turma = { id: string; name: string; area: string | null };
 
-type SubTab = "alunos" | "visao" | "encontros" | "avisos" | "push";
+type SubTab = "alunos" | "visao" | "encontros" | "avisos" | "push" | "espera";
 
 const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
   { id: "alunos", label: "Alunos", icon: Users },
+  { id: "espera", label: "Espera", icon: Clock },
   { id: "visao", label: "Visão", icon: BarChart3 },
   { id: "encontros", label: "Encontros", icon: CalendarDays },
   { id: "avisos", label: "Avisos", icon: MessageSquare },
@@ -45,6 +47,26 @@ export default function LeaderRoomSection() {
   const [plans, setPlans] = useState<Record<string, PlanInfo>>({});
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [waitingCount, setWaitingCount] = useState(0);
+
+  const turmaArea = profile?.area ?? "";
+
+  // Fetch waiting room count for the leader's area
+  useEffect(() => {
+    if (!canView || !turmaArea) return;
+    async function fetchWaitingCount() {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("user_id, area")
+        .is("turma_id", null);
+      if (!error && data) {
+        const myId = (await supabase.auth.getUser()).data.user?.id;
+        const filtered = data.filter(p => p.user_id !== myId && p.area === turmaArea);
+        setWaitingCount(filtered.length);
+      }
+    }
+    fetchWaitingCount();
+  }, [canView, turmaArea, expanded]);
 
   const fetchPlans = useCallback(async (ids: string[]) => {
     if (ids.length === 0) return;
@@ -108,7 +130,6 @@ export default function LeaderRoomSection() {
 
   if (!canView) return null;
 
-  const turmaArea = profile?.area ?? "";
   const communities = turmaArea === "Área 1" ? AREA_1_COMMUNITIES
     : turmaArea === "Área 2" ? AREA_2_COMMUNITIES
     : ALL_COMMUNITIES;
@@ -121,18 +142,38 @@ export default function LeaderRoomSection() {
         className="w-full flex items-center justify-between bg-card border border-border rounded-2xl p-4 shadow-sm hover:bg-muted/50 transition-colors"
       >
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center relative" style={{ background: "var(--gradient-hero)" }}>
             <span className="text-lg">📋</span>
+            {waitingCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
+                {waitingCount}
+              </span>
+            )}
           </div>
           <div className="text-left">
             <p className="font-montserrat font-bold text-foreground text-sm">Sala do Discipulador</p>
             <p className="text-muted-foreground text-xs font-inter">
-              {expanded ? "Toque para fechar" : "Gerencie sua turma"}
+              {waitingCount > 0 && !expanded
+                ? `${waitingCount} pessoa${waitingCount !== 1 ? "s" : ""} na sala de espera`
+                : expanded ? "Toque para fechar" : "Gerencie sua turma"}
             </p>
           </div>
         </div>
         {expanded ? <ChevronUp className="w-5 h-5 text-muted-foreground" /> : <ChevronDown className="w-5 h-5 text-muted-foreground" />}
       </button>
+
+      {/* Waiting room alert banner */}
+      {expanded && waitingCount > 0 && (
+        <button
+          onClick={() => setActiveSubTab("espera")}
+          className="w-full mt-2 flex items-center gap-3 bg-destructive/10 border border-destructive/30 rounded-2xl p-3 hover:bg-destructive/15 transition-colors"
+        >
+          <Clock className="w-4 h-4 text-destructive flex-shrink-0" />
+          <p className="text-destructive font-inter text-xs font-semibold text-left">
+            {waitingCount} pessoa{waitingCount !== 1 ? "s" : ""} aguardando na sala de espera da sua área
+          </p>
+        </button>
+      )}
 
       {expanded && (
         <div className="mt-3 animate-in slide-in-from-top-2 duration-200">
@@ -141,11 +182,12 @@ export default function LeaderRoomSection() {
             {SUB_TABS.map(tab => {
               const Icon = tab.icon;
               const isActive = activeSubTab === tab.id;
+              const showBadge = tab.id === "espera" && waitingCount > 0;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveSubTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-inter font-medium whitespace-nowrap transition-all ${
+                  className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-inter font-medium whitespace-nowrap transition-all ${
                     isActive
                       ? "bg-primary text-primary-foreground shadow-sm"
                       : "bg-card border border-border text-muted-foreground hover:bg-muted/50"
@@ -153,6 +195,13 @@ export default function LeaderRoomSection() {
                 >
                   <Icon className="w-3.5 h-3.5" />
                   {tab.label}
+                  {showBadge && (
+                    <span className={`w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center ${
+                      isActive ? "bg-primary-foreground text-primary" : "bg-destructive text-destructive-foreground"
+                    }`}>
+                      {waitingCount}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -166,6 +215,13 @@ export default function LeaderRoomSection() {
           ) : (
             <>
               {activeSubTab === "alunos" && <StudentListSection />}
+
+              {activeSubTab === "espera" && (
+                <LeaderWaitingRoom
+                  areaFilter={turmaArea}
+                  onAssigned={() => setWaitingCount(prev => Math.max(0, prev - 1))}
+                />
+              )}
 
               {activeSubTab === "visao" && (
                 <OverviewTab
