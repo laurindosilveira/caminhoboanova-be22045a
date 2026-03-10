@@ -938,12 +938,12 @@ export default function ParticipantsTab({ participants, activities, communities 
             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all"
           />
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <div className="relative">
             <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <select value={communityFilter} onChange={(e) => setCommunityFilter(e.target.value)}
               className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none">
-              <option value="todas">Todas as comunidades</option>
+              <option value="todas">Todas comunidades</option>
               {communities.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
@@ -951,10 +951,19 @@ export default function ParticipantsTab({ participants, activities, communities 
             <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
               className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none">
-              <option value="todos">Qualquer status</option>
+              <option value="todos">Status</option>
               <option value="iniciando">Iniciando</option>
               <option value="andamento">Em andamento</option>
               <option value="avancado">Avançado</option>
+            </select>
+          </div>
+          <div className="relative">
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}
+              className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none">
+              <option value="todos">Todos anos</option>
+              <option value="1">1º Ano</option>
+              <option value="2">2º Ano</option>
             </select>
           </div>
         </div>
