@@ -21,6 +21,7 @@ type SubTab = "presenca" | "pessoas" | "discipulado" | "sala" | "avisos" | "desa
 type Event = {
   id: string; title: string; event_date: string; type: string;
   location: string | null; community: string | null; area: string | null;
+  description: string | null; linked_lesson_id: string | null;
 };
 type Participant = {
   user_id: string; full_name: string; community: string; area: string;
