@@ -60,6 +60,8 @@ export function useAgendaSchedule() {
     const entries: ScheduleEntry[] = [];
     for (const event of (events ?? [])) {
       if (!event.linked_lesson_id) continue;
+      // Filter by user's area: show events with no area or matching area
+      if (event.area && profile?.area && event.area !== profile.area) continue;
       const lesson = lessonMap.get(event.linked_lesson_id);
       if (!lesson) continue;
       const course = courseMap.get(lesson.course_id);
