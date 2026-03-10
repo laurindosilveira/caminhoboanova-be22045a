@@ -288,6 +288,9 @@ export default function ClassroomTab() {
         </div>
       )}
 
+      {/* ===== LISTA DE ALUNOS (admin/lider) ===== */}
+      <StudentListSection />
+
       {/* ===== MURAL DE ORAÇÕES ===== */}
       <div className="mx-5">
         <div className="flex items-center justify-between mb-3">
