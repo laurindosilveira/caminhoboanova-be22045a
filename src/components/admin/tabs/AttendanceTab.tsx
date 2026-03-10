@@ -594,6 +594,7 @@ export default function AttendanceTab({ participants, activities, communities, i
   if (activeSubTab !== "presenca") {
     return (
       <div className="space-y-4">
+        {renderCascadeDialog()}
         {renderSubTabs()}
         {activeSubTab === "pessoas" && (
           <ParticipantsTab participants={participants} activities={activities} communities={communities ?? []} />
@@ -616,6 +617,7 @@ export default function AttendanceTab({ participants, activities, communities, i
   if (loading) {
     return (
       <div className="space-y-3">
+        {renderCascadeDialog()}
         {renderSubTabs()}
         {[1, 2, 3].map(i => <div key={i} className="bg-muted rounded-2xl h-20 animate-pulse" />)}
       </div>
