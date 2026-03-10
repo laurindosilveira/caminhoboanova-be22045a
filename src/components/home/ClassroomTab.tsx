@@ -288,8 +288,8 @@ export default function ClassroomTab() {
         </div>
       )}
 
-      {/* ===== LISTA DE ALUNOS (admin/lider) ===== */}
-      <StudentListSection />
+      {/* ===== SALA DO DISCIPULADOR (admin/lider) ===== */}
+      <LeaderRoomSection />
 
       {/* ===== MURAL DE ORAÇÕES ===== */}
       <div className="mx-5">
