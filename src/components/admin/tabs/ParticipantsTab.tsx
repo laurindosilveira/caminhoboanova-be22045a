@@ -815,6 +815,7 @@ export default function ParticipantsTab({ participants, activities, communities 
   const [search, setSearch] = useState("");
   const [communityFilter, setCommunityFilter] = useState("todas");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("todos");
+  const [yearFilter, setYearFilter] = useState<string>("todos");
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
 
   const [statusReasons, setStatusReasons] = useState<Record<string, StatusReason[]>>({});
