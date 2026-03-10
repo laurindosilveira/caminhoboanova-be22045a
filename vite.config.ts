@@ -23,6 +23,7 @@ export default defineConfig(({ mode }) => ({
         navigateFallbackDenylist: [/^\/~oauth/],
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         importScripts: ["/push-sw.js"],
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
       manifest: {
         name: "Caminho Boa Nova",
