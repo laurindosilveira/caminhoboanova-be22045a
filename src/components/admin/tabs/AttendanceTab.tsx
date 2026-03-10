@@ -664,6 +664,7 @@ export default function AttendanceTab({ participants, activities, communities, i
   return (
     <div className="space-y-4">
       {renderSubTabs()}
+      {renderCascadeDialog()}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
