@@ -191,7 +191,7 @@ function computeDevotionalStatuses(
   return { statuses, lockedSet };
 }
 
-export default function LessonChoiceView({ lesson, onBack, onOpenStudy, scheduledDevotionalDates, eventDate }: Props) {
+export default function LessonChoiceView({ lesson, onBack, onOpenStudy, scheduledDevotionalDates, eventDate, isStudyLocked }: Props) {
   const [devotionals, setDevotionals] = useState<DevotionalItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDevotionals, setShowDevotionals] = useState(false);
