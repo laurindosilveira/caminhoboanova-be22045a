@@ -232,8 +232,7 @@ export default function AttendanceTab({ participants, activities, communities, i
   async function handleSaveEvent() {
     if (!eventForm.title || !eventForm.event_date) return;
     setSavingEvent(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from("events").insert({
+    const payload = {
       title: eventForm.title,
       description: eventForm.description || null,
       event_date: eventForm.event_date,
@@ -241,13 +240,35 @@ export default function AttendanceTab({ participants, activities, communities, i
       type: eventForm.type,
       area: adminArea || eventForm.area || null,
       community: eventForm.community || null,
-      created_by: user?.id,
       linked_lesson_id: eventForm.linked_lesson_id || null,
-    });
+    };
+    if (editingEventId) {
+      await supabase.from("events").update(payload).eq("id", editingEventId);
+    } else {
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from("events").insert({ ...payload, created_by: user?.id });
+    }
     setEventForm({ title: "", description: "", event_date: "", location: "", type: "encontro", area: adminArea ?? "", community: "", linked_lesson_id: "" });
     setShowEventForm(false);
+    setEditingEventId(null);
     setSavingEvent(false);
     fetchEvents();
+  }
+
+  function openEditEvent(event: Event) {
+    const dateForInput = event.event_date ? format(new Date(event.event_date), "yyyy-MM-dd'T'HH:mm") : "";
+    setEditingEventId(event.id);
+    setEventForm({
+      title: event.title,
+      description: event.description ?? "",
+      event_date: dateForInput,
+      location: event.location ?? "",
+      type: event.type,
+      area: event.area ?? adminArea ?? "",
+      community: event.community ?? "",
+      linked_lesson_id: event.linked_lesson_id ?? "",
+    });
+    setShowEventForm(true);
   }
 
   async function handleDeleteEvent(id: string) {
