@@ -387,7 +387,7 @@ export default function AttendanceTab({ participants, activities, communities, i
   function renderEventForm() {
     return (
       <div className="bg-card rounded-2xl border border-border p-4 space-y-3 shadow-sm">
-        <p className="font-montserrat font-bold text-foreground text-sm">Novo evento</p>
+        <p className="font-montserrat font-bold text-foreground text-sm">{editingEventId ? "✏️ Editar evento" : "Novo evento"}</p>
         <input value={eventForm.title} onChange={e => setEventForm(f => ({ ...f, title: e.target.value }))}
           placeholder="Título do evento *"
           className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
