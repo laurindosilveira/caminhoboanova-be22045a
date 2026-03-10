@@ -314,6 +314,21 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
     );
   }
 
+  // Block access for users not yet assigned to a turma (waiting room)
+  if (!profile?.turma_id) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+          <Lock className="w-8 h-8 text-muted-foreground" />
+        </div>
+        <h3 className="font-montserrat font-bold text-foreground text-lg mb-2">Aguardando aprovação</h3>
+        <p className="text-muted-foreground font-inter text-sm leading-relaxed max-w-xs">
+          Você ainda não foi atribuído(a) a uma turma. Assim que um administrador aprovar seu cadastro, os devocionais e lições ficarão disponíveis.
+        </p>
+      </div>
+    );
+  }
+
   const completedIds = new Set(progress.map(p => p.activity_id));
   const totalActs = activities.length;
   const completedActs = activities.filter(a => completedIds.has(a.id)).length;
