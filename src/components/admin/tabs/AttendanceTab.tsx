@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   CalendarDays, Users, CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp,
   Star, BookOpen, FileText, Save, Church, Plus, MapPin, X as XIcon,
-  Heart, GraduationCap, MessageSquare, ClipboardList, ArrowUpCircle, RefreshCw,
+  Heart, GraduationCap, MessageSquare, ClipboardList, ArrowUpCircle, RefreshCw, Pencil,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -21,6 +21,7 @@ type SubTab = "presenca" | "pessoas" | "discipulado" | "sala" | "avisos" | "desa
 type Event = {
   id: string; title: string; event_date: string; type: string;
   location: string | null; community: string | null; area: string | null;
+  description: string | null; linked_lesson_id: string | null;
 };
 type Participant = {
   user_id: string; full_name: string; community: string; area: string;
@@ -113,9 +114,10 @@ export default function AttendanceTab({ participants, activities, communities, i
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resettingJourney, setResettingJourney] = useState(false);
 
-  // Event creation (merged from AgendaTab)
+  // Event creation/editing
   const [showEventForm, setShowEventForm] = useState(false);
   const [savingEvent, setSavingEvent] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [eventForm, setEventForm] = useState({
     title: "", description: "", event_date: "", location: "", type: "encontro", area: adminArea ?? "", community: "", linked_lesson_id: "",
   });
@@ -147,7 +149,7 @@ export default function AttendanceTab({ participants, activities, communities, i
     setLoading(true);
     const { data } = await supabase
       .from("events")
-      .select("id, title, event_date, type, location, community, area")
+      .select("id, title, event_date, type, location, community, area, description, linked_lesson_id")
       .order("event_date", { ascending: true })
       .limit(30);
     setEvents(data ?? []);
@@ -230,8 +232,7 @@ export default function AttendanceTab({ participants, activities, communities, i
   async function handleSaveEvent() {
     if (!eventForm.title || !eventForm.event_date) return;
     setSavingEvent(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from("events").insert({
+    const payload = {
       title: eventForm.title,
       description: eventForm.description || null,
       event_date: eventForm.event_date,
@@ -239,13 +240,35 @@ export default function AttendanceTab({ participants, activities, communities, i
       type: eventForm.type,
       area: adminArea || eventForm.area || null,
       community: eventForm.community || null,
-      created_by: user?.id,
       linked_lesson_id: eventForm.linked_lesson_id || null,
-    });
+    };
+    if (editingEventId) {
+      await supabase.from("events").update(payload).eq("id", editingEventId);
+    } else {
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from("events").insert({ ...payload, created_by: user?.id });
+    }
     setEventForm({ title: "", description: "", event_date: "", location: "", type: "encontro", area: adminArea ?? "", community: "", linked_lesson_id: "" });
     setShowEventForm(false);
+    setEditingEventId(null);
     setSavingEvent(false);
     fetchEvents();
+  }
+
+  function openEditEvent(event: Event) {
+    const dateForInput = event.event_date ? format(new Date(event.event_date), "yyyy-MM-dd'T'HH:mm") : "";
+    setEditingEventId(event.id);
+    setEventForm({
+      title: event.title,
+      description: event.description ?? "",
+      event_date: dateForInput,
+      location: event.location ?? "",
+      type: event.type,
+      area: event.area ?? adminArea ?? "",
+      community: event.community ?? "",
+      linked_lesson_id: event.linked_lesson_id ?? "",
+    });
+    setShowEventForm(true);
   }
 
   async function handleDeleteEvent(id: string) {
@@ -364,7 +387,7 @@ export default function AttendanceTab({ participants, activities, communities, i
   function renderEventForm() {
     return (
       <div className="bg-card rounded-2xl border border-border p-4 space-y-3 shadow-sm">
-        <p className="font-montserrat font-bold text-foreground text-sm">Novo evento</p>
+        <p className="font-montserrat font-bold text-foreground text-sm">{editingEventId ? "✏️ Editar evento" : "Novo evento"}</p>
         <input value={eventForm.title} onChange={e => setEventForm(f => ({ ...f, title: e.target.value }))}
           placeholder="Título do evento *"
           className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
@@ -403,9 +426,9 @@ export default function AttendanceTab({ participants, activities, communities, i
           <button onClick={handleSaveEvent} disabled={savingEvent || !eventForm.title || !eventForm.event_date}
             className="flex-1 py-2.5 rounded-xl text-sm font-inter font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
             style={{ background: "var(--gradient-hero)" }}>
-            {savingEvent ? "Salvando..." : "Salvar evento"}
+            {savingEvent ? "Salvando..." : editingEventId ? "Salvar alterações" : "Salvar evento"}
           </button>
-          <button onClick={() => setShowEventForm(false)} className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm">
+          <button onClick={() => { setShowEventForm(false); setEditingEventId(null); }} className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm">
             Cancelar
           </button>
         </div>
@@ -486,7 +509,7 @@ export default function AttendanceTab({ participants, activities, communities, i
         {renderSubTabs()}
         <div className="flex items-center justify-between">
           <p className="font-montserrat font-bold text-foreground text-base">Encontros & Presença</p>
-          <button onClick={() => setShowEventForm(!showEventForm)}
+          <button onClick={() => { setEditingEventId(null); setEventForm({ title: "", description: "", event_date: "", location: "", type: "encontro", area: adminArea ?? "", community: "", linked_lesson_id: "" }); setShowEventForm(!showEventForm); }}
             className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-inter font-medium text-primary-foreground"
             style={{ background: "var(--gradient-hero)" }}>
             <Plus className="w-3.5 h-3.5" /> Novo evento
@@ -531,7 +554,7 @@ export default function AttendanceTab({ participants, activities, communities, i
             <p className="text-muted-foreground text-xs font-inter">Eventos, presença e avaliação</p>
           </div>
         </div>
-        <button onClick={() => setShowEventForm(!showEventForm)}
+        <button onClick={() => { setEditingEventId(null); setEventForm({ title: "", description: "", event_date: "", location: "", type: "encontro", area: adminArea ?? "", community: "", linked_lesson_id: "" }); setShowEventForm(!showEventForm); }}
           className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-inter font-medium text-primary-foreground"
           style={{ background: "var(--gradient-hero)" }}>
           <Plus className="w-3.5 h-3.5" /> Novo evento
@@ -733,6 +756,13 @@ export default function AttendanceTab({ participants, activities, communities, i
                       <ClipboardList className="w-3.5 h-3.5 text-primary" />
                     </button>
                   )}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openEditEvent(event); }}
+                    className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors"
+                    title="Editar evento"
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-primary" />
+                  </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
                     className="w-7 h-7 rounded-lg bg-destructive/10 flex items-center justify-center hover:bg-destructive/20 transition-colors"
