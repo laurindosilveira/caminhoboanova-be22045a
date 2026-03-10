@@ -655,6 +655,10 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
               <span>{age} anos</span>
             </div>
           )}
+          <div className="flex items-center gap-2 text-muted-foreground font-inter">
+            <GraduationCap className="w-4 h-4 flex-shrink-0" />
+            <span>{p.confirmation_year ? `${p.confirmation_year}º Ano` : <span className="text-destructive">Ano não definido</span>}</span>
+          </div>
           <div className="flex items-center gap-2 text-accent font-montserrat font-bold">
             <Star className="w-4 h-4 flex-shrink-0" />
             <span>{totalPts} pontos</span>
