@@ -255,12 +255,25 @@ export default function AttendanceTab({ participants, activities, communities, i
       const oldLessonId = oldEvent?.linked_lesson_id ?? null;
       const newLessonId = payload.linked_lesson_id;
 
+      console.log("[CASCADE CHECK]", { editingEventId, oldLessonId, newLessonId, changed: oldLessonId !== newLessonId });
+
       // Check if lesson changed and cascade is needed
       if (oldLessonId !== newLessonId && newLessonId && oldEvent) {
-        const subsequentWithLessons = events.filter(
+        // Fetch fresh events from DB to ensure accurate cascade check
+        const { data: freshEvents } = await supabase
+          .from("events")
+          .select("id, title, event_date, type, location, community, area, description, linked_lesson_id")
+          .order("event_date", { ascending: true });
+
+        const allEvents = freshEvents ?? events;
+        const subsequentWithLessons = allEvents.filter(
           e => e.id !== editingEventId && e.event_date > oldEvent.event_date && e.linked_lesson_id
         );
+        console.log("[CASCADE CHECK] subsequent events with lessons:", subsequentWithLessons.length);
+
         if (subsequentWithLessons.length > 0) {
+          // Update local events state with fresh data for cascade execution
+          setEvents(allEvents);
           setCascadePending({ eventId: editingEventId, oldLessonId, newLessonId, payload });
           setShowCascadeDialog(true);
           setShowEventForm(false);
