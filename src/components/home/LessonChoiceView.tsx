@@ -38,6 +38,8 @@ type Props = {
   scheduledDevotionalDates?: Date[];
   /** Event date for display */
   eventDate?: Date;
+  /** Whether the study is locked (event day or past deadline) */
+  isStudyLocked?: boolean;
 };
 
 /**
