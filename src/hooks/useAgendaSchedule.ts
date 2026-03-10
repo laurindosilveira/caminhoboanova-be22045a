@@ -110,14 +110,23 @@ export function useAgendaSchedule() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Which lessons are "released" (window is open or event is past)
+  // Which lessons are "released" (window is open)
   const releasedLessonIds = new Set<string>();
+  // Which lessons have study available (from first devotional until 1 day before event)
+  const studyOpenLessonIds = new Set<string>();
   const lessonDevotionalDates = new Map<string, Date[]>();
   const lessonEventDate = new Map<string, Date>();
 
   for (const entry of schedule) {
     if (today >= entry.windowStart) {
       releasedLessonIds.add(entry.lessonId);
+    }
+    // Study is open from windowStart (first devotional) until the day BEFORE the event
+    // On the event day (today >= eventDate with time zeroed), study is locked
+    const eventDay = new Date(entry.eventDate);
+    eventDay.setHours(0, 0, 0, 0);
+    if (today >= entry.windowStart && today < eventDay) {
+      studyOpenLessonIds.add(entry.lessonId);
     }
     lessonDevotionalDates.set(entry.lessonId, entry.devotionalDates);
     lessonEventDate.set(entry.lessonId, entry.eventDate);
@@ -136,6 +145,7 @@ export function useAgendaSchedule() {
     schedule,
     loading,
     releasedLessonIds,
+    studyOpenLessonIds,
     scheduledLessonIds,
     lessonDevotionalDates,
     lessonEventDate,

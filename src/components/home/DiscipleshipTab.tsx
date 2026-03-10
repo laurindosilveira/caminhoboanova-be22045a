@@ -415,6 +415,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
         onOpenStudy={() => setSelectedLessonMode("study")}
         scheduledDevotionalDates={agendaSchedule.lessonDevotionalDates.get(selectedLesson.id)}
         eventDate={agendaSchedule.lessonEventDate.get(selectedLesson.id) ?? undefined}
+        isStudyLocked={agendaSchedule.hasScheduledEvents && !agendaSchedule.studyOpenLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id)}
       />
     );
   }
@@ -912,14 +913,18 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
                         const isDone = completedLessonIds.has(lesson.id);
                         const isFullyDone = fullyCompletedLessonIds.has(lesson.id);
                         
-                        // Schedule-based locking: lesson must be in schedule and window must be open
+                        // Schedule-based locking
                         const isScheduled = agendaSchedule.scheduledLessonIds.has(lesson.id);
-                        const isReleased = agendaSchedule.releasedLessonIds.has(lesson.id);
+                        const isStudyOpen = agendaSchedule.studyOpenLessonIds.has(lesson.id);
                         const eventDate = agendaSchedule.lessonEventDate.get(lesson.id);
-                        const isPastEvent = eventDate ? eventDate < new Date() : false;
+                        const eventDay = eventDate ? new Date(eventDate) : null;
+                        if (eventDay) eventDay.setHours(0, 0, 0, 0);
+                        const todayZero = new Date(); todayZero.setHours(0, 0, 0, 0);
+                        const isEventDay = eventDay ? todayZero.getTime() === eventDay.getTime() : false;
+                        const isPastEvent = eventDay ? todayZero > eventDay : false;
                         
-                        // A lesson is accessible if: released (window open) OR event already passed OR fully completed
-                        const isAccessible = isReleased || isPastEvent || isFullyDone;
+                        // Study is accessible if: window open & before event day, OR fully completed
+                        const isAccessible = isStudyOpen || isFullyDone;
                         // Locked if: has scheduled events but this lesson isn't accessible
                         const isLocked = agendaSchedule.hasScheduledEvents && !isAccessible && !isFullyDone;
                         // Not yet scheduled
@@ -928,7 +933,11 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
                         let lockMessage = "";
                         if (isNotScheduled) {
                           lockMessage = "📅 Aguardando agendamento";
-                        } else if (isLocked && !isReleased) {
+                        } else if (isEventDay && !isFullyDone) {
+                          lockMessage = "📖 Dia do encontro — estudo encerrado";
+                        } else if (isPastEvent && !isFullyDone) {
+                          lockMessage = "⏰ Prazo encerrado";
+                        } else if (isLocked) {
                           const entry = agendaSchedule.schedule.find(e => e.lessonId === lesson.id);
                           if (entry) {
                             lockMessage = `🔜 Liberada em ${entry.windowStart.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;

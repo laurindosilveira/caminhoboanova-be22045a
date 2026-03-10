@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ChevronLeft, BookOpen, GraduationCap, CheckCircle2, Star, LockKeyhole, Calendar } from "lucide-react";
+import { ChevronLeft, BookOpen, GraduationCap, CheckCircle2, Star, LockKeyhole, Calendar, Lock } from "lucide-react";
 import DevotionalView from "@/components/home/DevotionalView";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -38,6 +38,8 @@ type Props = {
   scheduledDevotionalDates?: Date[];
   /** Event date for display */
   eventDate?: Date;
+  /** Whether the study is locked (event day or past deadline) */
+  isStudyLocked?: boolean;
 };
 
 /**
@@ -189,7 +191,7 @@ function computeDevotionalStatuses(
   return { statuses, lockedSet };
 }
 
-export default function LessonChoiceView({ lesson, onBack, onOpenStudy, scheduledDevotionalDates, eventDate }: Props) {
+export default function LessonChoiceView({ lesson, onBack, onOpenStudy, scheduledDevotionalDates, eventDate, isStudyLocked }: Props) {
   const [devotionals, setDevotionals] = useState<DevotionalItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDevotionals, setShowDevotionals] = useState(false);
@@ -446,21 +448,38 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
         </button>
 
         {/* Estudo */}
-        <button onClick={onOpenStudy}
-          className="flex items-center gap-4 p-5 bg-card rounded-2xl border border-border shadow-sm text-left hover:bg-secondary/5 hover:border-secondary/30 transition-all group">
-          <div className="w-14 h-14 rounded-2xl bg-secondary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-secondary/20 transition-colors">
-            <GraduationCap className="w-7 h-7 text-secondary" />
+        <button onClick={() => {
+            if (isStudyLocked) {
+              return;
+            }
+            onOpenStudy();
+          }}
+          className={`flex items-center gap-4 p-5 bg-card rounded-2xl border border-border shadow-sm text-left transition-all group ${
+            isStudyLocked ? "opacity-50 cursor-not-allowed" : "hover:bg-secondary/5 hover:border-secondary/30"
+          }`}>
+          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 transition-colors ${
+            isStudyLocked ? "bg-muted" : "bg-secondary/10 group-hover:bg-secondary/20"
+          }`}>
+            {isStudyLocked ? <Lock className="w-7 h-7 text-muted-foreground" /> : <GraduationCap className="w-7 h-7 text-secondary" />}
           </div>
           <div className="flex-1">
             <p className="font-montserrat font-bold text-foreground text-base">🎓 Estudo da Lição</p>
-            <p className="text-muted-foreground font-inter text-xs mt-0.5">
-              Responda as perguntas e registre sua reflexão
-            </p>
-            <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
-              +20 pontos de fé ao completar
-            </p>
+            {isStudyLocked ? (
+              <p className="text-destructive font-inter text-xs mt-0.5">
+                ⏰ Prazo encerrado — disponível apenas durante a semana de preparação
+              </p>
+            ) : (
+              <>
+                <p className="text-muted-foreground font-inter text-xs mt-0.5">
+                  Responda as perguntas e registre sua reflexão
+                </p>
+                <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
+                  +20 pontos de fé ao completar
+                </p>
+              </>
+            )}
           </div>
-          <span className="text-secondary font-montserrat font-bold text-lg">→</span>
+          {!isStudyLocked && <span className="text-secondary font-montserrat font-bold text-lg">→</span>}
         </button>
       </div>
     </div>
