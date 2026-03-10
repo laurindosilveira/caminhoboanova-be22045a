@@ -426,9 +426,9 @@ export default function AttendanceTab({ participants, activities, communities, i
           <button onClick={handleSaveEvent} disabled={savingEvent || !eventForm.title || !eventForm.event_date}
             className="flex-1 py-2.5 rounded-xl text-sm font-inter font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
             style={{ background: "var(--gradient-hero)" }}>
-            {savingEvent ? "Salvando..." : "Salvar evento"}
+            {savingEvent ? "Salvando..." : editingEventId ? "Salvar alterações" : "Salvar evento"}
           </button>
-          <button onClick={() => setShowEventForm(false)} className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm">
+          <button onClick={() => { setShowEventForm(false); setEditingEventId(null); }} className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm">
             Cancelar
           </button>
         </div>
