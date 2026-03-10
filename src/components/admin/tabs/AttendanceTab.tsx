@@ -594,6 +594,7 @@ export default function AttendanceTab({ participants, activities, communities, i
     return (
       <div className="space-y-4">
         {renderSubTabs()}
+        {renderCascadeDialog()}
         <div className="flex items-center justify-between">
           <p className="font-montserrat font-bold text-foreground text-base">Encontros & Presença</p>
           <button onClick={() => { setEditingEventId(null); setEventForm({ title: "", description: "", event_date: "", location: "", type: "encontro", area: adminArea ?? "", community: "", linked_lesson_id: "" }); setShowEventForm(!showEventForm); }}
