@@ -147,11 +147,16 @@ export default function AttendanceTab({ participants, activities, communities, i
 
   async function fetchEvents() {
     setLoading(true);
-    const { data } = await supabase
+    let query = supabase
       .from("events")
       .select("id, title, event_date, type, location, community, area, description, linked_lesson_id")
       .order("event_date", { ascending: true })
-      .limit(30);
+      .limit(50);
+    // Filter by admin area (non-super admins only see their area + events without area)
+    if (adminArea) {
+      query = query.or(`area.is.null,area.eq.${adminArea}`);
+    }
+    const { data } = await query;
     setEvents(data ?? []);
     setLoading(false);
   }
