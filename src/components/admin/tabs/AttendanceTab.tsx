@@ -122,6 +122,8 @@ export default function AttendanceTab({ participants, activities, communities, i
     title: "", description: "", event_date: "", location: "", type: "encontro", area: adminArea ?? "", community: "", linked_lesson_id: "",
   });
   const [reportEventId, setReportEventId] = useState<string | null>(null);
+  const [showCascadeDialog, setShowCascadeDialog] = useState(false);
+  const [cascadePending, setCascadePending] = useState<{ eventId: string; oldLessonId: string | null; newLessonId: string; payload: any } | null>(null);
 
   // Lesson options for linking to confirmatorio events
   type LessonOption = { id: string; title: string; order_num: number; course_title: string; course_order: number };
