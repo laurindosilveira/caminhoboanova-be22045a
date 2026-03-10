@@ -104,6 +104,7 @@ export default function AttendanceTab({ participants, activities, communities, i
   const [selectedParticipant, setSelectedParticipant] = useState<string | null>(null);
   const [savingEval, setSavingEval] = useState(false);
   const [filterType, setFilterType] = useState<string | null>(null);
+  const [filterYear, setFilterYear] = useState<number | null>(null);
 
   // Worship attendance requests
   const [worshipRequests, setWorshipRequests] = useState<WorshipRequest[]>([]);
