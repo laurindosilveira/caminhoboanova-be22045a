@@ -428,7 +428,8 @@ export default function AttendanceTab({ participants, activities, communities, i
 
   function getParticipantsForEvent(event: Event) {
     return participants.filter(p => {
-      if (event.community) return p.community === event.community;
+      if (event.community && p.community !== event.community) return false;
+      if (filterYear && p.confirmation_year !== filterYear) return false;
       return true;
     });
   }
