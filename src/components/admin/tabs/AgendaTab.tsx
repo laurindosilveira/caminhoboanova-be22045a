@@ -40,6 +40,10 @@ const TYPE_EMOJI: Record<string, string> = {
   encontro: "📅", culto: "⛪", jemiac: "✝️", retiro: "🏕️", confirmatorio: "📖", evento: "🎉",
 };
 
+const EMPTY_FORM = {
+  title: "", description: "", event_date: "", location: "", type: "encontro", area: "", community: "", linked_lesson_id: "",
+};
+
 export default function AgendaTab() {
   const { profile } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
@@ -47,13 +51,12 @@ export default function AgendaTab() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingFullEventId, setEditingFullEventId] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [editLessonId, setEditLessonId] = useState<string>("");
   const [showCascadeDialog, setShowCascadeDialog] = useState(false);
   const [cascadePending, setCascadePending] = useState<{ eventId: string; oldLessonId: string | null; newLessonId: string } | null>(null);
-  const [form, setForm] = useState({
-    title: "", description: "", event_date: "", location: "", type: "encontro", area: "", community: "", linked_lesson_id: "",
-  });
+  const [form, setForm] = useState({ ...EMPTY_FORM });
 
   useEffect(() => { fetchEvents(); fetchLessons(); }, []);
 
@@ -80,11 +83,33 @@ export default function AgendaTab() {
     setLessons(options);
   }
 
+  function openNewForm() {
+    setEditingFullEventId(null);
+    setForm({ ...EMPTY_FORM, area: profile?.area ?? "" });
+    setShowForm(true);
+  }
+
+  function openEditForm(event: Event) {
+    setEditingFullEventId(event.id);
+    const dateForInput = event.event_date ? format(new Date(event.event_date), "yyyy-MM-dd'T'HH:mm") : "";
+    setForm({
+      title: event.title,
+      description: event.description ?? "",
+      event_date: dateForInput,
+      location: event.location ?? "",
+      type: event.type,
+      area: event.area ?? profile?.area ?? "",
+      community: event.community ?? "",
+      linked_lesson_id: event.linked_lesson_id ?? "",
+    });
+    setShowForm(true);
+  }
+
   async function handleSave() {
     if (!form.title || !form.event_date) return;
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from("events").insert({
+
+    const payload = {
       title: form.title,
       description: form.description || null,
       event_date: form.event_date,
@@ -92,11 +117,44 @@ export default function AgendaTab() {
       type: form.type,
       area: form.area || null,
       community: form.community || null,
-      created_by: user?.id,
       linked_lesson_id: form.linked_lesson_id || null,
-    });
-    setForm({ title: "", description: "", event_date: "", location: "", type: "encontro", area: "", community: "", linked_lesson_id: "" });
+    };
+
+    if (editingFullEventId) {
+      // Editing existing event
+      const oldEvent = events.find(e => e.id === editingFullEventId);
+      const oldLessonId = oldEvent?.linked_lesson_id ?? null;
+      const newLessonId = payload.linked_lesson_id;
+
+      // Check cascade for lesson change
+      if (oldLessonId !== newLessonId && newLessonId && oldEvent) {
+        const subsequentWithLessons = events.filter(
+          e => e.id !== editingFullEventId && e.event_date > oldEvent.event_date && e.linked_lesson_id
+        );
+        if (subsequentWithLessons.length > 0) {
+          // Save other fields first, then handle cascade
+          await supabase.from("events").update({ ...payload, linked_lesson_id: oldLessonId }).eq("id", editingFullEventId);
+          setCascadePending({ eventId: editingFullEventId, oldLessonId, newLessonId });
+          setShowCascadeDialog(true);
+          setShowForm(false);
+          setEditingFullEventId(null);
+          setSaving(false);
+          return;
+        }
+      }
+
+      await supabase.from("events").update(payload).eq("id", editingFullEventId);
+      toast.success("Evento atualizado!");
+    } else {
+      // Creating new event
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from("events").insert({ ...payload, created_by: user?.id });
+      toast.success("Evento criado!");
+    }
+
+    setForm({ ...EMPTY_FORM });
     setShowForm(false);
+    setEditingFullEventId(null);
     setSaving(false);
     fetchEvents();
   }
@@ -106,13 +164,11 @@ export default function AgendaTab() {
     fetchEvents();
   }
 
-  // Start editing linked lesson on an event
   function startEditLesson(event: Event) {
     setEditingEventId(event.id);
     setEditLessonId(event.linked_lesson_id ?? "");
   }
 
-  // Save edited linked lesson
   async function saveEditLesson(eventId: string) {
     const event = events.find(e => e.id === eventId);
     if (!event) return;
@@ -120,7 +176,6 @@ export default function AgendaTab() {
     const oldLessonId = event.linked_lesson_id;
     const newLessonId = editLessonId || null;
 
-    // If lesson changed and there are subsequent events with linked lessons, ask about cascade
     if (oldLessonId !== newLessonId && newLessonId) {
       const subsequentWithLessons = events.filter(
         e => e.id !== eventId && e.event_date > event.event_date && e.linked_lesson_id
@@ -132,34 +187,28 @@ export default function AgendaTab() {
       }
     }
 
-    // No cascade needed, just update
     await supabase.from("events").update({ linked_lesson_id: newLessonId }).eq("id", eventId);
     setEditingEventId(null);
     toast.success("Lição atualizada!");
     fetchEvents();
   }
 
-  // Execute cascade: shift subsequent events' lessons
   async function executeCascade(doCascade: boolean) {
     if (!cascadePending) return;
     const { eventId, oldLessonId, newLessonId } = cascadePending;
     const event = events.find(e => e.id === eventId);
     if (!event) return;
 
-    // Update the changed event
     await supabase.from("events").update({ linked_lesson_id: newLessonId }).eq("id", eventId);
 
     if (doCascade) {
-      // Get subsequent events with linked lessons, ordered by date
       const subsequent = events
         .filter(e => e.id !== eventId && e.event_date > event.event_date && e.linked_lesson_id)
         .sort((a, b) => a.event_date.localeCompare(b.event_date));
 
       if (subsequent.length > 0) {
-        // Find the new lesson's position in the ordered list
         const newLesson = lessons.find(l => l.id === newLessonId);
         if (newLesson) {
-          // Get all lessons in order (across courses)
           const allLessonsOrdered = [...lessons].sort((a, b) => {
             if (a.course_order !== b.course_order) return a.course_order - b.course_order;
             return a.order_num - b.order_num;
@@ -167,7 +216,6 @@ export default function AgendaTab() {
 
           const newIdx = allLessonsOrdered.findIndex(l => l.id === newLessonId);
           if (newIdx >= 0) {
-            // Assign subsequent events to sequential lessons starting from newIdx + 1
             for (let i = 0; i < subsequent.length; i++) {
               const nextLessonIdx = newIdx + 1 + i;
               if (nextLessonIdx < allLessonsOrdered.length) {
@@ -187,6 +235,7 @@ export default function AgendaTab() {
     setShowCascadeDialog(false);
     setCascadePending(null);
     setEditingEventId(null);
+    setEditingFullEventId(null);
     fetchEvents();
   }
 
@@ -197,12 +246,14 @@ export default function AgendaTab() {
     return `Curso ${lesson.course_order} — Lição ${lesson.order_num}: ${lesson.title}`;
   };
 
+  const isEditing = !!editingFullEventId;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="font-montserrat font-bold text-foreground text-base">Eventos e Encontros</p>
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={openNewForm}
           className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-inter font-medium text-primary-foreground"
           style={{ background: "var(--gradient-hero)" }}
         >
@@ -240,10 +291,12 @@ export default function AgendaTab() {
         </div>
       )}
 
-      {/* Form */}
+      {/* Form (create or edit) */}
       {showForm && (
         <div className="bg-card rounded-2xl border border-border p-4 space-y-3 shadow-sm">
-          <p className="font-montserrat font-bold text-foreground text-sm">Novo evento</p>
+          <p className="font-montserrat font-bold text-foreground text-sm">
+            {isEditing ? "✏️ Editar evento" : "Novo evento"}
+          </p>
           <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
             placeholder="Título do evento *"
             className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
@@ -257,12 +310,39 @@ export default function AgendaTab() {
               placeholder="Local (opcional)"
               className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
           </div>
+
+          {/* Area selector */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="font-inter text-xs font-medium text-muted-foreground">📍 Área</label>
+              <select value={form.area} onChange={e => setForm(f => ({ ...f, area: e.target.value }))}
+                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                <option value="">Todas as áreas</option>
+                <option value="Área 1">Área 1</option>
+                <option value="Área 2">Área 2</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="font-inter text-xs font-medium text-muted-foreground">⛪ Comunidade</label>
+              <select value={form.community} onChange={e => setForm(f => ({ ...f, community: e.target.value }))}
+                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                <option value="">Todas</option>
+                <option value="Martim Lutero">Martim Lutero</option>
+                <option value="Bom Pastor">Bom Pastor</option>
+                <option value="Rincão Fundo">Rincão Fundo</option>
+                <option value="Rincão Frente">Rincão Frente</option>
+                <option value="Linha Brasil">Linha Brasil</option>
+                <option value="Iriá Pira 1">Iriá Pira 1</option>
+                <option value="Iriá Pira 2">Iriá Pira 2</option>
+              </select>
+            </div>
+          </div>
+
           <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value, linked_lesson_id: "" }))}
             className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
             {EVENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
 
-          {/* Lesson selector — available for any event type */}
           <div className="space-y-1">
             <label className="font-inter text-xs font-medium text-muted-foreground">📖 Vincular a um estudo (opcional)</label>
             <select
@@ -283,9 +363,9 @@ export default function AgendaTab() {
             <button onClick={handleSave} disabled={saving || !form.title || !form.event_date}
               className="flex-1 py-2.5 rounded-xl text-sm font-inter font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
               style={{ background: "var(--gradient-hero)" }}>
-              {saving ? "Salvando..." : "Salvar evento"}
+              {saving ? "Salvando..." : isEditing ? "Salvar alterações" : "Salvar evento"}
             </button>
-            <button onClick={() => setShowForm(false)} className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm">
+            <button onClick={() => { setShowForm(false); setEditingFullEventId(null); }} className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm">
               Cancelar
             </button>
           </div>
@@ -307,7 +387,7 @@ export default function AgendaTab() {
             const typeInfo = EVENT_TYPES.find(t => t.value === event.type);
             const dateObj = new Date(event.event_date);
             const lessonLabel = getLessonLabel(event.linked_lesson_id);
-            const isEditing = editingEventId === event.id;
+            const isEditingLesson = editingEventId === event.id;
             return (
               <div key={event.id} className="bg-card rounded-2xl border border-border p-4 shadow-sm">
                 <div className="flex items-start gap-3">
@@ -335,7 +415,7 @@ export default function AgendaTab() {
                     </div>
 
                     {/* Linked lesson display / edit */}
-                    {isEditing ? (
+                    {isEditingLesson ? (
                       <div className="mt-2 flex items-center gap-2">
                         <select
                           value={editLessonId}
@@ -377,9 +457,14 @@ export default function AgendaTab() {
 
                     {event.description && <p className="text-muted-foreground font-inter text-xs mt-1.5">{event.description}</p>}
                   </div>
-                  <button onClick={() => handleDelete(event.id)} className="w-7 h-7 rounded-lg bg-destructive/10 flex items-center justify-center flex-shrink-0">
-                    <X className="w-3.5 h-3.5 text-destructive" />
-                  </button>
+                  <div className="flex flex-col gap-1.5 flex-shrink-0">
+                    <button onClick={() => openEditForm(event)} className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors">
+                      <Pencil className="w-3.5 h-3.5 text-primary" />
+                    </button>
+                    <button onClick={() => handleDelete(event.id)} className="w-7 h-7 rounded-lg bg-destructive/10 flex items-center justify-center hover:bg-destructive/20 transition-colors">
+                      <X className="w-3.5 h-3.5 text-destructive" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
