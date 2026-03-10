@@ -554,7 +554,7 @@ export default function AttendanceTab({ participants, activities, communities, i
             <p className="text-muted-foreground text-xs font-inter">Eventos, presença e avaliação</p>
           </div>
         </div>
-        <button onClick={() => setShowEventForm(!showEventForm)}
+        <button onClick={() => { setEditingEventId(null); setEventForm({ title: "", description: "", event_date: "", location: "", type: "encontro", area: adminArea ?? "", community: "", linked_lesson_id: "" }); setShowEventForm(!showEventForm); }}
           className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-inter font-medium text-primary-foreground"
           style={{ background: "var(--gradient-hero)" }}>
           <Plus className="w-3.5 h-3.5" /> Novo evento
