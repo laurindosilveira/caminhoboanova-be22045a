@@ -122,6 +122,8 @@ export default function AttendanceTab({ participants, activities, communities, i
     title: "", description: "", event_date: "", location: "", type: "encontro", area: adminArea ?? "", community: "", linked_lesson_id: "",
   });
   const [reportEventId, setReportEventId] = useState<string | null>(null);
+  const [showCascadeDialog, setShowCascadeDialog] = useState(false);
+  const [cascadePending, setCascadePending] = useState<{ eventId: string; oldLessonId: string | null; newLessonId: string; payload: any } | null>(null);
 
   // Lesson options for linking to confirmatorio events
   type LessonOption = { id: string; title: string; order_num: number; course_title: string; course_order: number };
@@ -247,7 +249,26 @@ export default function AttendanceTab({ participants, activities, communities, i
       community: eventForm.community || null,
       linked_lesson_id: eventForm.linked_lesson_id || null,
     };
+
     if (editingEventId) {
+      const oldEvent = events.find(e => e.id === editingEventId);
+      const oldLessonId = oldEvent?.linked_lesson_id ?? null;
+      const newLessonId = payload.linked_lesson_id;
+
+      // Check if lesson changed and cascade is needed
+      if (oldLessonId !== newLessonId && newLessonId && oldEvent) {
+        const subsequentWithLessons = events.filter(
+          e => e.id !== editingEventId && e.event_date > oldEvent.event_date && e.linked_lesson_id
+        );
+        if (subsequentWithLessons.length > 0) {
+          setCascadePending({ eventId: editingEventId, oldLessonId, newLessonId, payload });
+          setShowCascadeDialog(true);
+          setShowEventForm(false);
+          setSavingEvent(false);
+          return;
+        }
+      }
+
       await supabase.from("events").update(payload).eq("id", editingEventId);
     } else {
       const { data: { user } } = await supabase.auth.getUser();
@@ -257,6 +278,49 @@ export default function AttendanceTab({ participants, activities, communities, i
     setShowEventForm(false);
     setEditingEventId(null);
     setSavingEvent(false);
+    fetchEvents();
+  }
+
+  async function executeCascade(doCascade: boolean) {
+    if (!cascadePending) return;
+    const { eventId, newLessonId, payload } = cascadePending;
+    const event = events.find(e => e.id === eventId);
+    if (!event) return;
+
+    // Update the edited event with all fields
+    await supabase.from("events").update(payload).eq("id", eventId);
+
+    if (doCascade) {
+      const subsequent = events
+        .filter(e => e.id !== eventId && e.event_date > event.event_date && e.linked_lesson_id)
+        .sort((a, b) => a.event_date.localeCompare(b.event_date));
+
+      if (subsequent.length > 0) {
+        const allLessonsOrdered = [...lessonOptions].sort((a, b) => {
+          if (a.course_order !== b.course_order) return a.course_order - b.course_order;
+          return a.order_num - b.order_num;
+        });
+
+        const newIdx = allLessonsOrdered.findIndex(l => l.id === newLessonId);
+        if (newIdx >= 0) {
+          for (let i = 0; i < subsequent.length; i++) {
+            const nextLessonIdx = newIdx + 1 + i;
+            if (nextLessonIdx < allLessonsOrdered.length) {
+              await supabase.from("events")
+                .update({ linked_lesson_id: allLessonsOrdered[nextLessonIdx].id })
+                .eq("id", subsequent[i].id);
+            }
+          }
+          toast({ title: `Lições atualizadas em ${subsequent.length + 1} eventos!` });
+        }
+      }
+    } else {
+      toast({ title: "Evento atualizado (sem cascata)!" });
+    }
+
+    setShowCascadeDialog(false);
+    setCascadePending(null);
+    setEditingEventId(null);
     fetchEvents();
   }
 
@@ -385,6 +449,38 @@ export default function AttendanceTab({ participants, activities, communities, i
           ))}
         </div>
         {value && <p className="text-[10px] text-primary font-inter">{SCORE_LABELS[value]}</p>}
+      </div>
+    );
+  }
+
+  function renderCascadeDialog() {
+    if (!showCascadeDialog || !cascadePending) return null;
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in" onClick={() => { setShowCascadeDialog(false); setCascadePending(null); }}>
+        <div className="w-full max-w-sm bg-card rounded-2xl p-5 mx-4 space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="text-center">
+            <span className="text-3xl">📅</span>
+            <h3 className="font-montserrat font-bold text-foreground text-base mt-2">Prorrogar estudos?</h3>
+            <p className="text-muted-foreground font-inter text-xs mt-2 leading-relaxed">
+              Você mudou a lição deste encontro. Deseja que as próximas datas sejam atualizadas automaticamente com as lições seguintes?
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => executeCascade(false)}
+              className="flex-1 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm font-medium"
+            >
+              Só este evento
+            </button>
+            <button
+              onClick={() => executeCascade(true)}
+              className="flex-1 py-2.5 rounded-xl text-primary-foreground font-inter text-sm font-medium"
+              style={{ background: "var(--gradient-hero)" }}
+            >
+              Prorrogar todos
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -530,6 +626,7 @@ export default function AttendanceTab({ participants, activities, communities, i
     return (
       <div className="space-y-4">
         {renderSubTabs()}
+        {renderCascadeDialog()}
         <div className="flex items-center justify-between">
           <p className="font-montserrat font-bold text-foreground text-base">Encontros & Presença</p>
           <button onClick={() => { setEditingEventId(null); setEventForm({ title: "", description: "", event_date: "", location: "", type: "encontro", area: adminArea ?? "", community: "", linked_lesson_id: "" }); setShowEventForm(!showEventForm); }}
@@ -567,6 +664,7 @@ export default function AttendanceTab({ participants, activities, communities, i
   return (
     <div className="space-y-4">
       {renderSubTabs()}
+      {renderCascadeDialog()}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
