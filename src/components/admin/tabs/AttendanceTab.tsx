@@ -26,6 +26,7 @@ type Event = {
 type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
+  confirmation_year?: number | null;
 };
 type Activity = {
   id: string; title: string; type: string; order_num: number; points: number; subtitle: string | null;
