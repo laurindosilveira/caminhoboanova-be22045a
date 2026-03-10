@@ -453,6 +453,38 @@ export default function AttendanceTab({ participants, activities, communities, i
     );
   }
 
+  function renderCascadeDialog() {
+    if (!showCascadeDialog || !cascadePending) return null;
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in" onClick={() => { setShowCascadeDialog(false); setCascadePending(null); }}>
+        <div className="w-full max-w-sm bg-card rounded-2xl p-5 mx-4 space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="text-center">
+            <span className="text-3xl">📅</span>
+            <h3 className="font-montserrat font-bold text-foreground text-base mt-2">Prorrogar estudos?</h3>
+            <p className="text-muted-foreground font-inter text-xs mt-2 leading-relaxed">
+              Você mudou a lição deste encontro. Deseja que as próximas datas sejam atualizadas automaticamente com as lições seguintes?
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => executeCascade(false)}
+              className="flex-1 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm font-medium"
+            >
+              Só este evento
+            </button>
+            <button
+              onClick={() => executeCascade(true)}
+              className="flex-1 py-2.5 rounded-xl text-primary-foreground font-inter text-sm font-medium"
+              style={{ background: "var(--gradient-hero)" }}
+            >
+              Prorrogar todos
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function renderEventForm() {
     const formContent = (
       <div className="space-y-3">
