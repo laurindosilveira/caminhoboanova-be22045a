@@ -757,6 +757,13 @@ export default function AttendanceTab({ participants, activities, communities, i
                     </button>
                   )}
                   <button
+                    onClick={(e) => { e.stopPropagation(); openEditEvent(event); }}
+                    className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors"
+                    title="Editar evento"
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-primary" />
+                  </button>
+                  <button
                     onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
                     className="w-7 h-7 rounded-lg bg-destructive/10 flex items-center justify-center hover:bg-destructive/20 transition-colors"
                     title="Excluir evento"
