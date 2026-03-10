@@ -972,8 +972,8 @@ export default function ParticipantsTab({ participants, activities, communities 
           <span className="text-muted-foreground font-inter text-xs">
             {filtered.length} participante{filtered.length !== 1 ? "s" : ""} encontrado{filtered.length !== 1 ? "s" : ""}
           </span>
-          {(communityFilter !== "todas" || statusFilter !== "todos" || search) && (
-            <button onClick={() => { setCommunityFilter("todas"); setStatusFilter("todos"); setSearch(""); }}
+          {(communityFilter !== "todas" || statusFilter !== "todos" || yearFilter !== "todos" || search) && (
+            <button onClick={() => { setCommunityFilter("todas"); setStatusFilter("todos"); setYearFilter("todos"); setSearch(""); }}
               className="ml-auto text-secondary font-inter text-xs font-medium">
               Limpar filtros
             </button>
