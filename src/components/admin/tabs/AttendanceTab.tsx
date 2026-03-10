@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   CalendarDays, Users, CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp,
   Star, BookOpen, FileText, Save, Church, Plus, MapPin, X as XIcon,
-  Heart, GraduationCap, MessageSquare, ClipboardList, ArrowUpCircle, RefreshCw,
+  Heart, GraduationCap, MessageSquare, ClipboardList, ArrowUpCircle, RefreshCw, Pencil,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
