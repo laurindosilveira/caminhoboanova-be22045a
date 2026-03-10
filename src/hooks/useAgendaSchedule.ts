@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export type ScheduleEntry = {
   eventId: string;
@@ -33,19 +34,22 @@ export function getBusinessDaysBefore(date: Date, count: number): Date[] {
 }
 
 export function useAgendaSchedule() {
+  const { profile } = useAuth();
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchSchedule();
-  }, []);
+    if (profile) fetchSchedule();
+  }, [profile?.area]);
 
   async function fetchSchedule() {
     setLoading(true);
+    let eventsQuery = supabase.from("events").select("id, event_date, linked_lesson_id, title, type, area")
+      .not("linked_lesson_id", "is", null)
+      .order("event_date");
+
     const [{ data: events }, { data: lessons }, { data: courses }] = await Promise.all([
-      supabase.from("events").select("id, event_date, linked_lesson_id, title, type")
-        .not("linked_lesson_id", "is", null)
-        .order("event_date"),
+      eventsQuery,
       supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
       supabase.from("courses").select("id, title, order_num").order("order_num"),
     ]);
@@ -56,6 +60,8 @@ export function useAgendaSchedule() {
     const entries: ScheduleEntry[] = [];
     for (const event of (events ?? [])) {
       if (!event.linked_lesson_id) continue;
+      // Filter by user's area: show events with no area or matching area
+      if (event.area && profile?.area && event.area !== profile.area) continue;
       const lesson = lessonMap.get(event.linked_lesson_id);
       if (!lesson) continue;
       const course = courseMap.get(lesson.course_id);
