@@ -385,8 +385,8 @@ export default function AttendanceTab({ participants, activities, communities, i
   }
 
   function renderEventForm() {
-    return (
-      <div className="bg-card rounded-2xl border border-border p-4 space-y-3 shadow-sm">
+    const formContent = (
+      <div className="space-y-3">
         <p className="font-montserrat font-bold text-foreground text-sm">{editingEventId ? "✏️ Editar evento" : "Novo evento"}</p>
         <input value={eventForm.title} onChange={e => setEventForm(f => ({ ...f, title: e.target.value }))}
           placeholder="Título do evento *"
@@ -432,6 +432,24 @@ export default function AttendanceTab({ participants, activities, communities, i
             Cancelar
           </button>
         </div>
+      </div>
+    );
+
+    // If editing, render as floating modal
+    if (editingEventId) {
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in" onClick={() => { setShowEventForm(false); setEditingEventId(null); }}>
+          <div className="w-full max-w-md bg-card rounded-2xl border border-border p-5 mx-4 shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            {formContent}
+          </div>
+        </div>
+      );
+    }
+
+    // New event: inline form
+    return (
+      <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+        {formContent}
       </div>
     );
   }
