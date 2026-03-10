@@ -249,7 +249,26 @@ export default function AttendanceTab({ participants, activities, communities, i
       community: eventForm.community || null,
       linked_lesson_id: eventForm.linked_lesson_id || null,
     };
+
     if (editingEventId) {
+      const oldEvent = events.find(e => e.id === editingEventId);
+      const oldLessonId = oldEvent?.linked_lesson_id ?? null;
+      const newLessonId = payload.linked_lesson_id;
+
+      // Check if lesson changed and cascade is needed
+      if (oldLessonId !== newLessonId && newLessonId && oldEvent) {
+        const subsequentWithLessons = events.filter(
+          e => e.id !== editingEventId && e.event_date > oldEvent.event_date && e.linked_lesson_id
+        );
+        if (subsequentWithLessons.length > 0) {
+          setCascadePending({ eventId: editingEventId, oldLessonId, newLessonId, payload });
+          setShowCascadeDialog(true);
+          setShowEventForm(false);
+          setSavingEvent(false);
+          return;
+        }
+      }
+
       await supabase.from("events").update(payload).eq("id", editingEventId);
     } else {
       const { data: { user } } = await supabase.auth.getUser();
@@ -259,6 +278,49 @@ export default function AttendanceTab({ participants, activities, communities, i
     setShowEventForm(false);
     setEditingEventId(null);
     setSavingEvent(false);
+    fetchEvents();
+  }
+
+  async function executeCascade(doCascade: boolean) {
+    if (!cascadePending) return;
+    const { eventId, newLessonId, payload } = cascadePending;
+    const event = events.find(e => e.id === eventId);
+    if (!event) return;
+
+    // Update the edited event with all fields
+    await supabase.from("events").update(payload).eq("id", eventId);
+
+    if (doCascade) {
+      const subsequent = events
+        .filter(e => e.id !== eventId && e.event_date > event.event_date && e.linked_lesson_id)
+        .sort((a, b) => a.event_date.localeCompare(b.event_date));
+
+      if (subsequent.length > 0) {
+        const allLessonsOrdered = [...lessonOptions].sort((a, b) => {
+          if (a.course_order !== b.course_order) return a.course_order - b.course_order;
+          return a.order_num - b.order_num;
+        });
+
+        const newIdx = allLessonsOrdered.findIndex(l => l.id === newLessonId);
+        if (newIdx >= 0) {
+          for (let i = 0; i < subsequent.length; i++) {
+            const nextLessonIdx = newIdx + 1 + i;
+            if (nextLessonIdx < allLessonsOrdered.length) {
+              await supabase.from("events")
+                .update({ linked_lesson_id: allLessonsOrdered[nextLessonIdx].id })
+                .eq("id", subsequent[i].id);
+            }
+          }
+          toast({ title: `Lições atualizadas em ${subsequent.length + 1} eventos!` });
+        }
+      }
+    } else {
+      toast({ title: "Evento atualizado (sem cascata)!" });
+    }
+
+    setShowCascadeDialog(false);
+    setCascadePending(null);
+    setEditingEventId(null);
     fetchEvents();
   }
 
