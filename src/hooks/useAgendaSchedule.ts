@@ -42,6 +42,22 @@ export function useAgendaSchedule() {
     if (profile) fetchSchedule();
   }, [profile?.area]);
 
+  // Realtime subscription for events changes
+  useEffect(() => {
+    const channel = supabase
+      .channel('agenda-events-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'events' },
+        () => {
+          if (profile) fetchSchedule();
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [profile?.area]);
+
   async function fetchSchedule() {
     setLoading(true);
     let eventsQuery = supabase.from("events").select("id, event_date, linked_lesson_id, title, type, area")
