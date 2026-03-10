@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Send, MessageSquare, Heart, BookOpen, ExternalLink, Eye, EyeOff, Trash2, CheckCircle } from "lucide-react";
-import StudentListSection from "@/components/home/StudentListSection";
+import LeaderRoomSection from "@/components/home/LeaderRoomSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -288,8 +288,8 @@ export default function ClassroomTab() {
         </div>
       )}
 
-      {/* ===== LISTA DE ALUNOS (admin/lider) ===== */}
-      <StudentListSection />
+      {/* ===== SALA DO DISCIPULADOR (admin/lider) ===== */}
+      <LeaderRoomSection />
 
       {/* ===== MURAL DE ORAÇÕES ===== */}
       <div className="mx-5">
