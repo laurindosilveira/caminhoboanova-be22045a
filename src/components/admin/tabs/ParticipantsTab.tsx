@@ -1012,6 +1012,11 @@ export default function ParticipantsTab({ participants, activities, communities 
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                           <span className="text-muted-foreground font-inter text-xs">{p.community}</span>
                           {age !== null && <><span className="text-muted-foreground">·</span><span className="text-muted-foreground font-inter text-xs">{age} anos</span></>}
+                          {p.confirmation_year ? (
+                            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-inter font-medium bg-primary/10 text-primary">{p.confirmation_year}º ano</span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-inter font-medium bg-destructive/10 text-destructive">Ano ?</span>
+                          )}
                         </div>
                       </div>
                     </div>
