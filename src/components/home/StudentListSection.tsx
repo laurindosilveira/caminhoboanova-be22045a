@@ -344,6 +344,19 @@ export default function StudentListSection() {
                 <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Ano de confirmação</label>
                 <Input type="number" min={1} max={3} value={editForm.confirmation_year ?? ""} onChange={e => setEditForm(f => ({ ...f, confirmation_year: e.target.value ? Number(e.target.value) : null }))} className="text-sm" placeholder="1 ou 2" />
               </div>
+              <div>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Turma</label>
+                <select
+                  value={editForm.turma_id ?? ""}
+                  onChange={e => setEditForm(f => ({ ...f, turma_id: e.target.value || null }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">Sem turma</option>
+                  {turmas.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}{t.area ? ` (${t.area})` : ""}</option>
+                  ))}
+                </select>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Nome do pai</label>
