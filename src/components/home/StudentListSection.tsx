@@ -77,12 +77,17 @@ export default function StudentListSection() {
     
     async function fetchStudents() {
       setLoading(true);
-      const { data } = await supabase
-        .from("profiles")
-        .select("user_id, full_name, community, area, birth_date, phone, father_name, mother_name, father_phone, mother_phone, address, turma_id, confirmation_year")
-        .eq("turma_id", profile!.turma_id!)
-        .neq("user_id", profile!.user_id)
-        .order("full_name");
+      const [{ data }, { data: turmasData }] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("user_id, full_name, community, area, birth_date, phone, father_name, mother_name, father_phone, mother_phone, address, turma_id, confirmation_year")
+          .eq("turma_id", profile!.turma_id!)
+          .neq("user_id", profile!.user_id)
+          .order("full_name"),
+        supabase.from("turmas").select("id, name, area").eq("is_active", true).order("name"),
+      ]);
+
+      setTurmas(turmasData ?? []);
       
       // Filter out admins/leaders
       if (data && data.length > 0) {
