@@ -50,7 +50,7 @@ interface BirthdayPerson {
 type SubTab = "comunidade" | "sala";
 
 export default function CommunityTab() {
-  const { profile } = useAuth();
+  const { profile, role } = useAuth();
   const [subTab, setSubTab] = useState<SubTab>("comunidade");
   const [messages, setMessages] = useState<Message[]>([]);
   const [reactions, setReactions] = useState<ReactionMap>({});
