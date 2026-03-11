@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Users, ChevronDown, ChevronUp, Phone, MapPin, Calendar, BookOpen, GraduationCap, Heart, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { Users, ChevronDown, ChevronUp, Phone, MapPin, Calendar, BookOpen, GraduationCap, Heart, CheckCircle2, Clock, AlertCircle, Pencil, Save, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 interface StudentProfile {
   user_id: string;
@@ -56,6 +59,9 @@ export default function StudentListSection() {
   const [selectedStudent, setSelectedStudent] = useState<StudentProfile | null>(null);
   const [studentStats, setStudentStats] = useState<StudentStats | null>(null);
   const [loadingStats, setLoadingStats] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState<Partial<StudentProfile>>({});
+  const [saving, setSaving] = useState(false);
 
   const canView = role === "admin" || role === "lider";
 
@@ -92,6 +98,7 @@ export default function StudentListSection() {
 
   async function loadStudentDetails(student: StudentProfile) {
     setSelectedStudent(student);
+    setEditing(false);
     setLoadingStats(true);
     setStudentStats(null);
 
@@ -131,6 +138,64 @@ export default function StudentListSection() {
       needsPastor: assessData?.needs_pastor ?? false,
     });
     setLoadingStats(false);
+  }
+
+  function startEditing() {
+    if (!selectedStudent) return;
+    setEditForm({
+      full_name: selectedStudent.full_name,
+      phone: selectedStudent.phone,
+      birth_date: selectedStudent.birth_date,
+      address: selectedStudent.address ?? "",
+      father_name: selectedStudent.father_name ?? "",
+      mother_name: selectedStudent.mother_name ?? "",
+      father_phone: selectedStudent.father_phone ?? "",
+      mother_phone: selectedStudent.mother_phone ?? "",
+      confirmation_year: selectedStudent.confirmation_year,
+    });
+    setEditing(true);
+  }
+
+  async function saveEdits() {
+    if (!selectedStudent) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        full_name: editForm.full_name?.trim() || selectedStudent.full_name,
+        phone: editForm.phone?.trim() || selectedStudent.phone,
+        birth_date: editForm.birth_date || selectedStudent.birth_date,
+        address: editForm.address?.trim() ?? "",
+        father_name: editForm.father_name?.trim() ?? "",
+        mother_name: editForm.mother_name?.trim() ?? "",
+        father_phone: editForm.father_phone?.trim() ?? "",
+        mother_phone: editForm.mother_phone?.trim() ?? "",
+        confirmation_year: editForm.confirmation_year ?? null,
+      } as any)
+      .eq("user_id", selectedStudent.user_id);
+
+    if (error) {
+      toast.error("Erro ao salvar alterações");
+      console.error(error);
+    } else {
+      const updated = {
+        ...selectedStudent,
+        full_name: editForm.full_name?.trim() || selectedStudent.full_name,
+        phone: editForm.phone?.trim() || selectedStudent.phone,
+        birth_date: editForm.birth_date || selectedStudent.birth_date,
+        address: editForm.address?.trim() ?? "",
+        father_name: editForm.father_name?.trim() ?? "",
+        mother_name: editForm.mother_name?.trim() ?? "",
+        father_phone: editForm.father_phone?.trim() ?? "",
+        mother_phone: editForm.mother_phone?.trim() ?? "",
+        confirmation_year: editForm.confirmation_year ?? null,
+      };
+      setSelectedStudent(updated);
+      setStudents(prev => prev.map(s => s.user_id === updated.user_id ? updated : s));
+      setEditing(false);
+      toast.success("Dados atualizados com sucesso!");
+    }
+    setSaving(false);
   }
 
   if (!canView) return null;
@@ -201,7 +266,7 @@ export default function StudentListSection() {
       )}
 
       {/* Student Details Dialog */}
-      <Dialog open={!!selectedStudent} onOpenChange={(open) => { if (!open) setSelectedStudent(null); }}>
+      <Dialog open={!!selectedStudent} onOpenChange={(open) => { if (!open) { setSelectedStudent(null); setEditing(false); } }}>
         <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
@@ -210,18 +275,77 @@ export default function StudentListSection() {
                   {selectedStudent?.full_name[0]?.toUpperCase()}
                 </span>
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="font-montserrat font-bold text-foreground text-base">{selectedStudent?.full_name}</p>
                 <p className="text-muted-foreground text-xs font-inter font-normal">
                   {selectedStudent?.community} · {selectedStudent?.area}
                 </p>
               </div>
+              {!editing && (
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={startEditing} title="Editar dados">
+                  <Pencil className="w-4 h-4 text-muted-foreground" />
+                </Button>
+              )}
             </DialogTitle>
           </DialogHeader>
 
           {loadingStats ? (
             <div className="py-8 text-center">
               <p className="text-muted-foreground text-sm font-inter animate-pulse">Carregando informações...</p>
+            </div>
+          ) : editing && selectedStudent ? (
+            /* ===== EDIT MODE ===== */
+            <div className="space-y-3 mt-2">
+              <div>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Nome completo</label>
+                <Input value={editForm.full_name ?? ""} onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))} className="text-sm" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Telefone</label>
+                  <Input value={editForm.phone ?? ""} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} className="text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Data de nascimento</label>
+                  <Input type="date" value={editForm.birth_date ?? ""} onChange={e => setEditForm(f => ({ ...f, birth_date: e.target.value }))} className="text-sm" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Endereço</label>
+                <Input value={editForm.address ?? ""} onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))} className="text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Ano de confirmação</label>
+                <Input type="number" min={1} max={3} value={editForm.confirmation_year ?? ""} onChange={e => setEditForm(f => ({ ...f, confirmation_year: e.target.value ? Number(e.target.value) : null }))} className="text-sm" placeholder="1 ou 2" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Nome do pai</label>
+                  <Input value={editForm.father_name ?? ""} onChange={e => setEditForm(f => ({ ...f, father_name: e.target.value }))} className="text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Telefone do pai</label>
+                  <Input value={editForm.father_phone ?? ""} onChange={e => setEditForm(f => ({ ...f, father_phone: e.target.value }))} className="text-sm" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Nome da mãe</label>
+                  <Input value={editForm.mother_name ?? ""} onChange={e => setEditForm(f => ({ ...f, mother_name: e.target.value }))} className="text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Telefone da mãe</label>
+                  <Input value={editForm.mother_phone ?? ""} onChange={e => setEditForm(f => ({ ...f, mother_phone: e.target.value }))} className="text-sm" />
+                </div>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => setEditing(false)} disabled={saving}>
+                  <X className="w-3.5 h-3.5" /> Cancelar
+                </Button>
+                <Button size="sm" className="flex-1 gap-1.5" onClick={saveEdits} disabled={saving}>
+                  <Save className="w-3.5 h-3.5" /> {saving ? "Salvando..." : "Salvar"}
+                </Button>
+              </div>
             </div>
           ) : studentStats && selectedStudent ? (
             <div className="space-y-4 mt-2">
