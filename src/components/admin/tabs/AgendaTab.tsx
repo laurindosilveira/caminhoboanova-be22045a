@@ -109,10 +109,13 @@ export default function AgendaTab() {
     if (!form.title || !form.event_date) return;
     setSaving(true);
 
+    // Append Brazil timezone offset so Supabase stores the correct local time
+    const eventDateWithTz = form.event_date ? form.event_date + ":00-03:00" : form.event_date;
+
     const payload = {
       title: form.title,
       description: form.description || null,
-      event_date: form.event_date,
+      event_date: eventDateWithTz,
       location: form.location || null,
       type: form.type,
       area: form.area || null,
