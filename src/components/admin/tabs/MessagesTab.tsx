@@ -135,8 +135,16 @@ export default function MessagesTab() {
             </select>
           )}
 
+          {form.target === "turma" && (
+            <select value={form.turmaId} onChange={e => setForm(f => ({ ...f, turmaId: e.target.value }))}
+              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+              <option value="">Selecione a turma</option>
+              {turmas.map(t => <option key={t.id} value={t.id}>{t.name}{t.area ? ` (${t.area})` : ""}</option>)}
+            </select>
+          )}
+
           <div className="flex gap-2">
-            <button onClick={handleSend} disabled={saving || !form.title || !form.body || (form.target === "community" && !form.community)}
+            <button onClick={handleSend} disabled={saving || !form.title || !form.body || (form.target === "community" && !form.community) || (form.target === "turma" && !form.turmaId)}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-inter font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
               style={{ background: "var(--gradient-hero)" }}>
               <Send className="w-4 h-4" /> {saving ? "Enviando..." : "Enviar"}
