@@ -221,6 +221,10 @@ async function checkNewMessages() {
         count === 1 ? data[0].title : `Você tem ${count} novas mensagens. Confira!`
       );
       markSentToday("mensagens");
+    }
+  } catch (err) {
+    console.warn("Messages notification check failed", err);
+  }
 }
 
 async function checkLessonCompletion() {
