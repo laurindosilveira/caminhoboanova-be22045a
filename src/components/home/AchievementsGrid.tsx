@@ -2,9 +2,10 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import confetti from "canvas-confetti";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Trophy, Lock, Flame } from "lucide-react";
+import { Trophy, Lock, Flame, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import GameRulesDialog from "./GameRulesDialog";
+import PlayerDetailSheet from "./PlayerDetailSheet";
 
 interface AchievementsGridProps {
   faithPoints: number;
