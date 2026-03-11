@@ -50,7 +50,7 @@ interface BirthdayPerson {
 type SubTab = "comunidade" | "sala";
 
 export default function CommunityTab() {
-  const { profile } = useAuth();
+  const { profile, role } = useAuth();
   const [subTab, setSubTab] = useState<SubTab>("comunidade");
   const [messages, setMessages] = useState<Message[]>([]);
   const [reactions, setReactions] = useState<ReactionMap>({});
@@ -437,7 +437,7 @@ export default function CommunityTab() {
                           <p className="text-muted-foreground text-[10px] font-inter">{timeAgo(t.created_at)}</p>
                         </div>
                       </div>
-                      {profile && t.user_id === profile.user_id && (
+                      {(profile && (t.user_id === profile.user_id || role === "admin" || role === "lider")) && (
                         <button onClick={() => deleteTestimony(t.id)} className="text-muted-foreground hover:text-destructive transition-colors p-1">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -472,13 +472,15 @@ export default function CommunityTab() {
                       className={`flex items-center gap-3 px-4 py-3 ${i < birthdays.length - 1 ? "border-b border-border" : ""} ${isToday ? "bg-secondary/5" : ""}`}
                     >
                       <span className="text-lg">{isToday ? "🎉" : "🎂"}</span>
+                      <span className="font-montserrat font-black text-card-foreground text-sm flex-shrink-0">
+                        {String(b.day).padStart(2, '0')}/{String(new Date().getMonth() + 1).padStart(2, '0')}
+                      </span>
                       <div className="flex-1 min-w-0">
-                        <p className="font-montserrat font-bold text-card-foreground text-sm truncate">
+                        <p className="font-montserrat text-card-foreground text-sm truncate">
                           {b.full_name}
                           {isToday && <span className="text-secondary text-xs font-inter ml-1">(hoje!)</span>}
                         </p>
                       </div>
-                      <span className="text-muted-foreground text-xs font-inter flex-shrink-0">dia {b.day}</span>
                     </div>
                   );
                 })}
