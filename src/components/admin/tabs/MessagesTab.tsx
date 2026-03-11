@@ -69,7 +69,7 @@ export default function MessagesTab() {
       console.warn("Push notification failed:", e);
     }
 
-    setForm({ title: "", body: "", target: "area", community: "" });
+    setForm({ title: "", body: "", target: "area", community: "", turmaId: "" });
     setShowForm(false);
     setSaving(false);
     fetchMessages();
