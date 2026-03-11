@@ -77,6 +77,11 @@ export function useAppNotifications() {
         checks.push(checkNewMessages());
       }
 
+      // --- LESSON COMPLETION celebration ---
+      if (!wasSentToday("lesson_complete")) {
+        checks.push(checkLessonCompletion());
+      }
+
       await Promise.allSettled(checks);
       markRunToday();
     }
@@ -219,5 +224,63 @@ async function checkNewMessages() {
     }
   } catch (err) {
     console.warn("Messages notification check failed", err);
+  }
+}
+
+async function checkLessonCompletion() {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Check if user completed all responses for any lesson in the last 24h
+    const since = new Date(Date.now() - 86400000).toISOString();
+    const { data: recentResponses } = await supabase
+      .from("lesson_responses")
+      .select("lesson_id, created_at")
+      .eq("user_id", user.id)
+      .gte("created_at", since);
+
+    if (!recentResponses || recentResponses.length === 0) return;
+
+    // Get unique lesson IDs from recent responses
+    const recentLessonIds = [...new Set(recentResponses.map(r => r.lesson_id))];
+
+    // Get lesson info
+    const { data: lessons } = await supabase
+      .from("lessons")
+      .select("id, title, order_num")
+      .in("id", recentLessonIds);
+
+    if (!lessons || lessons.length === 0) return;
+
+    // Check devotionals completion for these lessons
+    const { data: devs } = await supabase
+      .from("devotional_content")
+      .select("id, lesson_id")
+      .in("lesson_id", recentLessonIds);
+
+    const { data: devProg } = await supabase
+      .from("devotional_progress")
+      .select("devotional_id")
+      .eq("user_id", user.id);
+
+    const completedDevIds = new Set((devProg ?? []).map(p => p.devotional_id));
+
+    // Check each recent lesson for full completion
+    for (const lesson of lessons) {
+      const lessonDevs = (devs ?? []).filter(d => d.lesson_id === lesson.id);
+      const allDevsCompleted = lessonDevs.length === 0 || lessonDevs.every(d => completedDevIds.has(d.id));
+
+      if (allDevsCompleted) {
+        await sendNotification(
+          "🎉 Lição concluída!",
+          `Parabéns! Você completou a Lição ${lesson.order_num}: ${lesson.title}. Continue firme na caminhada! 🙌`
+        );
+        markSentToday("lesson_complete");
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn("Lesson completion notification check failed", err);
   }
 }
