@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Cake, Sparkles, Send, Trash2, Target, Check, Users } from "lucide-react";
+import { MessageCircle, GraduationCap, Cake, Sparkles, Send, Trash2, Target, Check, Users } from "lucide-react";
 import ClassroomTab from "./ClassroomTab";
 import AnnouncementsSection from "./AnnouncementsSection";
 
