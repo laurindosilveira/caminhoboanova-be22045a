@@ -35,11 +35,11 @@ const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
   { id: "push", label: "Push", icon: Megaphone },
 ];
 
-export default function LeaderRoomSection() {
+export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }) {
   const { profile, role } = useAuth();
   const canView = role === "admin" || role === "lider";
 
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(asTab);
   const [activeSubTab, setActiveSubTab] = useState<SubTab>("alunos");
   const [loading, setLoading] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
