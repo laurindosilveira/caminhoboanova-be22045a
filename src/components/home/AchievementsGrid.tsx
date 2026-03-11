@@ -248,6 +248,34 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
 
   const unlockedCount = achievements.filter(a => a.unlocked).length;
 
+  async function handleResetGame() {
+    setResettingGame(true);
+    const userIds = members.map(m => m.user_id);
+    if (userIds.length === 0) {
+      toast.error("Nenhum membro encontrado.");
+      setResettingGame(false);
+      setShowResetConfirm(false);
+      return;
+    }
+    try {
+      await Promise.all([
+        supabase.from("user_progress").delete().in("user_id", userIds),
+        supabase.from("lesson_responses").delete().in("user_id", userIds),
+        supabase.from("devotional_progress").delete().in("user_id", userIds),
+        supabase.from("achievement_unlocks").delete().in("user_id", userIds),
+        supabase.from("attendance").delete().in("user_id", userIds),
+        supabase.from("worship_attendance").delete().in("user_id", userIds),
+      ]);
+      toast.success(`✅ Pontuações resetadas para ${userIds.length} participantes!`);
+      const { data } = await supabase.rpc("get_community_ranking", { _community: profile!.community as any });
+      setMembers((data ?? []) as RankingMember[]);
+    } catch (err: any) {
+      toast.error("Erro ao resetar: " + (err.message ?? ""));
+    }
+    setResettingGame(false);
+    setShowResetConfirm(false);
+  }
+
   return (
     <div className="px-5 pt-2 pb-4 space-y-5">
       <div className="flex items-center justify-between mb-4">
