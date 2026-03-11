@@ -478,6 +478,19 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
           </div>
         )}
       </div>
+
+      {/* Player detail sheet */}
+      {selectedPlayer && (
+        <PlayerDetailSheet
+          userId={selectedPlayer.userId}
+          fullName={selectedPlayer.fullName}
+          onClose={() => setSelectedPlayer(null)}
+          onPointsChanged={async () => {
+            const { data } = await supabase.rpc("get_community_ranking", { _community: profile!.community as any });
+            setMembers((data ?? []) as RankingMember[]);
+          }}
+        />
+      )}
     </div>
   );
 }
