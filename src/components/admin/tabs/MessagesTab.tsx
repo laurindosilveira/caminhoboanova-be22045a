@@ -27,7 +27,10 @@ export default function MessagesTab() {
 
   const communities = profile?.area === "Área 1" ? AREA_1_COMMUNITIES : AREA_2_COMMUNITIES;
 
-  useEffect(() => { fetchMessages(); }, []);
+  useEffect(() => {
+    fetchMessages();
+    supabase.from("turmas").select("id, name, area").eq("is_active", true).order("name").then(({ data }) => setTurmas(data ?? []));
+  }, []);
 
   async function fetchMessages() {
     setLoading(true);
