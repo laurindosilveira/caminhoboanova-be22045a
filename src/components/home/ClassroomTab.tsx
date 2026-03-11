@@ -288,8 +288,7 @@ export default function ClassroomTab() {
         </div>
       )}
 
-      {/* ===== SALA DO DISCIPULADOR (admin/lider) ===== */}
-      <LeaderRoomSection />
+      {/* Sala do Discipulador moved to CommunityTab as separate tab */}
 
       {/* ===== MURAL DE ORAÇÕES ===== */}
       <div className="mx-5">

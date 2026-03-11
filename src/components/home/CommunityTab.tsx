@@ -49,7 +49,7 @@ interface BirthdayPerson {
   day: number;
 }
 
-type SubTab = "comunidade" | "sala";
+type SubTab = "comunidade" | "sala" | "discipulador";
 
 export default function CommunityTab() {
   const { profile, role } = useAuth();
