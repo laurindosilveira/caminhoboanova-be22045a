@@ -5,6 +5,7 @@ import { ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 import HeroHeader from "@/components/home/HeroHeader";
+import AnnouncementsSection from "@/components/home/AnnouncementsSection";
 import NextCourseActivityCard from "@/components/home/NextCourseActivityCard";
 import MissionCard from "@/components/home/MissionCard";
 import JourneyPath from "@/components/home/JourneyPath";
@@ -65,8 +66,13 @@ export default function Index() {
         {/* ===== JORNADA ===== */}
         {activeTab === "jornada" && (
           <>
+            {/* Avisos do pastor no topo */}
+            <div className="pt-4">
+              <AnnouncementsSection />
+            </div>
+
             {/* Cabeçalho explicativo */}
-            <div className="px-5 pt-4 pb-1">
+            <div className="px-5 pt-3 pb-1">
               <p className="text-muted-foreground font-inter text-xs leading-relaxed">
                 ✨ Complete atividades para ganhar pontos e avançar na sua jornada de fé
               </p>
