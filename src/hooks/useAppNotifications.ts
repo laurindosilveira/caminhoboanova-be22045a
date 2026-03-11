@@ -77,6 +77,11 @@ export function useAppNotifications() {
         checks.push(checkNewMessages());
       }
 
+      // --- LESSON COMPLETION celebration ---
+      if (!wasSentToday("lesson_complete")) {
+        checks.push(checkLessonCompletion());
+      }
+
       await Promise.allSettled(checks);
       markRunToday();
     }
