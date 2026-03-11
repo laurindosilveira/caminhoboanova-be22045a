@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageCircle, Trash2 } from "lucide-react";
+import { MessageCircle, Trash2, X } from "lucide-react";
 
 const REACTION_EMOJIS = [
   { emoji: "🙏", label: "orando" },
@@ -17,7 +17,13 @@ interface Message {
   created_at: string;
 }
 
-type ReactionMap = Record<string, Record<string, { count: number; hasReacted: boolean }>>;
+interface ReactionDetail {
+  count: number;
+  hasReacted: boolean;
+  userIds: string[];
+}
+
+type ReactionMap = Record<string, Record<string, ReactionDetail>>;
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -35,6 +41,9 @@ export default function AnnouncementsSection() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [reactions, setReactions] = useState<ReactionMap>({});
   const [loading, setLoading] = useState(true);
+  const [showUsers, setShowUsers] = useState<{ messageId: string; emoji: string } | null>(null);
+  const [reactionUsers, setReactionUsers] = useState<string[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -53,8 +62,9 @@ export default function AnnouncementsSection() {
       const rMap: ReactionMap = {};
       (reactionsData ?? []).forEach((r: any) => {
         if (!rMap[r.message_id]) rMap[r.message_id] = {};
-        if (!rMap[r.message_id][r.emoji]) rMap[r.message_id][r.emoji] = { count: 0, hasReacted: false };
+        if (!rMap[r.message_id][r.emoji]) rMap[r.message_id][r.emoji] = { count: 0, hasReacted: false, userIds: [] };
         rMap[r.message_id][r.emoji].count++;
+        rMap[r.message_id][r.emoji].userIds.push(r.user_id);
         if (user && r.user_id === user.id) rMap[r.message_id][r.emoji].hasReacted = true;
       });
       setReactions(rMap);
@@ -73,7 +83,8 @@ export default function AnnouncementsSection() {
         const copy = { ...prev };
         if (copy[messageId]?.[emoji]) {
           copy[messageId] = { ...copy[messageId] };
-          copy[messageId][emoji] = { count: copy[messageId][emoji].count - 1, hasReacted: false };
+          const old = copy[messageId][emoji];
+          copy[messageId][emoji] = { count: old.count - 1, hasReacted: false, userIds: old.userIds.filter(id => id !== user.id) };
           if (copy[messageId][emoji].count <= 0) delete copy[messageId][emoji];
         }
         return copy;
@@ -84,11 +95,24 @@ export default function AnnouncementsSection() {
         const copy = { ...prev };
         if (!copy[messageId]) copy[messageId] = {};
         copy[messageId] = { ...copy[messageId] };
-        const old = copy[messageId][emoji] ?? { count: 0, hasReacted: false };
-        copy[messageId][emoji] = { count: old.count + 1, hasReacted: true };
+        const old = copy[messageId][emoji] ?? { count: 0, hasReacted: false, userIds: [] };
+        copy[messageId][emoji] = { count: old.count + 1, hasReacted: true, userIds: [...old.userIds, user.id] };
         return copy;
       });
     }
+  }
+
+  async function showReactionUsers(messageId: string, emoji: string) {
+    const r = reactions[messageId]?.[emoji];
+    if (!r || r.count === 0) return;
+    setShowUsers({ messageId, emoji });
+    setLoadingUsers(true);
+    const { data } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .in("user_id", r.userIds);
+    setReactionUsers((data ?? []).map(p => p.full_name));
+    setLoadingUsers(false);
   }
 
   async function deleteMessage(id: string) {
@@ -140,6 +164,8 @@ export default function AnnouncementsSection() {
                   <button
                     key={emoji}
                     onClick={() => toggleReaction(msg.id, emoji)}
+                    onContextMenu={(e) => { e.preventDefault(); showReactionUsers(msg.id, emoji); }}
+                    onDoubleClick={() => showReactionUsers(msg.id, emoji)}
                     className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-inter transition-all ${
                       active
                         ? "bg-primary/15 text-primary border border-primary/30 font-semibold"
@@ -148,7 +174,14 @@ export default function AnnouncementsSection() {
                     title={label}
                   >
                     <span className="text-sm">{emoji}</span>
-                    {count > 0 && <span>{count}</span>}
+                    {count > 0 && (
+                      <span
+                        onClick={(e) => { e.stopPropagation(); showReactionUsers(msg.id, emoji); }}
+                        className="cursor-pointer hover:underline"
+                      >
+                        {count}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -156,6 +189,48 @@ export default function AnnouncementsSection() {
           </div>
         ))}
       </div>
+
+      {/* Reaction users modal */}
+      {showUsers && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => setShowUsers(null)}>
+          <div
+            className="bg-card rounded-t-2xl w-full max-w-md p-5 pb-8 shadow-xl animate-in slide-in-from-bottom"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">
+                  {REACTION_EMOJIS.find(e => e.emoji === showUsers.emoji)?.emoji}
+                </span>
+                <span className="font-montserrat font-bold text-foreground text-sm">
+                  {REACTION_EMOJIS.find(e => e.emoji === showUsers.emoji)?.label}
+                </span>
+              </div>
+              <button onClick={() => setShowUsers(null)} className="p-1 text-muted-foreground hover:text-foreground">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {loadingUsers ? (
+              <div className="space-y-2">
+                {[1, 2].map(i => <div key={i} className="h-8 bg-muted rounded-lg animate-pulse" />)}
+              </div>
+            ) : reactionUsers.length === 0 ? (
+              <p className="text-muted-foreground font-inter text-sm">Nenhuma reação encontrada.</p>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {reactionUsers.map((name, i) => (
+                  <div key={i} className="flex items-center gap-2 py-2 px-3 rounded-xl bg-muted/50">
+                    <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary">
+                      {name.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="font-inter text-sm text-foreground">{name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

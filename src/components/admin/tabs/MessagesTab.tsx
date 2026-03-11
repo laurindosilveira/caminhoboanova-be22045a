@@ -37,13 +37,32 @@ export default function MessagesTab() {
     if (!form.title || !form.body) return;
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
+    const msgArea = form.target === "all" ? null : profile?.area ?? null;
+    const msgCommunity = form.target === "community" ? form.community : null;
     await supabase.from("messages").insert({
       title: form.title,
       body: form.body,
-      area: form.target === "all" ? null : profile?.area ?? null,
-      community: form.target === "community" ? form.community : null,
+      area: msgArea,
+      community: msgCommunity,
       sent_by: user?.id,
     });
+
+    // Send push notification about the new announcement
+    try {
+      const pushTarget = form.target === "all" ? "all" : form.target === "community" ? "community" : "area";
+      const pushTargetValue = form.target === "all" ? undefined : form.target === "community" ? form.community : profile?.area;
+      await supabase.functions.invoke("admin-push", {
+        body: {
+          title: `📢 ${form.title}`,
+          body: form.body.length > 100 ? form.body.slice(0, 100) + "…" : form.body,
+          target: pushTarget,
+          targetValue: pushTargetValue,
+        },
+      });
+    } catch (e) {
+      console.warn("Push notification failed:", e);
+    }
+
     setForm({ title: "", body: "", target: "area", community: "" });
     setShowForm(false);
     setSaving(false);
