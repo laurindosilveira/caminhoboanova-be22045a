@@ -109,13 +109,14 @@ export default function MessagesTab() {
           {/* Target */}
           <div>
             <p className="font-inter text-xs text-muted-foreground mb-2">Enviar para:</p>
-            <div className="grid grid-cols-3 gap-2">
-              {[
+            <div className="grid grid-cols-2 gap-2">
+              {([
                 { value: "all" as const, label: "Todos", icon: Globe },
                 { value: "area" as const, label: profile?.area ?? "Minha área", icon: MapPin },
                 { value: "community" as const, label: "Comunidade", icon: Users },
-              ].map(opt => (
-                <button key={opt.value} onClick={() => setForm(f => ({ ...f, target: opt.value }))}
+                ...(turmas.length > 0 ? [{ value: "turma" as const, label: "Turma", icon: GraduationCap }] : []),
+              ] as const).map(opt => (
+                <button key={opt.value} onClick={() => setForm(f => ({ ...f, target: opt.value as any }))}
                   className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border text-xs font-inter transition-colors ${
                     form.target === opt.value ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground"
                   }`}>
