@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageCircle, GraduationCap, Cake, Sparkles, Send, Trash2, Target, Check, Users } from "lucide-react";
+import { Cake, Sparkles, Send, Trash2, Target, Check, Users } from "lucide-react";
 import ClassroomTab from "./ClassroomTab";
+import AnnouncementsSection from "./AnnouncementsSection";
 
 const REACTION_EMOJIS = [
   { emoji: "🙏", label: "orando" },
