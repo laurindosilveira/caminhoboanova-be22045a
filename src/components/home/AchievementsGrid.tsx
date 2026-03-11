@@ -37,7 +37,8 @@ interface RankingMember {
 }
 
 export default function AchievementsGrid({ faithPoints, streakDays, completedCount }: AchievementsGridProps) {
-  const { profile } = useAuth();
+  const { profile, role } = useAuth();
+  const canManage = role === "admin" || role === "lider";
   const myUserId = profile?.user_id;
   const [seasons, setSeasons] = useState<RankingSeason[]>([]);
   const [members, setMembers] = useState<RankingMember[]>([]);
