@@ -437,7 +437,7 @@ export default function CommunityTab() {
                           <p className="text-muted-foreground text-[10px] font-inter">{timeAgo(t.created_at)}</p>
                         </div>
                       </div>
-                      {profile && t.user_id === profile.user_id && (
+                      {(profile && (t.user_id === profile.user_id || role === "admin" || role === "lider")) && (
                         <button onClick={() => deleteTestimony(t.id)} className="text-muted-foreground hover:text-destructive transition-colors p-1">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
