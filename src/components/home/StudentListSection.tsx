@@ -172,6 +172,9 @@ export default function StudentListSection() {
   async function saveEdits() {
     if (!selectedStudent) return;
     setSaving(true);
+    const newTurmaId = editForm.turma_id ?? selectedStudent.turma_id;
+    const turmaChanged = newTurmaId !== selectedStudent.turma_id;
+
     const { error } = await supabase
       .from("profiles")
       .update({
@@ -184,6 +187,7 @@ export default function StudentListSection() {
         father_phone: editForm.father_phone?.trim() ?? "",
         mother_phone: editForm.mother_phone?.trim() ?? "",
         confirmation_year: editForm.confirmation_year ?? null,
+        turma_id: newTurmaId,
       } as any)
       .eq("user_id", selectedStudent.user_id);
 
@@ -202,11 +206,20 @@ export default function StudentListSection() {
         father_phone: editForm.father_phone?.trim() ?? "",
         mother_phone: editForm.mother_phone?.trim() ?? "",
         confirmation_year: editForm.confirmation_year ?? null,
+        turma_id: newTurmaId,
       };
       setSelectedStudent(updated);
-      setStudents(prev => prev.map(s => s.user_id === updated.user_id ? updated : s));
+      if (turmaChanged) {
+        // Remove from list since student moved to another turma
+        setStudents(prev => prev.filter(s => s.user_id !== updated.user_id));
+        const turmaName = turmas.find(t => t.id === newTurmaId)?.name ?? "outra turma";
+        toast.success(`${updated.full_name} transferido para "${turmaName}"`);
+        setSelectedStudent(null);
+      } else {
+        setStudents(prev => prev.map(s => s.user_id === updated.user_id ? updated : s));
+        toast.success("Dados atualizados com sucesso!");
+      }
       setEditing(false);
-      toast.success("Dados atualizados com sucesso!");
     }
     setSaving(false);
   }
