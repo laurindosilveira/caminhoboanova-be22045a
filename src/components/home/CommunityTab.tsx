@@ -277,60 +277,7 @@ export default function CommunityTab() {
       {subTab === "comunidade" && (
         <div className="px-5 space-y-5">
           {/* Pastor messages */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <MessageCircle className="w-4 h-4 text-primary" />
-              <span className="font-montserrat font-bold text-foreground text-sm">Avisos</span>
-            </div>
-
-            {loadingMessages ? (
-              <div className="space-y-2">
-                {[1, 2].map(i => <div key={i} className="bg-muted rounded-2xl h-20 animate-pulse" />)}
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="bg-card rounded-2xl border border-border p-4 text-center">
-                <p className="text-muted-foreground text-sm font-inter">Nenhuma mensagem ainda.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {messages.map((msg) => (
-                  <div key={msg.id} className="bg-card rounded-2xl p-4 border border-border shadow-sm">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xl">✝️</span>
-                      <div>
-                        <p className="font-montserrat font-bold text-card-foreground text-sm">{msg.title}</p>
-                        <p className="text-muted-foreground text-xs font-inter">{timeAgo(msg.created_at)}</p>
-                      </div>
-                    </div>
-                    <p className="text-card-foreground text-sm font-inter leading-relaxed">{msg.body}</p>
-                    {/* Reactions */}
-                    <div className="flex items-center gap-1.5 mt-3 flex-wrap">
-                      {REACTION_EMOJIS.map(({ emoji, label }) => {
-                        const r = reactions[msg.id]?.[emoji];
-                        const active = r?.hasReacted;
-                        const count = r?.count ?? 0;
-                        return (
-                          <button
-                            key={emoji}
-                            onClick={() => toggleReaction(msg.id, emoji)}
-                            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-inter transition-all ${
-                              active
-                                ? "bg-primary/15 text-primary border border-primary/30 font-semibold"
-                                : "bg-muted/50 text-muted-foreground border border-transparent hover:bg-muted"
-                            }`}
-                            title={label}
-                          >
-                            <span className="text-sm">{emoji}</span>
-                            {count > 0 && <span>{count}</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <AnnouncementsSection />
 
           {/* 🎯 Desafios Comunitários */}
           {challenges.length > 0 && (
