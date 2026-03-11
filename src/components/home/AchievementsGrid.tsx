@@ -337,10 +337,44 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
 
       {/* Ranking da Turma */}
       <div>
-        <div className="flex items-center gap-2 mb-3">
-          <Flame className="w-4 h-4 text-secondary" />
-          <span className="font-montserrat font-bold text-foreground text-sm">Ranking da turma</span>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Flame className="w-4 h-4 text-secondary" />
+            <span className="font-montserrat font-bold text-foreground text-sm">Ranking da turma</span>
+          </div>
+          {canManage && (
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-destructive/10 text-destructive text-[10px] font-inter font-bold hover:bg-destructive/20 transition-colors"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Resetar
+            </button>
+          )}
         </div>
+
+        {/* Reset confirmation */}
+        {showResetConfirm && (
+          <div className="bg-destructive/5 border border-destructive/20 rounded-2xl p-4 mb-3 space-y-3">
+            <p className="font-montserrat font-bold text-foreground text-sm">⚠️ Resetar pontuações?</p>
+            <p className="text-muted-foreground font-inter text-xs">
+              Isso vai zerar o progresso de <strong>todos os membros</strong> da comunidade ({members.length} participantes). Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setShowResetConfirm(false)} className="flex-1 py-2 rounded-xl bg-muted text-foreground text-xs font-inter font-bold">
+                Cancelar
+              </button>
+              <button
+                onClick={handleResetGame}
+                disabled={resettingGame}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-destructive text-destructive-foreground text-xs font-inter font-bold disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${resettingGame ? "animate-spin" : ""}`} />
+                {resettingGame ? "Resetando..." : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        )}
 
         {loadingMembers ? (
           <div className="space-y-2">
@@ -356,12 +390,14 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
               const isMe = m.user_id === myUserId;
               const initials = m.full_name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
               const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : null;
+              const clickable = canManage && !isMe;
               return (
                 <div
                   key={m.user_id}
+                  onClick={() => clickable && setSelectedPlayer({ userId: m.user_id, fullName: m.full_name })}
                   className={`flex items-center gap-3 px-4 py-3 ${
                     i < members.length - 1 ? "border-b border-border" : ""
-                  } ${isMe ? "bg-primary/5" : ""}`}
+                  } ${isMe ? "bg-primary/5" : ""} ${clickable ? "cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors" : ""}`}
                 >
                   <div className="w-7 flex-shrink-0 text-center">
                     {medal ? (
