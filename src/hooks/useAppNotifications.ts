@@ -92,20 +92,41 @@ async function checkDevocional() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const [{ data: devs }, { data: prog }] = await Promise.all([
+    const { data: profileData } = await supabase.from("profiles").select("area").eq("user_id", user.id).maybeSingle();
+    const userArea = profileData?.area;
+
+    const [{ data: lessons }, { data: devs }, { data: prog }, { data: unlocks }] = await Promise.all([
+      supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
       supabase.from("devotional_content").select("id, lesson_id"),
       supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
+      supabase.from("course_unlocks").select("course_id").eq("area", userArea ?? ""),
     ]);
 
+    const unlockedCourseIds = new Set((unlocks ?? []).map(u => u.course_id));
     const completedSet = new Set((prog ?? []).map((p) => p.devotional_id));
-    const pending = (devs ?? []).filter((d) => !completedSet.has(d.id));
 
-    if (pending.length > 0) {
-      await sendNotification(
-        "📖 Devocional pendente!",
-        `Você tem ${pending.length} devocional${pending.length > 1 ? "is" : ""} esperando por você. Não perca sua caminhada!`
-      );
-      markSentToday("devocional");
+    // Group devotionals by lesson
+    const lessonDevMap: Record<string, { total: number; completed: number }> = {};
+    (devs ?? []).forEach((d) => {
+      if (!d.lesson_id) return;
+      if (!lessonDevMap[d.lesson_id]) lessonDevMap[d.lesson_id] = { total: 0, completed: 0 };
+      lessonDevMap[d.lesson_id].total++;
+      if (completedSet.has(d.id)) lessonDevMap[d.lesson_id].completed++;
+    });
+
+    // Find first accessible lesson with pending devotionals
+    const accessibleLessons = (lessons ?? []).filter((l) => unlockedCourseIds.has(l.course_id));
+    for (const l of accessibleLessons) {
+      const info = lessonDevMap[l.id];
+      if (info && info.completed < info.total) {
+        const pending = info.total - info.completed;
+        await sendNotification(
+          "📖 Devocional pendente!",
+          `Você tem ${pending} devocional${pending > 1 ? "is" : ""} da Lição ${l.order_num} esperando. Não perca sua caminhada!`
+        );
+        markSentToday("devocional");
+        return;
+      }
     }
   } catch (err) {
     console.warn("Devocional notification check failed", err);
