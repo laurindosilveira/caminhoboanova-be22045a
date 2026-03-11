@@ -280,4 +280,3 @@ async function checkLessonCompletion() {
     console.warn("Lesson completion notification check failed", err);
   }
 }
-}
