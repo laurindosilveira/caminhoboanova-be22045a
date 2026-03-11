@@ -68,6 +68,7 @@ export default function StudentListSection() {
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState<Partial<StudentProfile>>({});
   const [saving, setSaving] = useState(false);
+  const [turmas, setTurmas] = useState<Turma[]>([]);
 
   const canView = role === "admin" || role === "lider";
 
