@@ -164,6 +164,7 @@ export default function StudentListSection() {
       father_phone: selectedStudent.father_phone ?? "",
       mother_phone: selectedStudent.mother_phone ?? "",
       confirmation_year: selectedStudent.confirmation_year,
+      turma_id: selectedStudent.turma_id,
     });
     setEditing(true);
   }
