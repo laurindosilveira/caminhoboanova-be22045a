@@ -43,7 +43,7 @@ export default function MessagesTab() {
     if (!form.title || !form.body) return;
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
-    const msgArea = form.target === "all" ? null : profile?.area ?? null;
+    const msgArea = form.target === "all" ? null : form.target === "turma" ? null : profile?.area ?? null;
     const msgCommunity = form.target === "community" ? form.community : null;
     await supabase.from("messages").insert({
       title: form.title,
