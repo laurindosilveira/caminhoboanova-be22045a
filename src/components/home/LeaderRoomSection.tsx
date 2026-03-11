@@ -35,11 +35,11 @@ const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
   { id: "push", label: "Push", icon: Megaphone },
 ];
 
-export default function LeaderRoomSection() {
+export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }) {
   const { profile, role } = useAuth();
   const canView = role === "admin" || role === "lider";
 
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(asTab);
   const [activeSubTab, setActiveSubTab] = useState<SubTab>("alunos");
   const [loading, setLoading] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -135,38 +135,40 @@ export default function LeaderRoomSection() {
     : ALL_COMMUNITIES;
 
   return (
-    <div className="mx-5">
-      {/* Collapsible header */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between bg-card border border-border rounded-2xl p-4 shadow-sm hover:bg-muted/50 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center relative" style={{ background: "var(--gradient-hero)" }}>
-            <span className="text-lg">📋</span>
-            {waitingCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
-                {waitingCount}
-              </span>
-            )}
+    <div className={asTab ? "px-5" : "mx-5"}>
+      {/* Collapsible header - hidden in tab mode */}
+      {!asTab && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full flex items-center justify-between bg-card border border-border rounded-2xl p-4 shadow-sm hover:bg-muted/50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center relative" style={{ background: "var(--gradient-hero)" }}>
+              <span className="text-lg">📋</span>
+              {waitingCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
+                  {waitingCount}
+                </span>
+              )}
+            </div>
+            <div className="text-left">
+              <p className="font-montserrat font-bold text-foreground text-sm">Sala do Discipulador</p>
+              <p className="text-muted-foreground text-xs font-inter">
+                {waitingCount > 0 && !expanded
+                  ? `${waitingCount} pessoa${waitingCount !== 1 ? "s" : ""} na sala de espera`
+                  : expanded ? "Toque para fechar" : "Gerencie sua turma"}
+              </p>
+            </div>
           </div>
-          <div className="text-left">
-            <p className="font-montserrat font-bold text-foreground text-sm">Sala do Discipulador</p>
-            <p className="text-muted-foreground text-xs font-inter">
-              {waitingCount > 0 && !expanded
-                ? `${waitingCount} pessoa${waitingCount !== 1 ? "s" : ""} na sala de espera`
-                : expanded ? "Toque para fechar" : "Gerencie sua turma"}
-            </p>
-          </div>
-        </div>
-        {expanded ? <ChevronUp className="w-5 h-5 text-muted-foreground" /> : <ChevronDown className="w-5 h-5 text-muted-foreground" />}
-      </button>
+          {expanded ? <ChevronUp className="w-5 h-5 text-muted-foreground" /> : <ChevronDown className="w-5 h-5 text-muted-foreground" />}
+        </button>
+      )}
 
       {/* Waiting room alert banner */}
       {expanded && waitingCount > 0 && (
         <button
           onClick={() => setActiveSubTab("espera")}
-          className="w-full mt-2 flex items-center gap-3 bg-destructive/10 border border-destructive/30 rounded-2xl p-3 hover:bg-destructive/15 transition-colors"
+          className={`w-full ${asTab ? "" : "mt-2"} flex items-center gap-3 bg-destructive/10 border border-destructive/30 rounded-2xl p-3 hover:bg-destructive/15 transition-colors`}
         >
           <Clock className="w-4 h-4 text-destructive flex-shrink-0" />
           <p className="text-destructive font-inter text-xs font-semibold text-left">
@@ -176,7 +178,7 @@ export default function LeaderRoomSection() {
       )}
 
       {expanded && (
-        <div className="mt-3 animate-in slide-in-from-top-2 duration-200">
+        <div className={`${asTab ? "mt-2" : "mt-3"} animate-in slide-in-from-top-2 duration-200`}>
           {/* Sub-tab navigation */}
           <div className="flex gap-1 overflow-x-auto pb-2 mb-3 scrollbar-hide">
             {SUB_TABS.map(tab => {

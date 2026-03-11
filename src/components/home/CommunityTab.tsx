@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageCircle, GraduationCap, Cake, Sparkles, Send, Trash2, Target, Check, Users } from "lucide-react";
+import { MessageCircle, GraduationCap, Cake, Sparkles, Send, Trash2, Target, Check, Users, ClipboardList } from "lucide-react";
 import ClassroomTab from "./ClassroomTab";
 import AnnouncementsSection from "./AnnouncementsSection";
+import LeaderRoomSection from "./LeaderRoomSection";
 
 const REACTION_EMOJIS = [
   { emoji: "🙏", label: "orando" },
@@ -48,7 +49,7 @@ interface BirthdayPerson {
   day: number;
 }
 
-type SubTab = "comunidade" | "sala";
+type SubTab = "comunidade" | "sala" | "discipulador";
 
 export default function CommunityTab() {
   const { profile, role } = useAuth();
@@ -267,8 +268,26 @@ export default function CommunityTab() {
             <GraduationCap className="w-3.5 h-3.5" />
             Sala da Turma
           </button>
+          {(role === "admin" || role === "lider") && (
+            <button
+              onClick={() => setSubTab("discipulador")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-montserrat font-bold transition-all ${
+                subTab === "discipulador"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <ClipboardList className="w-3.5 h-3.5" />
+              Discipulador
+            </button>
+          )}
         </div>
       </div>
+
+      {/* ===== DISCIPULADOR (admin/lider) ===== */}
+      {subTab === "discipulador" && (role === "admin" || role === "lider") && (
+        <LeaderRoomSection asTab />
+      )}
 
       {/* ===== SALA DA TURMA ===== */}
       {subTab === "sala" && <ClassroomTab />}
