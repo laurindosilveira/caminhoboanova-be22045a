@@ -1,10 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { CalendarDays, MapPin, Users, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
+import { CalendarDays, MapPin, Users, BookOpen, ChevronDown, ChevronUp, Plus, Pencil, Trash2, Save, X } from "lucide-react";
 import WorshipConfirmation from "./WorshipConfirmation";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 type Event = {
   id: string;
@@ -31,14 +36,35 @@ const EVENT_TYPES: Record<string, { label: string; color: string; emoji: string 
   evento:        { label: "Evento",            color: "bg-accent/20 text-accent-foreground",     emoji: "🎉" },
 };
 
+const EVENT_TYPE_OPTIONS = Object.entries(EVENT_TYPES).map(([key, val]) => ({ value: key, label: `${val.emoji} ${val.label}` }));
+
+interface EventFormData {
+  title: string;
+  description: string;
+  event_date: string;
+  location: string;
+  area: string;
+  community: string;
+  type: string;
+}
+
+const EMPTY_FORM: EventFormData = { title: "", description: "", event_date: "", location: "", area: "", community: "", type: "encontro" };
+
 export default function UserAgendaTab() {
-  const { profile } = useAuth();
+  const { profile, role } = useAuth();
+  const canManage = role === "admin" || role === "lider";
   const [events, setEvents] = useState<Event[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [lessonInfoMap, setLessonInfoMap] = useState<Map<string, LessonInfo>>(new Map());
   const [lessonContentMap, setLessonContentMap] = useState<Map<string, LessonContentInfo>>(new Map());
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>("agenda");
+
+  // Event form state
+  const [showForm, setShowForm] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+  const [form, setForm] = useState<EventFormData>(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     async function fetch() {
@@ -63,7 +89,6 @@ export default function UserAgendaTab() {
       setEvents(filtered);
       setAttendanceRecords((attendanceData ?? []) as AttendanceRecord[]);
 
-      // Build lesson info map keyed by lesson id
       const courses = coursesData ?? [];
       const lessons = lessonsData ?? [];
       const infoMap = new Map<string, LessonInfo>();
@@ -74,7 +99,6 @@ export default function UserAgendaTab() {
       });
       setLessonInfoMap(infoMap);
 
-      // Build lesson content map
       const contentMap = new Map<string, LessonContentInfo>();
       (lessonContentData ?? []).forEach((lc: any) => {
         contentMap.set(lc.lesson_id, lc);
@@ -85,7 +109,7 @@ export default function UserAgendaTab() {
     if (profile) fetch();
   }, [profile]);
 
-  // Realtime: re-fetch when events change
+  // Realtime
   useEffect(() => {
     const channel = supabase
       .channel('user-agenda-events-realtime')
@@ -93,9 +117,7 @@ export default function UserAgendaTab() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'events' },
         () => {
-          // Re-run fetch without showing loading spinner
           async function refetch() {
-            const { data: { user } } = await supabase.auth.getUser();
             const [{ data: eventsData }] = await Promise.all([
               supabase.from("events").select("*").order("event_date"),
             ]);
@@ -136,7 +158,78 @@ export default function UserAgendaTab() {
     });
   }
 
-  // Attendance history: past events only
+  function openCreateForm() {
+    setEditingEvent(null);
+    setForm({ ...EMPTY_FORM, area: profile?.area ?? "" });
+    setShowForm(true);
+  }
+
+  function openEditForm(event: Event) {
+    setEditingEvent(event);
+    const dateLocal = event.event_date ? new Date(event.event_date).toISOString().slice(0, 16) : "";
+    setForm({
+      title: event.title,
+      description: event.description ?? "",
+      event_date: dateLocal,
+      location: event.location ?? "",
+      area: event.area ?? "",
+      community: event.community ?? "",
+      type: event.type,
+    });
+    setShowForm(true);
+  }
+
+  async function handleSaveEvent() {
+    if (!form.title.trim() || !form.event_date) {
+      toast.error("Preencha título e data do evento");
+      return;
+    }
+    setSaving(true);
+    const eventDateWithTz = form.event_date ? form.event_date + ":00-03:00" : form.event_date;
+    const payload = {
+      title: form.title.trim(),
+      description: form.description.trim() || null,
+      event_date: eventDateWithTz,
+      location: form.location.trim() || null,
+      area: form.area || null,
+      community: form.community || null,
+      type: form.type,
+    };
+
+    if (editingEvent) {
+      const { error } = await supabase.from("events").update(payload).eq("id", editingEvent.id);
+      if (error) {
+        toast.error("Erro ao atualizar evento");
+        console.error(error);
+      } else {
+        toast.success("Evento atualizado!");
+        setShowForm(false);
+      }
+    } else {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.from("events").insert({ ...payload, created_by: user?.id ?? null } as any);
+      if (error) {
+        toast.error("Erro ao criar evento");
+        console.error(error);
+      } else {
+        toast.success("Evento criado!");
+        setShowForm(false);
+      }
+    }
+    setSaving(false);
+  }
+
+  async function handleDeleteEvent(eventId: string) {
+    if (!confirm("Tem certeza que deseja excluir este evento?")) return;
+    const { error } = await supabase.from("events").delete().eq("id", eventId);
+    if (error) {
+      toast.error("Erro ao excluir evento");
+    } else {
+      toast.success("Evento excluído!");
+      setEvents(prev => prev.filter(e => e.id !== eventId));
+    }
+  }
+
   const pastEvents = events
     .filter(e => new Date(e.event_date) < now)
     .sort((a, b) => new Date(b.event_date).getTime() - new Date(a.event_date).getTime());
@@ -145,11 +238,18 @@ export default function UserAgendaTab() {
     <div className="px-5 pt-5 pb-4 space-y-5">
       <div className="flex items-center justify-between">
         <h2 className="font-montserrat font-black text-foreground text-xl">📅 Agenda</h2>
-        {profile?.community && (
-          <span className="text-xs font-inter text-muted-foreground bg-muted rounded-full px-3 py-1">
-            {profile.community}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {canManage && (
+            <Button size="sm" variant="outline" className="h-8 rounded-xl text-xs gap-1.5 border-primary/40 text-primary" onClick={openCreateForm}>
+              <Plus className="w-3.5 h-3.5" /> Novo Evento
+            </Button>
+          )}
+          {profile?.community && (
+            <span className="text-xs font-inter text-muted-foreground bg-muted rounded-full px-3 py-1">
+              {profile.community}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* ── CONFIRMAÇÃO DE PRESENÇA EM EVENTOS ──── */}
@@ -184,6 +284,9 @@ export default function UserAgendaTab() {
                     attendanceRecords={attendanceRecords}
                     onCheckIn={handleCheckIn}
                     onNavigateToLesson={setActiveTab}
+                    canManage={canManage}
+                    onEdit={openEditForm}
+                    onDelete={handleDeleteEvent}
                   />
                 );
               })}
@@ -195,7 +298,17 @@ export default function UserAgendaTab() {
               {past.slice(0, 3).map(event => {
                 const linkedLesson = event.linked_lesson_id ? lessonInfoMap.get(event.linked_lesson_id) : undefined;
                 return (
-                  <EventCard key={event.id} event={event} past linkedLesson={linkedLesson} attendanceRecords={attendanceRecords} onCheckIn={handleCheckIn} />
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    past
+                    linkedLesson={linkedLesson}
+                    attendanceRecords={attendanceRecords}
+                    onCheckIn={handleCheckIn}
+                    canManage={canManage}
+                    onEdit={openEditForm}
+                    onDelete={handleDeleteEvent}
+                  />
                 );
               })}
             </div>
@@ -253,14 +366,82 @@ export default function UserAgendaTab() {
           </div>
         </div>
       )}
+
+      {/* ── MODAL DE CRIAR/EDITAR EVENTO ────────── */}
+      <Dialog open={showForm} onOpenChange={(open) => { if (!open) setShowForm(false); }}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-montserrat font-bold text-foreground">
+              {editingEvent ? "Editar Evento" : "Novo Evento"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div>
+              <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Título *</label>
+              <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="text-sm" placeholder="Ex: Encontro da Turma" />
+            </div>
+            <div>
+              <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Data e hora *</label>
+              <Input type="datetime-local" value={form.event_date} onChange={e => setForm(f => ({ ...f, event_date: e.target.value }))} className="text-sm" />
+            </div>
+            <div>
+              <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Tipo</label>
+              <select
+                value={form.type}
+                onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {EVENT_TYPE_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Local</label>
+              <Input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} className="text-sm" placeholder="Ex: Igreja Central" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Área</label>
+                <select
+                  value={form.area}
+                  onChange={e => setForm(f => ({ ...f, area: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">Todas</option>
+                  <option value="Área 1">Área 1</option>
+                  <option value="Área 2">Área 2</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Comunidade</label>
+                <Input value={form.community} onChange={e => setForm(f => ({ ...f, community: e.target.value }))} className="text-sm" placeholder="Opcional" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Descrição</label>
+              <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="text-sm resize-none" rows={3} placeholder="Detalhes do evento..." />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => setShowForm(false)} disabled={saving}>
+                <X className="w-3.5 h-3.5" /> Cancelar
+              </Button>
+              <Button size="sm" className="flex-1 gap-1.5" onClick={handleSaveEvent} disabled={saving}>
+                <Save className="w-3.5 h-3.5" /> {saving ? "Salvando..." : "Salvar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function EventCard({ event, past = false, linkedLesson, lessonContent, attendanceRecords = [], onCheckIn, onNavigateToLesson }: { 
+function EventCard({ event, past = false, linkedLesson, lessonContent, attendanceRecords = [], onCheckIn, onNavigateToLesson, canManage, onEdit, onDelete }: { 
   event: Event; past?: boolean; linkedLesson?: LessonInfo; lessonContent?: LessonContentInfo;
   attendanceRecords?: AttendanceRecord[]; onCheckIn?: (eventId: string, status: "presente" | "faltou", justification?: string) => void;
   onNavigateToLesson?: (tab: string) => void;
+  canManage?: boolean; onEdit?: (event: Event) => void; onDelete?: (eventId: string) => void;
 }) {
   const [showJustification, setShowJustification] = useState(false);
   const [justificationText, setJustificationText] = useState("");
@@ -268,16 +449,13 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
   const typeInfo = EVENT_TYPES[event.type] ?? EVENT_TYPES.evento;
   const dateObj = new Date(event.event_date);
   
-  // Check-in: show for today's events or events in the last 24h
   const now = new Date();
   const diffHours = (now.getTime() - dateObj.getTime()) / 3600000;
   const isCheckInWindow = diffHours >= -2 && diffHours <= 24;
   const existingRecord = attendanceRecords.find(a => a.event_id === event.id);
 
   const handleLessonClick = () => {
-    // Navigate to the Jornada tab where the user can access the lesson
     if (onNavigateToLesson) {
-      // Dispatch a custom event so the parent (Index page) can switch tabs
       window.dispatchEvent(new CustomEvent("navigate-to-lesson", { detail: { lessonId: linkedLesson?.id } }));
     }
   };
@@ -292,7 +470,19 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
           </span>
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-montserrat font-bold text-foreground text-sm">{event.title}</h3>
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-montserrat font-bold text-foreground text-sm">{event.title}</h3>
+            {canManage && (
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button onClick={() => onEdit?.(event)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors" title="Editar">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => onDelete?.(event.id)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Excluir">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
           <p className="text-muted-foreground font-inter text-xs mt-0.5">
             {format(dateObj, "EEEE, d 'de' MMMM 'às' HH:mm", { locale: ptBR })}
           </p>
@@ -322,7 +512,7 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
               </p>
             </button>
           )}
-          {/* Preparation section for upcoming events with linked lesson */}
+          {/* Preparation section */}
           {!past && linkedLesson && lessonContent && (lessonContent.summary || lessonContent.prayer_prompt || (lessonContent.bible_texts && lessonContent.bible_texts.length > 0)) && (
             <div className="mt-2">
               <button
