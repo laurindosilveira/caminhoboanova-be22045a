@@ -23,6 +23,12 @@ interface StudentProfile {
   confirmation_year?: number | null;
 }
 
+interface Turma {
+  id: string;
+  name: string;
+  area: string | null;
+}
+
 interface StudentStats {
   completedActivities: number;
   totalActivities: number;
