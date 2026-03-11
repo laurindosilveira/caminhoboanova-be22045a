@@ -55,8 +55,8 @@ export default function MessagesTab() {
 
     // Send push notification about the new announcement
     try {
-      const pushTarget = form.target === "all" ? "all" : form.target === "community" ? "community" : "area";
-      const pushTargetValue = form.target === "all" ? undefined : form.target === "community" ? form.community : profile?.area;
+      const pushTarget = form.target === "turma" ? "turma" : form.target === "all" ? "all" : form.target === "community" ? "community" : "area";
+      const pushTargetValue = form.target === "all" ? undefined : form.target === "turma" ? form.turmaId : form.target === "community" ? form.community : profile?.area;
       await supabase.functions.invoke("admin-push", {
         body: {
           title: `📢 ${form.title}`,
