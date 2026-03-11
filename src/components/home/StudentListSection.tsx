@@ -23,6 +23,12 @@ interface StudentProfile {
   confirmation_year?: number | null;
 }
 
+interface Turma {
+  id: string;
+  name: string;
+  area: string | null;
+}
+
 interface StudentStats {
   completedActivities: number;
   totalActivities: number;
@@ -62,6 +68,7 @@ export default function StudentListSection() {
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState<Partial<StudentProfile>>({});
   const [saving, setSaving] = useState(false);
+  const [turmas, setTurmas] = useState<Turma[]>([]);
 
   const canView = role === "admin" || role === "lider";
 
@@ -70,12 +77,17 @@ export default function StudentListSection() {
     
     async function fetchStudents() {
       setLoading(true);
-      const { data } = await supabase
-        .from("profiles")
-        .select("user_id, full_name, community, area, birth_date, phone, father_name, mother_name, father_phone, mother_phone, address, turma_id, confirmation_year")
-        .eq("turma_id", profile!.turma_id!)
-        .neq("user_id", profile!.user_id)
-        .order("full_name");
+      const [{ data }, { data: turmasData }] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("user_id, full_name, community, area, birth_date, phone, father_name, mother_name, father_phone, mother_phone, address, turma_id, confirmation_year")
+          .eq("turma_id", profile!.turma_id!)
+          .neq("user_id", profile!.user_id)
+          .order("full_name"),
+        supabase.from("turmas").select("id, name, area").eq("is_active", true).order("name"),
+      ]);
+
+      setTurmas(turmasData ?? []);
       
       // Filter out admins/leaders
       if (data && data.length > 0) {
@@ -152,6 +164,7 @@ export default function StudentListSection() {
       father_phone: selectedStudent.father_phone ?? "",
       mother_phone: selectedStudent.mother_phone ?? "",
       confirmation_year: selectedStudent.confirmation_year,
+      turma_id: selectedStudent.turma_id,
     });
     setEditing(true);
   }
@@ -159,6 +172,9 @@ export default function StudentListSection() {
   async function saveEdits() {
     if (!selectedStudent) return;
     setSaving(true);
+    const newTurmaId = editForm.turma_id ?? selectedStudent.turma_id;
+    const turmaChanged = newTurmaId !== selectedStudent.turma_id;
+
     const { error } = await supabase
       .from("profiles")
       .update({
@@ -171,6 +187,7 @@ export default function StudentListSection() {
         father_phone: editForm.father_phone?.trim() ?? "",
         mother_phone: editForm.mother_phone?.trim() ?? "",
         confirmation_year: editForm.confirmation_year ?? null,
+        turma_id: newTurmaId,
       } as any)
       .eq("user_id", selectedStudent.user_id);
 
@@ -189,11 +206,20 @@ export default function StudentListSection() {
         father_phone: editForm.father_phone?.trim() ?? "",
         mother_phone: editForm.mother_phone?.trim() ?? "",
         confirmation_year: editForm.confirmation_year ?? null,
+        turma_id: newTurmaId,
       };
       setSelectedStudent(updated);
-      setStudents(prev => prev.map(s => s.user_id === updated.user_id ? updated : s));
+      if (turmaChanged) {
+        // Remove from list since student moved to another turma
+        setStudents(prev => prev.filter(s => s.user_id !== updated.user_id));
+        const turmaName = turmas.find(t => t.id === newTurmaId)?.name ?? "outra turma";
+        toast.success(`${updated.full_name} transferido para "${turmaName}"`);
+        setSelectedStudent(null);
+      } else {
+        setStudents(prev => prev.map(s => s.user_id === updated.user_id ? updated : s));
+        toast.success("Dados atualizados com sucesso!");
+      }
       setEditing(false);
-      toast.success("Dados atualizados com sucesso!");
     }
     setSaving(false);
   }
@@ -317,6 +343,19 @@ export default function StudentListSection() {
               <div>
                 <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Ano de confirmação</label>
                 <Input type="number" min={1} max={3} value={editForm.confirmation_year ?? ""} onChange={e => setEditForm(f => ({ ...f, confirmation_year: e.target.value ? Number(e.target.value) : null }))} className="text-sm" placeholder="1 ou 2" />
+              </div>
+              <div>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Turma</label>
+                <select
+                  value={editForm.turma_id ?? ""}
+                  onChange={e => setEditForm(f => ({ ...f, turma_id: e.target.value || null }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">Sem turma</option>
+                  {turmas.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}{t.area ? ` (${t.area})` : ""}</option>
+                  ))}
+                </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
