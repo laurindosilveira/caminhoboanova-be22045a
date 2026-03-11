@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageSquare, Plus, Send, Users, MapPin, Globe, Trash2 } from "lucide-react";
+import { MessageSquare, Plus, Send, Users, MapPin, Globe, Trash2, GraduationCap } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -9,6 +9,8 @@ type Message = {
   id: string; title: string; body: string;
   area: string | null; community: string | null; created_at: string;
 };
+
+type Turma = { id: string; name: string; area: string | null };
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
 const AREA_2_COMMUNITIES = ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"];
@@ -19,8 +21,9 @@ export default function MessagesTab() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ title: "", body: "", target: "area" as "all" | "area" | "community", community: "" });
+  const [form, setForm] = useState({ title: "", body: "", target: "area" as "all" | "area" | "community" | "turma", community: "", turmaId: "" });
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [turmas, setTurmas] = useState<Turma[]>([]);
 
   const communities = profile?.area === "Área 1" ? AREA_1_COMMUNITIES : AREA_2_COMMUNITIES;
 
