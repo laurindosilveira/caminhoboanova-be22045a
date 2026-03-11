@@ -5,6 +5,7 @@ import { ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 import HeroHeader from "@/components/home/HeroHeader";
+import AnnouncementsSection from "@/components/home/AnnouncementsSection";
 import NextCourseActivityCard from "@/components/home/NextCourseActivityCard";
 import MissionCard from "@/components/home/MissionCard";
 import JourneyPath from "@/components/home/JourneyPath";
