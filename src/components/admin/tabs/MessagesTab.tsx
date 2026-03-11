@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageSquare, Plus, Send, Users, MapPin, Globe, Trash2 } from "lucide-react";
+import { MessageSquare, Plus, Send, Users, MapPin, Globe, Trash2, GraduationCap } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -9,6 +9,8 @@ type Message = {
   id: string; title: string; body: string;
   area: string | null; community: string | null; created_at: string;
 };
+
+type Turma = { id: string; name: string; area: string | null };
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
 const AREA_2_COMMUNITIES = ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"];
@@ -19,12 +21,16 @@ export default function MessagesTab() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ title: "", body: "", target: "area" as "all" | "area" | "community", community: "" });
+  const [form, setForm] = useState({ title: "", body: "", target: "area" as "all" | "area" | "community" | "turma", community: "", turmaId: "" });
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [turmas, setTurmas] = useState<Turma[]>([]);
 
   const communities = profile?.area === "Área 1" ? AREA_1_COMMUNITIES : AREA_2_COMMUNITIES;
 
-  useEffect(() => { fetchMessages(); }, []);
+  useEffect(() => {
+    fetchMessages();
+    supabase.from("turmas").select("id, name, area").eq("is_active", true).order("name").then(({ data }) => setTurmas(data ?? []));
+  }, []);
 
   async function fetchMessages() {
     setLoading(true);
@@ -37,7 +43,7 @@ export default function MessagesTab() {
     if (!form.title || !form.body) return;
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
-    const msgArea = form.target === "all" ? null : profile?.area ?? null;
+    const msgArea = form.target === "all" ? null : form.target === "turma" ? null : profile?.area ?? null;
     const msgCommunity = form.target === "community" ? form.community : null;
     await supabase.from("messages").insert({
       title: form.title,
@@ -49,8 +55,8 @@ export default function MessagesTab() {
 
     // Send push notification about the new announcement
     try {
-      const pushTarget = form.target === "all" ? "all" : form.target === "community" ? "community" : "area";
-      const pushTargetValue = form.target === "all" ? undefined : form.target === "community" ? form.community : profile?.area;
+      const pushTarget = form.target === "turma" ? "turma" : form.target === "all" ? "all" : form.target === "community" ? "community" : "area";
+      const pushTargetValue = form.target === "all" ? undefined : form.target === "turma" ? form.turmaId : form.target === "community" ? form.community : profile?.area;
       await supabase.functions.invoke("admin-push", {
         body: {
           title: `📢 ${form.title}`,
@@ -63,7 +69,7 @@ export default function MessagesTab() {
       console.warn("Push notification failed:", e);
     }
 
-    setForm({ title: "", body: "", target: "area", community: "" });
+    setForm({ title: "", body: "", target: "area", community: "", turmaId: "" });
     setShowForm(false);
     setSaving(false);
     fetchMessages();
@@ -103,13 +109,14 @@ export default function MessagesTab() {
           {/* Target */}
           <div>
             <p className="font-inter text-xs text-muted-foreground mb-2">Enviar para:</p>
-            <div className="grid grid-cols-3 gap-2">
-              {[
+            <div className="grid grid-cols-2 gap-2">
+              {([
                 { value: "all" as const, label: "Todos", icon: Globe },
                 { value: "area" as const, label: profile?.area ?? "Minha área", icon: MapPin },
                 { value: "community" as const, label: "Comunidade", icon: Users },
-              ].map(opt => (
-                <button key={opt.value} onClick={() => setForm(f => ({ ...f, target: opt.value }))}
+                ...(turmas.length > 0 ? [{ value: "turma" as const, label: "Turma", icon: GraduationCap }] : []),
+              ] as const).map(opt => (
+                <button key={opt.value} onClick={() => setForm(f => ({ ...f, target: opt.value as any }))}
                   className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border text-xs font-inter transition-colors ${
                     form.target === opt.value ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground"
                   }`}>
@@ -128,8 +135,16 @@ export default function MessagesTab() {
             </select>
           )}
 
+          {form.target === "turma" && (
+            <select value={form.turmaId} onChange={e => setForm(f => ({ ...f, turmaId: e.target.value }))}
+              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+              <option value="">Selecione a turma</option>
+              {turmas.map(t => <option key={t.id} value={t.id}>{t.name}{t.area ? ` (${t.area})` : ""}</option>)}
+            </select>
+          )}
+
           <div className="flex gap-2">
-            <button onClick={handleSend} disabled={saving || !form.title || !form.body || (form.target === "community" && !form.community)}
+            <button onClick={handleSend} disabled={saving || !form.title || !form.body || (form.target === "community" && !form.community) || (form.target === "turma" && !form.turmaId)}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-inter font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
               style={{ background: "var(--gradient-hero)" }}>
               <Send className="w-4 h-4" /> {saving ? "Enviando..." : "Enviar"}
