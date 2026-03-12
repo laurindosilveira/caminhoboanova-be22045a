@@ -5,6 +5,12 @@ import { FileText, Download, CheckCircle2, XCircle, Clock } from "lucide-react";
 type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
+  avatar_url?: string | null;
+  father_name?: string | null;
+  mother_name?: string | null;
+  father_phone?: string | null;
+  mother_phone?: string | null;
+  address?: string | null;
 };
 type Activity = { id: string; type: string; title: string; points: number; order_num: number; subtitle: string | null };
 
