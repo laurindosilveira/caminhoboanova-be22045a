@@ -110,6 +110,11 @@ export default function AttendanceTab({ participants, activities, communities, i
   const [worshipRequests, setWorshipRequests] = useState<WorshipRequest[]>([]);
   const [savingWorship, setSavingWorship] = useState<string | null>(null);
 
+  // Pending event attendance requests
+  type PendingAttendance = { id: string; event_id: string; user_id: string; status: string; justification: string | null; created_at: string; full_name?: string; community?: string; event_title?: string; event_date?: string };
+  const [pendingAttendance, setPendingAttendance] = useState<PendingAttendance[]>([]);
+  const [savingAttendanceApproval, setSavingAttendanceApproval] = useState<string | null>(null);
+
   // Year promotion state
   const [promotionRequests, setPromotionRequests] = useState<{ id: string; user_id: string; from_year: number; to_year: number; status: string; requested_at: string; full_name?: string; community?: string }[]>([]);
   const [generatingPromotions, setGeneratingPromotions] = useState(false);
@@ -131,7 +136,7 @@ export default function AttendanceTab({ participants, activities, communities, i
   type LessonOption = { id: string; title: string; order_num: number; course_title: string; course_order: number };
   const [lessonOptions, setLessonOptions] = useState<LessonOption[]>([]);
 
-  useEffect(() => { fetchEvents(); fetchWorshipRequests(); fetchLessonOptions(); fetchPromotionRequests(); }, []);
+  useEffect(() => { fetchEvents(); fetchWorshipRequests(); fetchLessonOptions(); fetchPromotionRequests(); fetchPendingAttendance(); }, []);
 
   async function fetchLessonOptions() {
     const [{ data: coursesData }, { data: lessonsData }] = await Promise.all([
