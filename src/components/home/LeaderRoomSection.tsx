@@ -164,7 +164,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
       {/* Waiting room alert banner */}
       {expanded && waitingCount > 0 && (
         <button
-          onClick={() => setActiveSubTab("espera")}
+          onClick={() => setActiveSubTab("alunos")}
           className={`w-full ${asTab ? "" : "mt-2"} flex items-center gap-3 bg-destructive/10 border border-destructive/30 rounded-2xl p-3 hover:bg-destructive/15 transition-colors`}
         >
           <Clock className="w-4 h-4 text-destructive flex-shrink-0" />
@@ -181,7 +181,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
             {SUB_TABS.map(tab => {
               const Icon = tab.icon;
               const isActive = activeSubTab === tab.id;
-              const showBadge = tab.id === "espera" && waitingCount > 0;
+              const showBadge = tab.id === "alunos" && waitingCount > 0;
               return (
                 <button
                   key={tab.id}
@@ -213,22 +213,18 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
             </div>
           ) : (
             <>
-              {activeSubTab === "alunos" && <StudentListSection />}
-
-              {activeSubTab === "espera" && (
-                <LeaderWaitingRoom
-                  areaFilter={turmaArea}
-                  onAssigned={() => setWaitingCount(prev => Math.max(0, prev - 1))}
-                />
-              )}
-
-              {activeSubTab === "visao" && (
-                <OverviewTab
-                  participants={participants}
-                  activities={activities}
-                  plans={plans}
-                  onSelectParticipant={() => setActiveSubTab("encontros")}
-                />
+              {activeSubTab === "alunos" && (
+                <div className="space-y-4">
+                  {/* Waiting room inline when there are people waiting */}
+                  {waitingCount > 0 && (
+                    <LeaderWaitingRoom
+                      areaFilter={turmaArea}
+                      onAssigned={() => setWaitingCount(prev => Math.max(0, prev - 1))}
+                    />
+                  )}
+                  {/* Student list */}
+                  <StudentListSection />
+                </div>
               )}
 
               {activeSubTab === "encontros" && (
@@ -240,9 +236,17 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                 />
               )}
 
-              {activeSubTab === "avisos" && <MessagesTab />}
-
-              {activeSubTab === "push" && <AdminPushTab turmas={turmas} />}
+              {activeSubTab === "comunicacao" && (
+                <div className="space-y-4">
+                  <MessagesTab />
+                  <div className="border-t border-border pt-4">
+                    <h3 className="font-montserrat font-bold text-foreground text-sm mb-3 flex items-center gap-2">
+                      📣 Notificações Push
+                    </h3>
+                    <AdminPushTab turmas={turmas} />
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
