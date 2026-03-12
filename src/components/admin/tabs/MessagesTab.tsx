@@ -45,13 +45,15 @@ export default function MessagesTab() {
     const { data: { user } } = await supabase.auth.getUser();
     const msgArea = form.target === "all" ? null : form.target === "turma" ? null : profile?.area ?? null;
     const msgCommunity = form.target === "community" ? form.community : null;
+    const msgTurmaId = form.target === "turma" ? form.turmaId : null;
     await supabase.from("messages").insert({
       title: form.title,
       body: form.body,
       area: msgArea,
       community: msgCommunity,
+      turma_id: msgTurmaId,
       sent_by: user?.id,
-    });
+    } as any);
 
     // Send push notification about the new announcement
     try {
