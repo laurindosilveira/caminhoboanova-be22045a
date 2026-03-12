@@ -369,27 +369,79 @@ export default function CommunityTab() {
                               ⏳ {daysLeft} dia{daysLeft !== 1 ? "s" : ""} restante{daysLeft !== 1 ? "s" : ""}
                             </span>
                           </div>
-                          <div className="mt-2.5">
+                          <div className="mt-2.5 space-y-2">
                             {ch.has_completed ? (
-                              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-green/10">
-                                <Check className="w-3.5 h-3.5 text-brand-green" />
-                                <span className="font-inter text-xs font-semibold text-brand-green">Desafio concluído ✓</span>
+                              <div>
+                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-green/10">
+                                  <Check className="w-3.5 h-3.5 text-brand-green" />
+                                  <span className="font-inter text-xs font-semibold text-brand-green">Desafio concluído ✓ (+15 pts)</span>
+                                </div>
+                                {ch.response_text && (
+                                  <p className="text-muted-foreground font-inter text-xs mt-1.5 italic">"{ch.response_text}"</p>
+                                )}
+                                {ch.file_url && (
+                                  <a href={ch.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary text-xs font-inter mt-1 hover:underline">
+                                    <Image className="w-3 h-3" /> Ver arquivo enviado
+                                  </a>
+                                )}
                               </div>
                             ) : ch.has_joined ? (
-                              <button
-                                onClick={() => completeChallenge(ch.id)}
-                                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors"
-                              >
-                                <Check className="w-3.5 h-3.5" />
-                                <span className="font-inter text-xs font-semibold">Completei o desafio!</span>
-                              </button>
+                              <div className="space-y-2">
+                                {ch.requires_text && (
+                                  <textarea
+                                    value={challengeResponses[ch.id] || ""}
+                                    onChange={e => setChallengeResponses(prev => ({ ...prev, [ch.id]: e.target.value }))}
+                                    placeholder="Escreva sua resposta..."
+                                    className="w-full rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm font-inter text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                                    rows={2}
+                                    maxLength={500}
+                                  />
+                                )}
+                                {ch.requires_file && (
+                                  <div>
+                                    <input
+                                      ref={el => { fileInputRefs.current[ch.id] = el; }}
+                                      type="file"
+                                      accept="image/*,.pdf,.doc,.docx"
+                                      className="hidden"
+                                      onChange={e => {
+                                        const file = e.target.files?.[0] ?? null;
+                                        setChallengeFiles(prev => ({ ...prev, [ch.id]: file }));
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => fileInputRefs.current[ch.id]?.click()}
+                                      className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-border bg-muted/20 text-muted-foreground hover:bg-muted/40 transition-colors"
+                                    >
+                                      <Upload className="w-3.5 h-3.5" />
+                                      <span className="font-inter text-xs">
+                                        {challengeFiles[ch.id] ? challengeFiles[ch.id]!.name : "Enviar foto/arquivo"}
+                                      </span>
+                                    </button>
+                                  </div>
+                                )}
+                                <button
+                                  onClick={() => completeChallenge(ch.id)}
+                                  disabled={
+                                    completingChallenge === ch.id ||
+                                    (ch.requires_text && !challengeResponses[ch.id]?.trim()) ||
+                                    (ch.requires_file && !challengeFiles[ch.id])
+                                  }
+                                  className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors disabled:opacity-50"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span className="font-inter text-xs font-semibold">
+                                    {completingChallenge === ch.id ? "Enviando..." : "Completei o desafio!"}
+                                  </span>
+                                </button>
+                              </div>
                             ) : (
                               <button
                                 onClick={() => joinChallenge(ch.id)}
                                 className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                               >
                                 <Target className="w-3.5 h-3.5" />
-                                <span className="font-inter text-xs font-semibold">Participar</span>
+                                <span className="font-inter text-xs font-semibold">Participar (+15 pts)</span>
                               </button>
                             )}
                           </div>
