@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Users, BarChart3, CalendarDays, MessageSquare, Megaphone, ChevronDown, ChevronUp, Clock } from "lucide-react";
+import { Users, CalendarDays, MessageSquare, ChevronDown, ChevronUp, Clock } from "lucide-react";
 import StudentListSection from "@/components/home/StudentListSection";
-import OverviewTab from "@/components/admin/tabs/OverviewTab";
 import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
 import MessagesTab from "@/components/admin/tabs/MessagesTab";
 import AdminPushTab from "@/components/admin/tabs/AdminPushTab";
 import LeaderWaitingRoom from "@/components/home/LeaderWaitingRoom";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
 const AREA_2_COMMUNITIES = ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"];
@@ -24,15 +24,12 @@ type Participant = {
 type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
 type Turma = { id: string; name: string; area: string | null };
 
-type SubTab = "alunos" | "visao" | "encontros" | "avisos" | "push" | "espera";
+type SubTab = "alunos" | "encontros" | "comunicacao";
 
 const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
   { id: "alunos", label: "Alunos", icon: Users },
-  { id: "espera", label: "Espera", icon: Clock },
-  { id: "visao", label: "Visão", icon: BarChart3 },
   { id: "encontros", label: "Encontros", icon: CalendarDays },
-  { id: "avisos", label: "Avisos", icon: MessageSquare },
-  { id: "push", label: "Push", icon: Megaphone },
+  { id: "comunicacao", label: "Comunicação", icon: MessageSquare },
 ];
 
 export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }) {
@@ -167,7 +164,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
       {/* Waiting room alert banner */}
       {expanded && waitingCount > 0 && (
         <button
-          onClick={() => setActiveSubTab("espera")}
+          onClick={() => setActiveSubTab("alunos")}
           className={`w-full ${asTab ? "" : "mt-2"} flex items-center gap-3 bg-destructive/10 border border-destructive/30 rounded-2xl p-3 hover:bg-destructive/15 transition-colors`}
         >
           <Clock className="w-4 h-4 text-destructive flex-shrink-0" />
@@ -184,7 +181,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
             {SUB_TABS.map(tab => {
               const Icon = tab.icon;
               const isActive = activeSubTab === tab.id;
-              const showBadge = tab.id === "espera" && waitingCount > 0;
+              const showBadge = tab.id === "alunos" && waitingCount > 0;
               return (
                 <button
                   key={tab.id}
@@ -216,22 +213,18 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
             </div>
           ) : (
             <>
-              {activeSubTab === "alunos" && <StudentListSection />}
-
-              {activeSubTab === "espera" && (
-                <LeaderWaitingRoom
-                  areaFilter={turmaArea}
-                  onAssigned={() => setWaitingCount(prev => Math.max(0, prev - 1))}
-                />
-              )}
-
-              {activeSubTab === "visao" && (
-                <OverviewTab
-                  participants={participants}
-                  activities={activities}
-                  plans={plans}
-                  onSelectParticipant={() => setActiveSubTab("encontros")}
-                />
+              {activeSubTab === "alunos" && (
+                <div className="space-y-4">
+                  {/* Waiting room inline when there are people waiting */}
+                  {waitingCount > 0 && (
+                    <LeaderWaitingRoom
+                      areaFilter={turmaArea}
+                      onAssigned={() => setWaitingCount(prev => Math.max(0, prev - 1))}
+                    />
+                  )}
+                  {/* Student list */}
+                  <StudentListSection />
+                </div>
               )}
 
               {activeSubTab === "encontros" && (
@@ -243,9 +236,17 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                 />
               )}
 
-              {activeSubTab === "avisos" && <MessagesTab />}
-
-              {activeSubTab === "push" && <AdminPushTab turmas={turmas} />}
+              {activeSubTab === "comunicacao" && (
+                <div className="space-y-4">
+                  <MessagesTab />
+                  <div className="border-t border-border pt-4">
+                    <h3 className="font-montserrat font-bold text-foreground text-sm mb-3 flex items-center gap-2">
+                      📣 Notificações Push
+                    </h3>
+                    <AdminPushTab turmas={turmas} />
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
