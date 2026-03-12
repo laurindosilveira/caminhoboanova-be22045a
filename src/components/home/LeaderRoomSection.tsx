@@ -187,33 +187,55 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
       {expanded && (
         <div className={`${asTab ? "mt-2" : "mt-3"} animate-in slide-in-from-top-2 duration-200`}>
           {/* Sub-tab navigation */}
-          <div className="flex gap-1.5 overflow-x-auto pb-2 mb-3 scrollbar-hide">
-            {SUB_TABS.map(tab => {
-              const Icon = tab.icon;
-              const isActive = activeSubTab === tab.id;
-              const showBadge = tab.id === "alunos" && waitingCount > 0;
-              return (
+          <div className="relative">
+            <div className="flex gap-1.5 overflow-x-auto pb-1 mb-1 scrollbar-hide" id="leader-subtabs">
+              {SUB_TABS.map(tab => {
+                const Icon = tab.icon;
+                const isActive = activeSubTab === tab.id;
+                const showBadge = tab.id === "alunos" && waitingCount > 0;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveSubTab(tab.id)}
+                    className={`relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-inter font-semibold whitespace-nowrap transition-all duration-200 ${
+                      isActive
+                        ? "bg-primary text-primary-foreground shadow-sm scale-[1.02]"
+                        : "bg-card border border-border text-muted-foreground hover:bg-muted/50 hover:scale-[1.01]"
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 transition-transform duration-200 ${isActive ? "scale-110" : ""}`} />
+                    {tab.label}
+                    {showBadge && (
+                      <span className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${
+                        isActive ? "bg-primary-foreground text-primary" : "bg-destructive text-destructive-foreground"
+                      }`}>
+                        {waitingCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Scroll position indicator */}
+            <div className="flex justify-center gap-1 pt-1 pb-2">
+              {SUB_TABS.map((tab, i) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveSubTab(tab.id)}
-                  className={`relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-inter font-semibold whitespace-nowrap transition-all ${
-                    isActive
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "bg-card border border-border text-muted-foreground hover:bg-muted/50"
-                  }`}
+                  className="p-0.5"
+                  aria-label={tab.label}
                 >
-                  <Icon className="w-4 h-4" />
-                  {tab.label}
-                  {showBadge && (
-                    <span className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${
-                      isActive ? "bg-primary-foreground text-primary" : "bg-destructive text-destructive-foreground"
-                    }`}>
-                      {waitingCount}
-                    </span>
-                  )}
+                  <div
+                    className={`rounded-full transition-all duration-300 ${
+                      activeSubTab === tab.id
+                        ? "w-5 h-1.5 bg-primary"
+                        : "w-1.5 h-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50"
+                    }`}
+                  />
                 </button>
-              );
-            })}
+              ))}
+            </div>
           </div>
 
           {/* Content */}
