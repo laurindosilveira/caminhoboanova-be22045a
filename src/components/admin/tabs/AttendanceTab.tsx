@@ -110,6 +110,11 @@ export default function AttendanceTab({ participants, activities, communities, i
   const [worshipRequests, setWorshipRequests] = useState<WorshipRequest[]>([]);
   const [savingWorship, setSavingWorship] = useState<string | null>(null);
 
+  // Pending event attendance requests
+  type PendingAttendance = { id: string; event_id: string; user_id: string; status: string; justification: string | null; created_at: string; full_name?: string; community?: string; event_title?: string; event_date?: string };
+  const [pendingAttendance, setPendingAttendance] = useState<PendingAttendance[]>([]);
+  const [savingAttendanceApproval, setSavingAttendanceApproval] = useState<string | null>(null);
+
   // Year promotion state
   const [promotionRequests, setPromotionRequests] = useState<{ id: string; user_id: string; from_year: number; to_year: number; status: string; requested_at: string; full_name?: string; community?: string }[]>([]);
   const [generatingPromotions, setGeneratingPromotions] = useState(false);
@@ -131,7 +136,7 @@ export default function AttendanceTab({ participants, activities, communities, i
   type LessonOption = { id: string; title: string; order_num: number; course_title: string; course_order: number };
   const [lessonOptions, setLessonOptions] = useState<LessonOption[]>([]);
 
-  useEffect(() => { fetchEvents(); fetchWorshipRequests(); fetchLessonOptions(); fetchPromotionRequests(); }, []);
+  useEffect(() => { fetchEvents(); fetchWorshipRequests(); fetchLessonOptions(); fetchPromotionRequests(); fetchPendingAttendance(); }, []);
 
   async function fetchLessonOptions() {
     const [{ data: coursesData }, { data: lessonsData }] = await Promise.all([
@@ -196,6 +201,40 @@ export default function AttendanceTab({ participants, activities, communities, i
       setWorshipRequests(prev => prev.map(w => w.id === id ? { ...w, status: action } : w));
     }
     setSavingWorship(null);
+  }
+
+  async function fetchPendingAttendance() {
+    const participantIds = participants.map(p => p.user_id);
+    if (participantIds.length === 0) return;
+    const { data } = await supabase
+      .from("attendance")
+      .select("id, event_id, user_id, status, justification, created_at")
+      .in("user_id", participantIds)
+      .in("status", ["pendente_presente", "pendente_falta"])
+      .order("created_at", { ascending: false });
+    if (!data || data.length === 0) { setPendingAttendance([]); return; }
+    const eventIds = [...new Set(data.map(a => a.event_id))];
+    const { data: eventsData } = await supabase.from("events").select("id, title, event_date").in("id", eventIds);
+    const eventsMap = new Map((eventsData ?? []).map(e => [e.id, e]));
+    const enriched = data.map(a => {
+      const p = participants.find(p => p.user_id === a.user_id);
+      const ev = eventsMap.get(a.event_id);
+      return { ...a, full_name: p?.full_name ?? "Desconhecido", community: p?.community ?? "", event_title: ev?.title ?? "Evento", event_date: ev?.event_date ?? a.created_at };
+    });
+    setPendingAttendance(enriched);
+  }
+
+  async function handleAttendanceApproval(id: string, action: "presente" | "justificou" | "rejeitado") {
+    setSavingAttendanceApproval(id);
+    if (action === "rejeitado") {
+      await supabase.from("attendance").delete().eq("id", id);
+      setPendingAttendance(prev => prev.filter(a => a.id !== id));
+    } else {
+      await supabase.from("attendance").update({ status: action }).eq("id", id);
+      setPendingAttendance(prev => prev.filter(a => a.id !== id));
+    }
+    toast({ title: action === "presente" ? "Presença aprovada ✅" : action === "justificou" ? "Falta justificada ✓" : "Solicitação rejeitada" });
+    setSavingAttendanceApproval(null);
   }
 
   async function loadEventData(eventId: string, eventDate: string, isEncontro: boolean) {
@@ -725,6 +764,66 @@ export default function AttendanceTab({ participants, activities, communities, i
           </button>
         ))}
       </div>
+
+      {/* Pending event attendance requests */}
+      {pendingAttendance.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="w-4 h-4 text-primary" />
+            <p className="font-montserrat font-bold text-foreground text-sm">
+              Solicitações de Presença em Eventos
+              <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-inter font-bold bg-primary/10 text-primary">
+                {pendingAttendance.length} pendente{pendingAttendance.length !== 1 ? "s" : ""}
+              </span>
+            </p>
+          </div>
+          {pendingAttendance.map(a => {
+            const isSaving = savingAttendanceApproval === a.id;
+            const isPresence = a.status === "pendente_presente";
+            return (
+              <div key={a.id} className="bg-card rounded-2xl border border-primary/20 p-4 shadow-sm space-y-2">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isPresence ? "bg-brand-green/10" : "bg-accent/20"}`}>
+                    <span className="text-lg">{isPresence ? "✅" : "📝"}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-montserrat font-bold text-foreground text-sm">{a.full_name}</p>
+                    <p className="text-muted-foreground font-inter text-xs">{a.community}</p>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-inter font-medium ${isPresence ? "bg-brand-green/10 text-brand-green" : "bg-accent/20 text-accent-foreground"}`}>
+                    {isPresence ? "Confirma presença" : "Justifica falta"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-xs font-inter text-muted-foreground">
+                  <span>📅 {a.event_title}</span>
+                  <span>🕐 {new Date(a.event_date!).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}</span>
+                </div>
+                {a.justification && (
+                  <p className="text-muted-foreground font-inter text-xs italic bg-muted/50 rounded-lg px-3 py-2">
+                    💬 {a.justification}
+                  </p>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => handleAttendanceApproval(a.id, isPresence ? "presente" : "justificou")}
+                    disabled={isSaving}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-green/10 text-brand-green font-inter text-xs font-medium border border-brand-green/30 hover:bg-brand-green/20 transition-colors disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Aprovar
+                  </button>
+                  <button
+                    onClick={() => handleAttendanceApproval(a.id, "rejeitado")}
+                    disabled={isSaving}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-destructive/10 text-destructive font-inter text-xs font-medium border border-destructive/30 hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                  >
+                    <XCircle className="w-3.5 h-3.5" /> Rejeitar
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Event attendance requests - filtered by event type */}
       {(() => {
