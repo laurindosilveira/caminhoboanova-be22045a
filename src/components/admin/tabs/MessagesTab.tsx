@@ -185,6 +185,10 @@ export default function MessagesTab() {
                       <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-md text-[10px] font-inter font-medium">{msg.community}</span>
                     ) : msg.area ? (
                       <span className="px-2 py-0.5 bg-secondary/10 text-secondary rounded-md text-[10px] font-inter font-medium">{msg.area}</span>
+                    ) : (msg as any).turma_id ? (
+                      <span className="px-2 py-0.5 bg-accent/10 text-accent rounded-md text-[10px] font-inter font-medium">
+                        {turmas.find(t => t.id === (msg as any).turma_id)?.name ?? "Turma"}
+                      </span>
                     ) : (
                       <span className="px-2 py-0.5 bg-muted text-muted-foreground rounded-md text-[10px] font-inter font-medium">Todos</span>
                     )}
