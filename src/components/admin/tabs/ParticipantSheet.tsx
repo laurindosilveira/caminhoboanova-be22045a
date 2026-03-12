@@ -58,6 +58,12 @@ export type Participant = {
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
   turma_id?: string | null;
   confirmation_year?: number | null;
+  avatar_url?: string | null;
+  father_name?: string | null;
+  mother_name?: string | null;
+  father_phone?: string | null;
+  mother_phone?: string | null;
+  address?: string | null;
 };
 
 export type Activity = { id: string; type: string; points: number; title: string; order_num: number; subtitle: string | null };
