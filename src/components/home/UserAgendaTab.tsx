@@ -440,7 +440,7 @@ export default function UserAgendaTab() {
 
 function EventCard({ event, past = false, linkedLesson, lessonContent, attendanceRecords = [], onCheckIn, onNavigateToLesson, canManage, onEdit, onDelete }: { 
   event: Event; past?: boolean; linkedLesson?: LessonInfo; lessonContent?: LessonContentInfo;
-  attendanceRecords?: AttendanceRecord[]; onCheckIn?: (eventId: string, status: "presente" | "faltou", justification?: string) => void;
+  attendanceRecords?: AttendanceRecord[]; onCheckIn?: (eventId: string, status: "pendente_presente" | "pendente_falta", justification?: string) => void;
   onNavigateToLesson?: (tab: string) => void;
   canManage?: boolean; onEdit?: (event: Event) => void; onDelete?: (eventId: string) => void;
 }) {
@@ -452,12 +452,30 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
   
   const now = new Date();
   const diffHours = (now.getTime() - dateObj.getTime()) / 3600000;
-  const isCheckInWindow = diffHours >= -2 && diffHours <= 24;
+  // Show buttons for events up to 7 days before and 48 hours after
+  const isCheckInWindow = diffHours >= -168 && diffHours <= 48;
   const existingRecord = attendanceRecords.find(a => a.event_id === event.id);
 
   const handleLessonClick = () => {
     if (onNavigateToLesson) {
       window.dispatchEvent(new CustomEvent("navigate-to-lesson", { detail: { lessonId: linkedLesson?.id } }));
+    }
+  };
+
+  const getStatusDisplay = (status: string) => {
+    switch (status) {
+      case "pendente_presente":
+        return { icon: "⏳", label: "Presença aguardando aprovação", cls: "bg-accent/20 text-accent-foreground" };
+      case "pendente_falta":
+        return { icon: "⏳", label: "Justificativa aguardando aprovação", cls: "bg-accent/20 text-accent-foreground" };
+      case "presente":
+        return { icon: "📍", label: "Presença confirmada ✓", cls: "bg-brand-green/10 text-brand-green" };
+      case "justificou":
+        return { icon: "🟡", label: "Falta justificada", cls: "bg-accent/20 text-accent-foreground" };
+      case "faltou":
+        return { icon: "❌", label: "Ausência registrada", cls: "bg-destructive/10 text-destructive" };
+      default:
+        return { icon: "⚪", label: status, cls: "bg-muted text-muted-foreground" };
     }
   };
 
@@ -553,36 +571,32 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
             <p className="text-muted-foreground font-inter text-xs mt-1.5 leading-relaxed">{event.description}</p>
           )}
 
-          {/* Check-in buttons */}
+          {/* Attendance buttons */}
           {isCheckInWindow && onCheckIn && (
             <div className="mt-2.5">
               {existingRecord ? (
-                <div className={`flex items-center gap-2 px-3 py-2 rounded-xl ${
-                  existingRecord.status === "presente" ? "bg-brand-green/10" : "bg-destructive/10"
-                }`}>
-                  <span className="text-sm">{existingRecord.status === "presente" ? "📍" : "❌"}</span>
-                  <p className={`font-inter text-xs font-semibold ${
-                    existingRecord.status === "presente" ? "text-brand-green" : "text-destructive"
-                  }`}>
-                    {existingRecord.status === "presente" ? "Check-in realizado ✓" : "Ausência registrada"}
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-xl ${getStatusDisplay(existingRecord.status).cls}`}>
+                  <span className="text-sm">{getStatusDisplay(existingRecord.status).icon}</span>
+                  <p className={`font-inter text-xs font-semibold`}>
+                    {getStatusDisplay(existingRecord.status).label}
                   </p>
                 </div>
               ) : (
                 <div className="space-y-2">
                   <div className="flex gap-2">
                     <button
-                      onClick={() => onCheckIn(event.id, "presente")}
+                      onClick={() => onCheckIn(event.id, "pendente_presente")}
                       className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors"
                     >
-                      <span className="text-sm">📍</span>
-                      <span className="font-inter text-xs font-semibold">Cheguei</span>
+                      <span className="text-sm">✅</span>
+                      <span className="font-inter text-xs font-semibold">Confirmar Presença</span>
                     </button>
                     <button
                       onClick={() => setShowJustification(prev => !prev)}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl transition-colors ${showJustification ? "bg-destructive/20 text-destructive" : "bg-destructive/10 text-destructive hover:bg-destructive/20"}`}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl transition-colors ${showJustification ? "bg-accent/30 text-accent-foreground" : "bg-accent/10 text-accent-foreground hover:bg-accent/20"}`}
                     >
-                      <span className="text-sm">❌</span>
-                      <span className="font-inter text-xs font-semibold">Não compareci</span>
+                      <span className="text-sm">📝</span>
+                      <span className="font-inter text-xs font-semibold">Justificar Falta</span>
                     </button>
                   </div>
                   {showJustification && (
@@ -590,19 +604,20 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
                       <textarea
                         value={justificationText}
                         onChange={e => setJustificationText(e.target.value)}
-                        placeholder="Não poderei participar por…"
+                        placeholder="Motivo da ausência..."
                         className="w-full rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs font-inter text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
                         rows={2}
                         maxLength={300}
                       />
                       <button
                         onClick={() => {
-                          onCheckIn(event.id, "faltou", justificationText || undefined);
+                          onCheckIn(event.id, "pendente_falta", justificationText || undefined);
                           setShowJustification(false);
                         }}
-                        className="w-full py-2 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors font-inter text-xs font-semibold"
+                        disabled={!justificationText.trim()}
+                        className="w-full py-2 rounded-xl bg-accent/15 text-accent-foreground hover:bg-accent/25 transition-colors font-inter text-xs font-semibold disabled:opacity-50"
                       >
-                        Confirmar ausência
+                        Enviar justificativa
                       </button>
                     </div>
                   )}
