@@ -67,6 +67,9 @@ export default function Index() {
         {/* ===== JORNADA ===== */}
         {activeTab === "jornada" && (
           <>
+            {/* Push activation reminder from leader */}
+            <PushActivationBanner />
+
             {/* Avisos do pastor no topo */}
             <div className="pt-4">
               <AnnouncementsSection />
