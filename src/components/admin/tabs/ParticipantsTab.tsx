@@ -3,12 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   Search, ChevronDown, Filter, Users, CheckCircle, Clock, BookOpen,
   GraduationCap, CalendarDays, Zap, ChevronLeft, Phone, MapPin, Calendar, Star, AlertTriangle,
-  Trash2, Eye, X, ChevronRight, Church, History, Pencil, Save, Heart
+  Trash2, Eye, X, ChevronRight, Church, History, Pencil, Save, Heart, Lock, Unlock
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import ParticipantSheet from "./ParticipantSheet";
 
 type Activity = { id: string; type: string; title: string; points: number; order_num: number; subtitle: string | null };
 type Participant = {
