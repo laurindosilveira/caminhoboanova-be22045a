@@ -48,6 +48,20 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
   const [expanded, setExpanded] = useState(asTab);
   const [activeSubTab, setActiveSubTab] = useState<SubTab>("visao");
   const [highlightedParticipant, setHighlightedParticipant] = useState<Participant | null>(null);
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
+
+  const scrollToTab = useCallback((tabId: SubTab) => {
+    setActiveSubTab(tabId);
+    requestAnimationFrame(() => {
+      const container = tabsContainerRef.current;
+      if (!container) return;
+      const idx = SUB_TABS.findIndex(t => t.id === tabId);
+      const btn = container.children[idx] as HTMLElement | undefined;
+      if (!btn) return;
+      const scrollLeft = btn.offsetLeft - container.offsetWidth / 2 + btn.offsetWidth / 2;
+      container.scrollTo({ left: scrollLeft, behavior: "smooth" });
+    });
+  }, []);
   const [loading, setLoading] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
