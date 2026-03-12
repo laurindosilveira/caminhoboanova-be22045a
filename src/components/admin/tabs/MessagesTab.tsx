@@ -150,9 +150,9 @@ export default function MessagesTab() {
       if (msg.turma_id) {
         targetQuery = targetQuery.eq("turma_id", msg.turma_id);
       } else if (msg.community) {
-        targetQuery = targetQuery.eq("community", msg.community);
+        targetQuery = targetQuery.eq("community", msg.community as any);
       } else if (msg.area) {
-        targetQuery = targetQuery.eq("area", msg.area);
+        targetQuery = targetQuery.eq("area", msg.area as any);
       }
       const { data: targetUsers } = await targetQuery;
       
