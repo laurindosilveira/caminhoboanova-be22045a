@@ -74,8 +74,10 @@ export default function ChallengesTab() {
       end_date: form.end_date,
       area: profile?.area ?? null,
       created_by: user?.id,
+      requires_text: form.requires_text,
+      requires_file: form.requires_file,
     });
-    setForm({ title: "", description: "", emoji: "📖", start_date: "", end_date: "" });
+    setForm({ title: "", description: "", emoji: "📖", start_date: "", end_date: "", requires_text: false, requires_file: false });
     setShowForm(false);
     setSaving(false);
     fetchChallenges();
