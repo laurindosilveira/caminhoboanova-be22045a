@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock } from "lucide-react";
-import StudentListSection from "@/components/home/StudentListSection";
+
 import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
 import MessagesTab from "@/components/admin/tabs/MessagesTab";
 import ParticipantsTab from "@/components/admin/tabs/ParticipantsTab";
@@ -225,9 +225,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                       onAssigned={() => setWaitingCount(prev => Math.max(0, prev - 1))}
                     />
                   )}
-                  {/* Student list */}
-                  <StudentListSection />
-                  {/* Participants progress (merged from Encontros > Pessoas) */}
+                  {/* Unified student list with progress, edit, and personal info */}
                   <ParticipantsTab participants={participants} activities={activities} communities={communities} />
                 </div>
               )}
