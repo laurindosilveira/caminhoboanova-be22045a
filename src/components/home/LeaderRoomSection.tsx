@@ -241,6 +241,10 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                 />
               )}
 
+              {activeSubTab === "roteiros" && (
+                <CourseGuideSubTab />
+              )}
+
               {activeSubTab === "comunicacao" && (
                 <MessagesTab />
               )}
