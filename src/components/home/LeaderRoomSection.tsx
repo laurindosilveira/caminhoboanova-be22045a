@@ -3,15 +3,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock, BookOpen, BarChart3, GraduationCap } from "lucide-react";
 
-import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
-import MessagesTab from "@/components/admin/tabs/MessagesTab";
-import ParticipantsTab from "@/components/admin/tabs/ParticipantsTab";
-import AdminPushTab from "@/components/admin/tabs/AdminPushTab";
-import PushStatusList from "@/components/admin/tabs/PushStatusList";
+const AttendanceTab = lazy(() => import("@/components/admin/tabs/AttendanceTab"));
+const MessagesTab = lazy(() => import("@/components/admin/tabs/MessagesTab"));
+const ParticipantsTab = lazy(() => import("@/components/admin/tabs/ParticipantsTab"));
+const AdminPushTab = lazy(() => import("@/components/admin/tabs/AdminPushTab"));
+const PushStatusList = lazy(() => import("@/components/admin/tabs/PushStatusList"));
+const CourseGuideSubTab = lazy(() => import("@/components/admin/tabs/leader/CourseGuideSubTab"));
+const OverviewTab = lazy(() => import("@/components/admin/tabs/OverviewTab"));
+const LeaderTurmaManagement = lazy(() => import("@/components/admin/tabs/leader/LeaderTurmaManagement"));
 import LeaderWaitingRoom from "@/components/home/LeaderWaitingRoom";
-import CourseGuideSubTab from "@/components/admin/tabs/leader/CourseGuideSubTab";
-import OverviewTab from "@/components/admin/tabs/OverviewTab";
-import LeaderTurmaManagement from "@/components/admin/tabs/leader/LeaderTurmaManagement";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
