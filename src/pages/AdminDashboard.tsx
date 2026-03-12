@@ -301,7 +301,6 @@ export default function AdminDashboard() {
             )}
             {activeTab === "courses" && <CoursesTab />}
             {activeTab === "push" && <AdminPushTab turmas={turmas} />}
-            {activeTab === "guide" && <LeaderGuideTab />}
             {activeTab === "users" && <UsersTab onSelectTurma={(turma) => {
               const found = turmas.find(t => t.area === turma.area);
               if (found) {
