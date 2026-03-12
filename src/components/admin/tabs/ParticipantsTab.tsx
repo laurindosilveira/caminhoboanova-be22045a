@@ -174,8 +174,21 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
 
+  // Extended profile data & edit
+  type ExtendedProfile = {
+    address?: string; father_name?: string; mother_name?: string;
+    father_phone?: string; mother_phone?: string; turma_id?: string | null;
+  };
+  const [extProfile, setExtProfile] = useState<ExtendedProfile>({});
+  const [turmas, setTurmas] = useState<{ id: string; name: string; area: string | null }[]>([]);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState<Record<string, any>>({});
+  const [saving, setSaving] = useState(false);
+  const [showPersonalInfo, setShowPersonalInfo] = useState(false);
+
   useEffect(() => {
     fetchRealData();
+    fetchExtendedProfile();
   }, [p.user_id]);
 
   async function fetchRealData() {
