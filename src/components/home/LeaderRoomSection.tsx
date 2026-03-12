@@ -227,6 +227,8 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                   )}
                   {/* Student list */}
                   <StudentListSection />
+                  {/* Participants progress (merged from Encontros > Pessoas) */}
+                  <ParticipantsTab participants={participants} activities={activities} communities={communities} />
                 </div>
               )}
 
