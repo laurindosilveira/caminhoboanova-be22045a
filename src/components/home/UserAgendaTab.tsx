@@ -328,11 +328,14 @@ export default function UserAgendaTab() {
             {pastEvents.slice(0, 8).map((evt) => {
               const record = attendanceRecords.find(a => a.event_id === evt.id);
               const status = record?.status;
-              const statusCfg = {
+              const statusCfg: Record<string, { icon: string; label: string; cls: string }> = {
                 presente: { icon: "🟢", label: "Presente", cls: "text-brand-green bg-brand-green/10" },
                 faltou: { icon: "🔴", label: "Faltou", cls: "text-destructive bg-destructive/10" },
                 justificou: { icon: "🟡", label: "Justificou", cls: "text-accent-foreground bg-accent/20" },
-              }[status ?? ""] ?? { icon: "⚪", label: "Sem registro", cls: "text-muted-foreground bg-muted" };
+                pendente_presente: { icon: "⏳", label: "Aguardando aprovação", cls: "text-accent-foreground bg-accent/20" },
+                pendente_falta: { icon: "⏳", label: "Justificativa pendente", cls: "text-accent-foreground bg-accent/20" },
+              };
+              const cfg = statusCfg[status ?? ""] ?? { icon: "⚪", label: "Sem registro", cls: "text-muted-foreground bg-muted" };
 
               const date = new Date(evt.event_date);
               const dateStr = date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
