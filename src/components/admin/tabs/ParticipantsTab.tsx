@@ -152,7 +152,9 @@ function AuditLogSection({ targetUserId, userName }: { targetUserId: string; use
 // ─── ParticipantDetail (rebuilt with REAL data) ──────────
 type DetailProps = { participant: Participant; activities: Activity[]; onBack: () => void };
 
-function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) {
+function ParticipantDetail({ participant: pOriginal, activities, onBack }: DetailProps) {
+  const [localOverrides, setLocalOverrides] = useState<Partial<Participant>>({});
+  const p = { ...pOriginal, ...localOverrides };
   const [typeFilter, setTypeFilter] = useState("todos");
   const [loading, setLoading] = useState(true);
   const [showAuditLog, setShowAuditLog] = useState(false);
