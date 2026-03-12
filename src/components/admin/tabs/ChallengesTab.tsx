@@ -28,6 +28,7 @@ export default function ChallengesTab() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     title: "", description: "", emoji: "📖", start_date: "", end_date: "",
+    requires_text: false, requires_file: false,
   });
 
   useEffect(() => { fetchChallenges(); }, []);
