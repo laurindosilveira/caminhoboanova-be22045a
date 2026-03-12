@@ -58,6 +58,12 @@ export type Participant = {
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
   turma_id?: string | null;
   confirmation_year?: number | null;
+  avatar_url?: string | null;
+  father_name?: string | null;
+  mother_name?: string | null;
+  father_phone?: string | null;
+  mother_phone?: string | null;
+  address?: string | null;
 };
 
 export type Activity = { id: string; type: string; points: number; title: string; order_num: number; subtitle: string | null };
@@ -485,9 +491,13 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       {/* Profile header */}
       <div className="rounded-2xl p-4 relative overflow-hidden" style={{ background: "var(--gradient-hero)" }}>
         <div className="flex items-center gap-4 mb-3">
-          <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0 border border-white/20">
-            <span className="font-montserrat font-black text-primary-foreground text-2xl">{p.full_name.charAt(0)}</span>
-          </div>
+          {p.avatar_url ? (
+            <img src={p.avatar_url} alt={p.full_name} className="w-14 h-14 rounded-2xl object-cover flex-shrink-0 border-2 border-white/30" />
+          ) : (
+            <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0 border border-white/20">
+              <span className="font-montserrat font-black text-primary-foreground text-2xl">{p.full_name.charAt(0)}</span>
+            </div>
+          )}
           <div className="flex-1">
             <h2 className="font-montserrat font-black text-primary-foreground text-lg leading-tight">{p.full_name}</h2>
             <p className="text-primary-foreground/70 font-inter text-xs">
@@ -496,7 +506,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
             </p>
             <p className="text-primary-foreground/60 font-inter text-xs">📞 {p.phone}</p>
             <p className="text-primary-foreground/60 font-inter text-xs">
-              🎓 {currentTurmaName ?? "Sem turma"}
+              🎓 Confirmatório {new Date().getFullYear()} - {p.area}
               <button onClick={() => { setEditingTurma(true); setNewTurmaId(p.turma_id ?? ""); }} className="ml-1.5 text-primary-foreground/50 hover:text-primary-foreground underline text-[10px]">✏️ alterar</button>
             </p>
             <p className="text-primary-foreground/60 font-inter text-xs">
@@ -510,6 +520,28 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
             <Star className={`w-4 h-4 ${plan.is_priority ? "text-accent-foreground" : "text-primary-foreground/60"}`} style={{ fill: plan.is_priority ? "hsl(var(--accent-foreground))" : "transparent" }} />
           </button>
         </div>
+
+        {/* Family info */}
+        {(p.father_name || p.mother_name) && (
+          <div className="bg-white/10 rounded-xl p-3 mb-3 space-y-1.5">
+            {p.father_name && (
+              <p className="text-primary-foreground/80 font-inter text-xs">
+                👨 <strong>Pai:</strong> {p.father_name}{p.father_phone ? ` · 📞 ${p.father_phone}` : ""}
+              </p>
+            )}
+            {p.mother_name && (
+              <p className="text-primary-foreground/80 font-inter text-xs">
+                👩 <strong>Mãe:</strong> {p.mother_name}{p.mother_phone ? ` · 📞 ${p.mother_phone}` : ""}
+              </p>
+            )}
+            {p.address && (
+              <p className="text-primary-foreground/80 font-inter text-xs">
+                📍 <strong>Endereço:</strong> {p.address}
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center gap-2 flex-wrap">
           <HealthBadge status={plan.health_status} />
           {plan.is_priority && <span className="px-2.5 py-1 rounded-lg text-xs font-inter font-semibold bg-accent text-accent-foreground">⭐ Prioridade</span>}
