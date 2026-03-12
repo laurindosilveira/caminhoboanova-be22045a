@@ -3,12 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   Search, ChevronDown, Filter, Users, CheckCircle, Clock, BookOpen,
   GraduationCap, CalendarDays, Zap, ChevronLeft, Phone, MapPin, Calendar, Star, AlertTriangle,
-  Trash2, Eye, X, ChevronRight, Church, History, Pencil, Save, Heart
+  Trash2, Eye, X, ChevronRight, Church, History, Pencil, Save, Heart, Lock, Unlock
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import ParticipantSheet from "./ParticipantSheet";
 
 type Activity = { id: string; type: string; title: string; points: number; order_num: number; subtitle: string | null };
 type Participant = {
@@ -988,13 +989,47 @@ type Props = {
 type StatusFilter = "todos" | "iniciando" | "andamento" | "avancado";
 
 export default function ParticipantsTab({ participants, activities, communities }: Props) {
+  const { profile } = useAuth();
   const [search, setSearch] = useState("");
   const [communityFilter, setCommunityFilter] = useState("todas");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("todos");
   const [yearFilter, setYearFilter] = useState<string>("todos");
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
 
+  // Course unlock management
+  const myArea = profile?.area ?? "";
+  const [courses, setCourses] = useState<{ id: string; title: string; order_num: number }[]>([]);
+  const [unlockedCourseIds, setUnlockedCourseIds] = useState<Set<string>>(new Set());
+  const [unlockLoading, setUnlockLoading] = useState<string | null>(null);
+
   const [statusReasons, setStatusReasons] = useState<Record<string, StatusReason[]>>({});
+
+  // Fetch course unlocks
+  useEffect(() => {
+    async function fetchCourseUnlocks() {
+      const [{ data: coursesData }, { data: unlocksData }] = await Promise.all([
+        supabase.from("courses").select("id, title, order_num").order("order_num"),
+        supabase.from("course_unlocks").select("course_id, area").eq("area", myArea),
+      ]);
+      setCourses(coursesData ?? []);
+      setUnlockedCourseIds(new Set((unlocksData ?? []).map((u: any) => u.course_id)));
+    }
+    if (myArea) fetchCourseUnlocks();
+  }, [myArea]);
+
+  async function toggleCourseUnlock(courseId: string) {
+    setUnlockLoading(courseId);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setUnlockLoading(null); return; }
+    if (unlockedCourseIds.has(courseId)) {
+      await supabase.from("course_unlocks").delete().eq("course_id", courseId).eq("area", myArea);
+      setUnlockedCourseIds(prev => { const n = new Set(prev); n.delete(courseId); return n; });
+    } else {
+      await supabase.from("course_unlocks").insert({ course_id: courseId, area: myArea, unlocked_by: user.id } as any);
+      setUnlockedCourseIds(prev => new Set(prev).add(courseId));
+    }
+    setUnlockLoading(null);
+  }
 
   // Fetch objective status reasons from DB
   useEffect(() => {
@@ -1088,7 +1123,7 @@ export default function ParticipantsTab({ participants, activities, communities 
   }, [participants, activities]);
 
   if (selectedParticipant) {
-    return <ParticipantDetail participant={selectedParticipant} activities={activities} onBack={() => setSelectedParticipant(null)} />;
+    return <ParticipantSheet participant={selectedParticipant} activities={activities} onBack={() => setSelectedParticipant(null)} />;
   }
 
   const filtered = participants.filter((p) => {
@@ -1104,6 +1139,53 @@ export default function ParticipantsTab({ participants, activities, communities 
 
   return (
     <div className="space-y-4">
+      {/* Course Unlock Management */}
+      {courses.length > 0 && (
+        <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <GraduationCap className="w-4 h-4 text-secondary" />
+            <p className="font-montserrat font-bold text-foreground text-sm">Liberação de Cursos</p>
+          </div>
+          <p className="font-inter text-xs text-muted-foreground mb-3">
+            Libere os cursos que sua turma poderá acessar.
+          </p>
+          <div className="space-y-2">
+            {courses.map(c => {
+              const isUnlocked = unlockedCourseIds.has(c.id);
+              const loading = unlockLoading === c.id;
+              return (
+                <div key={c.id} className={`flex items-center justify-between gap-3 p-3 rounded-xl border transition-colors ${
+                  isUnlocked ? "border-brand-green/30 bg-brand-green/5" : "border-border bg-muted/30"
+                }`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      isUnlocked ? "bg-brand-green/15" : "bg-muted"
+                    }`}>
+                      {isUnlocked ? <Unlock className="w-4 h-4 text-brand-green" /> : <Lock className="w-4 h-4 text-muted-foreground" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-montserrat font-bold text-foreground text-sm">Curso {c.order_num} — {c.title}</p>
+                      <p className="font-inter text-[10px] text-muted-foreground">
+                        {isUnlocked ? "✅ Liberado para a turma" : "🔒 Bloqueado"}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => toggleCourseUnlock(c.id)}
+                    disabled={loading}
+                    className={`px-3 py-1.5 rounded-lg font-inter text-xs font-semibold transition-colors flex-shrink-0 ${
+                      isUnlocked ? "bg-destructive/10 text-destructive hover:bg-destructive/20" : "bg-brand-green/10 text-brand-green hover:bg-brand-green/20"
+                    } disabled:opacity-40`}
+                  >
+                    {loading ? "..." : isUnlocked ? "Bloquear" : "Liberar"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="bg-card rounded-2xl border border-border p-4 space-y-3 shadow-sm">
         <div className="relative">

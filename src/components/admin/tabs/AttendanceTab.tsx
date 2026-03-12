@@ -11,12 +11,12 @@ import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 
-import AdminDiscipleshipTab from "./AdminDiscipleshipTab";
+
 import ClassroomSettingsTab from "./ClassroomSettingsTab";
 
 import ChallengesTab from "./ChallengesTab";
 
-type SubTab = "presenca" | "discipulado" | "sala" | "desafios";
+type SubTab = "presenca" | "sala" | "desafios";
 
 type Event = {
   id: string; title: string; event_date: string; type: string;
@@ -89,7 +89,7 @@ type AttendanceProps = {
 };
 
 export default function AttendanceTab({ participants, activities, communities, initialParticipant, onClearInitial, adminArea }: AttendanceProps) {
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>(initialParticipant ? "discipulado" : "presenca");
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>("presenca");
   const { profile } = useAuth();
   const { toast } = useToast();
   const [events, setEvents] = useState<Event[]>([]);
@@ -573,7 +573,6 @@ export default function AttendanceTab({ participants, activities, communities, i
 
   const SUB_TABS = [
     { id: "presenca" as SubTab, label: "Presença", icon: CheckCircle2 },
-    { id: "discipulado" as SubTab, label: "Discipulado", icon: Heart },
     { id: "desafios" as SubTab, label: "Desafios", icon: Star },
     { id: "sala" as SubTab, label: "Sala", icon: GraduationCap },
   ];
@@ -610,14 +609,6 @@ export default function AttendanceTab({ participants, activities, communities, i
       <div className="space-y-4">
         {renderCascadeDialog()}
         {renderSubTabs()}
-        {activeSubTab === "discipulado" && (
-          <AdminDiscipleshipTab
-            participants={participants}
-            activities={activities}
-            initialParticipant={initialParticipant}
-            onClearInitial={onClearInitial}
-          />
-        )}
         {activeSubTab === "sala" && <ClassroomSettingsTab />}
         
         {activeSubTab === "desafios" && <ChallengesTab />}
