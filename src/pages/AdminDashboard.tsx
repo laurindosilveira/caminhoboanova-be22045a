@@ -39,7 +39,7 @@ export default function AdminDashboard() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [plans, setPlans] = useState<Record<string, PlanInfo>>({});
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<AdminTab>(role === "lider" ? "courses" : "overview");
+  const [activeTab, setActiveTab] = useState<AdminTab>(role === "lider" ? "courses" : "attendance");
   const [highlightedParticipant, setHighlightedParticipant] = useState<Participant | null>(null);
 
   // Turma selection state
