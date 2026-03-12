@@ -29,7 +29,7 @@ type Turma = { id: string; name: string; area: string | null };
 type SubTab = "alunos" | "encontros" | "comunicacao" | "push";
 
 const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
-  { id: "alunos", label: "Alunos", icon: Users },
+  { id: "alunos", label: "Discípulos", icon: Users },
   { id: "encontros", label: "Encontros", icon: CalendarDays },
   { id: "comunicacao", label: "Avisos", icon: MessageSquare },
   { id: "push", label: "Push", icon: Bell },
