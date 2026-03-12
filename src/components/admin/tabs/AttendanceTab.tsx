@@ -203,7 +203,40 @@ export default function AttendanceTab({ participants, activities, communities, i
     setSavingWorship(null);
   }
 
-  async function loadEventData(eventId: string, eventDate: string, isEncontro: boolean) {
+  async function fetchPendingAttendance() {
+    const participantIds = participants.map(p => p.user_id);
+    if (participantIds.length === 0) return;
+    const { data } = await supabase
+      .from("attendance")
+      .select("id, event_id, user_id, status, justification, created_at")
+      .in("user_id", participantIds)
+      .in("status", ["pendente_presente", "pendente_falta"])
+      .order("created_at", { ascending: false });
+    if (!data || data.length === 0) { setPendingAttendance([]); return; }
+    const eventIds = [...new Set(data.map(a => a.event_id))];
+    const { data: eventsData } = await supabase.from("events").select("id, title, event_date").in("id", eventIds);
+    const eventsMap = new Map((eventsData ?? []).map(e => [e.id, e]));
+    const enriched = data.map(a => {
+      const p = participants.find(p => p.user_id === a.user_id);
+      const ev = eventsMap.get(a.event_id);
+      return { ...a, full_name: p?.full_name ?? "Desconhecido", community: p?.community ?? "", event_title: ev?.title ?? "Evento", event_date: ev?.event_date ?? a.created_at };
+    });
+    setPendingAttendance(enriched);
+  }
+
+  async function handleAttendanceApproval(id: string, action: "presente" | "justificou" | "rejeitado") {
+    setSavingAttendanceApproval(id);
+    if (action === "rejeitado") {
+      await supabase.from("attendance").delete().eq("id", id);
+      setPendingAttendance(prev => prev.filter(a => a.id !== id));
+    } else {
+      await supabase.from("attendance").update({ status: action }).eq("id", id);
+      setPendingAttendance(prev => prev.filter(a => a.id !== id));
+    }
+    toast({ title: action === "presente" ? "Presença aprovada ✅" : action === "justificou" ? "Falta justificada ✓" : "Solicitação rejeitada" });
+    setSavingAttendanceApproval(null);
+  }
+
     const eventParticipants = getParticipantsForEvent(events.find(e => e.id === eventId)!);
     const userIds = eventParticipants.map(p => p.user_id);
 
