@@ -6,11 +6,8 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 
 import AdminHeader from "@/components/admin/AdminHeader";
 import AdminBottomNav, { AdminTab } from "@/components/admin/AdminBottomNav";
-import OverviewTab from "@/components/admin/tabs/OverviewTab";
 import ParticipantsTab from "@/components/admin/tabs/ParticipantsTab";
 import CoursesTab from "@/components/admin/tabs/CoursesTab";
-import AdminDiscipleshipTab from "@/components/admin/tabs/AdminDiscipleshipTab";
-import ClassroomSettingsTab from "@/components/admin/tabs/ClassroomSettingsTab";
 import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
 import UsersTab from "@/components/admin/tabs/UsersTab";
 import LeaderGuideTab from "@/components/admin/tabs/LeaderGuideTab";
