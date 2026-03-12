@@ -210,7 +210,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveSubTab(tab.id)}
+                    onClick={() => scrollToTab(tab.id)}
                     className={`relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-inter font-semibold whitespace-nowrap transition-all duration-200 ${
                       isActive
                         ? "bg-primary text-primary-foreground shadow-sm scale-[1.02]"
