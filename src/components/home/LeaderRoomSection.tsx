@@ -335,7 +335,8 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
             </div>
           </div>
 
-          {/* Content */}
+          {/* Content - swipe enabled */}
+          <div ref={contentRef} className="touch-pan-y">
           {loading ? (
             <div className="bg-card border border-border rounded-2xl p-8 text-center">
               <p className="text-muted-foreground text-sm font-inter animate-pulse">Carregando dados...</p>
