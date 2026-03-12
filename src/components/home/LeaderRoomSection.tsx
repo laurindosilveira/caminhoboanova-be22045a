@@ -182,7 +182,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
       {expanded && (
         <div className={`${asTab ? "mt-2" : "mt-3"} animate-in slide-in-from-top-2 duration-200`}>
           {/* Sub-tab navigation */}
-          <div className="flex gap-1 overflow-x-auto pb-2 mb-3 scrollbar-hide">
+          <div className="flex gap-1.5 overflow-x-auto pb-2 mb-3 scrollbar-hide">
             {SUB_TABS.map(tab => {
               const Icon = tab.icon;
               const isActive = activeSubTab === tab.id;
@@ -191,16 +191,16 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                 <button
                   key={tab.id}
                   onClick={() => setActiveSubTab(tab.id)}
-                  className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-inter font-medium whitespace-nowrap transition-all ${
+                  className={`relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-inter font-semibold whitespace-nowrap transition-all ${
                     isActive
                       ? "bg-primary text-primary-foreground shadow-sm"
                       : "bg-card border border-border text-muted-foreground hover:bg-muted/50"
                   }`}
                 >
-                  <Icon className="w-3.5 h-3.5" />
+                  <Icon className="w-4 h-4" />
                   {tab.label}
                   {showBadge && (
-                    <span className={`w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center ${
+                    <span className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${
                       isActive ? "bg-primary-foreground text-primary" : "bg-destructive text-destructive-foreground"
                     }`}>
                       {waitingCount}
