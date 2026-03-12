@@ -299,14 +299,6 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <>
-            {activeTab === "overview" && (
-              <OverviewTab
-                participants={filteredParticipants}
-                activities={activities}
-                plans={plans}
-                onSelectParticipant={handleSelectParticipantFromOverview}
-              />
-            )}
             {activeTab === "attendance" && (
               <AttendanceTab
                 participants={filteredParticipants}
