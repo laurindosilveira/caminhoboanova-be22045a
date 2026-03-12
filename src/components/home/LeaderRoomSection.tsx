@@ -225,9 +225,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                       onAssigned={() => setWaitingCount(prev => Math.max(0, prev - 1))}
                     />
                   )}
-                  {/* Student list */}
-                  <StudentListSection />
-                  {/* Participants progress (merged from Encontros > Pessoas) */}
+                  {/* Unified student list with progress, edit, and personal info */}
                   <ParticipantsTab participants={participants} activities={activities} communities={communities} />
                 </div>
               )}
