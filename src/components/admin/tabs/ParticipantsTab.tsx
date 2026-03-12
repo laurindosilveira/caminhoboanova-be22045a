@@ -1139,6 +1139,53 @@ export default function ParticipantsTab({ participants, activities, communities 
 
   return (
     <div className="space-y-4">
+      {/* Course Unlock Management */}
+      {courses.length > 0 && (
+        <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <GraduationCap className="w-4 h-4 text-secondary" />
+            <p className="font-montserrat font-bold text-foreground text-sm">Liberação de Cursos</p>
+          </div>
+          <p className="font-inter text-xs text-muted-foreground mb-3">
+            Libere os cursos que sua turma poderá acessar.
+          </p>
+          <div className="space-y-2">
+            {courses.map(c => {
+              const isUnlocked = unlockedCourseIds.has(c.id);
+              const loading = unlockLoading === c.id;
+              return (
+                <div key={c.id} className={`flex items-center justify-between gap-3 p-3 rounded-xl border transition-colors ${
+                  isUnlocked ? "border-brand-green/30 bg-brand-green/5" : "border-border bg-muted/30"
+                }`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      isUnlocked ? "bg-brand-green/15" : "bg-muted"
+                    }`}>
+                      {isUnlocked ? <Unlock className="w-4 h-4 text-brand-green" /> : <Lock className="w-4 h-4 text-muted-foreground" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-montserrat font-bold text-foreground text-sm">Curso {c.order_num} — {c.title}</p>
+                      <p className="font-inter text-[10px] text-muted-foreground">
+                        {isUnlocked ? "✅ Liberado para a turma" : "🔒 Bloqueado"}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => toggleCourseUnlock(c.id)}
+                    disabled={loading}
+                    className={`px-3 py-1.5 rounded-lg font-inter text-xs font-semibold transition-colors flex-shrink-0 ${
+                      isUnlocked ? "bg-destructive/10 text-destructive hover:bg-destructive/20" : "bg-brand-green/10 text-brand-green hover:bg-brand-green/20"
+                    } disabled:opacity-40`}
+                  >
+                    {loading ? "..." : isUnlocked ? "Bloquear" : "Liberar"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="bg-card rounded-2xl border border-border p-4 space-y-3 shadow-sm">
         <div className="relative">
