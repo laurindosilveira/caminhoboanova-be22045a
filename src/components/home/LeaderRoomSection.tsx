@@ -221,6 +221,18 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
             </div>
           ) : (
             <>
+              {activeSubTab === "visao" && (
+                <OverviewTab
+                  participants={participants}
+                  activities={activities}
+                  plans={plans}
+                  onSelectParticipant={(p) => {
+                    setHighlightedParticipant(p);
+                    setActiveSubTab("encontros");
+                  }}
+                />
+              )}
+
               {activeSubTab === "alunos" && (
                 <div className="space-y-4">
                   {/* Waiting room inline when there are people waiting */}
