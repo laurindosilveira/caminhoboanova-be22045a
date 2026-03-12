@@ -103,7 +103,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
     container.addEventListener("scroll", handleTabsScroll, { passive: true });
     return () => container.removeEventListener("scroll", handleTabsScroll);
   }, [expanded, handleTabsScroll]);
-
+  const [loading, setLoading] = useState(false);
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
