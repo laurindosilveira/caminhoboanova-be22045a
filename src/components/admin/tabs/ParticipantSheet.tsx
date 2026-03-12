@@ -313,6 +313,33 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         tl.push({ date: first.created_at, type: "milestone", category: "marco", title: "💗 Primeira autoavaliação espiritual", detail: "Início do acompanhamento da vida espiritual", icon: "💗", severity: "positive" });
       }
 
+      // Challenge participations
+      const challengeParts = challengeParticipations ?? [];
+      if (challengeParts.length > 0) {
+        const challengeIds = challengeParts.map((cp: any) => cp.challenge_id);
+        const { data: challengesData } = await supabase.from("community_challenges").select("id, title, emoji").in("id", challengeIds);
+        const challengeMap = new Map((challengesData ?? []).map((c: any) => [c.id, c]));
+        challengeParts.forEach((cp: any) => {
+          const ch = challengeMap.get(cp.challenge_id);
+          if (!ch) return;
+          const date = cp.completed && cp.completed_at ? cp.completed_at : cp.joined_at;
+          const detail = [
+            cp.completed ? "✅ Concluído (+15 pts)" : "⏳ Participando",
+            cp.response_text ? `Resposta: "${cp.response_text.slice(0, 80)}"` : null,
+            cp.file_url ? "📎 Arquivo anexado" : null,
+          ].filter(Boolean).join(" · ");
+          tl.push({
+            date,
+            type: cp.completed ? "activity" : "attendance",
+            category: "progresso",
+            title: `${ch.emoji} Desafio: ${ch.title}`,
+            detail,
+            icon: ch.emoji,
+            severity: cp.completed ? "positive" : "neutral",
+          });
+        });
+      }
+
       tl.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setTimelineItems(tl);
       setLoading(false);
