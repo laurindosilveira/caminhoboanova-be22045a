@@ -10,7 +10,6 @@ import ParticipantsTab from "@/components/admin/tabs/ParticipantsTab";
 import CoursesTab from "@/components/admin/tabs/CoursesTab";
 import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
 import UsersTab from "@/components/admin/tabs/UsersTab";
-import LeaderGuideTab from "@/components/admin/tabs/LeaderGuideTab";
 import AdminPushTab from "@/components/admin/tabs/AdminPushTab";
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
@@ -302,7 +301,6 @@ export default function AdminDashboard() {
             )}
             {activeTab === "courses" && <CoursesTab />}
             {activeTab === "push" && <AdminPushTab turmas={turmas} />}
-            {activeTab === "guide" && <LeaderGuideTab />}
             {activeTab === "users" && <UsersTab onSelectTurma={(turma) => {
               const found = turmas.find(t => t.area === turma.area);
               if (found) {
