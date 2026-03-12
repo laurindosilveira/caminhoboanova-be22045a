@@ -11,6 +11,7 @@ import PushStatusList from "@/components/admin/tabs/PushStatusList";
 import LeaderWaitingRoom from "@/components/home/LeaderWaitingRoom";
 import CourseGuideSubTab from "@/components/admin/tabs/leader/CourseGuideSubTab";
 import OverviewTab from "@/components/admin/tabs/OverviewTab";
+import LeaderTurmaManagement from "@/components/admin/tabs/leader/LeaderTurmaManagement";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
