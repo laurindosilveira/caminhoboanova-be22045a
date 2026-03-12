@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock } from "lucide-react";
+import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock, BookOpen } from "lucide-react";
 
 import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
 import MessagesTab from "@/components/admin/tabs/MessagesTab";
@@ -9,6 +9,7 @@ import ParticipantsTab from "@/components/admin/tabs/ParticipantsTab";
 import AdminPushTab from "@/components/admin/tabs/AdminPushTab";
 import PushStatusList from "@/components/admin/tabs/PushStatusList";
 import LeaderWaitingRoom from "@/components/home/LeaderWaitingRoom";
+import CourseGuideSubTab from "@/components/admin/tabs/leader/CourseGuideSubTab";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
@@ -26,11 +27,12 @@ type Participant = {
 type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
 type Turma = { id: string; name: string; area: string | null };
 
-type SubTab = "alunos" | "encontros" | "comunicacao" | "push";
+type SubTab = "alunos" | "encontros" | "roteiros" | "comunicacao" | "push";
 
 const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
   { id: "alunos", label: "Discípulos", icon: Users },
   { id: "encontros", label: "Encontros", icon: CalendarDays },
+  { id: "roteiros", label: "Roteiros", icon: BookOpen },
   { id: "comunicacao", label: "Avisos", icon: MessageSquare },
   { id: "push", label: "Push", icon: Bell },
 ];
@@ -237,6 +239,10 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                   communities={communities}
                   adminArea={turmaArea}
                 />
+              )}
+
+              {activeSubTab === "roteiros" && (
+                <CourseGuideSubTab />
               )}
 
               {activeSubTab === "comunicacao" && (
