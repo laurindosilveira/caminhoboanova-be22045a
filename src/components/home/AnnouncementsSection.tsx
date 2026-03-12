@@ -157,15 +157,15 @@ export default function AnnouncementsSection() {
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-xl">✝️</span>
                 <div>
-                  <div className="flex items-center gap-1.5">
-                    <p className="font-montserrat font-bold text-card-foreground text-sm">{msg.title}</p>
+                  <p className="font-montserrat font-bold text-card-foreground text-sm">{msg.title}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <p className="text-muted-foreground text-xs font-inter">{timeAgo(msg.created_at)}</p>
                     {msg.turma_id && turmaNames[msg.turma_id] && (
-                      <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded text-[9px] font-inter font-semibold">
-                        {turmaNames[msg.turma_id]}
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-primary/10 text-primary rounded-full text-[9px] font-inter font-semibold leading-none">
+                        🎓 {turmaNames[msg.turma_id]}
                       </span>
                     )}
                   </div>
-                  <p className="text-muted-foreground text-xs font-inter">{timeAgo(msg.created_at)}</p>
                 </div>
               </div>
               {canDelete && (
