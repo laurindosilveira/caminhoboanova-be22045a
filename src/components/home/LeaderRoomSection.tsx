@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock, BookOpen, BarChart3, GraduationCap } from "lucide-react";
@@ -48,6 +48,20 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
   const [expanded, setExpanded] = useState(asTab);
   const [activeSubTab, setActiveSubTab] = useState<SubTab>("visao");
   const [highlightedParticipant, setHighlightedParticipant] = useState<Participant | null>(null);
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
+
+  const scrollToTab = useCallback((tabId: SubTab) => {
+    setActiveSubTab(tabId);
+    requestAnimationFrame(() => {
+      const container = tabsContainerRef.current;
+      if (!container) return;
+      const idx = SUB_TABS.findIndex(t => t.id === tabId);
+      const btn = container.children[idx] as HTMLElement | undefined;
+      if (!btn) return;
+      const scrollLeft = btn.offsetLeft - container.offsetWidth / 2 + btn.offsetWidth / 2;
+      container.scrollTo({ left: scrollLeft, behavior: "smooth" });
+    });
+  }, []);
   const [loading, setLoading] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -188,7 +202,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
         <div className={`${asTab ? "mt-2" : "mt-3"} animate-in slide-in-from-top-2 duration-200`}>
           {/* Sub-tab navigation */}
           <div className="relative">
-            <div className="flex gap-1.5 overflow-x-auto pb-1 mb-1 scrollbar-hide" id="leader-subtabs">
+            <div className="flex gap-1.5 overflow-x-auto pb-1 mb-1 scrollbar-hide" ref={tabsContainerRef}>
               {SUB_TABS.map(tab => {
                 const Icon = tab.icon;
                 const isActive = activeSubTab === tab.id;
@@ -196,7 +210,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveSubTab(tab.id)}
+                    onClick={() => scrollToTab(tab.id)}
                     className={`relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-inter font-semibold whitespace-nowrap transition-all duration-200 ${
                       isActive
                         ? "bg-primary text-primary-foreground shadow-sm scale-[1.02]"
@@ -222,7 +236,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
               {SUB_TABS.map((tab, i) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveSubTab(tab.id)}
+                  onClick={() => scrollToTab(tab.id)}
                   className="p-0.5"
                   aria-label={tab.label}
                 >
