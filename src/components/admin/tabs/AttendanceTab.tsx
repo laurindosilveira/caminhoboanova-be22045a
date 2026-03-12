@@ -13,10 +13,10 @@ import { Textarea } from "@/components/ui/textarea";
 import ParticipantsTab from "./ParticipantsTab";
 import AdminDiscipleshipTab from "./AdminDiscipleshipTab";
 import ClassroomSettingsTab from "./ClassroomSettingsTab";
-import MessagesTab from "./MessagesTab";
+
 import ChallengesTab from "./ChallengesTab";
 
-type SubTab = "presenca" | "pessoas" | "discipulado" | "sala" | "avisos" | "desafios";
+type SubTab = "presenca" | "pessoas" | "discipulado" | "sala" | "desafios";
 
 type Event = {
   id: string; title: string; event_date: string; type: string;
@@ -577,7 +577,6 @@ export default function AttendanceTab({ participants, activities, communities, i
     { id: "discipulado" as SubTab, label: "Discipulado", icon: Heart },
     { id: "desafios" as SubTab, label: "Desafios", icon: Star },
     { id: "sala" as SubTab, label: "Sala", icon: GraduationCap },
-    { id: "avisos" as SubTab, label: "Avisos", icon: MessageSquare },
   ];
 
   // Sub-tab navigation header (shared across all states)
@@ -624,7 +623,7 @@ export default function AttendanceTab({ participants, activities, communities, i
           />
         )}
         {activeSubTab === "sala" && <ClassroomSettingsTab />}
-        {activeSubTab === "avisos" && <MessagesTab />}
+        
         {activeSubTab === "desafios" && <ChallengesTab />}
       </div>
     );
