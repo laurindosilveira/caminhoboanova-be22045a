@@ -104,6 +104,7 @@ export function useUserStats(): UserStats {
       const attendancePoints = (attendance ?? []).filter(a => a.status === "presente").length * 10;
       const worshipPoints = (worshipData ?? []).length * 5;
       const achievementBonusPoints = (achievementUnlocks ?? []).reduce((sum, a) => sum + (a.bonus_points ?? 0), 0);
+      const challengePoints = (challengeData ?? []).length * 15;
 
       // Course completion bonus: +100 per fully completed course
       let courseBonusPoints = 0;
@@ -115,7 +116,7 @@ export function useUserStats(): UserStats {
         }
       });
 
-      const faithPoints = activityPoints + devotionalPoints + lessonStudyPoints + attendancePoints + worshipPoints + achievementBonusPoints + courseBonusPoints;
+      const faithPoints = activityPoints + devotionalPoints + lessonStudyPoints + attendancePoints + worshipPoints + achievementBonusPoints + courseBonusPoints + challengePoints;
 
       const faithLevel = calculateLevel(faithPoints);
       const streakDays = calculateStreak(allDates);
