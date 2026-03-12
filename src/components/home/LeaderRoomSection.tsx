@@ -276,6 +276,10 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                   </div>
                 </div>
               )}
+
+              {activeSubTab === "gerencia" && (
+                <LeaderTurmaManagement />
+              )}
             </>
           )}
         </div>
