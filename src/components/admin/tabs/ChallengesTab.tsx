@@ -154,7 +154,28 @@ export default function ChallengesTab() {
                 onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))}
                 className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
-            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="font-inter text-xs text-muted-foreground">Requisitos para conclusão</p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.requires_text}
+                onChange={e => setForm(f => ({ ...f, requires_text: e.target.checked }))}
+                className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+              />
+              <span className="font-inter text-sm text-foreground">Pedir resposta em texto</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.requires_file}
+                onChange={e => setForm(f => ({ ...f, requires_file: e.target.checked }))}
+                className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+              />
+              <span className="font-inter text-sm text-foreground">Pedir envio de foto/arquivo</span>
+            </label>
+          </div>
           </div>
           <div className="flex gap-2">
             <button
