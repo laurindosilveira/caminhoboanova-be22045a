@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import ParticipantsTab from "./ParticipantsTab";
 import AdminDiscipleshipTab from "./AdminDiscipleshipTab";
 import ClassroomSettingsTab from "./ClassroomSettingsTab";
-import MessagesTab from "./MessagesTab";
+
 import ChallengesTab from "./ChallengesTab";
 
 type SubTab = "presenca" | "pessoas" | "discipulado" | "sala" | "avisos" | "desafios";
