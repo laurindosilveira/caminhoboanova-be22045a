@@ -316,7 +316,7 @@ export default function AdminDashboard() {
               const found = turmas.find(t => t.area === turma.area);
               if (found) {
                 setSelectedTurma(found);
-                setActiveTab("overview");
+                setActiveTab("attendance");
               }
             }} />}
           </>
