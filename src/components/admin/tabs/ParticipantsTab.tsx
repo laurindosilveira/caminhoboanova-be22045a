@@ -334,6 +334,13 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       toast({ title: "Erro ao salvar", variant: "destructive" });
     } else {
       toast({ title: "Dados atualizados!" });
+      setLocalOverrides(prev => ({
+        ...prev,
+        full_name: editForm.full_name?.trim() || p.full_name,
+        phone: editForm.phone?.trim() || p.phone,
+        birth_date: editForm.birth_date || p.birth_date,
+        confirmation_year: editForm.confirmation_year ?? null,
+      }));
       setExtProfile(prev => ({
         ...prev, address: editForm.address?.trim(), father_name: editForm.father_name?.trim(),
         mother_name: editForm.mother_name?.trim(), father_phone: editForm.father_phone?.trim(),
