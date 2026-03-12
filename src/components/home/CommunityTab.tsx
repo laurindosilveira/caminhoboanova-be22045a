@@ -66,6 +66,10 @@ export default function CommunityTab() {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [birthdays, setBirthdays] = useState<BirthdayPerson[]>([]);
+  const [challengeResponses, setChallengeResponses] = useState<Record<string, string>>({});
+  const [challengeFiles, setChallengeFiles] = useState<Record<string, File | null>>({});
+  const [completingChallenge, setCompletingChallenge] = useState<string | null>(null);
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
     if (!profile) return;
