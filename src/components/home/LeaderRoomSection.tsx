@@ -253,6 +253,8 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                   activities={activities}
                   communities={communities}
                   adminArea={turmaArea}
+                  initialParticipant={highlightedParticipant}
+                  onClearInitial={() => setHighlightedParticipant(null)}
                 />
               )}
 
