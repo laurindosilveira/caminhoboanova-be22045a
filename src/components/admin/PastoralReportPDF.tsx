@@ -403,6 +403,8 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
               <p className="font-inter text-xs font-medium text-foreground">O relatório incluirá:</p>
               <div className="grid grid-cols-2 gap-1 text-xs font-inter text-muted-foreground">
                 <span>✅ Dados pessoais</span>
+                <span>✅ Foto do discípulo</span>
+                <span>✅ Dados dos pais</span>
                 <span>✅ Progresso ({pct}%)</span>
                 <span>✅ Presença ({attendanceData ? `${attendanceData.present}/${attendanceData.total}` : "—"})</span>
                 <span>✅ Autoavaliação</span>
