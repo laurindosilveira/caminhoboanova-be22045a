@@ -44,7 +44,8 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
   const canView = role === "admin" || role === "lider";
 
   const [expanded, setExpanded] = useState(asTab);
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>("alunos");
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>("visao");
+  const [highlightedParticipant, setHighlightedParticipant] = useState<Participant | null>(null);
   const [loading, setLoading] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
