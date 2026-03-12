@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock, BookOpen, BarChart3, GraduationCap } from "lucide-react";
