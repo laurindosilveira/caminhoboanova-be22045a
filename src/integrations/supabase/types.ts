@@ -171,24 +171,30 @@ export type Database = {
           challenge_id: string
           completed: boolean
           completed_at: string | null
+          file_url: string | null
           id: string
           joined_at: string
+          response_text: string | null
           user_id: string
         }
         Insert: {
           challenge_id: string
           completed?: boolean
           completed_at?: string | null
+          file_url?: string | null
           id?: string
           joined_at?: string
+          response_text?: string | null
           user_id: string
         }
         Update: {
           challenge_id?: string
           completed?: boolean
           completed_at?: string | null
+          file_url?: string | null
           id?: string
           joined_at?: string
+          response_text?: string | null
           user_id?: string
         }
         Relationships: [
@@ -211,6 +217,8 @@ export type Database = {
           emoji: string
           end_date: string
           id: string
+          requires_file: boolean
+          requires_text: boolean
           start_date: string
           title: string
         }
@@ -223,6 +231,8 @@ export type Database = {
           emoji?: string
           end_date: string
           id?: string
+          requires_file?: boolean
+          requires_text?: boolean
           start_date: string
           title: string
         }
@@ -235,6 +245,8 @@ export type Database = {
           emoji?: string
           end_date?: string
           id?: string
+          requires_file?: boolean
+          requires_text?: boolean
           start_date?: string
           title?: string
         }
