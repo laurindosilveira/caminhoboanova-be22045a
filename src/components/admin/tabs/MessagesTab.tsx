@@ -7,7 +7,7 @@ import { ptBR } from "date-fns/locale";
 
 type Message = {
   id: string; title: string; body: string;
-  area: string | null; community: string | null; created_at: string;
+  area: string | null; community: string | null; turma_id: string | null; created_at: string;
 };
 
 type Turma = { id: string; name: string; area: string | null };
