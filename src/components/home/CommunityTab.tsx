@@ -230,8 +230,36 @@ export default function CommunityTab() {
   async function completeChallenge(challengeId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from("challenge_participants").update({ completed: true, completed_at: new Date().toISOString() }).eq("challenge_id", challengeId).eq("user_id", user.id);
-    setChallenges(prev => prev.map(c => c.id === challengeId ? { ...c, has_completed: true } : c));
+    const ch = challenges.find(c => c.id === challengeId);
+    if (!ch) return;
+
+    // Validate requirements
+    if (ch.requires_text && !challengeResponses[challengeId]?.trim()) return;
+    if (ch.requires_file && !challengeFiles[challengeId]) return;
+
+    setCompletingChallenge(challengeId);
+
+    let fileUrl: string | null = null;
+    if (ch.requires_file && challengeFiles[challengeId]) {
+      const file = challengeFiles[challengeId]!;
+      const ext = file.name.split(".").pop();
+      const path = `${user.id}/${challengeId}.${ext}`;
+      const { error } = await supabase.storage.from("challenge-files").upload(path, file, { upsert: true });
+      if (!error) {
+        const { data: urlData } = supabase.storage.from("challenge-files").getPublicUrl(path);
+        fileUrl = urlData.publicUrl;
+      }
+    }
+
+    await supabase.from("challenge_participants").update({
+      completed: true,
+      completed_at: new Date().toISOString(),
+      response_text: challengeResponses[challengeId]?.trim() || null,
+      file_url: fileUrl,
+    }).eq("challenge_id", challengeId).eq("user_id", user.id);
+
+    setChallenges(prev => prev.map(c => c.id === challengeId ? { ...c, has_completed: true, response_text: challengeResponses[challengeId] || null, file_url: fileUrl } : c));
+    setCompletingChallenge(null);
   }
 
   function timeAgo(dateStr: string): string {
