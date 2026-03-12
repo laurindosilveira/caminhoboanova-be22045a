@@ -989,11 +989,18 @@ type Props = {
 type StatusFilter = "todos" | "iniciando" | "andamento" | "avancado";
 
 export default function ParticipantsTab({ participants, activities, communities }: Props) {
+  const { profile } = useAuth();
   const [search, setSearch] = useState("");
   const [communityFilter, setCommunityFilter] = useState("todas");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("todos");
   const [yearFilter, setYearFilter] = useState<string>("todos");
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
+
+  // Course unlock management
+  const myArea = profile?.area ?? "";
+  const [courses, setCourses] = useState<{ id: string; title: string; order_num: number }[]>([]);
+  const [unlockedCourseIds, setUnlockedCourseIds] = useState<Set<string>>(new Set());
+  const [unlockLoading, setUnlockLoading] = useState<string | null>(null);
 
   const [statusReasons, setStatusReasons] = useState<Record<string, StatusReason[]>>({});
 
