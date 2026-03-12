@@ -695,38 +695,138 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
           <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
             <span className="font-montserrat font-black text-primary text-2xl">{p.full_name.charAt(0).toUpperCase()}</span>
           </div>
-          <div>
+          <div className="flex-1">
             <h2 className="font-montserrat font-black text-foreground text-lg">{p.full_name}</h2>
             <span className={`px-2.5 py-0.5 rounded-lg text-xs font-inter font-medium ${status.bg} ${status.color}`}>{status.label}</span>
           </div>
+          {!editing && (
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={startEditing} title="Editar dados">
+              <Pencil className="w-4 h-4 text-muted-foreground" />
+            </Button>
+          )}
         </div>
 
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div className="flex items-center gap-2 text-muted-foreground font-inter">
-            <MapPin className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">{p.community} · {p.area}</span>
-          </div>
-          {p.phone && (
-            <div className="flex items-center gap-2 text-muted-foreground font-inter">
-              <Phone className="w-4 h-4 flex-shrink-0" />
-              <span>{p.phone}</span>
+        {editing ? (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Nome completo</label>
+              <Input value={editForm.full_name ?? ""} onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))} className="text-sm" />
             </div>
-          )}
-          {age !== null && (
-            <div className="flex items-center gap-2 text-muted-foreground font-inter">
-              <Calendar className="w-4 h-4 flex-shrink-0" />
-              <span>{age} anos</span>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Telefone</label>
+                <Input value={editForm.phone ?? ""} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} className="text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Data nasc.</label>
+                <Input type="date" value={editForm.birth_date ?? ""} onChange={e => setEditForm(f => ({ ...f, birth_date: e.target.value }))} className="text-sm" />
+              </div>
             </div>
-          )}
-          <div className="flex items-center gap-2 text-muted-foreground font-inter">
-            <GraduationCap className="w-4 h-4 flex-shrink-0" />
-            <span>{p.confirmation_year ? `${p.confirmation_year}º Ano` : <span className="text-destructive">Ano não definido</span>}</span>
+            <div>
+              <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Endereço</label>
+              <Input value={editForm.address ?? ""} onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))} className="text-sm" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Ano confirmação</label>
+                <Input type="number" min={1} max={3} value={editForm.confirmation_year ?? ""} onChange={e => setEditForm(f => ({ ...f, confirmation_year: e.target.value ? Number(e.target.value) : null }))} className="text-sm" placeholder="1 ou 2" />
+              </div>
+              <div>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Turma</label>
+                <select value={editForm.turma_id ?? ""} onChange={e => setEditForm(f => ({ ...f, turma_id: e.target.value || null }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <option value="">Sem turma</option>
+                  {turmas.map(t => <option key={t.id} value={t.id}>{t.name}{t.area ? ` (${t.area})` : ""}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Nome do pai</label>
+                <Input value={editForm.father_name ?? ""} onChange={e => setEditForm(f => ({ ...f, father_name: e.target.value }))} className="text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Tel. pai</label>
+                <Input value={editForm.father_phone ?? ""} onChange={e => setEditForm(f => ({ ...f, father_phone: e.target.value }))} className="text-sm" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Nome da mãe</label>
+                <Input value={editForm.mother_name ?? ""} onChange={e => setEditForm(f => ({ ...f, mother_name: e.target.value }))} className="text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Tel. mãe</label>
+                <Input value={editForm.mother_phone ?? ""} onChange={e => setEditForm(f => ({ ...f, mother_phone: e.target.value }))} className="text-sm" />
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => setEditing(false)} disabled={saving}>
+                <X className="w-3.5 h-3.5" /> Cancelar
+              </Button>
+              <Button size="sm" className="flex-1 gap-1.5" onClick={saveEdits} disabled={saving}>
+                <Save className="w-3.5 h-3.5" /> {saving ? "Salvando..." : "Salvar"}
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2 text-accent font-montserrat font-bold">
-            <Star className="w-4 h-4 flex-shrink-0" />
-            <span>{totalPts} pontos</span>
-          </div>
-        </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="flex items-center gap-2 text-muted-foreground font-inter">
+                <MapPin className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate">{p.community} · {p.area}</span>
+              </div>
+              {p.phone && (
+                <div className="flex items-center gap-2 text-muted-foreground font-inter">
+                  <Phone className="w-4 h-4 flex-shrink-0" />
+                  <a href={`tel:${p.phone}`} className="text-primary hover:underline">{p.phone}</a>
+                </div>
+              )}
+              {age !== null && (
+                <div className="flex items-center gap-2 text-muted-foreground font-inter">
+                  <Calendar className="w-4 h-4 flex-shrink-0" />
+                  <span>{age} anos</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2 text-muted-foreground font-inter">
+                <GraduationCap className="w-4 h-4 flex-shrink-0" />
+                <span>{p.confirmation_year ? `${p.confirmation_year}º Ano` : <span className="text-destructive">Ano não definido</span>}</span>
+              </div>
+              <div className="flex items-center gap-2 text-accent font-montserrat font-bold">
+                <Star className="w-4 h-4 flex-shrink-0" />
+                <span>{totalPts} pontos</span>
+              </div>
+              {extProfile.address && (
+                <div className="flex items-center gap-2 text-muted-foreground font-inter col-span-2">
+                  <MapPin className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">{extProfile.address}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Parents info */}
+            {(extProfile.father_name || extProfile.mother_name) && (
+              <div className="border-t border-border pt-3 mt-3 space-y-1">
+                {extProfile.father_name && (
+                  <div className="text-xs font-inter text-muted-foreground">
+                    <span className="font-semibold">Pai:</span> {extProfile.father_name}
+                    {extProfile.father_phone && (
+                      <a href={`tel:${extProfile.father_phone}`} className="ml-1.5 text-primary hover:underline">{extProfile.father_phone}</a>
+                    )}
+                  </div>
+                )}
+                {extProfile.mother_name && (
+                  <div className="text-xs font-inter text-muted-foreground">
+                    <span className="font-semibold">Mãe:</span> {extProfile.mother_name}
+                    {extProfile.mother_phone && (
+                      <a href={`tel:${extProfile.mother_phone}`} className="ml-1.5 text-primary hover:underline">{extProfile.mother_phone}</a>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Mini stats by real data */}
