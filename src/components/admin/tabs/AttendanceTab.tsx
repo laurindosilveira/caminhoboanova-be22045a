@@ -237,6 +237,7 @@ export default function AttendanceTab({ participants, activities, communities, i
     setSavingAttendanceApproval(null);
   }
 
+  async function loadEventData(eventId: string, eventDate: string, isEncontro: boolean) {
     const eventParticipants = getParticipantsForEvent(events.find(e => e.id === eventId)!);
     const userIds = eventParticipants.map(p => p.user_id);
 
