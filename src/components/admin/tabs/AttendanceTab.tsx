@@ -16,7 +16,7 @@ import ClassroomSettingsTab from "./ClassroomSettingsTab";
 
 import ChallengesTab from "./ChallengesTab";
 
-type SubTab = "presenca" | "pessoas" | "discipulado" | "sala" | "avisos" | "desafios";
+type SubTab = "presenca" | "pessoas" | "discipulado" | "sala" | "desafios";
 
 type Event = {
   id: string; title: string; event_date: string; type: string;
