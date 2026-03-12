@@ -1048,6 +1048,30 @@ export type Database = {
           },
         ]
       }
+      push_activation_reminders: {
+        Row: {
+          created_at: string
+          dismissed_at: string | null
+          id: string
+          sent_by: string
+          target_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dismissed_at?: string | null
+          id?: string
+          sent_by: string
+          target_user_id: string
+        }
+        Update: {
+          created_at?: string
+          dismissed_at?: string | null
+          id?: string
+          sent_by?: string
+          target_user_id?: string
+        }
+        Relationships: []
+      }
       push_subscriptions: {
         Row: {
           auth: string

@@ -21,6 +21,7 @@ import StreakRiskReminder from "@/components/home/StreakRiskReminder";
 import UserAgendaTab from "@/components/home/UserAgendaTab";
 import NotificationSettings from "@/components/home/NotificationSettings";
 import InstallAppCard from "@/components/home/InstallAppCard";
+import PushActivationBanner from "@/components/home/PushActivationBanner";
 import BottomNav, { type Tab } from "@/components/home/BottomNav";
 import { useUserStats } from "@/hooks/useUserStats";
 import { useAppNotifications } from "@/hooks/useAppNotifications";
@@ -66,6 +67,9 @@ export default function Index() {
         {/* ===== JORNADA ===== */}
         {activeTab === "jornada" && (
           <>
+            {/* Push activation reminder from leader */}
+            <PushActivationBanner />
+
             {/* Avisos do pastor no topo */}
             <div className="pt-4">
               <AnnouncementsSection />
