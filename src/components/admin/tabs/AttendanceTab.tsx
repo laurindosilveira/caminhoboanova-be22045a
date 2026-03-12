@@ -573,7 +573,6 @@ export default function AttendanceTab({ participants, activities, communities, i
 
   const SUB_TABS = [
     { id: "presenca" as SubTab, label: "Presença", icon: CheckCircle2 },
-    { id: "discipulado" as SubTab, label: "Discipulado", icon: Heart },
     { id: "desafios" as SubTab, label: "Desafios", icon: Star },
     { id: "sala" as SubTab, label: "Sala", icon: GraduationCap },
   ];
