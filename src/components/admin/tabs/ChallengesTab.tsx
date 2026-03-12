@@ -235,13 +235,23 @@ export default function ChallengesTab() {
                     <p className="text-muted-foreground font-inter text-[10px] mt-1">
                       {format(new Date(c.start_date + "T12:00:00"), "d MMM", { locale: ptBR })} — {format(new Date(c.end_date + "T12:00:00"), "d MMM yyyy", { locale: ptBR })}
                     </p>
-                    <div className="flex items-center gap-3 mt-1.5">
+                    <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                       <span className="flex items-center gap-1 text-xs font-inter text-muted-foreground">
                         <Users className="w-3 h-3" /> {c.participant_count} participante{c.participant_count !== 1 ? "s" : ""}
                       </span>
                       <span className="flex items-center gap-1 text-xs font-inter text-brand-green">
                         <Trophy className="w-3 h-3" /> {c.completed_count} concluíra{c.completed_count !== 1 ? "m" : ""}
                       </span>
+                      {c.requires_text && (
+                        <span className="flex items-center gap-1 text-[10px] font-inter text-primary">
+                          <MessageSquare className="w-2.5 h-2.5" /> Texto
+                        </span>
+                      )}
+                      {c.requires_file && (
+                        <span className="flex items-center gap-1 text-[10px] font-inter text-primary">
+                          <FileText className="w-2.5 h-2.5" /> Arquivo
+                        </span>
+                      )}
                     </div>
                   </div>
                   <button
