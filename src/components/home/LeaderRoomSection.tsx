@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Users, BarChart3, CalendarDays, MessageSquare, Megaphone, ChevronDown, ChevronUp, Clock } from "lucide-react";
+import { Users, CalendarDays, MessageSquare, ChevronDown, ChevronUp, Clock } from "lucide-react";
 import StudentListSection from "@/components/home/StudentListSection";
-import OverviewTab from "@/components/admin/tabs/OverviewTab";
 import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
 import MessagesTab from "@/components/admin/tabs/MessagesTab";
 import AdminPushTab from "@/components/admin/tabs/AdminPushTab";
 import LeaderWaitingRoom from "@/components/home/LeaderWaitingRoom";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
 const AREA_2_COMMUNITIES = ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"];
@@ -24,15 +24,12 @@ type Participant = {
 type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
 type Turma = { id: string; name: string; area: string | null };
 
-type SubTab = "alunos" | "visao" | "encontros" | "avisos" | "push" | "espera";
+type SubTab = "alunos" | "encontros" | "comunicacao";
 
 const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
   { id: "alunos", label: "Alunos", icon: Users },
-  { id: "espera", label: "Espera", icon: Clock },
-  { id: "visao", label: "Visão", icon: BarChart3 },
   { id: "encontros", label: "Encontros", icon: CalendarDays },
-  { id: "avisos", label: "Avisos", icon: MessageSquare },
-  { id: "push", label: "Push", icon: Megaphone },
+  { id: "comunicacao", label: "Comunicação", icon: MessageSquare },
 ];
 
 export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }) {
