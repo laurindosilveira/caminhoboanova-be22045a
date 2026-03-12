@@ -1,11 +1,10 @@
 import { BarChart3, BookOpen, UserCheck, Shield, ClipboardList, Megaphone } from "lucide-react";
 
-export type AdminTab = "overview" | "attendance" | "courses" | "guide" | "users" | "push";
+export type AdminTab = "attendance" | "courses" | "guide" | "users" | "push";
 
 type TabDef = { id: AdminTab; label: string; icon: typeof BarChart3 };
 
 const ALL_TABS: TabDef[] = [
-  { id: "overview", label: "Visão", icon: BarChart3 },
   { id: "attendance", label: "Encontros", icon: UserCheck },
   { id: "courses", label: "Cursos", icon: BookOpen },
   { id: "push", label: "Push", icon: Megaphone },

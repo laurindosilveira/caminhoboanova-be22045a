@@ -6,11 +6,8 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 
 import AdminHeader from "@/components/admin/AdminHeader";
 import AdminBottomNav, { AdminTab } from "@/components/admin/AdminBottomNav";
-import OverviewTab from "@/components/admin/tabs/OverviewTab";
 import ParticipantsTab from "@/components/admin/tabs/ParticipantsTab";
 import CoursesTab from "@/components/admin/tabs/CoursesTab";
-import AdminDiscipleshipTab from "@/components/admin/tabs/AdminDiscipleshipTab";
-import ClassroomSettingsTab from "@/components/admin/tabs/ClassroomSettingsTab";
 import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
 import UsersTab from "@/components/admin/tabs/UsersTab";
 import LeaderGuideTab from "@/components/admin/tabs/LeaderGuideTab";
@@ -39,8 +36,8 @@ export default function AdminDashboard() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [plans, setPlans] = useState<Record<string, PlanInfo>>({});
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<AdminTab>(role === "lider" ? "courses" : "overview");
-  const [highlightedParticipant, setHighlightedParticipant] = useState<Participant | null>(null);
+  const [activeTab, setActiveTab] = useState<AdminTab>(role === "lider" ? "courses" : "attendance");
+  
 
   // Turma selection state
   const [turmas, setTurmas] = useState<Turma[]>([]);
@@ -112,10 +109,6 @@ export default function AdminDashboard() {
     setLoading(false);
   }
 
-  function handleSelectParticipantFromOverview(participant: Participant) {
-    setHighlightedParticipant(participant);
-    setActiveTab("attendance");
-  }
 
   // Filter participants by selected turma
   const filteredParticipants = selectedTurma
@@ -299,21 +292,11 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <>
-            {activeTab === "overview" && (
-              <OverviewTab
-                participants={filteredParticipants}
-                activities={activities}
-                plans={plans}
-                onSelectParticipant={handleSelectParticipantFromOverview}
-              />
-            )}
             {activeTab === "attendance" && (
               <AttendanceTab
                 participants={filteredParticipants}
                 activities={activities}
                 communities={communities}
-                initialParticipant={highlightedParticipant}
-                onClearInitial={() => setHighlightedParticipant(null)}
                 adminArea={selectedTurma.area ?? profile?.area ?? ""}
               />
             )}
@@ -324,7 +307,7 @@ export default function AdminDashboard() {
               const found = turmas.find(t => t.area === turma.area);
               if (found) {
                 setSelectedTurma(found);
-                setActiveTab("overview");
+                setActiveTab("attendance");
               }
             }} />}
           </>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock, BookOpen } from "lucide-react";
+import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock, BookOpen, BarChart3 } from "lucide-react";
 
 import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
 import MessagesTab from "@/components/admin/tabs/MessagesTab";
@@ -10,6 +10,7 @@ import AdminPushTab from "@/components/admin/tabs/AdminPushTab";
 import PushStatusList from "@/components/admin/tabs/PushStatusList";
 import LeaderWaitingRoom from "@/components/home/LeaderWaitingRoom";
 import CourseGuideSubTab from "@/components/admin/tabs/leader/CourseGuideSubTab";
+import OverviewTab from "@/components/admin/tabs/OverviewTab";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
@@ -27,9 +28,10 @@ type Participant = {
 type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
 type Turma = { id: string; name: string; area: string | null };
 
-type SubTab = "alunos" | "encontros" | "roteiros" | "comunicacao" | "push";
+type SubTab = "visao" | "alunos" | "encontros" | "roteiros" | "comunicacao" | "push";
 
 const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
+  { id: "visao", label: "Visão", icon: BarChart3 },
   { id: "alunos", label: "Discípulos", icon: Users },
   { id: "encontros", label: "Encontros", icon: CalendarDays },
   { id: "roteiros", label: "Roteiros", icon: BookOpen },
@@ -42,7 +44,8 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
   const canView = role === "admin" || role === "lider";
 
   const [expanded, setExpanded] = useState(asTab);
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>("alunos");
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>("visao");
+  const [highlightedParticipant, setHighlightedParticipant] = useState<Participant | null>(null);
   const [loading, setLoading] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -218,6 +221,18 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
             </div>
           ) : (
             <>
+              {activeSubTab === "visao" && (
+                <OverviewTab
+                  participants={participants}
+                  activities={activities}
+                  plans={plans}
+                  onSelectParticipant={(p) => {
+                    setHighlightedParticipant(p);
+                    setActiveSubTab("encontros");
+                  }}
+                />
+              )}
+
               {activeSubTab === "alunos" && (
                 <div className="space-y-4">
                   {/* Waiting room inline when there are people waiting */}
@@ -238,6 +253,8 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                   activities={activities}
                   communities={communities}
                   adminArea={turmaArea}
+                  initialParticipant={highlightedParticipant}
+                  onClearInitial={() => setHighlightedParticipant(null)}
                 />
               )}
 
