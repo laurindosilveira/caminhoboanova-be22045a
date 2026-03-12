@@ -256,13 +256,34 @@ export default function ChallengesTab() {
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleDelete(c.id)}
-                    className="w-7 h-7 rounded-lg bg-destructive/10 flex items-center justify-center flex-shrink-0"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                  </button>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => setExpandedChallenge(expandedChallenge === c.id ? null : c.id)}
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                        expandedChallenge === c.id ? "bg-primary/15 text-primary" : "bg-primary/10 text-primary hover:bg-primary/20"
+                      }`}
+                      title="Ver participantes"
+                    >
+                      {expandedChallenge === c.id ? <ChevronUp className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(c.id)}
+                      className="w-7 h-7 rounded-lg bg-destructive/10 flex items-center justify-center"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                    </button>
+                  </div>
                 </div>
+
+                {expandedChallenge === c.id && (
+                  <div className="mt-3 border-t border-border pt-3">
+                    <ChallengeParticipantsPanel
+                      challengeId={c.id}
+                      requiresText={c.requires_text}
+                      requiresFile={c.requires_file}
+                    />
+                  </div>
+                )}
               </div>
             );
           })}
