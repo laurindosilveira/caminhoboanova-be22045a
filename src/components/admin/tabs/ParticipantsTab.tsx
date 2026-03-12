@@ -152,7 +152,9 @@ function AuditLogSection({ targetUserId, userName }: { targetUserId: string; use
 // ─── ParticipantDetail (rebuilt with REAL data) ──────────
 type DetailProps = { participant: Participant; activities: Activity[]; onBack: () => void };
 
-function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) {
+function ParticipantDetail({ participant: pOriginal, activities, onBack }: DetailProps) {
+  const [localOverrides, setLocalOverrides] = useState<Partial<Participant>>({});
+  const p = { ...pOriginal, ...localOverrides };
   const [typeFilter, setTypeFilter] = useState("todos");
   const [loading, setLoading] = useState(true);
   const [showAuditLog, setShowAuditLog] = useState(false);
@@ -332,6 +334,13 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
       toast({ title: "Erro ao salvar", variant: "destructive" });
     } else {
       toast({ title: "Dados atualizados!" });
+      setLocalOverrides(prev => ({
+        ...prev,
+        full_name: editForm.full_name?.trim() || p.full_name,
+        phone: editForm.phone?.trim() || p.phone,
+        birth_date: editForm.birth_date || p.birth_date,
+        confirmation_year: editForm.confirmation_year ?? null,
+      }));
       setExtProfile(prev => ({
         ...prev, address: editForm.address?.trim(), father_name: editForm.father_name?.trim(),
         mother_name: editForm.mother_name?.trim(), father_phone: editForm.father_phone?.trim(),
