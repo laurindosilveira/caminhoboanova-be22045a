@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Plus, Trash2, Users, Trophy, FileText, MessageSquare } from "lucide-react";
+import { Plus, Trash2, Users, Trophy, FileText, MessageSquare, Eye, ChevronDown, ChevronUp } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import ChallengeParticipantsPanel from "./ChallengeParticipantsPanel";
 
 type Challenge = {
   id: string;
@@ -27,6 +28,7 @@ export default function ChallengesTab() {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [expandedChallenge, setExpandedChallenge] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     title: "", description: "", emoji: "📖", start_date: "", end_date: "",
@@ -254,13 +256,34 @@ export default function ChallengesTab() {
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleDelete(c.id)}
-                    className="w-7 h-7 rounded-lg bg-destructive/10 flex items-center justify-center flex-shrink-0"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                  </button>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => setExpandedChallenge(expandedChallenge === c.id ? null : c.id)}
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                        expandedChallenge === c.id ? "bg-primary/15 text-primary" : "bg-primary/10 text-primary hover:bg-primary/20"
+                      }`}
+                      title="Ver participantes"
+                    >
+                      {expandedChallenge === c.id ? <ChevronUp className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(c.id)}
+                      className="w-7 h-7 rounded-lg bg-destructive/10 flex items-center justify-center"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                    </button>
+                  </div>
                 </div>
+
+                {expandedChallenge === c.id && (
+                  <div className="mt-3 border-t border-border pt-3">
+                    <ChallengeParticipantsPanel
+                      challengeId={c.id}
+                      requiresText={c.requires_text}
+                      requiresFile={c.requires_file}
+                    />
+                  </div>
+                )}
               </div>
             );
           })}
