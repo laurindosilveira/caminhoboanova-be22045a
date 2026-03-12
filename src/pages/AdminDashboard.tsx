@@ -297,8 +297,6 @@ export default function AdminDashboard() {
                 participants={filteredParticipants}
                 activities={activities}
                 communities={communities}
-                initialParticipant={highlightedParticipant}
-                onClearInitial={() => setHighlightedParticipant(null)}
                 adminArea={selectedTurma.area ?? profile?.area ?? ""}
               />
             )}
