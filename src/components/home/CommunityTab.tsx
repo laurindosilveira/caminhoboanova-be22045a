@@ -135,11 +135,12 @@ export default function CommunityTab() {
       const cIds = (challengesData ?? []).map((c: any) => c.id);
       let participantsData: any[] = [];
       if (cIds.length > 0) {
-        const { data } = await supabase.from("challenge_participants").select("challenge_id, user_id, completed").in("challenge_id", cIds);
+        const { data } = await supabase.from("challenge_participants").select("challenge_id, user_id, completed, response_text, file_url").in("challenge_id", cIds);
         participantsData = data ?? [];
       }
       const mapped: Challenge[] = (challengesData ?? []).map((c: any) => {
         const parts = participantsData.filter((p: any) => p.challenge_id === c.id);
+        const myPart = user ? parts.find((p: any) => p.user_id === user.id) : null;
         return {
           id: c.id,
           title: c.title,
@@ -148,8 +149,12 @@ export default function CommunityTab() {
           start_date: c.start_date,
           end_date: c.end_date,
           participant_count: parts.length,
-          has_joined: user ? parts.some((p: any) => p.user_id === user.id) : false,
-          has_completed: user ? parts.some((p: any) => p.user_id === user.id && p.completed) : false,
+          has_joined: !!myPart,
+          has_completed: myPart?.completed ?? false,
+          requires_text: c.requires_text ?? false,
+          requires_file: c.requires_file ?? false,
+          response_text: myPart?.response_text ?? null,
+          file_url: myPart?.file_url ?? null,
         };
       });
       setChallenges(mapped);
