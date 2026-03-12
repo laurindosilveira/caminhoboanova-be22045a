@@ -7,7 +7,7 @@ import { ptBR } from "date-fns/locale";
 
 type Message = {
   id: string; title: string; body: string;
-  area: string | null; community: string | null; created_at: string;
+  area: string | null; community: string | null; turma_id: string | null; created_at: string;
 };
 
 type Turma = { id: string; name: string; area: string | null };
@@ -45,13 +45,15 @@ export default function MessagesTab() {
     const { data: { user } } = await supabase.auth.getUser();
     const msgArea = form.target === "all" ? null : form.target === "turma" ? null : profile?.area ?? null;
     const msgCommunity = form.target === "community" ? form.community : null;
+    const msgTurmaId = form.target === "turma" ? form.turmaId : null;
     await supabase.from("messages").insert({
       title: form.title,
       body: form.body,
       area: msgArea,
       community: msgCommunity,
+      turma_id: msgTurmaId,
       sent_by: user?.id,
-    });
+    } as any);
 
     // Send push notification about the new announcement
     try {
@@ -183,6 +185,10 @@ export default function MessagesTab() {
                       <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-md text-[10px] font-inter font-medium">{msg.community}</span>
                     ) : msg.area ? (
                       <span className="px-2 py-0.5 bg-secondary/10 text-secondary rounded-md text-[10px] font-inter font-medium">{msg.area}</span>
+                    ) : (msg as any).turma_id ? (
+                      <span className="px-2 py-0.5 bg-accent/10 text-accent rounded-md text-[10px] font-inter font-medium">
+                        {turmas.find(t => t.id === (msg as any).turma_id)?.name ?? "Turma"}
+                      </span>
                     ) : (
                       <span className="px-2 py-0.5 bg-muted text-muted-foreground rounded-md text-[10px] font-inter font-medium">Todos</span>
                     )}

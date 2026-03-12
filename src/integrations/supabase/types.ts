@@ -840,6 +840,7 @@ export type Database = {
           id: string
           sent_by: string | null
           title: string
+          turma_id: string | null
         }
         Insert: {
           area?: string | null
@@ -849,6 +850,7 @@ export type Database = {
           id?: string
           sent_by?: string | null
           title: string
+          turma_id?: string | null
         }
         Update: {
           area?: string | null
@@ -858,8 +860,17 @@ export type Database = {
           id?: string
           sent_by?: string | null
           title?: string
+          turma_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "messages_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notification_preferences: {
         Row: {

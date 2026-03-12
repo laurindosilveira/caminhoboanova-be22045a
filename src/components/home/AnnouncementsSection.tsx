@@ -15,6 +15,7 @@ interface Message {
   title: string;
   body: string;
   created_at: string;
+  turma_id: string | null;
 }
 
 interface ReactionDetail {
@@ -44,6 +45,7 @@ export default function AnnouncementsSection() {
   const [showUsers, setShowUsers] = useState<{ messageId: string; emoji: string } | null>(null);
   const [reactionUsers, setReactionUsers] = useState<string[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [turmaNames, setTurmaNames] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!profile) return;
@@ -53,12 +55,23 @@ export default function AnnouncementsSection() {
       const [{ data }, { data: reactionsData }] = await Promise.all([
         supabase
           .from("messages")
-          .select("id, title, body, created_at")
+          .select("id, title, body, created_at, turma_id")
           .order("created_at", { ascending: false })
           .limit(5),
         supabase.from("message_reactions").select("message_id, emoji, user_id"),
       ]);
-      setMessages(data ?? []);
+      const msgs = (data ?? []) as Message[];
+      setMessages(msgs);
+
+      // Fetch turma names for turma-targeted messages
+      const turmaIds = [...new Set(msgs.filter(m => m.turma_id).map(m => m.turma_id!))];
+      if (turmaIds.length > 0) {
+        const { data: turmaData } = await supabase.from("turmas").select("id, name").in("id", turmaIds);
+        const tMap: Record<string, string> = {};
+        (turmaData ?? []).forEach(t => { tMap[t.id] = t.name; });
+        setTurmaNames(tMap);
+      }
+
       const rMap: ReactionMap = {};
       (reactionsData ?? []).forEach((r: any) => {
         if (!rMap[r.message_id]) rMap[r.message_id] = {};
@@ -144,7 +157,14 @@ export default function AnnouncementsSection() {
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-xl">✝️</span>
                 <div>
-                  <p className="font-montserrat font-bold text-card-foreground text-sm">{msg.title}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-montserrat font-bold text-card-foreground text-sm">{msg.title}</p>
+                    {msg.turma_id && turmaNames[msg.turma_id] && (
+                      <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded text-[9px] font-inter font-semibold">
+                        {turmaNames[msg.turma_id]}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-muted-foreground text-xs font-inter">{timeAgo(msg.created_at)}</p>
                 </div>
               </div>
