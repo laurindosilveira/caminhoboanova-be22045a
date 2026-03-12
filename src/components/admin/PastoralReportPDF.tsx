@@ -162,9 +162,35 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
         y += Math.max(6, lines.length * 4.5);
       };
 
+      // Try to load avatar image
+      let avatarDataUrl: string | null = null;
+      if (p.avatar_url) {
+        try {
+          const response = await fetch(p.avatar_url);
+          const blob = await response.blob();
+          avatarDataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+        } catch (e) {
+          console.warn("Could not load avatar for PDF:", e);
+        }
+      }
+
       // Header
       doc.setFillColor(31, 60, 136);
       doc.rect(0, 0, W, 38, "F");
+
+      // Avatar in header
+      if (avatarDataUrl) {
+        try {
+          doc.addImage(avatarDataUrl, "JPEG", W - margin - 22, 6, 26, 26);
+        } catch (e) {
+          console.warn("Could not embed avatar image:", e);
+        }
+      }
+
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(255, 255, 255);
@@ -184,6 +210,16 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
       addRow("Idade", age ? `${age} anos` : "—");
       addRow("Telefone", p.phone);
       addRow("Data de nascimento", p.birth_date ? new Date(p.birth_date).toLocaleDateString("pt-BR") : "—");
+      if (p.address) addRow("Endereco", p.address);
+
+      // 2. Dados dos pais / responsáveis
+      if (p.father_name || p.mother_name) {
+        addSection("PAIS / RESPONSAVEIS");
+        if (p.father_name) addRow("Pai", p.father_name);
+        if (p.father_phone) addRow("Telefone do pai", p.father_phone);
+        if (p.mother_name) addRow("Mae", p.mother_name);
+        if (p.mother_phone) addRow("Telefone da mae", p.mother_phone);
+      }
 
       // 2. Aptidão
       addSection("APTIDAO PARA A PROFISSAO DE FE");
