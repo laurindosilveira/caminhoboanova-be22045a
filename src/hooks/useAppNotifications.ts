@@ -215,10 +215,10 @@ async function checkNewMessages() {
       .gte("created_at", since)
       .limit(1);
 
-    if (count && count > 0 && data && data.length > 0) {
+    if (count && count > 0) {
       await sendNotification(
-        "💬 Nova mensagem do pastor!",
-        count === 1 ? data[0].title : `Você tem ${count} novas mensagens. Confira!`
+        "📢 Novo aviso no app!",
+        "Você tem um novo comunicado. Abra o app para conferir!"
       );
       markSentToday("mensagens");
     }
