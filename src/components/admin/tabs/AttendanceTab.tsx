@@ -11,7 +11,7 @@ import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 
-import AdminDiscipleshipTab from "./AdminDiscipleshipTab";
+
 import ClassroomSettingsTab from "./ClassroomSettingsTab";
 
 import ChallengesTab from "./ChallengesTab";
