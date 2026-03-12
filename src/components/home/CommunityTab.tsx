@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageCircle, GraduationCap, Cake, Sparkles, Send, Trash2, Target, Check, Users, ClipboardList } from "lucide-react";
+import { MessageCircle, GraduationCap, Cake, Sparkles, Send, Trash2, Target, Check, Users, ClipboardList, Upload, Image } from "lucide-react";
 import ClassroomTab from "./ClassroomTab";
 import AnnouncementsSection from "./AnnouncementsSection";
 import LeaderRoomSection from "./LeaderRoomSection";
@@ -41,6 +41,10 @@ interface Challenge {
   participant_count: number;
   has_joined: boolean;
   has_completed: boolean;
+  requires_text: boolean;
+  requires_file: boolean;
+  response_text: string | null;
+  file_url: string | null;
 }
 
 interface BirthdayPerson {
@@ -62,6 +66,10 @@ export default function CommunityTab() {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [birthdays, setBirthdays] = useState<BirthdayPerson[]>([]);
+  const [challengeResponses, setChallengeResponses] = useState<Record<string, string>>({});
+  const [challengeFiles, setChallengeFiles] = useState<Record<string, File | null>>({});
+  const [completingChallenge, setCompletingChallenge] = useState<string | null>(null);
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
     if (!profile) return;
@@ -131,11 +139,12 @@ export default function CommunityTab() {
       const cIds = (challengesData ?? []).map((c: any) => c.id);
       let participantsData: any[] = [];
       if (cIds.length > 0) {
-        const { data } = await supabase.from("challenge_participants").select("challenge_id, user_id, completed").in("challenge_id", cIds);
+        const { data } = await supabase.from("challenge_participants").select("challenge_id, user_id, completed, response_text, file_url").in("challenge_id", cIds);
         participantsData = data ?? [];
       }
       const mapped: Challenge[] = (challengesData ?? []).map((c: any) => {
         const parts = participantsData.filter((p: any) => p.challenge_id === c.id);
+        const myPart = user ? parts.find((p: any) => p.user_id === user.id) : null;
         return {
           id: c.id,
           title: c.title,
@@ -144,8 +153,12 @@ export default function CommunityTab() {
           start_date: c.start_date,
           end_date: c.end_date,
           participant_count: parts.length,
-          has_joined: user ? parts.some((p: any) => p.user_id === user.id) : false,
-          has_completed: user ? parts.some((p: any) => p.user_id === user.id && p.completed) : false,
+          has_joined: !!myPart,
+          has_completed: myPart?.completed ?? false,
+          requires_text: c.requires_text ?? false,
+          requires_file: c.requires_file ?? false,
+          response_text: myPart?.response_text ?? null,
+          file_url: myPart?.file_url ?? null,
         };
       });
       setChallenges(mapped);
@@ -217,8 +230,36 @@ export default function CommunityTab() {
   async function completeChallenge(challengeId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from("challenge_participants").update({ completed: true, completed_at: new Date().toISOString() }).eq("challenge_id", challengeId).eq("user_id", user.id);
-    setChallenges(prev => prev.map(c => c.id === challengeId ? { ...c, has_completed: true } : c));
+    const ch = challenges.find(c => c.id === challengeId);
+    if (!ch) return;
+
+    // Validate requirements
+    if (ch.requires_text && !challengeResponses[challengeId]?.trim()) return;
+    if (ch.requires_file && !challengeFiles[challengeId]) return;
+
+    setCompletingChallenge(challengeId);
+
+    let fileUrl: string | null = null;
+    if (ch.requires_file && challengeFiles[challengeId]) {
+      const file = challengeFiles[challengeId]!;
+      const ext = file.name.split(".").pop();
+      const path = `${user.id}/${challengeId}.${ext}`;
+      const { error } = await supabase.storage.from("challenge-files").upload(path, file, { upsert: true });
+      if (!error) {
+        const { data: urlData } = supabase.storage.from("challenge-files").getPublicUrl(path);
+        fileUrl = urlData.publicUrl;
+      }
+    }
+
+    await supabase.from("challenge_participants").update({
+      completed: true,
+      completed_at: new Date().toISOString(),
+      response_text: challengeResponses[challengeId]?.trim() || null,
+      file_url: fileUrl,
+    }).eq("challenge_id", challengeId).eq("user_id", user.id);
+
+    setChallenges(prev => prev.map(c => c.id === challengeId ? { ...c, has_completed: true, response_text: challengeResponses[challengeId] || null, file_url: fileUrl } : c));
+    setCompletingChallenge(null);
   }
 
   function timeAgo(dateStr: string): string {
@@ -328,27 +369,79 @@ export default function CommunityTab() {
                               ⏳ {daysLeft} dia{daysLeft !== 1 ? "s" : ""} restante{daysLeft !== 1 ? "s" : ""}
                             </span>
                           </div>
-                          <div className="mt-2.5">
+                          <div className="mt-2.5 space-y-2">
                             {ch.has_completed ? (
-                              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-green/10">
-                                <Check className="w-3.5 h-3.5 text-brand-green" />
-                                <span className="font-inter text-xs font-semibold text-brand-green">Desafio concluído ✓</span>
+                              <div>
+                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-green/10">
+                                  <Check className="w-3.5 h-3.5 text-brand-green" />
+                                  <span className="font-inter text-xs font-semibold text-brand-green">Desafio concluído ✓ (+15 pts)</span>
+                                </div>
+                                {ch.response_text && (
+                                  <p className="text-muted-foreground font-inter text-xs mt-1.5 italic">"{ch.response_text}"</p>
+                                )}
+                                {ch.file_url && (
+                                  <a href={ch.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary text-xs font-inter mt-1 hover:underline">
+                                    <Image className="w-3 h-3" /> Ver arquivo enviado
+                                  </a>
+                                )}
                               </div>
                             ) : ch.has_joined ? (
-                              <button
-                                onClick={() => completeChallenge(ch.id)}
-                                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors"
-                              >
-                                <Check className="w-3.5 h-3.5" />
-                                <span className="font-inter text-xs font-semibold">Completei o desafio!</span>
-                              </button>
+                              <div className="space-y-2">
+                                {ch.requires_text && (
+                                  <textarea
+                                    value={challengeResponses[ch.id] || ""}
+                                    onChange={e => setChallengeResponses(prev => ({ ...prev, [ch.id]: e.target.value }))}
+                                    placeholder="Escreva sua resposta..."
+                                    className="w-full rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm font-inter text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                                    rows={2}
+                                    maxLength={500}
+                                  />
+                                )}
+                                {ch.requires_file && (
+                                  <div>
+                                    <input
+                                      ref={el => { fileInputRefs.current[ch.id] = el; }}
+                                      type="file"
+                                      accept="image/*,.pdf,.doc,.docx"
+                                      className="hidden"
+                                      onChange={e => {
+                                        const file = e.target.files?.[0] ?? null;
+                                        setChallengeFiles(prev => ({ ...prev, [ch.id]: file }));
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => fileInputRefs.current[ch.id]?.click()}
+                                      className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-border bg-muted/20 text-muted-foreground hover:bg-muted/40 transition-colors"
+                                    >
+                                      <Upload className="w-3.5 h-3.5" />
+                                      <span className="font-inter text-xs">
+                                        {challengeFiles[ch.id] ? challengeFiles[ch.id]!.name : "Enviar foto/arquivo"}
+                                      </span>
+                                    </button>
+                                  </div>
+                                )}
+                                <button
+                                  onClick={() => completeChallenge(ch.id)}
+                                  disabled={
+                                    completingChallenge === ch.id ||
+                                    (ch.requires_text && !challengeResponses[ch.id]?.trim()) ||
+                                    (ch.requires_file && !challengeFiles[ch.id])
+                                  }
+                                  className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors disabled:opacity-50"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span className="font-inter text-xs font-semibold">
+                                    {completingChallenge === ch.id ? "Enviando..." : "Completei o desafio!"}
+                                  </span>
+                                </button>
+                              </div>
                             ) : (
                               <button
                                 onClick={() => joinChallenge(ch.id)}
                                 className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                               >
                                 <Target className="w-3.5 h-3.5" />
-                                <span className="font-inter text-xs font-semibold">Participar</span>
+                                <span className="font-inter text-xs font-semibold">Participar (+15 pts)</span>
                               </button>
                             )}
                           </div>

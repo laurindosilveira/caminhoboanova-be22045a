@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Plus, Trash2, Users, Trophy } from "lucide-react";
+import { Plus, Trash2, Users, Trophy, FileText, MessageSquare } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -16,6 +16,8 @@ type Challenge = {
   community: string | null;
   participant_count: number;
   completed_count: number;
+  requires_text: boolean;
+  requires_file: boolean;
 };
 
 const EMOJI_OPTIONS = ["📖", "🙏", "🤝", "💪", "🎯", "❤️", "🌟", "⛪", "🕊️", "🔥"];
@@ -28,6 +30,7 @@ export default function ChallengesTab() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     title: "", description: "", emoji: "📖", start_date: "", end_date: "",
+    requires_text: false, requires_file: false,
   });
 
   useEffect(() => { fetchChallenges(); }, []);
@@ -73,8 +76,10 @@ export default function ChallengesTab() {
       end_date: form.end_date,
       area: profile?.area ?? null,
       created_by: user?.id,
+      requires_text: form.requires_text,
+      requires_file: form.requires_file,
     });
-    setForm({ title: "", description: "", emoji: "📖", start_date: "", end_date: "" });
+    setForm({ title: "", description: "", emoji: "📖", start_date: "", end_date: "", requires_text: false, requires_file: false });
     setShowForm(false);
     setSaving(false);
     fetchChallenges();
@@ -151,7 +156,28 @@ export default function ChallengesTab() {
                 onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))}
                 className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
-            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="font-inter text-xs text-muted-foreground">Requisitos para conclusão</p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.requires_text}
+                onChange={e => setForm(f => ({ ...f, requires_text: e.target.checked }))}
+                className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+              />
+              <span className="font-inter text-sm text-foreground">Pedir resposta em texto</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.requires_file}
+                onChange={e => setForm(f => ({ ...f, requires_file: e.target.checked }))}
+                className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+              />
+              <span className="font-inter text-sm text-foreground">Pedir envio de foto/arquivo</span>
+            </label>
+          </div>
           </div>
           <div className="flex gap-2">
             <button
@@ -209,13 +235,23 @@ export default function ChallengesTab() {
                     <p className="text-muted-foreground font-inter text-[10px] mt-1">
                       {format(new Date(c.start_date + "T12:00:00"), "d MMM", { locale: ptBR })} — {format(new Date(c.end_date + "T12:00:00"), "d MMM yyyy", { locale: ptBR })}
                     </p>
-                    <div className="flex items-center gap-3 mt-1.5">
+                    <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                       <span className="flex items-center gap-1 text-xs font-inter text-muted-foreground">
                         <Users className="w-3 h-3" /> {c.participant_count} participante{c.participant_count !== 1 ? "s" : ""}
                       </span>
                       <span className="flex items-center gap-1 text-xs font-inter text-brand-green">
                         <Trophy className="w-3 h-3" /> {c.completed_count} concluíra{c.completed_count !== 1 ? "m" : ""}
                       </span>
+                      {c.requires_text && (
+                        <span className="flex items-center gap-1 text-[10px] font-inter text-primary">
+                          <MessageSquare className="w-2.5 h-2.5" /> Texto
+                        </span>
+                      )}
+                      {c.requires_file && (
+                        <span className="flex items-center gap-1 text-[10px] font-inter text-primary">
+                          <FileText className="w-2.5 h-2.5" /> Arquivo
+                        </span>
+                      )}
                     </div>
                   </div>
                   <button
