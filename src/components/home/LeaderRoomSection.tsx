@@ -12,7 +12,7 @@ const CourseGuideSubTab = lazy(() => import("@/components/admin/tabs/leader/Cour
 const OverviewTab = lazy(() => import("@/components/admin/tabs/OverviewTab"));
 const LeaderTurmaManagement = lazy(() => import("@/components/admin/tabs/leader/LeaderTurmaManagement"));
 import LeaderWaitingRoom from "@/components/home/LeaderWaitingRoom";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
 const AREA_2_COMMUNITIES = ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"];
