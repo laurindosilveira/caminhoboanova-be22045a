@@ -55,14 +55,14 @@ export default function MessagesTab() {
       sent_by: user?.id,
     } as any);
 
-    // Send push notification about the new announcement
+    // Send push notification about the new announcement (generic message only)
     try {
       const pushTarget = form.target === "turma" ? "turma" : form.target === "all" ? "all" : form.target === "community" ? "community" : "area";
       const pushTargetValue = form.target === "all" ? undefined : form.target === "turma" ? form.turmaId : form.target === "community" ? form.community : profile?.area;
       await supabase.functions.invoke("admin-push", {
         body: {
-          title: `📢 ${form.title}`,
-          body: form.body.length > 100 ? form.body.slice(0, 100) + "…" : form.body,
+          title: "📢 Novo aviso no app!",
+          body: "Você tem um novo comunicado. Toque para conferir.",
           target: pushTarget,
           targetValue: pushTargetValue,
         },

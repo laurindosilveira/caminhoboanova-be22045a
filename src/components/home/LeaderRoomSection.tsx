@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Users, CalendarDays, MessageSquare, ChevronDown, ChevronUp, Clock } from "lucide-react";
+import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock } from "lucide-react";
 import StudentListSection from "@/components/home/StudentListSection";
 import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
 import MessagesTab from "@/components/admin/tabs/MessagesTab";
@@ -25,12 +25,13 @@ type Participant = {
 type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
 type Turma = { id: string; name: string; area: string | null };
 
-type SubTab = "alunos" | "encontros" | "comunicacao";
+type SubTab = "alunos" | "encontros" | "comunicacao" | "push";
 
 const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
   { id: "alunos", label: "Alunos", icon: Users },
   { id: "encontros", label: "Encontros", icon: CalendarDays },
-  { id: "comunicacao", label: "Comunicação", icon: MessageSquare },
+  { id: "comunicacao", label: "Avisos", icon: MessageSquare },
+  { id: "push", label: "Push", icon: Bell },
 ];
 
 export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }) {
@@ -238,14 +239,12 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
               )}
 
               {activeSubTab === "comunicacao" && (
+                <MessagesTab />
+              )}
+
+              {activeSubTab === "push" && (
                 <div className="space-y-4">
-                  <MessagesTab />
-                  <div className="border-t border-border pt-4">
-                    <h3 className="font-montserrat font-bold text-foreground text-sm mb-3 flex items-center gap-2">
-                      📣 Notificações Push
-                    </h3>
-                    <AdminPushTab turmas={turmas} />
-                  </div>
+                  <AdminPushTab turmas={turmas} />
                   <div className="border-t border-border pt-4">
                     <PushStatusList adminArea={turmaArea} />
                   </div>
