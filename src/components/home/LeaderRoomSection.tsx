@@ -377,7 +377,10 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                 <div className="h-3 w-2/3 rounded-md bg-muted animate-pulse" />
               </div>
             }>
-              <>
+              <div
+                key={activeSubTab}
+                className="animate-[tab-slide-in_0.35s_ease-out]"
+              >
               {activeSubTab === "visao" && (
                 <OverviewTab
                   participants={participants}
@@ -392,14 +395,12 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
 
               {activeSubTab === "alunos" && (
                 <div className="space-y-4">
-                  {/* Waiting room inline when there are people waiting */}
                   {waitingCount > 0 && (
                     <LeaderWaitingRoom
                       areaFilter={turmaArea}
                       onAssigned={() => setWaitingCount(prev => Math.max(0, prev - 1))}
                     />
                   )}
-                  {/* Unified student list with progress, edit, and personal info */}
                   <ParticipantsTab participants={participants} activities={activities} communities={communities} />
                 </div>
               )}
@@ -435,7 +436,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
               {activeSubTab === "gerencia" && (
                 <LeaderTurmaManagement />
               )}
-            </>
+              </div>
             </Suspense>
           )}
           </div>
