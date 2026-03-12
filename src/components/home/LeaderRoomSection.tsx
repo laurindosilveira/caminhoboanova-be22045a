@@ -246,6 +246,9 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                     </h3>
                     <AdminPushTab turmas={turmas} />
                   </div>
+                  <div className="border-t border-border pt-4">
+                    <PushStatusList adminArea={turmaArea} />
+                  </div>
                 </div>
               )}
             </>
