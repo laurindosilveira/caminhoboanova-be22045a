@@ -1004,6 +1004,33 @@ export default function ParticipantsTab({ participants, activities, communities 
 
   const [statusReasons, setStatusReasons] = useState<Record<string, StatusReason[]>>({});
 
+  // Fetch course unlocks
+  useEffect(() => {
+    async function fetchCourseUnlocks() {
+      const [{ data: coursesData }, { data: unlocksData }] = await Promise.all([
+        supabase.from("courses").select("id, title, order_num").order("order_num"),
+        supabase.from("course_unlocks").select("course_id, area").eq("area", myArea),
+      ]);
+      setCourses(coursesData ?? []);
+      setUnlockedCourseIds(new Set((unlocksData ?? []).map((u: any) => u.course_id)));
+    }
+    if (myArea) fetchCourseUnlocks();
+  }, [myArea]);
+
+  async function toggleCourseUnlock(courseId: string) {
+    setUnlockLoading(courseId);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setUnlockLoading(null); return; }
+    if (unlockedCourseIds.has(courseId)) {
+      await supabase.from("course_unlocks").delete().eq("course_id", courseId).eq("area", myArea);
+      setUnlockedCourseIds(prev => { const n = new Set(prev); n.delete(courseId); return n; });
+    } else {
+      await supabase.from("course_unlocks").insert({ course_id: courseId, area: myArea, unlocked_by: user.id } as any);
+      setUnlockedCourseIds(prev => new Set(prev).add(courseId));
+    }
+    setUnlockLoading(null);
+  }
+
   // Fetch objective status reasons from DB
   useEffect(() => {
     async function fetchReasons() {
