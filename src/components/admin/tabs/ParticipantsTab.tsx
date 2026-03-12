@@ -294,6 +294,54 @@ function ParticipantDetail({ participant: p, activities, onBack }: DetailProps) 
     setLoading(false);
   }
 
+  async function fetchExtendedProfile() {
+    const [{ data: profileData }, { data: turmasData }] = await Promise.all([
+      supabase.from("profiles").select("address, father_name, mother_name, father_phone, mother_phone, turma_id").eq("user_id", p.user_id).maybeSingle(),
+      supabase.from("turmas").select("id, name, area").eq("is_active", true).order("name"),
+    ]);
+    setExtProfile(profileData ?? {});
+    setTurmas(turmasData ?? []);
+  }
+
+  function startEditing() {
+    setEditForm({
+      full_name: p.full_name, phone: p.phone, birth_date: p.birth_date,
+      address: extProfile.address ?? "", father_name: extProfile.father_name ?? "",
+      mother_name: extProfile.mother_name ?? "", father_phone: extProfile.father_phone ?? "",
+      mother_phone: extProfile.mother_phone ?? "", confirmation_year: p.confirmation_year,
+      turma_id: extProfile.turma_id ?? null,
+    });
+    setEditing(true);
+  }
+
+  async function saveEdits() {
+    setSaving(true);
+    const { error } = await supabase.from("profiles").update({
+      full_name: editForm.full_name?.trim() || p.full_name,
+      phone: editForm.phone?.trim() || p.phone,
+      birth_date: editForm.birth_date || p.birth_date,
+      address: editForm.address?.trim() ?? "",
+      father_name: editForm.father_name?.trim() ?? "",
+      mother_name: editForm.mother_name?.trim() ?? "",
+      father_phone: editForm.father_phone?.trim() ?? "",
+      mother_phone: editForm.mother_phone?.trim() ?? "",
+      confirmation_year: editForm.confirmation_year ?? null,
+      turma_id: editForm.turma_id ?? null,
+    } as any).eq("user_id", p.user_id);
+    if (error) {
+      toast({ title: "Erro ao salvar", variant: "destructive" });
+    } else {
+      toast({ title: "Dados atualizados!" });
+      setExtProfile(prev => ({
+        ...prev, address: editForm.address?.trim(), father_name: editForm.father_name?.trim(),
+        mother_name: editForm.mother_name?.trim(), father_phone: editForm.father_phone?.trim(),
+        mother_phone: editForm.mother_phone?.trim(), turma_id: editForm.turma_id,
+      }));
+      setEditing(false);
+    }
+    setSaving(false);
+  }
+
   // ── Delete handlers ──
   async function logRemoval(activityType: string, activityId: string, activityTitle: string, pointsRemoved: number) {
     if (!user) return;
