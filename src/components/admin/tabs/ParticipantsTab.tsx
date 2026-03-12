@@ -1123,7 +1123,7 @@ export default function ParticipantsTab({ participants, activities, communities 
   }, [participants, activities]);
 
   if (selectedParticipant) {
-    return <ParticipantDetail participant={selectedParticipant} activities={activities} onBack={() => setSelectedParticipant(null)} />;
+    return <ParticipantSheet participant={selectedParticipant} activities={activities} onBack={() => setSelectedParticipant(null)} />;
   }
 
   const filtered = participants.filter((p) => {
