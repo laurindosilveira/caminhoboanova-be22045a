@@ -95,7 +95,16 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
       setActiveSubTab(closestTab);
     }, 50);
   }, []);
-  const [loading, setLoading] = useState(false);
+
+  // Attach passive scroll listener for better scroll performance
+  useEffect(() => {
+    const container = tabsContainerRef.current;
+    if (!container || !expanded) return;
+    container.addEventListener("scroll", handleTabsScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleTabsScroll);
+  }, [expanded, handleTabsScroll]);
+
+
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [plans, setPlans] = useState<Record<string, PlanInfo>>({});
