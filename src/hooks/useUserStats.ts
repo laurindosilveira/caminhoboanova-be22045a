@@ -66,7 +66,7 @@ export function useUserStats(): UserStats {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setStats(s => ({ ...s, loading: false })); return; }
 
-      const [{ data: activities }, { data: progress }, { data: devProgress }, { data: lessonResponses }, { data: attendance }, { data: worshipData }, { data: achievementUnlocks }, { data: coursesData }, { data: lessonsData }] = await Promise.all([
+      const [{ data: activities }, { data: progress }, { data: devProgress }, { data: lessonResponses }, { data: attendance }, { data: worshipData }, { data: achievementUnlocks }, { data: coursesData }, { data: lessonsData }, { data: challengeData }] = await Promise.all([
         supabase.from("activities").select("id, type, title, subtitle, order_num, points").order("order_num"),
         supabase.from("user_progress").select("activity_id, completed_at").eq("user_id", user.id),
         supabase.from("devotional_progress").select("devotional_id, completed_at").eq("user_id", user.id),
@@ -76,6 +76,7 @@ export function useUserStats(): UserStats {
         supabase.from("achievement_unlocks").select("achievement_key, bonus_points").eq("user_id", user.id),
         supabase.from("courses").select("id"),
         supabase.from("lessons").select("id, course_id"),
+        supabase.from("challenge_participants").select("id, completed").eq("user_id", user.id).eq("completed", true),
       ]);
 
       const acts = activities ?? [];
