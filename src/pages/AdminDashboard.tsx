@@ -10,7 +10,6 @@ import ParticipantsTab from "@/components/admin/tabs/ParticipantsTab";
 import CoursesTab from "@/components/admin/tabs/CoursesTab";
 import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
 import UsersTab from "@/components/admin/tabs/UsersTab";
-import LeaderGuideTab from "@/components/admin/tabs/LeaderGuideTab";
 import AdminPushTab from "@/components/admin/tabs/AdminPushTab";
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
