@@ -41,7 +41,7 @@ export default function PushStatusList({ adminArea }: Props) {
         profilesQuery,
         supabase.from("push_subscriptions").select("user_id, endpoint"),
         supabase.from("user_roles").select("user_id, role"),
-        supabase.from("push_activation_reminders" as any).select("target_user_id, dismissed_at").is("dismissed_at", null),
+        supabase.from("push_activation_reminders" as any).select("target_user_id, dismissed_at, created_at").is("dismissed_at", null),
       ]);
 
       const adminIds = new Set(
@@ -55,8 +55,13 @@ export default function PushStatusList({ adminArea }: Props) {
         subMap.set(s.user_id, (subMap.get(s.user_id) ?? 0) + 1);
       });
 
+      // Only consider reminders sent within the last 24 hours as "active"
+      const now = Date.now();
+      const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
       const reminderSet = new Set(
-        (reminders ?? []).map((r: any) => r.target_user_id)
+        (reminders ?? [])
+          .filter((r: any) => now - new Date(r.created_at).getTime() < TWENTY_FOUR_HOURS)
+          .map((r: any) => r.target_user_id)
       );
 
       const result: PushUser[] = (profiles ?? [])
@@ -206,7 +211,7 @@ export default function PushStatusList({ adminArea }: Props) {
       </div>
 
       {/* Send all reminders button */}
-      {filter === "inactive" && inactiveWithoutReminder.length > 0 && (
+      {inactiveWithoutReminder.length > 0 && (
         <button
           onClick={handleSendAllReminders}
           disabled={sendingReminder === "all"}
