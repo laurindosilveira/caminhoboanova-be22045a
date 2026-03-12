@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageSquare, Plus, Send, Users, MapPin, Globe, Trash2, GraduationCap } from "lucide-react";
+import { MessageSquare, Plus, Send, Users, MapPin, Globe, Trash2, GraduationCap, Eye, Share2, Bell } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -24,6 +24,11 @@ export default function MessagesTab() {
   const [form, setForm] = useState({ title: "", body: "", target: "area" as "all" | "area" | "community" | "turma", community: "", turmaId: "" });
   const [deleting, setDeleting] = useState<string | null>(null);
   const [turmas, setTurmas] = useState<Turma[]>([]);
+  const [viewCounts, setViewCounts] = useState<Record<string, number>>({});
+  const [showViewers, setShowViewers] = useState<string | null>(null);
+  const [viewers, setViewers] = useState<{ name: string; viewedAt: string }[]>([]);
+  const [loadingViewers, setLoadingViewers] = useState(false);
+  const [sendingPush, setSendingPush] = useState<string | null>(null);
 
   const communities = profile?.area === "Área 1" ? AREA_1_COMMUNITIES : AREA_2_COMMUNITIES;
 
@@ -35,7 +40,23 @@ export default function MessagesTab() {
   async function fetchMessages() {
     setLoading(true);
     const { data } = await supabase.from("messages").select("*").order("created_at", { ascending: false });
-    setMessages(data ?? []);
+    const msgs = data ?? [];
+    setMessages(msgs);
+
+    // Fetch view counts
+    if (msgs.length > 0) {
+      const msgIds = msgs.map(m => m.id);
+      const { data: viewsData } = await supabase
+        .from("message_views")
+        .select("message_id")
+        .in("message_id", msgIds);
+      const counts: Record<string, number> = {};
+      (viewsData ?? []).forEach((v: any) => {
+        counts[v.message_id] = (counts[v.message_id] || 0) + 1;
+      });
+      setViewCounts(counts);
+    }
+
     setLoading(false);
   }
 
@@ -55,7 +76,6 @@ export default function MessagesTab() {
       sent_by: user?.id,
     } as any);
 
-    // Send push notification about the new announcement (generic message only)
     try {
       const pushTarget = form.target === "turma" ? "turma" : form.target === "all" ? "all" : form.target === "community" ? "community" : "area";
       const pushTargetValue = form.target === "all" ? undefined : form.target === "turma" ? form.turmaId : form.target === "community" ? form.community : profile?.area;
@@ -85,6 +105,96 @@ export default function MessagesTab() {
     setDeleting(null);
   }
 
+  async function openViewers(messageId: string) {
+    if (showViewers === messageId) { setShowViewers(null); return; }
+    setShowViewers(messageId);
+    setLoadingViewers(true);
+    const { data: viewsData } = await supabase
+      .from("message_views")
+      .select("user_id, viewed_at")
+      .eq("message_id", messageId);
+    
+    if (viewsData && viewsData.length > 0) {
+      const userIds = viewsData.map((v: any) => v.user_id);
+      const { data: profiles } = await supabase.from("profiles").select("user_id, full_name").in("user_id", userIds);
+      const nameMap: Record<string, string> = {};
+      (profiles ?? []).forEach(p => { nameMap[p.user_id] = p.full_name; });
+      setViewers(viewsData.map((v: any) => ({
+        name: nameMap[v.user_id] || "Desconhecido",
+        viewedAt: v.viewed_at,
+      })));
+    } else {
+      setViewers([]);
+    }
+    setLoadingViewers(false);
+  }
+
+  function shareOnWhatsApp(msg: Message) {
+    const text = `📢 *${msg.title}*\n\n${msg.body}`;
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank");
+  }
+
+  async function sendReminderPush(msg: Message) {
+    setSendingPush(msg.id);
+    try {
+      // Get users who have NOT viewed this message
+      const { data: viewsData } = await supabase
+        .from("message_views")
+        .select("user_id")
+        .eq("message_id", msg.id);
+      const viewedUserIds = new Set((viewsData ?? []).map((v: any) => v.user_id));
+
+      // Get all target users based on message scope
+      let targetQuery = supabase.from("profiles").select("user_id");
+      if (msg.turma_id) {
+        targetQuery = targetQuery.eq("turma_id", msg.turma_id);
+      } else if (msg.community) {
+        targetQuery = targetQuery.eq("community", msg.community);
+      } else if (msg.area) {
+        targetQuery = targetQuery.eq("area", msg.area);
+      }
+      const { data: targetUsers } = await targetQuery;
+      
+      const nonViewers = (targetUsers ?? []).filter(u => !viewedUserIds.has(u.user_id)).map(u => u.user_id);
+
+      if (nonViewers.length === 0) {
+        alert("Todos já visualizaram este aviso! 🎉");
+        setSendingPush(null);
+        return;
+      }
+
+      // Get push subscriptions for non-viewers
+      const { data: subs } = await supabase
+        .from("push_subscriptions")
+        .select("user_id, endpoint, p256dh, auth")
+        .in("user_id", nonViewers);
+
+      if (!subs || subs.length === 0) {
+        alert(`${nonViewers.length} pessoa(s) não visualizaram, mas nenhuma tem push ativado.`);
+        setSendingPush(null);
+        return;
+      }
+
+      await supabase.functions.invoke("send-push-notifications", {
+        body: {
+          subscriptions: subs.map(s => ({
+            endpoint: s.endpoint,
+            keys: { p256dh: s.p256dh, auth: s.auth },
+          })),
+          title: "📢 Aviso pendente!",
+          body: `Você ainda não viu: "${msg.title}". Abra o app para conferir!`,
+        },
+      });
+
+      alert(`Push enviado para ${subs.length} pessoa(s) que não visualizaram!`);
+    } catch (e) {
+      console.error("Push reminder failed:", e);
+      alert("Erro ao enviar push. Tente novamente.");
+    }
+    setSendingPush(null);
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -108,7 +218,6 @@ export default function MessagesTab() {
             placeholder="Mensagem *" rows={3}
             className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
 
-          {/* Target */}
           <div>
             <p className="font-inter text-xs text-muted-foreground mb-2">Enviar para:</p>
             <div className="grid grid-cols-2 gap-2">
@@ -193,6 +302,68 @@ export default function MessagesTab() {
                       <span className="px-2 py-0.5 bg-muted text-muted-foreground rounded-md text-[10px] font-inter font-medium">Todos</span>
                     )}
                   </div>
+
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-2 mt-3 flex-wrap">
+                    <button
+                      onClick={() => openViewers(msg.id)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-inter font-medium transition-colors ${
+                        showViewers === msg.id
+                          ? "bg-primary/15 text-primary border border-primary/30"
+                          : "bg-muted/50 text-muted-foreground hover:bg-muted border border-transparent"
+                      }`}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      {viewCounts[msg.id] ?? 0} viram
+                    </button>
+                    <button
+                      onClick={() => shareOnWhatsApp(msg)}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-inter font-medium bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 transition-colors border border-transparent"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      WhatsApp
+                    </button>
+                    <button
+                      onClick={() => sendReminderPush(msg)}
+                      disabled={sendingPush === msg.id}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-inter font-medium bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors border border-transparent disabled:opacity-50"
+                    >
+                      <Bell className="w-3.5 h-3.5" />
+                      {sendingPush === msg.id ? "Enviando..." : "Lembrar"}
+                    </button>
+                  </div>
+
+                  {/* Viewers list */}
+                  {showViewers === msg.id && (
+                    <div className="mt-3 bg-muted/30 rounded-xl p-3 border border-border">
+                      <p className="font-inter text-xs font-semibold text-foreground mb-2">
+                        👁️ Quem visualizou ({viewCounts[msg.id] ?? 0})
+                      </p>
+                      {loadingViewers ? (
+                        <div className="space-y-1.5">
+                          {[1, 2].map(i => <div key={i} className="h-6 bg-muted rounded animate-pulse" />)}
+                        </div>
+                      ) : viewers.length === 0 ? (
+                        <p className="text-muted-foreground font-inter text-xs">Ninguém visualizou ainda.</p>
+                      ) : (
+                        <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                          {viewers.map((v, i) => (
+                            <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-background/50">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-primary/15 flex items-center justify-center text-[10px] font-bold text-primary">
+                                  {v.name.charAt(0).toUpperCase()}
+                                </div>
+                                <span className="font-inter text-xs text-foreground">{v.name}</span>
+                              </div>
+                              <span className="text-muted-foreground font-inter text-[10px]">
+                                {format(new Date(v.viewedAt), "dd/MM HH:mm")}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <button onClick={() => handleDelete(msg.id)} disabled={deleting === msg.id}
                   className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 hover:bg-destructive/10 transition-colors disabled:opacity-50"
