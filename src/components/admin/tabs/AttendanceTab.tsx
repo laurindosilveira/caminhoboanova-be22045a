@@ -609,14 +609,6 @@ export default function AttendanceTab({ participants, activities, communities, i
       <div className="space-y-4">
         {renderCascadeDialog()}
         {renderSubTabs()}
-        {activeSubTab === "discipulado" && (
-          <AdminDiscipleshipTab
-            participants={participants}
-            activities={activities}
-            initialParticipant={initialParticipant}
-            onClearInitial={onClearInitial}
-          />
-        )}
         {activeSubTab === "sala" && <ClassroomSettingsTab />}
         
         {activeSubTab === "desafios" && <ChallengesTab />}
