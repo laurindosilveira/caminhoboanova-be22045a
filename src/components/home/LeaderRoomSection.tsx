@@ -360,6 +360,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                 <LeaderTurmaManagement />
               )}
             </>
+            </Suspense>
           )}
         </div>
       )}
