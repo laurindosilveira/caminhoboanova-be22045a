@@ -29,7 +29,7 @@ type Participant = {
 type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
 type Turma = { id: string; name: string; area: string | null };
 
-type SubTab = "visao" | "alunos" | "encontros" | "roteiros" | "comunicacao" | "push";
+type SubTab = "visao" | "alunos" | "encontros" | "roteiros" | "comunicacao" | "push" | "gerencia";
 
 const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
   { id: "visao", label: "Visão", icon: BarChart3 },
@@ -38,6 +38,7 @@ const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
   { id: "roteiros", label: "Roteiros", icon: BookOpen },
   { id: "comunicacao", label: "Avisos", icon: MessageSquare },
   { id: "push", label: "Push", icon: Bell },
+  { id: "gerencia", label: "Confirmação", icon: GraduationCap },
 ];
 
 export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }) {
