@@ -66,7 +66,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
       // Release lock after scroll animation completes
       clearTimeout(scrollTimeout.current);
       scrollTimeout.current = setTimeout(() => {
-        isProgrammeticScroll.current = false;
+        isProgrammaticScroll.current = false;
       }, 400);
     });
   }, []);
