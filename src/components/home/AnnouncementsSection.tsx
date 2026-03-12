@@ -60,7 +60,18 @@ export default function AnnouncementsSection() {
           .limit(5),
         supabase.from("message_reactions").select("message_id, emoji, user_id"),
       ]);
-      setMessages(data ?? []);
+      const msgs = (data ?? []) as Message[];
+      setMessages(msgs);
+
+      // Fetch turma names for turma-targeted messages
+      const turmaIds = [...new Set(msgs.filter(m => m.turma_id).map(m => m.turma_id!))];
+      if (turmaIds.length > 0) {
+        const { data: turmaData } = await supabase.from("turmas").select("id, name").in("id", turmaIds);
+        const tMap: Record<string, string> = {};
+        (turmaData ?? []).forEach(t => { tMap[t.id] = t.name; });
+        setTurmaNames(tMap);
+      }
+
       const rMap: ReactionMap = {};
       (reactionsData ?? []).forEach((r: any) => {
         if (!rMap[r.message_id]) rMap[r.message_id] = {};
