@@ -103,6 +103,47 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
     container.addEventListener("scroll", handleTabsScroll, { passive: true });
     return () => container.removeEventListener("scroll", handleTabsScroll);
   }, [expanded, handleTabsScroll]);
+
+  // Swipe gesture support for navigating between sub-tabs
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  const handleSwipe = useCallback((direction: "left" | "right") => {
+    const currentIdx = SUB_TABS.findIndex(t => t.id === activeSubTab);
+    const nextIdx = direction === "left"
+      ? Math.min(currentIdx + 1, SUB_TABS.length - 1)
+      : Math.max(currentIdx - 1, 0);
+    if (nextIdx !== currentIdx) {
+      scrollToTab(SUB_TABS[nextIdx].id);
+    }
+  }, [activeSubTab, scrollToTab]);
+
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el || !expanded) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!touchStart.current) return;
+      const dx = e.changedTouches[0].clientX - touchStart.current.x;
+      const dy = e.changedTouches[0].clientY - touchStart.current.y;
+      touchStart.current = null;
+      // Only trigger if horizontal swipe is dominant and > 50px
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        handleSwipe(dx < 0 ? "left" : "right");
+      }
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [expanded, handleSwipe]);
+
   const [loading, setLoading] = useState(false);
 
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -294,7 +335,8 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
             </div>
           </div>
 
-          {/* Content */}
+          {/* Content - swipe enabled */}
+          <div ref={contentRef} className="touch-pan-y">
           {loading ? (
             <div className="bg-card border border-border rounded-2xl p-8 text-center">
               <p className="text-muted-foreground text-sm font-inter animate-pulse">Carregando dados...</p>
@@ -362,6 +404,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
             </>
             </Suspense>
           )}
+          </div>
         </div>
       )}
     </div>
