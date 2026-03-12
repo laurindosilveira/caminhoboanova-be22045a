@@ -5,6 +5,7 @@ import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock
 import StudentListSection from "@/components/home/StudentListSection";
 import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
 import MessagesTab from "@/components/admin/tabs/MessagesTab";
+import ParticipantsTab from "@/components/admin/tabs/ParticipantsTab";
 import AdminPushTab from "@/components/admin/tabs/AdminPushTab";
 import PushStatusList from "@/components/admin/tabs/PushStatusList";
 import LeaderWaitingRoom from "@/components/home/LeaderWaitingRoom";
@@ -226,6 +227,8 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                   )}
                   {/* Student list */}
                   <StudentListSection />
+                  {/* Participants progress (merged from Encontros > Pessoas) */}
+                  <ParticipantsTab participants={participants} activities={activities} communities={communities} />
                 </div>
               )}
 

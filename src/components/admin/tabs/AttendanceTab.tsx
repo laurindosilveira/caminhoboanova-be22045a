@@ -10,13 +10,13 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
-import ParticipantsTab from "./ParticipantsTab";
+
 import AdminDiscipleshipTab from "./AdminDiscipleshipTab";
 import ClassroomSettingsTab from "./ClassroomSettingsTab";
 
 import ChallengesTab from "./ChallengesTab";
 
-type SubTab = "presenca" | "pessoas" | "discipulado" | "sala" | "desafios";
+type SubTab = "presenca" | "discipulado" | "sala" | "desafios";
 
 type Event = {
   id: string; title: string; event_date: string; type: string;
@@ -573,7 +573,6 @@ export default function AttendanceTab({ participants, activities, communities, i
 
   const SUB_TABS = [
     { id: "presenca" as SubTab, label: "Presença", icon: CheckCircle2 },
-    { id: "pessoas" as SubTab, label: "Pessoas", icon: Users },
     { id: "discipulado" as SubTab, label: "Discipulado", icon: Heart },
     { id: "desafios" as SubTab, label: "Desafios", icon: Star },
     { id: "sala" as SubTab, label: "Sala", icon: GraduationCap },
@@ -611,9 +610,6 @@ export default function AttendanceTab({ participants, activities, communities, i
       <div className="space-y-4">
         {renderCascadeDialog()}
         {renderSubTabs()}
-        {activeSubTab === "pessoas" && (
-          <ParticipantsTab participants={participants} activities={activities} communities={communities ?? []} />
-        )}
         {activeSubTab === "discipulado" && (
           <AdminDiscipleshipTab
             participants={participants}
