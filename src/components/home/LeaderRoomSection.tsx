@@ -6,6 +6,7 @@ import StudentListSection from "@/components/home/StudentListSection";
 import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
 import MessagesTab from "@/components/admin/tabs/MessagesTab";
 import AdminPushTab from "@/components/admin/tabs/AdminPushTab";
+import PushStatusList from "@/components/admin/tabs/PushStatusList";
 import LeaderWaitingRoom from "@/components/home/LeaderWaitingRoom";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
@@ -244,6 +245,9 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                       📣 Notificações Push
                     </h3>
                     <AdminPushTab turmas={turmas} />
+                  </div>
+                  <div className="border-t border-border pt-4">
+                    <PushStatusList adminArea={turmaArea} />
                   </div>
                 </div>
               )}
