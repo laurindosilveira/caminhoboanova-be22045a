@@ -239,14 +239,12 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
               )}
 
               {activeSubTab === "comunicacao" && (
+                <MessagesTab />
+              )}
+
+              {activeSubTab === "push" && (
                 <div className="space-y-4">
-                  <MessagesTab />
-                  <div className="border-t border-border pt-4">
-                    <h3 className="font-montserrat font-bold text-foreground text-sm mb-3 flex items-center gap-2">
-                      📣 Notificações Push
-                    </h3>
-                    <AdminPushTab turmas={turmas} />
-                  </div>
+                  <AdminPushTab turmas={turmas} />
                   <div className="border-t border-border pt-4">
                     <PushStatusList adminArea={turmaArea} />
                   </div>
