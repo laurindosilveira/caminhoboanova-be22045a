@@ -211,7 +211,7 @@ export default function PushStatusList({ adminArea }: Props) {
       </div>
 
       {/* Send all reminders button */}
-      {filter === "inactive" && inactiveWithoutReminder.length > 0 && (
+      {inactiveWithoutReminder.length > 0 && (
         <button
           onClick={handleSendAllReminders}
           disabled={sendingReminder === "all"}
