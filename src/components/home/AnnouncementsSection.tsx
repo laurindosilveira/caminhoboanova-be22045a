@@ -45,6 +45,7 @@ export default function AnnouncementsSection() {
   const [showUsers, setShowUsers] = useState<{ messageId: string; emoji: string } | null>(null);
   const [reactionUsers, setReactionUsers] = useState<string[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [turmaNames, setTurmaNames] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!profile) return;
