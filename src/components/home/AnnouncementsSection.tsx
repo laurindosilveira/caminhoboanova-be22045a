@@ -15,6 +15,7 @@ interface Message {
   title: string;
   body: string;
   created_at: string;
+  turma_id: string | null;
 }
 
 interface ReactionDetail {
