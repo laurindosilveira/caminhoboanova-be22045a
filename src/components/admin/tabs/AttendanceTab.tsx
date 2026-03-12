@@ -623,7 +623,7 @@ export default function AttendanceTab({ participants, activities, communities, i
           />
         )}
         {activeSubTab === "sala" && <ClassroomSettingsTab />}
-        {activeSubTab === "avisos" && <MessagesTab />}
+        
         {activeSubTab === "desafios" && <ChallengesTab />}
       </div>
     );
