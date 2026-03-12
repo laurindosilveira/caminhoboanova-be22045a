@@ -141,7 +141,7 @@ export default function UserAgendaTab() {
   const upcoming = events.filter(e => new Date(e.event_date) >= now);
   const past = events.filter(e => new Date(e.event_date) < now);
 
-  async function handleCheckIn(eventId: string, status: "presente" | "faltou", justification?: string) {
+  async function handleCheckIn(eventId: string, status: "pendente_presente" | "pendente_falta", justification?: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const payload: any = { status };
@@ -156,6 +156,7 @@ export default function UserAgendaTab() {
       const filtered = prev.filter(a => a.event_id !== eventId);
       return [...filtered, { event_id: eventId, status }];
     });
+    toast.success(status === "pendente_presente" ? "Presença enviada para aprovação!" : "Justificativa enviada para aprovação!");
   }
 
   function openCreateForm() {
