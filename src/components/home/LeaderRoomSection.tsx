@@ -300,7 +300,8 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
               <p className="text-muted-foreground text-sm font-inter animate-pulse">Carregando dados...</p>
             </div>
           ) : (
-            <>
+            <Suspense fallback={<div className="bg-card border border-border rounded-2xl p-8 text-center"><p className="text-muted-foreground text-sm font-inter animate-pulse">Carregando...</p></div>}>
+              <>
               {activeSubTab === "visao" && (
                 <OverviewTab
                   participants={participants}
