@@ -63,6 +63,12 @@ export default function AnnouncementsSection() {
       const msgs = (data ?? []) as Message[];
       setMessages(msgs);
 
+      // Record views for all fetched messages
+      if (user && msgs.length > 0) {
+        const viewInserts = msgs.map(m => ({ message_id: m.id, user_id: user.id }));
+        await supabase.from("message_views").upsert(viewInserts, { onConflict: "message_id,user_id", ignoreDuplicates: true });
+      }
+
       // Fetch turma names for turma-targeted messages
       const turmaIds = [...new Set(msgs.filter(m => m.turma_id).map(m => m.turma_id!))];
       if (turmaIds.length > 0) {
