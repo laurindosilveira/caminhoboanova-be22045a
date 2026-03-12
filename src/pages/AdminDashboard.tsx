@@ -109,10 +109,6 @@ export default function AdminDashboard() {
     setLoading(false);
   }
 
-  function handleSelectParticipantFromOverview(participant: Participant) {
-    setHighlightedParticipant(participant);
-    setActiveTab("attendance");
-  }
 
   // Filter participants by selected turma
   const filteredParticipants = selectedTurma
