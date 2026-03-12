@@ -28,6 +28,7 @@ export default function ChallengesTab() {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [expandedChallenge, setExpandedChallenge] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     title: "", description: "", emoji: "📖", start_date: "", end_date: "",
