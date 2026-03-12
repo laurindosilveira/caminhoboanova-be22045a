@@ -62,6 +62,24 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
       container.scrollTo({ left: scrollLeft, behavior: "smooth" });
     });
   }, []);
+
+  const handleTabsScroll = useCallback(() => {
+    const container = tabsContainerRef.current;
+    if (!container) return;
+    const centerX = container.scrollLeft + container.offsetWidth / 2;
+    let closestTab: SubTab = SUB_TABS[0].id;
+    let closestDist = Infinity;
+    Array.from(container.children).forEach((child, i) => {
+      const el = child as HTMLElement;
+      const elCenter = el.offsetLeft + el.offsetWidth / 2;
+      const dist = Math.abs(elCenter - centerX);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestTab = SUB_TABS[i].id;
+      }
+    });
+    setActiveSubTab(closestTab);
+  }, []);
   const [loading, setLoading] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
