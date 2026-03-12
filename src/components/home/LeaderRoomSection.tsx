@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock, BookOpen, BarChart3 } from "lucide-react";
+import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock, BookOpen, BarChart3, GraduationCap } from "lucide-react";
 
 import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
 import MessagesTab from "@/components/admin/tabs/MessagesTab";
@@ -11,6 +11,7 @@ import PushStatusList from "@/components/admin/tabs/PushStatusList";
 import LeaderWaitingRoom from "@/components/home/LeaderWaitingRoom";
 import CourseGuideSubTab from "@/components/admin/tabs/leader/CourseGuideSubTab";
 import OverviewTab from "@/components/admin/tabs/OverviewTab";
+import LeaderTurmaManagement from "@/components/admin/tabs/leader/LeaderTurmaManagement";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
@@ -28,7 +29,7 @@ type Participant = {
 type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
 type Turma = { id: string; name: string; area: string | null };
 
-type SubTab = "visao" | "alunos" | "encontros" | "roteiros" | "comunicacao" | "push";
+type SubTab = "visao" | "alunos" | "encontros" | "roteiros" | "comunicacao" | "push" | "gerencia";
 
 const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
   { id: "visao", label: "Visão", icon: BarChart3 },
@@ -37,6 +38,7 @@ const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
   { id: "roteiros", label: "Roteiros", icon: BookOpen },
   { id: "comunicacao", label: "Avisos", icon: MessageSquare },
   { id: "push", label: "Push", icon: Bell },
+  { id: "gerencia", label: "Confirmação", icon: GraduationCap },
 ];
 
 export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }) {
@@ -273,6 +275,10 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                     <PushStatusList adminArea={turmaArea} />
                   </div>
                 </div>
+              )}
+
+              {activeSubTab === "gerencia" && (
+                <LeaderTurmaManagement />
               )}
             </>
           )}
