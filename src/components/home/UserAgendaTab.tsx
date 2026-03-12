@@ -342,13 +342,13 @@ export default function UserAgendaTab() {
 
               return (
                 <div key={evt.id} className="flex items-center gap-3 py-2 px-3 rounded-xl bg-muted/30">
-                  <span className="text-base">{statusCfg.icon}</span>
+                  <span className="text-base">{cfg.icon}</span>
                   <div className="flex-1 min-w-0">
                     <p className="font-inter text-sm text-foreground truncate">{evt.title}</p>
                     <p className="font-inter text-[10px] text-muted-foreground">{dateStr}</p>
                   </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-inter font-semibold ${statusCfg.cls}`}>
-                    {statusCfg.label}
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-inter font-semibold ${cfg.cls}`}>
+                    {cfg.label}
                   </span>
                 </div>
               );
