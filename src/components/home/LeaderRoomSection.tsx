@@ -236,7 +236,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
               {SUB_TABS.map((tab, i) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveSubTab(tab.id)}
+                  onClick={() => scrollToTab(tab.id)}
                   className="p-0.5"
                   aria-label={tab.label}
                 >
