@@ -41,6 +41,10 @@ interface Challenge {
   participant_count: number;
   has_joined: boolean;
   has_completed: boolean;
+  requires_text: boolean;
+  requires_file: boolean;
+  response_text: string | null;
+  file_url: string | null;
 }
 
 interface BirthdayPerson {
