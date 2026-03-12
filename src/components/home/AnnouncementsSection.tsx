@@ -55,7 +55,7 @@ export default function AnnouncementsSection() {
       const [{ data }, { data: reactionsData }] = await Promise.all([
         supabase
           .from("messages")
-          .select("id, title, body, created_at")
+          .select("id, title, body, created_at, turma_id")
           .order("created_at", { ascending: false })
           .limit(5),
         supabase.from("message_reactions").select("message_id, emoji, user_id"),
