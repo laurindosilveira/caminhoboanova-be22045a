@@ -16,6 +16,8 @@ type Challenge = {
   community: string | null;
   participant_count: number;
   completed_count: number;
+  requires_text: boolean;
+  requires_file: boolean;
 };
 
 const EMOJI_OPTIONS = ["📖", "🙏", "🤝", "💪", "🎯", "❤️", "🌟", "⛪", "🕊️", "🔥"];
