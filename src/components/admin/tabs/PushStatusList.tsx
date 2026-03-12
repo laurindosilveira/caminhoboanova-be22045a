@@ -28,7 +28,7 @@ export default function PushStatusList({ adminArea }: Props) {
         .select("user_id, full_name, community, area");
 
       if (adminArea) {
-        profilesQuery.eq("area", adminArea);
+        profilesQuery.eq("area", adminArea as any);
       }
 
       const [{ data: profiles }, { data: subs }, { data: roles }] = await Promise.all([
