@@ -577,7 +577,6 @@ export default function AttendanceTab({ participants, activities, communities, i
     { id: "discipulado" as SubTab, label: "Discipulado", icon: Heart },
     { id: "desafios" as SubTab, label: "Desafios", icon: Star },
     { id: "sala" as SubTab, label: "Sala", icon: GraduationCap },
-    { id: "avisos" as SubTab, label: "Avisos", icon: MessageSquare },
   ];
 
   // Sub-tab navigation header (shared across all states)
