@@ -49,9 +49,12 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
   const [activeSubTab, setActiveSubTab] = useState<SubTab>("visao");
   const [highlightedParticipant, setHighlightedParticipant] = useState<Participant | null>(null);
   const tabsContainerRef = useRef<HTMLDivElement>(null);
+  const isProgrammaticScroll = useRef(false);
+  const scrollTimeout = useRef<ReturnType<typeof setTimeout>>();
 
   const scrollToTab = useCallback((tabId: SubTab) => {
     setActiveSubTab(tabId);
+    isProgrammaticScroll.current = true;
     requestAnimationFrame(() => {
       const container = tabsContainerRef.current;
       if (!container) return;
@@ -59,26 +62,38 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
       const btn = container.children[idx] as HTMLElement | undefined;
       if (!btn) return;
       const scrollLeft = btn.offsetLeft - container.offsetWidth / 2 + btn.offsetWidth / 2;
-      container.scrollTo({ left: scrollLeft, behavior: "smooth" });
+      container.scrollTo({ left: Math.max(0, scrollLeft), behavior: "smooth" });
+      // Release lock after scroll animation completes
+      clearTimeout(scrollTimeout.current);
+      scrollTimeout.current = setTimeout(() => {
+        isProgrammaticScroll.current = false;
+      }, 400);
     });
   }, []);
 
   const handleTabsScroll = useCallback(() => {
+    if (isProgrammaticScroll.current) return;
     const container = tabsContainerRef.current;
     if (!container) return;
-    const centerX = container.scrollLeft + container.offsetWidth / 2;
-    let closestTab: SubTab = SUB_TABS[0].id;
-    let closestDist = Infinity;
-    Array.from(container.children).forEach((child, i) => {
-      const el = child as HTMLElement;
-      const elCenter = el.offsetLeft + el.offsetWidth / 2;
-      const dist = Math.abs(elCenter - centerX);
-      if (dist < closestDist) {
-        closestDist = dist;
-        closestTab = SUB_TABS[i].id;
-      }
-    });
-    setActiveSubTab(closestTab);
+    // Debounce to avoid excessive updates
+    clearTimeout(scrollTimeout.current);
+    scrollTimeout.current = setTimeout(() => {
+      const ctr = tabsContainerRef.current;
+      if (!ctr) return;
+      const centerX = ctr.scrollLeft + ctr.offsetWidth / 2;
+      let closestTab: SubTab = SUB_TABS[0].id;
+      let closestDist = Infinity;
+      Array.from(ctr.children).forEach((child, i) => {
+        const el = child as HTMLElement;
+        const elCenter = el.offsetLeft + el.offsetWidth / 2;
+        const dist = Math.abs(elCenter - centerX);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestTab = SUB_TABS[i].id;
+        }
+      });
+      setActiveSubTab(closestTab);
+    }, 50);
   }, []);
   const [loading, setLoading] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
