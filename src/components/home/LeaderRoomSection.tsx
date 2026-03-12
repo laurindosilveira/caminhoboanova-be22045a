@@ -220,7 +220,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
         <div className={`${asTab ? "mt-2" : "mt-3"} animate-in slide-in-from-top-2 duration-200`}>
           {/* Sub-tab navigation */}
           <div className="relative">
-            <div className="flex gap-1.5 overflow-x-auto pb-1 mb-1 scrollbar-hide" ref={tabsContainerRef}>
+            <div className="flex gap-1.5 overflow-x-auto pb-1 mb-1 scrollbar-hide" ref={tabsContainerRef} onScroll={handleTabsScroll}>
               {SUB_TABS.map(tab => {
                 const Icon = tab.icon;
                 const isActive = activeSubTab === tab.id;
