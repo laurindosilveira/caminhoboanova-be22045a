@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock, BookOpen, BarChart3, GraduationCap, FileText } from "lucide-react";
+import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock, BookOpen, BarChart3, GraduationCap, FileText, BookMarked } from "lucide-react";
 
 const AttendanceTab = lazy(() => import("@/components/admin/tabs/AttendanceTab"));
 const MessagesTab = lazy(() => import("@/components/admin/tabs/MessagesTab"));
@@ -12,6 +12,7 @@ const CourseGuideSubTab = lazy(() => import("@/components/admin/tabs/leader/Cour
 const OverviewTab = lazy(() => import("@/components/admin/tabs/OverviewTab"));
 const ReportsTab = lazy(() => import("@/components/admin/tabs/ReportsTab"));
 const LeaderTurmaManagement = lazy(() => import("@/components/admin/tabs/leader/LeaderTurmaManagement"));
+const LeaderGuideContent = lazy(() => import("@/components/home/LeaderGuideContent"));
 import LeaderWaitingRoom from "@/components/home/LeaderWaitingRoom";
 
 
@@ -30,13 +31,14 @@ type Participant = {
 type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
 type Turma = { id: string; name: string; area: string | null };
 
-type SubTab = "visao" | "alunos" | "encontros" | "roteiros" | "comunicacao" | "push" | "gerencia" | "relatorios";
+type SubTab = "visao" | "alunos" | "encontros" | "roteiros" | "comunicacao" | "push" | "gerencia" | "relatorios" | "guia";
 
 const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
   { id: "visao", label: "Visão", icon: BarChart3 },
   { id: "alunos", label: "Discípulos", icon: Users },
   { id: "encontros", label: "Encontros", icon: CalendarDays },
   { id: "roteiros", label: "Roteiros", icon: BookOpen },
+  { id: "guia", label: "Guia", icon: BookMarked },
   { id: "relatorios", label: "Relatórios", icon: FileText },
   { id: "comunicacao", label: "Avisos", icon: MessageSquare },
   { id: "push", label: "Push", icon: Bell },
@@ -441,6 +443,10 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
 
               {activeSubTab === "gerencia" && (
                 <LeaderTurmaManagement />
+              )}
+
+              {activeSubTab === "guia" && (
+                <LeaderGuideContent />
               )}
               </div>
             </Suspense>
