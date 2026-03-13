@@ -1,18 +1,21 @@
-import { useState } from "react";
-import { BookOpen, ChevronDown, ChevronUp, Users, MessageSquare, AlertTriangle, Lightbulb, Heart, Handshake } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { BookOpen, ChevronDown, ChevronUp, Users, MessageSquare, AlertTriangle, Lightbulb, Heart, Handshake, CheckCircle2, Clock, BarChart3 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 
-type Section = {
+type SectionMeta = {
   id: string;
   icon: typeof BookOpen;
   title: string;
+  readTimeMin: number;
   content: React.ReactNode;
 };
 
-const SECTIONS: Section[] = [
+const SECTIONS: SectionMeta[] = [
   {
     id: "intro",
     icon: BookOpen,
     title: "1. Introdução",
+    readTimeMin: 2,
     content: (
       <div className="space-y-2 text-sm font-inter text-foreground/90">
         <p>Este guia foi desenvolvido para apoiar líderes e discipuladores do programa <strong>Caminho</strong> na tarefa de conduzir pessoas no crescimento espiritual.</p>
@@ -24,6 +27,7 @@ const SECTIONS: Section[] = [
     id: "estilos",
     icon: Users,
     title: "2. Estilos de Liderança",
+    readTimeMin: 4,
     content: (
       <div className="space-y-3 text-sm font-inter text-foreground/90">
         <div>
@@ -66,6 +70,7 @@ const SECTIONS: Section[] = [
     id: "motivacao",
     icon: Heart,
     title: "3. Motivando Equipes",
+    readTimeMin: 3,
     content: (
       <div className="space-y-3 text-sm font-inter text-foreground/90">
         <div>
@@ -98,6 +103,7 @@ const SECTIONS: Section[] = [
     id: "comunicacao",
     icon: MessageSquare,
     title: "4. Comunicação e Feedback",
+    readTimeMin: 3,
     content: (
       <div className="space-y-3 text-sm font-inter text-foreground/90">
         <div>
@@ -133,6 +139,7 @@ const SECTIONS: Section[] = [
     id: "desafios",
     icon: AlertTriangle,
     title: "5. Situações Desafiadoras",
+    readTimeMin: 3,
     content: (
       <div className="space-y-3 text-sm font-inter text-foreground/90">
         {[
@@ -154,6 +161,7 @@ const SECTIONS: Section[] = [
     id: "desenvolvimento",
     icon: Lightbulb,
     title: "6. Desenvolvendo Habilidades",
+    readTimeMin: 3,
     content: (
       <div className="space-y-3 text-sm font-inter text-foreground/90">
         <div>
@@ -189,6 +197,7 @@ const SECTIONS: Section[] = [
     id: "colaborativo",
     icon: Handshake,
     title: "7. Ambiente Colaborativo",
+    readTimeMin: 3,
     content: (
       <div className="space-y-3 text-sm font-inter text-foreground/90">
         <div>
@@ -224,8 +233,47 @@ const SECTIONS: Section[] = [
   },
 ];
 
+const STORAGE_KEY = "leader-guide-read-sections";
+
+function getReadSections(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function saveReadSection(id: string) {
+  const current = getReadSections();
+  if (!current[id]) {
+    current[id] = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+  }
+  return current;
+}
+
 export default function LeaderGuideContent() {
   const [openSection, setOpenSection] = useState<string | null>("intro");
+  const [readMap, setReadMap] = useState<Record<string, string>>(getReadSections);
+
+  const markAsRead = useCallback((id: string) => {
+    setReadMap(saveReadSection(id));
+  }, []);
+
+  const handleToggle = useCallback((id: string) => {
+    setOpenSection(prev => {
+      if (prev === id) return null;
+      // Mark section as read when opened
+      markAsRead(id);
+      return id;
+    });
+  }, [markAsRead]);
+
+  const readCount = SECTIONS.filter(s => readMap[s.id]).length;
+  const totalCount = SECTIONS.length;
+  const progressPct = Math.round((readCount / totalCount) * 100);
+  const totalTimeMin = SECTIONS.reduce((s, sec) => s + sec.readTimeMin, 0);
+  const remainingTimeMin = SECTIONS.filter(s => !readMap[s.id]).reduce((s, sec) => s + sec.readTimeMin, 0);
 
   return (
     <div className="space-y-4">
@@ -237,23 +285,75 @@ export default function LeaderGuideContent() {
         Estratégias, estilos e ferramentas práticas para o discipulado.
       </p>
 
+      {/* Progress Summary Card */}
+      <div className="bg-card rounded-xl border border-border shadow-sm p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <BarChart3 className="w-4 h-4 text-primary" />
+          <span className="font-montserrat font-bold text-foreground text-sm">Progresso de Leitura</span>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Progress value={progressPct} className="flex-1 h-2.5" />
+          <span className="font-inter font-bold text-primary text-sm whitespace-nowrap">{progressPct}%</span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="bg-primary/5 rounded-lg p-2">
+            <p className="font-montserrat font-bold text-primary text-base">{readCount}</p>
+            <p className="text-muted-foreground font-inter text-[10px]">Concluídas</p>
+          </div>
+          <div className="bg-accent/10 rounded-lg p-2">
+            <p className="font-montserrat font-bold text-accent-foreground text-base">{totalCount - readCount}</p>
+            <p className="text-muted-foreground font-inter text-[10px]">Pendentes</p>
+          </div>
+          <div className="bg-muted rounded-lg p-2">
+            <div className="flex items-center justify-center gap-1">
+              <Clock className="w-3 h-3 text-muted-foreground" />
+              <p className="font-montserrat font-bold text-foreground text-base">{remainingTimeMin}</p>
+            </div>
+            <p className="text-muted-foreground font-inter text-[10px]">min restantes</p>
+          </div>
+        </div>
+
+        {readCount === totalCount && (
+          <div className="flex items-center gap-2 bg-primary/10 rounded-lg p-2.5">
+            <CheckCircle2 className="w-4 h-4 text-primary" />
+            <p className="font-inter text-xs text-primary font-semibold">Parabéns! Guia completo! 🎉</p>
+          </div>
+        )}
+      </div>
+
+      {/* Sections */}
       <div className="space-y-2">
         {SECTIONS.map(section => {
           const Icon = section.icon;
           const isOpen = openSection === section.id;
+          const isRead = !!readMap[section.id];
           return (
-            <div key={section.id} className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+            <div key={section.id} className={`bg-card rounded-xl border shadow-sm overflow-hidden transition-colors ${isRead ? "border-primary/30" : "border-border"}`}>
               <button
-                onClick={() => setOpenSection(isOpen ? null : section.id)}
+                onClick={() => handleToggle(section.id)}
                 className="w-full flex items-center gap-3 p-3 text-left"
               >
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <Icon className="w-4 h-4 text-primary" />
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isRead ? "bg-primary/20" : "bg-primary/10"}`}>
+                  {isRead
+                    ? <CheckCircle2 className="w-4 h-4 text-primary" />
+                    : <Icon className="w-4 h-4 text-primary" />
+                  }
                 </div>
-                <span className="font-montserrat font-bold text-foreground text-sm flex-1">{section.title}</span>
+                <div className="flex-1 min-w-0">
+                  <span className={`font-montserrat font-bold text-sm block ${isRead ? "text-primary" : "text-foreground"}`}>
+                    {section.title}
+                  </span>
+                  <span className="text-muted-foreground font-inter text-[10px] flex items-center gap-1">
+                    <Clock className="w-2.5 h-2.5" />
+                    {section.readTimeMin} min de leitura
+                    {isRead && <span className="ml-1 text-primary">· ✓ Lida</span>}
+                  </span>
+                </div>
                 {isOpen
-                  ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                  : <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                  ? <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                  : <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 }
               </button>
               {isOpen && (
