@@ -1030,6 +1030,7 @@ export type Database = {
           community: Database["public"]["Enums"]["community_name"]
           confirmation_year: number | null
           created_at: string
+          email: string | null
           father_name: string | null
           father_phone: string | null
           full_name: string
@@ -1049,6 +1050,7 @@ export type Database = {
           community: Database["public"]["Enums"]["community_name"]
           confirmation_year?: number | null
           created_at?: string
+          email?: string | null
           father_name?: string | null
           father_phone?: string | null
           full_name: string
@@ -1068,6 +1070,7 @@ export type Database = {
           community?: Database["public"]["Enums"]["community_name"]
           confirmation_year?: number | null
           created_at?: string
+          email?: string | null
           father_name?: string | null
           father_phone?: string | null
           full_name?: string

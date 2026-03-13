@@ -64,6 +64,7 @@ export type Participant = {
   father_phone?: string | null;
   mother_phone?: string | null;
   address?: string | null;
+  email?: string | null;
 };
 
 export type Activity = { id: string; type: string; points: number; title: string; order_num: number; subtitle: string | null };
@@ -505,6 +506,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
               <button onClick={() => { setEditingCommunity(true); setNewCommunity(p.community); }} className="ml-1.5 text-primary-foreground/50 hover:text-primary-foreground underline text-[10px]">✏️ alterar</button>
             </p>
             <p className="text-primary-foreground/60 font-inter text-xs">📞 {p.phone}</p>
+            {p.email && <p className="text-primary-foreground/60 font-inter text-xs">📧 {p.email}</p>}
             <p className="text-primary-foreground/60 font-inter text-xs">
               🎓 Confirmatório {new Date().getFullYear()} - {p.area}
               <button onClick={() => { setEditingTurma(true); setNewTurmaId(p.turma_id ?? ""); }} className="ml-1.5 text-primary-foreground/50 hover:text-primary-foreground underline text-[10px]">✏️ alterar</button>

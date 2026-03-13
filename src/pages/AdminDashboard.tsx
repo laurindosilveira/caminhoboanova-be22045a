@@ -81,7 +81,7 @@ export default function AdminDashboard() {
     setLoading(true);
     const [{ data: activitiesData }, { data: profilesData }, userResult, { data: turmasData }] = await Promise.all([
       supabase.from("activities").select("*").order("order_num"),
-      supabase.from("profiles").select("user_id, full_name, community, area, birth_date, phone, turma_id, confirmation_year, avatar_url, father_name, mother_name, father_phone, mother_phone, address"),
+      supabase.from("profiles").select("user_id, full_name, community, area, birth_date, phone, turma_id, confirmation_year, avatar_url, father_name, mother_name, father_phone, mother_phone, address, email"),
       supabase.auth.getUser(),
       supabase.from("turmas").select("*").eq("is_active", true).order("area").order("name"),
     ]);
