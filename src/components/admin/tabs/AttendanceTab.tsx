@@ -16,7 +16,7 @@ import ClassroomSettingsTab from "./ClassroomSettingsTab";
 
 import ChallengesTab from "./ChallengesTab";
 
-type SubTab = "presenca" | "sala" | "desafios";
+type SubTab = "sala";
 
 type Event = {
   id: string; title: string; event_date: string; type: string;
@@ -89,7 +89,7 @@ type AttendanceProps = {
 };
 
 export default function AttendanceTab({ participants, activities, communities, initialParticipant, onClearInitial, adminArea }: AttendanceProps) {
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>("presenca");
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>("sala");
   const { profile } = useAuth();
   const { toast } = useToast();
   const [events, setEvents] = useState<Event[]>([]);
@@ -611,8 +611,6 @@ export default function AttendanceTab({ participants, activities, communities, i
   }
 
   const SUB_TABS = [
-    { id: "presenca" as SubTab, label: "Presença", icon: CheckCircle2 },
-    { id: "desafios" as SubTab, label: "Desafios", icon: Star },
     { id: "sala" as SubTab, label: "Sala", icon: GraduationCap },
   ];
 
@@ -642,18 +640,13 @@ export default function AttendanceTab({ participants, activities, communities, i
     );
   }
 
-  // Non-presenca sub-tabs
-  if (activeSubTab !== "presenca") {
-    return (
-      <div className="space-y-4">
-        {renderCascadeDialog()}
-        {renderSubTabs()}
-        {activeSubTab === "sala" && <ClassroomSettingsTab />}
-        
-        {activeSubTab === "desafios" && <ChallengesTab />}
-      </div>
-    );
-  }
+  // Render sala directly (no sub-tab navigation needed)
+  return (
+    <div className="space-y-4">
+      {renderCascadeDialog()}
+      <ClassroomSettingsTab />
+    </div>
+  );
 
   if (loading) {
     return (
