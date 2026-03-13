@@ -34,7 +34,7 @@ export default function DiscipleProfile({ faithPoints, faithLevel, streakDays, c
             </div>
             <div>
               <p className="text-primary-foreground/70 text-xs font-inter">Perfil do discípulo</p>
-              <h3 className="font-montserrat font-black text-primary-foreground text-lg">Discípula Nível {faithLevel}</h3>
+              <h3 className="font-montserrat font-black text-primary-foreground text-lg">Discípulo Nível {faithLevel}</h3>
               <p className="text-primary-foreground/70 text-sm font-inter">{community ?? "Caminho"} • {area ?? "Área 1"}</p>
             </div>
           </div>
