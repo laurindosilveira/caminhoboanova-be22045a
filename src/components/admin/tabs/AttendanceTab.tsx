@@ -640,18 +640,13 @@ export default function AttendanceTab({ participants, activities, communities, i
     );
   }
 
-  // Non-presenca sub-tabs
-  if (activeSubTab !== "presenca") {
-    return (
-      <div className="space-y-4">
-        {renderCascadeDialog()}
-        {renderSubTabs()}
-        {activeSubTab === "sala" && <ClassroomSettingsTab />}
-        
-        {activeSubTab === "desafios" && <ChallengesTab />}
-      </div>
-    );
-  }
+  // Render sala directly (no sub-tab navigation needed)
+  return (
+    <div className="space-y-4">
+      {renderCascadeDialog()}
+      <ClassroomSettingsTab />
+    </div>
+  );
 
   if (loading) {
     return (
