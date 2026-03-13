@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
-import { BookOpen, ChevronDown, ChevronUp, Users, MessageSquare, AlertTriangle, Lightbulb, Heart, Handshake, CheckCircle2, Clock, BarChart3 } from "lucide-react";
+import { useState, useCallback } from "react";
+import { BookOpen, ChevronDown, ChevronUp, Users, MessageSquare, AlertTriangle, Lightbulb, Heart, Handshake, CheckCircle2, Clock, BarChart3, Download } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 
 type SectionMeta = {
   id: string;
