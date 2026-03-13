@@ -14,6 +14,7 @@ type Turma = { id: string; name: string; year: number; area: string | null };
 type UserEntry = {
   user_id: string;
   full_name: string;
+  email: string;
   community: string;
   area: string;
   phone: string;
