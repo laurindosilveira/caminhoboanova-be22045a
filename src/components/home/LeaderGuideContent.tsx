@@ -286,6 +286,14 @@ export default function LeaderGuideContent() {
         Estratégias, estilos e ferramentas práticas para o discipulado.
       </p>
 
+      {/* Download PDF Button */}
+      <a href="/__l5e/documents/Resumo_Guia_Lideres.pdf" download="Resumo_Guia_Lideres.pdf" target="_blank" rel="noopener noreferrer">
+        <Button variant="outline" className="w-full gap-2 border-primary/30 text-primary hover:bg-primary/10">
+          <Download className="w-4 h-4" />
+          Baixar Resumo em PDF
+        </Button>
+      </a>
+
       {/* Progress Summary Card */}
       <div className="bg-card rounded-xl border border-border shadow-sm p-4 space-y-3">
         <div className="flex items-center gap-2">
