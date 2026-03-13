@@ -64,6 +64,7 @@ export type Participant = {
   father_phone?: string | null;
   mother_phone?: string | null;
   address?: string | null;
+  email?: string | null;
 };
 
 export type Activity = { id: string; type: string; points: number; title: string; order_num: number; subtitle: string | null };
