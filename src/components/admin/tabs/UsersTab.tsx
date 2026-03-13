@@ -83,7 +83,7 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
   async function fetchUsers() {
     setLoading(true);
     const [{ data: profiles }, { data: roles }, { data: turmasData }] = await Promise.all([
-      supabase.from("profiles").select("user_id, full_name, community, area, phone, birth_date, father_name, mother_name, father_phone, mother_phone, address, created_at, turma_id").order("full_name"),
+      supabase.from("profiles").select("user_id, full_name, email, community, area, phone, birth_date, father_name, mother_name, father_phone, mother_phone, address, created_at, turma_id").order("full_name"),
       supabase.from("user_roles").select("user_id, role, admin_area"),
       supabase.from("turmas").select("id, name, year, area").eq("is_active", true).order("year", { ascending: false }),
     ]);
