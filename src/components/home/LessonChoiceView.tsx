@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { ChevronLeft, BookOpen, GraduationCap, CheckCircle2, Star, LockKeyhole, Calendar, Lock } from "lucide-react";
 import DevotionalView from "@/components/home/DevotionalView";
@@ -192,6 +193,8 @@ function computeDevotionalStatuses(
 }
 
 export default function LessonChoiceView({ lesson, onBack, onOpenStudy, scheduledDevotionalDates, eventDate, isStudyLocked }: Props) {
+  const { role } = useAuth();
+  const isLeaderOrAdmin = role === "admin" || role === "lider";
   const [devotionals, setDevotionals] = useState<DevotionalItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDevotionals, setShowDevotionals] = useState(false);
@@ -217,9 +220,17 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
       setCompletedIds(new Set(progList.map((p: any) => p.devotional_id)));
       setCompletedDates(completedMap);
 
-      const { statuses, lockedSet } = computeDevotionalStatuses(devList, completedMap, scheduledDevotionalDates);
-      setDevStatuses(statuses);
-      setLockedIds(lockedSet);
+      if (isLeaderOrAdmin) {
+        // Leaders/admins: all devotionals are available (no date locks)
+        const allAvailable = new Map<string, DevotionalStatus>();
+        devList.forEach(d => allAvailable.set(d.id, completedMap.has(d.id) ? "completed" : "available"));
+        setDevStatuses(allAvailable);
+        setLockedIds(new Set());
+      } else {
+        const { statuses, lockedSet } = computeDevotionalStatuses(devList, completedMap, scheduledDevotionalDates);
+        setDevStatuses(statuses);
+        setLockedIds(lockedSet);
+      }
       setDevotionals(devList);
       setLoading(false);
     }
@@ -240,9 +251,16 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
     newCompletedMap.set(devotionalId, now.toISOString());
     setCompletedDates(newCompletedMap);
     setCompletedIds(prev => new Set([...prev, devotionalId]));
-    const { statuses, lockedSet } = computeDevotionalStatuses(devotionals, newCompletedMap, scheduledDevotionalDates);
-    setDevStatuses(statuses);
-    setLockedIds(lockedSet);
+    if (isLeaderOrAdmin) {
+      const allAvailable = new Map<string, DevotionalStatus>();
+      devotionals.forEach(d => allAvailable.set(d.id, newCompletedMap.has(d.id) ? "completed" : "available"));
+      setDevStatuses(allAvailable);
+      setLockedIds(new Set());
+    } else {
+      const { statuses, lockedSet } = computeDevotionalStatuses(devotionals, newCompletedMap, scheduledDevotionalDates);
+      setDevStatuses(statuses);
+      setLockedIds(lockedSet);
+    }
     toast.success(`Devocional concluído! +${pts} pontos de fé ⭐`, {
       description: isWeekend ? "Recuperação de fim de semana (2 pts)" : "Continue firme na sua caminhada!",
       duration: 3000,
