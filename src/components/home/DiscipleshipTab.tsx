@@ -431,7 +431,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
         onOpenStudy={() => setSelectedLessonMode("study")}
         scheduledDevotionalDates={agendaSchedule.lessonDevotionalDates.get(selectedLesson.id)}
         eventDate={agendaSchedule.lessonEventDate.get(selectedLesson.id) ?? undefined}
-        isStudyLocked={agendaSchedule.hasScheduledEvents && !agendaSchedule.studyOpenLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id)}
+        isStudyLocked={!isLeaderOrAdmin && agendaSchedule.hasScheduledEvents && !agendaSchedule.studyOpenLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id)}
       />
     );
   }
