@@ -646,7 +646,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
             {content.questions.map((question, i) => (
               <div key={i}>
                 <p className="font-inter text-sm text-foreground mb-2 font-medium">{i + 1}. {question}</p>
-                <ResponseField qKey={`q${i}`} placeholder="Escreva sua reflexão aqui..." />
+                {renderResponseField(`q${i}`, "Escreva sua reflexão aqui...")}
               </div>
             ))}
           </div>
