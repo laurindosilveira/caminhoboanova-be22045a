@@ -434,17 +434,22 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     saveAs(blob, `Licao_${lesson.order_num}_${lesson.title.replace(/\s+/g, "_")}.docx`);
   }
 
-  const ResponseField = ({ qKey, placeholder }: { qKey: string; placeholder: string }) => (
-    <textarea
-      value={responses[qKey] ?? ""}
-      onChange={e => updateResponse(qKey, e.target.value)}
-      onBlur={e => saveResponse(qKey, e.target.value)}
-      placeholder={isAdmin ? "(Sem resposta ainda)" : placeholder}
-      readOnly={isAdmin}
-      rows={3}
-      className={`w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none transition-colors ${isAdmin ? "opacity-70 cursor-default" : ""}`}
-    />
-  );
+  // ResponseField is intentionally inlined as a JSX helper (not a component)
+  // to avoid remount/focus-loss issues. We use a plain function returning JSX.
+  function renderResponseField(qKey: string, placeholder: string) {
+    return (
+      <textarea
+        key={qKey}
+        value={responses[qKey] ?? ""}
+        onChange={e => updateResponse(qKey, e.target.value)}
+        onBlur={e => saveResponse(qKey, e.target.value)}
+        placeholder={isAdmin ? "(Sem resposta ainda)" : placeholder}
+        readOnly={isAdmin}
+        rows={3}
+        className={`w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none transition-colors ${isAdmin ? "opacity-70 cursor-default" : ""}`}
+      />
+    );
+  }
 
   if (!contentLoaded) {
     return (
@@ -498,7 +503,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
         </div>
         <div className="p-4 space-y-3">
           <p className="font-inter text-sm text-foreground leading-relaxed">{content.icebreaker}</p>
-          <ResponseField qKey="icebreaker" placeholder="Escreva sua resposta aqui..." />
+          {renderResponseField("icebreaker", "Escreva sua resposta aqui...")}
         </div>
       </div>
 
@@ -641,7 +646,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
             {content.questions.map((question, i) => (
               <div key={i}>
                 <p className="font-inter text-sm text-foreground mb-2 font-medium">{i + 1}. {question}</p>
-                <ResponseField qKey={`q${i}`} placeholder="Escreva sua reflexão aqui..." />
+                {renderResponseField(`q${i}`, "Escreva sua reflexão aqui...")}
               </div>
             ))}
           </div>
@@ -659,7 +664,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
             <p className="font-inter text-sm text-foreground leading-relaxed">{content.practice}</p>
           </div>
           <p className="font-inter text-xs text-muted-foreground font-medium">O que você planeja viver na prática esta semana?</p>
-          <ResponseField qKey="practice" placeholder="Escreva aqui como vai aplicar esta lição..." />
+          {renderResponseField("practice", "Escreva aqui como vai aplicar esta lição...")}
         </div>
       </div>
 
@@ -671,7 +676,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
         </div>
         <div className="p-4 space-y-3">
           <p className="font-inter text-xs text-muted-foreground leading-relaxed">{content.prayer_prompt}</p>
-          <ResponseField qKey="prayer" placeholder="Escreva sua oração pessoal..." />
+          {renderResponseField("prayer", "Escreva sua oração pessoal...")}
         </div>
       </div>
 
