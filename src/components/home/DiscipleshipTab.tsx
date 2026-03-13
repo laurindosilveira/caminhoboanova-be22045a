@@ -112,7 +112,8 @@ type DiscipleshipTabProps = {
 };
 
 export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed }: DiscipleshipTabProps = {}) {
-  const { profile } = useAuth();
+  const { profile, role } = useAuth();
+  const isLeaderOrAdmin = role === "admin" || role === "lider";
   const agendaSchedule = useAgendaSchedule();
 
   const [activities, setActivities] = useState<Activity[]>([]);
