@@ -581,7 +581,7 @@ function UserRow({
       </div>
       <div className="flex-1 min-w-0 cursor-pointer" onClick={onEdit}>
         <p className="font-montserrat font-bold text-foreground text-sm truncate">{u.full_name}</p>
-        <p className="text-muted-foreground text-xs font-inter">
+        <p className="text-muted-foreground text-xs font-inter truncate">
           {u.community} · {u.area}
           {u.role === "admin" && u.admin_area && (
             <span className="text-primary font-medium"> · Lidera {u.admin_area}</span>
@@ -590,6 +590,11 @@ function UserRow({
             <span className="text-accent-foreground font-medium"> · Líder {u.admin_area}</span>
           )}
         </p>
+        {u.email && (
+          <p className="text-muted-foreground text-[10px] font-inter flex items-center gap-1 truncate">
+            <Mail className="w-3 h-3 flex-shrink-0" />{u.email}
+          </p>
+        )}
       </div>
       <button onClick={onEdit} className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center hover:bg-muted/80 flex-shrink-0 mr-1" title="Editar">
         <ChevronRight className="w-4 h-4 text-muted-foreground" />
