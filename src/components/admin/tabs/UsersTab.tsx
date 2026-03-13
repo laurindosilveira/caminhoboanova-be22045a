@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Shield, User, Search, ShieldCheck, ShieldOff, CalendarDays, MapPin, ChevronRight, X, Save, Phone, Cake, Home, Users, GraduationCap, Clock, Download, Trash2 } from "lucide-react";
+import { Shield, User, Search, ShieldCheck, ShieldOff, CalendarDays, MapPin, ChevronRight, X, Save, Phone, Cake, Home, Users, GraduationCap, Clock, Download, Trash2, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
