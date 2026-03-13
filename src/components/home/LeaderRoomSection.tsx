@@ -10,6 +10,7 @@ const AdminPushTab = lazy(() => import("@/components/admin/tabs/AdminPushTab"));
 const PushStatusList = lazy(() => import("@/components/admin/tabs/PushStatusList"));
 const CourseGuideSubTab = lazy(() => import("@/components/admin/tabs/leader/CourseGuideSubTab"));
 const OverviewTab = lazy(() => import("@/components/admin/tabs/OverviewTab"));
+const ReportsTab = lazy(() => import("@/components/admin/tabs/ReportsTab"));
 const LeaderTurmaManagement = lazy(() => import("@/components/admin/tabs/leader/LeaderTurmaManagement"));
 import LeaderWaitingRoom from "@/components/home/LeaderWaitingRoom";
 
