@@ -251,9 +251,16 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
     newCompletedMap.set(devotionalId, now.toISOString());
     setCompletedDates(newCompletedMap);
     setCompletedIds(prev => new Set([...prev, devotionalId]));
-    const { statuses, lockedSet } = computeDevotionalStatuses(devotionals, newCompletedMap, scheduledDevotionalDates);
-    setDevStatuses(statuses);
-    setLockedIds(lockedSet);
+    if (isLeaderOrAdmin) {
+      const allAvailable = new Map<string, DevotionalStatus>();
+      devotionals.forEach(d => allAvailable.set(d.id, newCompletedMap.has(d.id) ? "completed" : "available"));
+      setDevStatuses(allAvailable);
+      setLockedIds(new Set());
+    } else {
+      const { statuses, lockedSet } = computeDevotionalStatuses(devotionals, newCompletedMap, scheduledDevotionalDates);
+      setDevStatuses(statuses);
+      setLockedIds(lockedSet);
+    }
     toast.success(`Devocional concluído! +${pts} pontos de fé ⭐`, {
       description: isWeekend ? "Recuperação de fim de semana (2 pts)" : "Continue firme na sua caminhada!",
       duration: 3000,
