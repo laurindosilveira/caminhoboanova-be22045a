@@ -12,6 +12,7 @@ const CourseGuideSubTab = lazy(() => import("@/components/admin/tabs/leader/Cour
 const OverviewTab = lazy(() => import("@/components/admin/tabs/OverviewTab"));
 const ReportsTab = lazy(() => import("@/components/admin/tabs/ReportsTab"));
 const LeaderTurmaManagement = lazy(() => import("@/components/admin/tabs/leader/LeaderTurmaManagement"));
+const LeaderGuideContent = lazy(() => import("@/components/home/LeaderGuideContent"));
 import LeaderWaitingRoom from "@/components/home/LeaderWaitingRoom";
 
 
