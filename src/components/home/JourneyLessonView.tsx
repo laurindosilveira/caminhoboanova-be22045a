@@ -676,7 +676,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
         </div>
         <div className="p-4 space-y-3">
           <p className="font-inter text-xs text-muted-foreground leading-relaxed">{content.prayer_prompt}</p>
-          <ResponseField qKey="prayer" placeholder="Escreva sua oração pessoal..." />
+          {renderResponseField("prayer", "Escreva sua oração pessoal...")}
         </div>
       </div>
 
