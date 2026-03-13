@@ -664,7 +664,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
             <p className="font-inter text-sm text-foreground leading-relaxed">{content.practice}</p>
           </div>
           <p className="font-inter text-xs text-muted-foreground font-medium">O que você planeja viver na prática esta semana?</p>
-          <ResponseField qKey="practice" placeholder="Escreva aqui como vai aplicar esta lição..." />
+          {renderResponseField("practice", "Escreva aqui como vai aplicar esta lição...")}
         </div>
       </div>
 
