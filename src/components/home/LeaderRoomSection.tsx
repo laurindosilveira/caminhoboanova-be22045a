@@ -31,13 +31,14 @@ type Participant = {
 type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
 type Turma = { id: string; name: string; area: string | null };
 
-type SubTab = "visao" | "alunos" | "encontros" | "roteiros" | "comunicacao" | "push" | "gerencia" | "relatorios";
+type SubTab = "visao" | "alunos" | "encontros" | "roteiros" | "comunicacao" | "push" | "gerencia" | "relatorios" | "guia";
 
 const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
   { id: "visao", label: "Visão", icon: BarChart3 },
   { id: "alunos", label: "Discípulos", icon: Users },
   { id: "encontros", label: "Encontros", icon: CalendarDays },
   { id: "roteiros", label: "Roteiros", icon: BookOpen },
+  { id: "guia", label: "Guia", icon: BookMarked },
   { id: "relatorios", label: "Relatórios", icon: FileText },
   { id: "comunicacao", label: "Avisos", icon: MessageSquare },
   { id: "push", label: "Push", icon: Bell },
