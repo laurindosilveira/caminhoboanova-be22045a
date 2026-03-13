@@ -89,7 +89,7 @@ type AttendanceProps = {
 };
 
 export default function AttendanceTab({ participants, activities, communities, initialParticipant, onClearInitial, adminArea }: AttendanceProps) {
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>("presenca");
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>("sala");
   const { profile } = useAuth();
   const { toast } = useToast();
   const [events, setEvents] = useState<Event[]>([]);
