@@ -243,7 +243,8 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
 
   const filtered = users.filter(u => {
     const matchesSearch = u.full_name.toLowerCase().includes(search.toLowerCase()) ||
-      u.community.toLowerCase().includes(search.toLowerCase());
+      u.community.toLowerCase().includes(search.toLowerCase()) ||
+      (u.email && u.email.toLowerCase().includes(search.toLowerCase()));
     const matchesYear = selectedYear ? u.created_year === selectedYear : true;
     return matchesSearch && matchesYear;
   });
