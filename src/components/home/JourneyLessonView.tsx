@@ -434,17 +434,22 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     saveAs(blob, `Licao_${lesson.order_num}_${lesson.title.replace(/\s+/g, "_")}.docx`);
   }
 
-  const ResponseField = ({ qKey, placeholder }: { qKey: string; placeholder: string }) => (
-    <textarea
-      value={responses[qKey] ?? ""}
-      onChange={e => updateResponse(qKey, e.target.value)}
-      onBlur={e => saveResponse(qKey, e.target.value)}
-      placeholder={isAdmin ? "(Sem resposta ainda)" : placeholder}
-      readOnly={isAdmin}
-      rows={3}
-      className={`w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none transition-colors ${isAdmin ? "opacity-70 cursor-default" : ""}`}
-    />
-  );
+  // ResponseField is intentionally inlined as a JSX helper (not a component)
+  // to avoid remount/focus-loss issues. We use a plain function returning JSX.
+  function renderResponseField(qKey: string, placeholder: string) {
+    return (
+      <textarea
+        key={qKey}
+        value={responses[qKey] ?? ""}
+        onChange={e => updateResponse(qKey, e.target.value)}
+        onBlur={e => saveResponse(qKey, e.target.value)}
+        placeholder={isAdmin ? "(Sem resposta ainda)" : placeholder}
+        readOnly={isAdmin}
+        rows={3}
+        className={`w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none transition-colors ${isAdmin ? "opacity-70 cursor-default" : ""}`}
+      />
+    );
+  }
 
   if (!contentLoaded) {
     return (
