@@ -100,6 +100,7 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
 
     const combined: UserEntry[] = (profiles ?? []).map(p => ({
       ...p,
+      email: (p as any).email ?? "",
       father_name: (p as any).father_name ?? "",
       mother_name: (p as any).mother_name ?? "",
       father_phone: (p as any).father_phone ?? "",
