@@ -6,11 +6,13 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 
 import AdminHeader from "@/components/admin/AdminHeader";
 import AdminBottomNav, { AdminTab } from "@/components/admin/AdminBottomNav";
-import ParticipantsTab from "@/components/admin/tabs/ParticipantsTab";
 import CoursesTab from "@/components/admin/tabs/CoursesTab";
 import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
 import UsersTab from "@/components/admin/tabs/UsersTab";
 import AdminPushTab from "@/components/admin/tabs/AdminPushTab";
+import AdminOverviewTab from "@/components/admin/tabs/AdminOverviewTab";
+import AdminAlertsTab from "@/components/admin/tabs/AdminAlertsTab";
+import AdminLeadersTab from "@/components/admin/tabs/AdminLeadersTab";
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
 const AREA_2_COMMUNITIES = ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"];
@@ -35,15 +37,12 @@ export default function AdminDashboard() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [plans, setPlans] = useState<Record<string, PlanInfo>>({});
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<AdminTab>(role === "lider" ? "courses" : "attendance");
-  
+  const [activeTab, setActiveTab] = useState<AdminTab>(role === "lider" ? "courses" : "overview");
 
   // Turma selection state
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [selectedTurma, setSelectedTurma] = useState<Turma | null>(null);
   const [expandedArea, setExpandedArea] = useState<string | null>(null);
-
-  const currentYear = new Date().getFullYear();
 
   useEffect(() => {
     if (role !== "admin" && role !== "lider") { navigate("/"); return; }
@@ -108,7 +107,6 @@ export default function AdminDashboard() {
     setLoading(false);
   }
 
-
   // Filter participants by selected turma
   const filteredParticipants = selectedTurma
     ? participants.filter(p => (p as any).turma_id === selectedTurma.id)
@@ -132,7 +130,6 @@ export default function AdminDashboard() {
     const area1Turmas = turmas.filter(t => t.area === "Área 1");
     const area2Turmas = turmas.filter(t => t.area === "Área 2");
 
-    // For non-super admins, only show their area
     const adminArea = profile?.area ?? "";
     const areasToShow = isSuper
       ? [{ name: "Área 1", turmas: area1Turmas, communities: AREA_1_COMMUNITIES, icon: "⛪" },
@@ -185,7 +182,6 @@ export default function AdminDashboard() {
 
                 return (
                   <div key={areaInfo.name} className="space-y-2">
-                    {/* Area card */}
                     <button
                       onClick={() => setExpandedArea(isExpanded ? null : areaInfo.name)}
                       className={`w-full flex items-center gap-4 p-4 bg-card rounded-2xl border-2 shadow-sm transition-all ${
@@ -210,7 +206,6 @@ export default function AdminDashboard() {
                       }
                     </button>
 
-                    {/* Expanded turmas */}
                     {isExpanded && (
                       <div className="pl-6 space-y-2 animate-in slide-in-from-top-2 duration-200">
                         {areaInfo.turmas.length === 0 ? (
@@ -291,7 +286,17 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <>
-            {activeTab === "attendance" && (
+            {activeTab === "overview" && (
+              <AdminOverviewTab
+                participants={filteredParticipants}
+                activities={activities}
+                turmas={turmas}
+              />
+            )}
+            {activeTab === "alerts" && (
+              <AdminAlertsTab participants={filteredParticipants} />
+            )}
+            {activeTab === "settings" && (
               <AttendanceTab
                 participants={filteredParticipants}
                 activities={activities}
@@ -300,12 +305,13 @@ export default function AdminDashboard() {
               />
             )}
             {activeTab === "courses" && <CoursesTab />}
+            {activeTab === "leaders" && <AdminLeadersTab turmas={turmas} />}
             {activeTab === "push" && <AdminPushTab turmas={turmas} />}
             {activeTab === "users" && <UsersTab onSelectTurma={(turma) => {
               const found = turmas.find(t => t.area === turma.area);
               if (found) {
                 setSelectedTurma(found);
-                setActiveTab("attendance");
+                setActiveTab("overview");
               }
             }} />}
           </>
