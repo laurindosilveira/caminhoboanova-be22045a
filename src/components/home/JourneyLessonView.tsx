@@ -503,7 +503,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
         </div>
         <div className="p-4 space-y-3">
           <p className="font-inter text-sm text-foreground leading-relaxed">{content.icebreaker}</p>
-          <ResponseField qKey="icebreaker" placeholder="Escreva sua resposta aqui..." />
+          {renderResponseField("icebreaker", "Escreva sua resposta aqui...")}
         </div>
       </div>
 
