@@ -555,7 +555,8 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
             )}
             {p.mother_name && (
               <p className="text-primary-foreground/80 font-inter text-xs">
-                👩 <strong>Mãe:</strong> {p.mother_name}{p.mother_phone ? ` · 📞 ${p.mother_phone}` : ""}
+                👩 <strong>Mãe:</strong> {p.mother_name}
+                {p.mother_phone && <> · 📞 <a href={`https://wa.me/${p.mother_phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary-foreground transition-colors">{p.mother_phone}</a></>}
               </p>
             )}
             {p.address && (
