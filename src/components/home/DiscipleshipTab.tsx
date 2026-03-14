@@ -424,6 +424,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
         </div>
       );
     }
+    const isLateAccess = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id);
     return (
       <LessonChoiceView
         lesson={selectedLesson}
@@ -431,7 +432,8 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
         onOpenStudy={() => setSelectedLessonMode("study")}
         scheduledDevotionalDates={agendaSchedule.lessonDevotionalDates.get(selectedLesson.id)}
         eventDate={agendaSchedule.lessonEventDate.get(selectedLesson.id) ?? undefined}
-        isStudyLocked={!isLeaderOrAdmin && agendaSchedule.hasScheduledEvents && !agendaSchedule.studyOpenLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id)}
+        isStudyLocked={false}
+        isLateAccess={isLateAccess}
       />
     );
   }
