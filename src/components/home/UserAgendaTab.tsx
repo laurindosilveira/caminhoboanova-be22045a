@@ -185,7 +185,7 @@ export default function UserAgendaTab() {
 
   function openCreateForm() {
     setEditingEvent(null);
-    setForm({ ...EMPTY_FORM, area: profile?.area ?? "" });
+    setForm({ ...EMPTY_FORM, area: currentArea });
     setShowForm(true);
   }
 

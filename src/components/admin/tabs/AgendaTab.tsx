@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import { CalendarDays, Plus, X, MapPin, Users, BookOpen, Pencil, Check } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -46,6 +47,8 @@ const EMPTY_FORM = {
 
 export default function AgendaTab() {
   const { profile } = useAuth();
+  const { effectiveArea } = useAreaSwitch();
+  const currentArea = effectiveArea || profile?.area || "";
   const [events, setEvents] = useState<Event[]>([]);
   const [lessons, setLessons] = useState<LessonOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,7 +88,7 @@ export default function AgendaTab() {
 
   function openNewForm() {
     setEditingFullEventId(null);
-    setForm({ ...EMPTY_FORM, area: profile?.area ?? "" });
+    setForm({ ...EMPTY_FORM, area: currentArea });
     setShowForm(true);
   }
 
@@ -98,7 +101,7 @@ export default function AgendaTab() {
       event_date: dateForInput,
       location: event.location ?? "",
       type: event.type,
-      area: event.area ?? profile?.area ?? "",
+      area: event.area ?? currentArea,
       community: event.community ?? "",
       linked_lesson_id: event.linked_lesson_id ?? "",
     });
