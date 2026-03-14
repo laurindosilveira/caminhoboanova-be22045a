@@ -1272,9 +1272,13 @@ export default function ParticipantsTab({ participants, activities, communities 
                 <div className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <span className="font-montserrat font-black text-primary text-lg">{p.full_name.charAt(0).toUpperCase()}</span>
-                      </div>
+                      {p.avatar_url ? (
+                        <img src={p.avatar_url} alt={p.full_name} className="w-11 h-11 rounded-xl object-cover flex-shrink-0 border border-border" />
+                      ) : (
+                        <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <span className="font-montserrat font-black text-primary text-lg">{p.full_name.charAt(0).toUpperCase()}</span>
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <h3 className="font-montserrat font-bold text-card-foreground text-sm truncate">{p.full_name}</h3>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
