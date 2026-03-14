@@ -58,6 +58,7 @@ type Props = {
   onBack: () => void;
   isAdmin?: boolean;
   targetUserId?: string;
+  isLateAccess?: boolean;
 };
 
 export default function JourneyLessonView({ lesson, onBack, isAdmin = false, targetUserId }: Props) {
