@@ -50,6 +50,7 @@ export default function AgendaTab() {
   const { effectiveArea } = useAreaSwitch();
   const currentArea = effectiveArea || profile?.area || "";
   const [events, setEvents] = useState<Event[]>([]);
+  const [areaFilter, setAreaFilter] = useState<string>(currentArea);
   const [lessons, setLessons] = useState<LessonOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -252,6 +253,10 @@ export default function AgendaTab() {
     return `Curso ${lesson.course_order} — Lição ${lesson.order_num}: ${lesson.title}`;
   };
 
+  const filteredEvents = areaFilter === "all"
+    ? events
+    : events.filter(e => !e.area || e.area === areaFilter);
+
   const isEditing = !!editingFullEventId;
 
   return (
@@ -265,6 +270,23 @@ export default function AgendaTab() {
         >
           <Plus className="w-3.5 h-3.5" /> Novo evento
         </button>
+      </div>
+
+      {/* Area filter */}
+      <div className="flex gap-1.5">
+        {["all", "Área 1", "Área 2"].map(val => (
+          <button
+            key={val}
+            onClick={() => setAreaFilter(val)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-inter font-medium transition-colors ${
+              areaFilter === val
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            {val === "all" ? "Todas" : val}
+          </button>
+        ))}
       </div>
 
       {/* Cascade confirmation dialog */}
@@ -381,15 +403,15 @@ export default function AgendaTab() {
       {/* List */}
       {loading ? (
         <div className="text-center py-12 text-muted-foreground font-inter text-sm">Carregando...</div>
-      ) : events.length === 0 ? (
+      ) : filteredEvents.length === 0 ? (
         <div className="text-center py-16">
           <CalendarDays className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-          <p className="font-montserrat font-bold text-foreground">Nenhum evento cadastrado</p>
-          <p className="text-muted-foreground font-inter text-sm mt-1">Clique em "Novo evento" para adicionar.</p>
+          <p className="font-montserrat font-bold text-foreground">Nenhum evento encontrado</p>
+          <p className="text-muted-foreground font-inter text-sm mt-1">Nenhum evento para o filtro selecionado.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {events.map(event => {
+          {filteredEvents.map(event => {
             const typeInfo = EVENT_TYPES.find(t => t.value === event.type);
             const dateObj = new Date(event.event_date);
             const lessonLabel = getLessonLabel(event.linked_lesson_id);
