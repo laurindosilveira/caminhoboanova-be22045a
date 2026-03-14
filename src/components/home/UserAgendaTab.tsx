@@ -153,7 +153,7 @@ function DateTimePickerField({ value, onChange }: { value: string; onChange: (va
   );
 }
 
-
+export default function UserAgendaTab() {
   const { profile, role } = useAuth();
   const { effectiveArea } = useAreaSwitch();
   const canManage = role === "admin" || role === "lider";
