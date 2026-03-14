@@ -403,15 +403,15 @@ export default function AgendaTab() {
       {/* List */}
       {loading ? (
         <div className="text-center py-12 text-muted-foreground font-inter text-sm">Carregando...</div>
-      ) : events.length === 0 ? (
+      ) : filteredEvents.length === 0 ? (
         <div className="text-center py-16">
           <CalendarDays className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-          <p className="font-montserrat font-bold text-foreground">Nenhum evento cadastrado</p>
-          <p className="text-muted-foreground font-inter text-sm mt-1">Clique em "Novo evento" para adicionar.</p>
+          <p className="font-montserrat font-bold text-foreground">Nenhum evento encontrado</p>
+          <p className="text-muted-foreground font-inter text-sm mt-1">Nenhum evento para o filtro selecionado.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {events.map(event => {
+          {filteredEvents.map(event => {
             const typeInfo = EVENT_TYPES.find(t => t.value === event.type);
             const dateObj = new Date(event.event_date);
             const lessonLabel = getLessonLabel(event.linked_lesson_id);
