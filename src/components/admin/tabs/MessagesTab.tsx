@@ -80,7 +80,7 @@ export default function MessagesTab() {
 
     try {
       const pushTarget = form.target === "turma" ? "turma" : form.target === "all" ? "all" : form.target === "community" ? "community" : "area";
-      const pushTargetValue = form.target === "all" ? undefined : form.target === "turma" ? form.turmaId : form.target === "community" ? form.community : profile?.area;
+      const pushTargetValue = form.target === "all" ? undefined : form.target === "turma" ? form.turmaId : form.target === "community" ? form.community : effectiveArea;
       await supabase.functions.invoke("admin-push", {
         body: {
           title: "📢 Novo aviso no app!",
