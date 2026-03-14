@@ -954,10 +954,8 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
                         let lockMessage = "";
                         if (isNotScheduled) {
                           lockMessage = "📅 Aguardando agendamento";
-                        } else if (isEventDay && !isFullyDone) {
-                          lockMessage = "📖 Dia do encontro — estudo encerrado";
-                        } else if (isPastEvent && !isFullyDone) {
-                          lockMessage = "⏰ Prazo encerrado";
+                        } else if (isLateAccess) {
+                          lockMessage = "⚠️ Atrasado — sem pontuação";
                         } else if (isLocked) {
                           const entry = agendaSchedule.schedule.find(e => e.lessonId === lesson.id);
                           if (entry) {
