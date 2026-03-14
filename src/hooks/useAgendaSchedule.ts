@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 
 export type ScheduleEntry = {
   eventId: string;
@@ -35,12 +36,14 @@ export function getBusinessDaysBefore(date: Date, count: number): Date[] {
 
 export function useAgendaSchedule() {
   const { profile } = useAuth();
+  const { effectiveArea } = useAreaSwitch();
+  const currentArea = effectiveArea || profile?.area || "";
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (profile) fetchSchedule();
-  }, [profile?.area]);
+  }, [currentArea]);
 
   // Realtime subscription for events changes
   useEffect(() => {
@@ -56,7 +59,7 @@ export function useAgendaSchedule() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [profile?.area]);
+  }, [currentArea]);
 
   async function fetchSchedule() {
     setLoading(true);
@@ -77,7 +80,7 @@ export function useAgendaSchedule() {
     for (const event of (events ?? [])) {
       if (!event.linked_lesson_id) continue;
       // Filter by user's area: show events with no area or matching area
-      if (event.area && profile?.area && event.area !== profile.area) continue;
+      if (event.area && currentArea && event.area !== currentArea) continue;
       const lesson = lessonMap.get(event.linked_lesson_id);
       if (!lesson) continue;
       const course = courseMap.get(lesson.course_id);

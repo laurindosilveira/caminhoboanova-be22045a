@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import { CalendarDays, MapPin, Users, BookOpen, ChevronDown, ChevronUp, Plus, Pencil, Trash2, Save, X } from "lucide-react";
 import WorshipConfirmation from "./WorshipConfirmation";
 import { format } from "date-fns";
@@ -61,7 +62,9 @@ const EMPTY_FORM: EventFormData = { title: "", description: "", event_date: "", 
 
 export default function UserAgendaTab() {
   const { profile, role } = useAuth();
+  const { effectiveArea } = useAreaSwitch();
   const canManage = role === "admin" || role === "lider";
+  const currentArea = effectiveArea || profile?.area || "";
   const [events, setEvents] = useState<Event[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [lessonInfoMap, setLessonInfoMap] = useState<Map<string, LessonInfo>>(new Map());
@@ -95,7 +98,7 @@ export default function UserAgendaTab() {
       const all = (eventsData ?? []) as Event[];
       const filtered = all.filter(e =>
         !e.area ||
-        e.area === profile?.area ||
+        e.area === currentArea ||
         e.community === profile?.community
       );
       setEvents(filtered);
@@ -122,7 +125,7 @@ export default function UserAgendaTab() {
       setLoading(false);
     }
     if (profile) fetch();
-  }, [profile]);
+  }, [profile, currentArea]);
 
   // Realtime
   useEffect(() => {
@@ -139,7 +142,7 @@ export default function UserAgendaTab() {
             const all = (eventsData ?? []) as Event[];
             const filtered = all.filter(e =>
               !e.area ||
-              e.area === profile?.area ||
+              e.area === currentArea ||
               e.community === profile?.community
             );
             setEvents(filtered);
@@ -150,7 +153,7 @@ export default function UserAgendaTab() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [profile]);
+  }, [profile, currentArea]);
 
   const now = new Date();
   const upcoming = events.filter(e => new Date(e.event_date) >= now);
