@@ -189,6 +189,7 @@ export default function UserAgendaTab() {
       area: event.area ?? "",
       community: event.community ?? "",
       type: event.type,
+      linked_lesson_id: event.linked_lesson_id ?? "",
     });
     setShowForm(true);
   }
