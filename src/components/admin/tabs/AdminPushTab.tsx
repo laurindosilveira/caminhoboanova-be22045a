@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Send, Users, MapPin, Building, Megaphone, CheckCircle, AlertCircle } from "lucide-react";
+import { Send, Users, MapPin, Building, Megaphone, CheckCircle, AlertCircle, CalendarClock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -223,6 +223,82 @@ export default function AdminPushTab({ turmas = [] }: Props) {
       <p className="text-muted-foreground text-[10px] font-inter text-center">
         Apenas usuários com notificações de mensagens ativas receberão o aviso.
       </p>
+
+      {/* Event Reminders Manual Trigger */}
+      <EventRemindersTrigger />
+    </div>
+  );
+}
+
+function EventRemindersTrigger() {
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<{ sent: number; failed: number; upcomingEvents: number; pastEvents: number } | null>(null);
+  const [error, setError] = useState("");
+
+  async function handleTrigger() {
+    setSending(true);
+    setError("");
+    setResult(null);
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke("event-reminders", { body: {} });
+      if (fnError) throw fnError;
+      setResult(data);
+    } catch (err: any) {
+      setError(err.message || "Erro ao disparar lembretes.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-border space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center">
+          <CalendarClock className="w-5 h-5 text-secondary" />
+        </div>
+        <div>
+          <h3 className="font-montserrat font-bold text-foreground text-sm">Lembretes de Eventos</h3>
+          <p className="text-muted-foreground font-inter text-[10px]">Dispara automático às 8h · Eventos +2 dias e -1 dia</p>
+        </div>
+      </div>
+
+      {error && (
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-destructive/10 border border-destructive/20">
+          <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
+          <p className="text-destructive text-xs font-inter">{error}</p>
+        </div>
+      )}
+
+      {result && (
+        <div className="p-3 rounded-xl bg-brand-green/10 border border-brand-green/20 space-y-1">
+          <p className="text-brand-green text-xs font-inter font-bold flex items-center gap-1.5">
+            <CheckCircle className="w-3.5 h-3.5" />
+            {result.sent > 0 ? `${result.sent} notificação(ões) enviada(s)` : "Nenhuma notificação para enviar"}
+          </p>
+          <p className="text-muted-foreground text-[10px] font-inter">
+            📅 {result.upcomingEvents} evento(s) em 2 dias · 📋 {result.pastEvents} evento(s) de ontem
+            {result.failed > 0 && ` · ❌ ${result.failed} falha(s)`}
+          </p>
+        </div>
+      )}
+
+      <button
+        onClick={handleTrigger}
+        disabled={sending}
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-secondary/30 bg-secondary/5 text-secondary hover:bg-secondary/10 transition-colors font-inter font-bold text-sm disabled:opacity-50"
+      >
+        {sending ? (
+          <>
+            <div className="w-4 h-4 border-2 border-secondary/30 border-t-secondary rounded-full animate-spin" />
+            Disparando...
+          </>
+        ) : (
+          <>
+            <CalendarClock className="w-4 h-4" />
+            Disparar Lembretes Agora
+          </>
+        )}
+      </button>
     </div>
   );
 }
