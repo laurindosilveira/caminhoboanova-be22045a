@@ -243,6 +243,14 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
     setDataLoaded(true);
   }
 
+  // Re-fetch when area changes (admin switching) or on first expand
+  useEffect(() => {
+    if (expanded && canView) {
+      setDataLoaded(false);
+      fetchData();
+    }
+  }, [expanded, canView, turmaArea]);
+
   useEffect(() => {
     if (expanded && !dataLoaded && canView) {
       fetchData();
