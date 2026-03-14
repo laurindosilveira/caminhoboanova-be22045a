@@ -717,7 +717,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         {[
           { icon: MessageSquare, label: "Enviar mensagem", action: () => setActiveSection("notes") },
           { icon: FileText, label: "Registrar acomp.", action: () => { setActiveSection("notes"); setShowNoteForm(true); } },
-          { icon: Calendar, label: "Agendar conversa", action: () => { setNoteForm(f => ({ ...f, note_type: "encontro_individual" })); setActiveSection("notes"); setShowNoteForm(true); } },
+          { icon: Calendar, label: "Agendar conversa", action: () => setShowScheduleForm(true) },
           { icon: AlertTriangle, label: plan.health_status === "critico" ? "⚠️ Crítico" : "Marcar crítico", action: () => setPlan(prev => ({ ...prev, health_status: prev.health_status === "critico" ? "atencao" : "critico" })) },
         ].map(({ icon: Icon, label, action }) => (
           <button key={label} onClick={action}
