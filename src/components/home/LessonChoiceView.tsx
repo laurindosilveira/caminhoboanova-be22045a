@@ -41,6 +41,8 @@ type Props = {
   eventDate?: Date;
   /** Whether the study is locked (event day or past deadline) */
   isStudyLocked?: boolean;
+  /** Whether this is late access (after event date — no points) */
+  isLateAccess?: boolean;
 };
 
 /**
