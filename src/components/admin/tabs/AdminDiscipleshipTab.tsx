@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  Heart, ChevronLeft, AlertCircle, Star, Search, Filter, LayoutGrid, List, Users, Lock, Unlock, GraduationCap
+  Heart, ChevronLeft, AlertCircle, Star, Search, Filter, LayoutGrid, List, Users, Lock, Unlock, GraduationCap, Info
 } from "lucide-react";
 import ParticipantSheet, { HealthBadge } from "./ParticipantSheet";
 import type { Participant, Activity } from "./ParticipantSheet";
@@ -141,9 +141,15 @@ export default function AdminDiscipleshipTab({ participants, activities, initial
             <GraduationCap className="w-4 h-4 text-secondary" />
             <p className="font-montserrat font-bold text-foreground text-sm">Liberação de Cursos</p>
           </div>
-          <p className="font-inter text-xs text-muted-foreground mb-3">
+          <p className="font-inter text-xs text-muted-foreground mb-2">
             Libere os cursos que sua turma poderá acessar. Cursos bloqueados ficam visíveis mas inacessíveis.
           </p>
+          <div className="flex items-start gap-2 p-2.5 rounded-xl bg-secondary/5 border border-secondary/20 mb-3">
+            <Info className="w-4 h-4 text-secondary flex-shrink-0 mt-0.5" />
+            <p className="font-inter text-[10px] text-secondary leading-relaxed">
+              <strong>Como funciona:</strong> Liberar um curso é o <strong>primeiro passo</strong>. Cada lição só ficará disponível para o aluno quando houver um <strong>evento na Agenda</strong> vinculado a ela (dentro da janela de 10 dias úteis antes do encontro). Sem evento agendado, a lição permanece com "Aguardando programação".
+            </p>
+          </div>
           <div className="space-y-2">
             {courses.map(c => {
               const isUnlocked = unlockedCourseIds.has(c.id);
