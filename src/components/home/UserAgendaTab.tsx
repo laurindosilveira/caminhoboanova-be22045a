@@ -142,7 +142,7 @@ export default function UserAgendaTab() {
             const all = (eventsData ?? []) as Event[];
             const filtered = all.filter(e =>
               !e.area ||
-              e.area === profile?.area ||
+              e.area === currentArea ||
               e.community === profile?.community
             );
             setEvents(filtered);
