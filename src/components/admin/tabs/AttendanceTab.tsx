@@ -602,49 +602,10 @@ export default function AttendanceTab({ participants, activities, communities, i
     );
   }
 
-  const SUB_TABS = [
-    { id: "sala" as SubTab, label: "Sala", icon: GraduationCap },
-  ];
-
-  // Sub-tab navigation header (shared across all states)
-  function renderSubTabs() {
-    return (
-      <div className="flex gap-1 bg-muted/50 rounded-xl p-1 mb-4">
-        {SUB_TABS.map(tab => {
-          const Icon = tab.icon;
-          const isActive = activeSubTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveSubTab(tab.id)}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-inter font-medium transition-all ${
-                isActive
-                  ? "bg-card text-primary shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-    );
-  }
-
-  // Render sala directly (no sub-tab navigation needed)
-  return (
-    <div className="space-y-4">
-      {renderCascadeDialog()}
-      <ClassroomSettingsTab />
-    </div>
-  );
-
   if (loading) {
     return (
       <div className="space-y-3">
         {renderCascadeDialog()}
-        {renderSubTabs()}
         {[1, 2, 3].map(i => <div key={i} className="bg-muted rounded-2xl h-20 animate-pulse" />)}
       </div>
     );
@@ -653,7 +614,6 @@ export default function AttendanceTab({ participants, activities, communities, i
   if (events.length === 0 && worshipRequests.length === 0) {
     return (
       <div className="space-y-4">
-        {renderSubTabs()}
         {renderCascadeDialog()}
         <div className="flex items-center justify-between">
           <p className="font-montserrat font-bold text-foreground text-base">Encontros & Presença</p>
@@ -691,7 +651,6 @@ export default function AttendanceTab({ participants, activities, communities, i
 
   return (
     <div className="space-y-4">
-      {renderSubTabs()}
       {renderCascadeDialog()}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
