@@ -61,7 +61,7 @@ type Props = {
   isLateAccess?: boolean;
 };
 
-export default function JourneyLessonView({ lesson, onBack, isAdmin = false, targetUserId }: Props) {
+export default function JourneyLessonView({ lesson, onBack, isAdmin = false, targetUserId, isLateAccess = false }: Props) {
   const [content, setContent] = useState<LessonContent>(getDefaultContent(lesson.order_num));
   const [responses, setResponses] = useState<Response>({});
   const [bibleRef, setBibleRef] = useState<string | null>(null);
