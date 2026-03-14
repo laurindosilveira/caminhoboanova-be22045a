@@ -137,6 +137,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const [meetingEvals, setMeetingEvals] = useState<MeetingEval[]>([]);
   const [worshipRecords, setWorshipRecords] = useState<WorshipRecord[]>([]);
   const [timelineFilter, setTimelineFilter] = useState<TimelineCategory | "todos">("todos");
+  const [showAvatarZoom, setShowAvatarZoom] = useState(false);
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
