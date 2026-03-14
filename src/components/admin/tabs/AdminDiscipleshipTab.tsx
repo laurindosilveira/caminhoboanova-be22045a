@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  Heart, ChevronLeft, AlertCircle, Star, Search, Filter, LayoutGrid, List, Users, Lock, Unlock, GraduationCap
+  Heart, ChevronLeft, AlertCircle, Star, Search, Filter, LayoutGrid, List, Users, Lock, Unlock, GraduationCap, Info
 } from "lucide-react";
 import ParticipantSheet, { HealthBadge } from "./ParticipantSheet";
 import type { Participant, Activity } from "./ParticipantSheet";
