@@ -153,7 +153,7 @@ export default function UserAgendaTab() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [profile]);
+  }, [profile, currentArea]);
 
   const now = new Date();
   const upcoming = events.filter(e => new Date(e.event_date) >= now);

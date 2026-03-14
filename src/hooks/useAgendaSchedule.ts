@@ -59,7 +59,7 @@ export function useAgendaSchedule() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [profile?.area]);
+  }, [currentArea]);
 
   async function fetchSchedule() {
     setLoading(true);
