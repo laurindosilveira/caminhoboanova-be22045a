@@ -226,6 +226,9 @@ export default function AdminPushTab({ turmas = [] }: Props) {
 
       {/* Event Reminders Manual Trigger */}
       <EventRemindersTrigger />
+
+      {/* Push Log History */}
+      <PushLogHistory />
     </div>
   );
 }
