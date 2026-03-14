@@ -286,15 +286,24 @@ export default function UserAgendaTab() {
 
           const newIdx = allLessonsOrdered.findIndex(l => l.id === newLessonId);
           if (newIdx >= 0) {
+            let updated = 0;
+            let overflow = 0;
             for (let i = 0; i < subsequent.length; i++) {
               const nextLessonIdx = newIdx + 1 + i;
               if (nextLessonIdx < allLessonsOrdered.length) {
                 await supabase.from("events")
                   .update({ linked_lesson_id: allLessonsOrdered[nextLessonIdx].id })
                   .eq("id", subsequent[i].id);
+                updated++;
+              } else {
+                overflow++;
               }
             }
-            toast.success(`Lições atualizadas em ${subsequent.length + 1} eventos!`);
+            if (overflow > 0) {
+              toast.warning(`${updated + 1} eventos atualizados. ${overflow} evento(s) não tinham lições suficientes para vincular.`);
+            } else {
+              toast.success(`Lições atualizadas em ${updated + 1} eventos!`);
+            }
           }
         }
       }
@@ -459,7 +468,7 @@ export default function UserAgendaTab() {
 
       {/* ── DIÁLOGO DE CASCATA ──────────────── */}
       {showCascadeDialog && cascadePending && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in" onClick={() => { setShowCascadeDialog(false); setCascadePending(null); }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in" onClick={() => executeCascade(false)}>
           <div className="w-full max-w-sm bg-card rounded-2xl p-5 mx-4 space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="text-center">
               <span className="text-3xl">📅</span>
