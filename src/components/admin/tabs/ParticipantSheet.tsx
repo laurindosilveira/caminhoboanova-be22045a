@@ -549,7 +549,8 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           <div className="bg-white/10 rounded-xl p-3 mb-3 space-y-1.5">
             {p.father_name && (
               <p className="text-primary-foreground/80 font-inter text-xs">
-                👨 <strong>Pai:</strong> {p.father_name}{p.father_phone ? ` · 📞 ${p.father_phone}` : ""}
+                👨 <strong>Pai:</strong> {p.father_name}
+                {p.father_phone && <> · 📞 <a href={`https://wa.me/${p.father_phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary-foreground transition-colors">{p.father_phone}</a></>}
               </p>
             )}
             {p.mother_name && (
