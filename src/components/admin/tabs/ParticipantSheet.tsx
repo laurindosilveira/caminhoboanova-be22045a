@@ -119,6 +119,11 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const [noteForm, setNoteForm] = useState({ note_type: "acompanhamento", content: "" });
   const [savingNote, setSavingNote] = useState(false);
   const [activeSection, setActiveSection] = useState<"overview"|"plan"|"notes"|"jornada"|"presenca"|"timeline"|"relatorio"|"parecer">("overview");
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("14:00");
+  const [scheduleNote, setScheduleNote] = useState("");
+  const [savingSchedule, setSavingSchedule] = useState(false);
   const [editingCommunity, setEditingCommunity] = useState(false);
   const [newCommunity, setNewCommunity] = useState(p.community);
   const [savingCommunity, setSavingCommunity] = useState(false);
