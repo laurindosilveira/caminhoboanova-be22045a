@@ -475,7 +475,7 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
               </div>
             )}
             <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
-              Preparação diária antes do encontro
+              {isLateAccess ? "⚠️ Sem pontuação (prazo encerrado)" : "Preparação diária antes do encontro"}
             </p>
           </div>
           <span className="text-brand-green font-montserrat font-bold text-lg">→</span>
