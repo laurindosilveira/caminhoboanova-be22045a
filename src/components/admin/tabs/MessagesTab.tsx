@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import { MessageSquare, Plus, Send, Users, MapPin, Globe, Trash2, GraduationCap, Eye, Share2, Bell } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
