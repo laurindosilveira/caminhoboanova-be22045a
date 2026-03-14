@@ -91,6 +91,9 @@ Deno.serve(async (req) => {
         .eq("turma_id", targetValue);
       targetUserIds = (profiles ?? []).map((p: any) => p.user_id);
       console.log(`Target=turma(${targetValue}), found ${targetUserIds.length} profiles`);
+    } else if (target === "user" && targetValue) {
+      targetUserIds = [targetValue];
+      console.log(`Target=user(${targetValue})`);
     }
 
     if (targetUserIds.length === 0) {

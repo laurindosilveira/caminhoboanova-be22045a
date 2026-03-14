@@ -119,6 +119,11 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const [noteForm, setNoteForm] = useState({ note_type: "acompanhamento", content: "" });
   const [savingNote, setSavingNote] = useState(false);
   const [activeSection, setActiveSection] = useState<"overview"|"plan"|"notes"|"jornada"|"presenca"|"timeline"|"relatorio"|"parecer">("overview");
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("14:00");
+  const [scheduleNote, setScheduleNote] = useState("");
+  const [savingSchedule, setSavingSchedule] = useState(false);
   const [editingCommunity, setEditingCommunity] = useState(false);
   const [newCommunity, setNewCommunity] = useState(p.community);
   const [savingCommunity, setSavingCommunity] = useState(false);
@@ -712,7 +717,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         {[
           { icon: MessageSquare, label: "Enviar mensagem", action: () => setActiveSection("notes") },
           { icon: FileText, label: "Registrar acomp.", action: () => { setActiveSection("notes"); setShowNoteForm(true); } },
-          { icon: Calendar, label: "Agendar conversa", action: () => { setNoteForm(f => ({ ...f, note_type: "encontro_individual" })); setActiveSection("notes"); setShowNoteForm(true); } },
+          { icon: Calendar, label: "Agendar conversa", action: () => setShowScheduleForm(true) },
           { icon: AlertTriangle, label: plan.health_status === "critico" ? "⚠️ Crítico" : "Marcar crítico", action: () => setPlan(prev => ({ ...prev, health_status: prev.health_status === "critico" ? "atencao" : "critico" })) },
         ].map(({ icon: Icon, label, action }) => (
           <button key={label} onClick={action}
@@ -723,7 +728,110 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         ))}
       </div>
 
-      {/* Section tabs */}
+      {/* Schedule conversation form */}
+      {showScheduleForm && (
+        <div className="bg-card rounded-2xl border border-border shadow-sm p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+          <p className="font-montserrat font-bold text-foreground text-sm">📅 Agendar Conversa com {p.full_name.split(" ")[0]}</p>
+          <p className="text-muted-foreground font-inter text-[10px]">
+            O aluno receberá uma notificação push e verá o agendamento na aba Jornada e Agenda.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[10px] font-inter font-bold text-foreground mb-1">Data</label>
+              <input
+                type="date"
+                value={scheduleDate}
+                onChange={e => setScheduleDate(e.target.value)}
+                min={new Date().toISOString().slice(0, 10)}
+                className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-inter font-bold text-foreground mb-1">Horário</label>
+              <input
+                type="time"
+                value={scheduleTime}
+                onChange={e => setScheduleTime(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] font-inter font-bold text-foreground mb-1">Observação (opcional)</label>
+            <input
+              type="text"
+              value={scheduleNote}
+              onChange={e => setScheduleNote(e.target.value)}
+              placeholder="Ex: Conversa sobre frequência"
+              maxLength={120}
+              className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm font-inter text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              disabled={savingSchedule || !scheduleDate}
+              onClick={async () => {
+                setSavingSchedule(true);
+                try {
+                  const { data: { user } } = await supabase.auth.getUser();
+                  if (!user) return;
+                  // Create event with local date to avoid timezone issues
+                  const eventDate = `${scheduleDate}T${scheduleTime}:00`;
+                  const { error } = await supabase.from("events").insert({
+                    title: `Conversa pastoral — ${p.full_name.split(" ")[0]}`,
+                    description: scheduleNote || `Conversa agendada com ${p.full_name}`,
+                    event_date: eventDate,
+                    type: "conversa",
+                    area: p.area,
+                    target_user_id: p.user_id,
+                    created_by: user.id,
+                  } as any);
+                  if (error) throw error;
+
+                  // Send push notification via admin-push
+                  await supabase.functions.invoke("admin-push", {
+                    body: {
+                      title: "💬 Conversa agendada!",
+                      body: `Seu líder agendou uma conversa com você para ${new Date(eventDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })} às ${scheduleTime}. Confira na sua agenda!`,
+                      target: "user",
+                      targetValue: p.user_id,
+                    },
+                  });
+
+                  // Also register a pastoral note
+                  await supabase.from("pastoral_notes").insert({
+                    user_id: p.user_id,
+                    admin_id: user.id,
+                    note_type: "encontro_individual",
+                    content: `Conversa agendada para ${new Date(eventDate).toLocaleDateString("pt-BR")} às ${scheduleTime}${scheduleNote ? `. ${scheduleNote}` : ""}`,
+                  });
+
+                  setShowScheduleForm(false);
+                  setScheduleDate("");
+                  setScheduleTime("14:00");
+                  setScheduleNote("");
+                  // Refresh notes
+                  const { data } = await supabase.from("pastoral_notes").select("*").eq("user_id", p.user_id).order("created_at", { ascending: false });
+                  setNotes(data ?? []);
+                } catch (err) {
+                  console.error("Failed to schedule conversation:", err);
+                } finally {
+                  setSavingSchedule(false);
+                }
+              }}
+              className="flex-1 h-9 rounded-xl font-inter text-xs font-bold text-primary-foreground disabled:opacity-60"
+              style={{ background: "var(--gradient-hero)" }}
+            >
+              {savingSchedule ? "Agendando..." : "✅ Confirmar Agendamento"}
+            </button>
+            <button onClick={() => setShowScheduleForm(false)} className="px-4 h-9 rounded-xl border border-border text-xs font-inter text-muted-foreground hover:text-foreground">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+
       <div className="flex gap-1 bg-muted rounded-xl p-1 overflow-x-auto">
         {SECTIONS.map(s => (
           <button key={s.id} onClick={() => setActiveSection(s.id)}

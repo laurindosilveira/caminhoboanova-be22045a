@@ -36,6 +36,7 @@ const EVENT_TYPES: Record<string, { label: string; color: string; emoji: string 
   retiro:        { label: "Retiro",            color: "bg-secondary/10 text-secondary",          emoji: "🏕️" },
   confirmatorio: { label: "Ens. Confirmatório", color: "bg-primary/10 text-primary",             emoji: "📖" },
   evento:        { label: "Evento",            color: "bg-accent/20 text-accent-foreground",     emoji: "🎉" },
+  conversa:      { label: "Conversa Pastoral", color: "bg-secondary/10 text-secondary",          emoji: "💬" },
 };
 
 const EVENT_TYPE_OPTIONS = Object.entries(EVENT_TYPES).map(([key, val]) => ({ value: key, label: `${val.emoji} ${val.label}` }));

@@ -509,6 +509,7 @@ export type Database = {
           id: string
           linked_lesson_id: string | null
           location: string | null
+          target_user_id: string | null
           title: string
           type: string
         }
@@ -522,6 +523,7 @@ export type Database = {
           id?: string
           linked_lesson_id?: string | null
           location?: string | null
+          target_user_id?: string | null
           title: string
           type?: string
         }
@@ -535,6 +537,7 @@ export type Database = {
           id?: string
           linked_lesson_id?: string | null
           location?: string | null
+          target_user_id?: string | null
           title?: string
           type?: string
         }
