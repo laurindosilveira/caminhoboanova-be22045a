@@ -144,6 +144,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const MONTH_NAMES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
     async function load() {
       const [{ data: ass }, { data: planData }, { data: notesData }, { data: lessonsData }, { data: attendanceData }, { data: progressData }, { data: allAssessments }, { data: evalData }, { data: worshipData }, { data: challengeParticipations }] = await Promise.all([
         supabase.from("spiritual_assessments").select("*").eq("user_id", p.user_id).eq("month", month).eq("year", year).maybeSingle(),
@@ -526,7 +527,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
               {p.community} · {p.area}{age ? ` · ${age} anos` : ""}
               <button onClick={() => { setEditingCommunity(true); setNewCommunity(p.community); }} className="ml-1.5 text-primary-foreground/50 hover:text-primary-foreground underline text-[10px]">✏️ alterar</button>
             </p>
-            <p className="text-primary-foreground/60 font-inter text-xs">📞 {p.phone}</p>
+            <p className="text-primary-foreground/60 font-inter text-xs">📞 <a href={`https://wa.me/${p.phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary-foreground transition-colors">{p.phone}</a></p>
             {p.email && <p className="text-primary-foreground/60 font-inter text-xs">📧 {p.email}</p>}
             <p className="text-primary-foreground/60 font-inter text-xs">
               🎓 Confirmatório {new Date().getFullYear()} - {p.area}
@@ -549,12 +550,14 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           <div className="bg-white/10 rounded-xl p-3 mb-3 space-y-1.5">
             {p.father_name && (
               <p className="text-primary-foreground/80 font-inter text-xs">
-                👨 <strong>Pai:</strong> {p.father_name}{p.father_phone ? ` · 📞 ${p.father_phone}` : ""}
+                👨 <strong>Pai:</strong> {p.father_name}
+                {p.father_phone && <> · 📞 <a href={`https://wa.me/${p.father_phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary-foreground transition-colors">{p.father_phone}</a></>}
               </p>
             )}
             {p.mother_name && (
               <p className="text-primary-foreground/80 font-inter text-xs">
-                👩 <strong>Mãe:</strong> {p.mother_name}{p.mother_phone ? ` · 📞 ${p.mother_phone}` : ""}
+                👩 <strong>Mãe:</strong> {p.mother_name}
+                {p.mother_phone && <> · 📞 <a href={`https://wa.me/${p.mother_phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary-foreground transition-colors">{p.mother_phone}</a></>}
               </p>
             )}
             {p.address && (
