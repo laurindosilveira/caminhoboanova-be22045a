@@ -88,7 +88,7 @@ export default function AgendaTab() {
 
   function openNewForm() {
     setEditingFullEventId(null);
-    setForm({ ...EMPTY_FORM, area: profile?.area ?? "" });
+    setForm({ ...EMPTY_FORM, area: currentArea });
     setShowForm(true);
   }
 
