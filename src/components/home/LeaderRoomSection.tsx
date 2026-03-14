@@ -208,7 +208,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
     
     if (isAdmin) {
       // Admin: fetch all profiles from the effective area
-      profilesQuery = profilesQuery.eq("area", turmaArea);
+      profilesQuery = profilesQuery.eq("area", turmaArea as any);
     } else {
       // Leader: fetch only their turma
       profilesQuery = profilesQuery.eq("turma_id", profile!.turma_id!);
