@@ -253,6 +253,10 @@ export default function AgendaTab() {
     return `Curso ${lesson.course_order} — Lição ${lesson.order_num}: ${lesson.title}`;
   };
 
+  const filteredEvents = areaFilter === "all"
+    ? events
+    : events.filter(e => !e.area || e.area === areaFilter);
+
   const isEditing = !!editingFullEventId;
 
   return (
@@ -266,6 +270,23 @@ export default function AgendaTab() {
         >
           <Plus className="w-3.5 h-3.5" /> Novo evento
         </button>
+      </div>
+
+      {/* Area filter */}
+      <div className="flex gap-1.5">
+        {["all", "Área 1", "Área 2"].map(val => (
+          <button
+            key={val}
+            onClick={() => setAreaFilter(val)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-inter font-medium transition-colors ${
+              areaFilter === val
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            {val === "all" ? "Todas" : val}
+          </button>
+        ))}
       </div>
 
       {/* Cascade confirmation dialog */}
