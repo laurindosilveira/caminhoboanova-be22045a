@@ -185,7 +185,10 @@ export default function UserAgendaTab() {
 
   function openEditForm(event: Event) {
     setEditingEvent(event);
-    const dateLocal = event.event_date ? new Date(event.event_date).toISOString().slice(0, 16) : "";
+    const dateObj = event.event_date ? new Date(event.event_date) : null;
+    const dateLocal = dateObj
+      ? `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}-${String(dateObj.getDate()).padStart(2, "0")}T${String(dateObj.getHours()).padStart(2, "0")}:${String(dateObj.getMinutes()).padStart(2, "0")}`
+      : "";
     setForm({
       title: event.title,
       description: event.description ?? "",
