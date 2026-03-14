@@ -941,9 +941,11 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
                         const isEventDay = eventDay ? todayZero.getTime() === eventDay.getTime() : false;
                         const isPastEvent = eventDay ? todayZero > eventDay : false;
                         
+                        const isLateAccess = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(lesson.id) && !isFullyDone;
+                        
                         // Leaders and admins always have full access
-                        // Study is accessible if: leader/admin, OR window open & before event day, OR fully completed
-                        const isAccessible = isLeaderOrAdmin || isStudyOpen || isFullyDone;
+                        // Study is accessible if: leader/admin, OR window open & before event day, OR late access (past event), OR fully completed
+                        const isAccessible = isLeaderOrAdmin || isStudyOpen || isLateAccess || isFullyDone;
                         // Locked if: has scheduled events but this lesson isn't accessible (never for leaders/admins)
                         const isLocked = !isLeaderOrAdmin && agendaSchedule.hasScheduledEvents && !isAccessible && !isFullyDone;
                         // Not yet scheduled (never locked for leaders/admins)
