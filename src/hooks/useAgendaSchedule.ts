@@ -117,6 +117,8 @@ export function useAgendaSchedule() {
   const releasedLessonIds = new Set<string>();
   // Which lessons have study available (from first devotional until 1 day before event)
   const studyOpenLessonIds = new Set<string>();
+  // Lessons where event has already passed — accessible but 0 points
+  const lateAccessLessonIds = new Set<string>();
   const lessonDevotionalDates = new Map<string, Date[]>();
   const lessonEventDate = new Map<string, Date>();
 
@@ -124,12 +126,14 @@ export function useAgendaSchedule() {
     if (today >= entry.windowStart) {
       releasedLessonIds.add(entry.lessonId);
     }
-    // Study is open from windowStart (first devotional) until the day BEFORE the event
-    // On the event day (today >= eventDate with time zeroed), study is locked
     const eventDay = new Date(entry.eventDate);
     eventDay.setHours(0, 0, 0, 0);
     if (today >= entry.windowStart && today < eventDay) {
+      // Study is open from windowStart until the day BEFORE the event
       studyOpenLessonIds.add(entry.lessonId);
+    } else if (today >= eventDay) {
+      // After event day: late access (no points)
+      lateAccessLessonIds.add(entry.lessonId);
     }
     lessonDevotionalDates.set(entry.lessonId, entry.devotionalDates);
     lessonEventDate.set(entry.lessonId, entry.eventDate);
