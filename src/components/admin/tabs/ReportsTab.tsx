@@ -30,7 +30,8 @@ const CHART_COLORS = [
 ];
 
 export default function ReportsTab() {
-  const { profile } = useAuth();
+  const { profile, role } = useAuth();
+  const { effectiveArea } = useAreaSwitch();
   const [reportType, setReportType] = useState<ReportType>("geral");
   const [loading, setLoading] = useState(true);
 
@@ -41,17 +42,26 @@ export default function ReportsTab() {
   const [lessonData, setLessonData] = useState<any[]>([]);
   const [events, setEvents] = useState<any[]>([]);
 
+  const isAdmin = role === "admin";
+
   useEffect(() => {
-    if (!profile?.turma_id) return;
+    if (!profile?.turma_id && !isAdmin) return;
     fetchReportData();
-  }, [profile?.turma_id]);
+  }, [profile?.turma_id, effectiveArea]);
 
   async function fetchReportData() {
-    if (!profile?.turma_id) return;
+    if (!profile?.turma_id && !isAdmin) return;
     setLoading(true);
 
     const userResult = await supabase.auth.getUser();
     const myId = userResult.data.user?.id ?? "";
+
+    let profilesQuery = supabase.from("profiles").select("user_id, full_name, community, area");
+    if (isAdmin) {
+      profilesQuery = profilesQuery.eq("area", effectiveArea as any);
+    } else {
+      profilesQuery = profilesQuery.eq("turma_id", profile!.turma_id!);
+    }
 
     const [
       { data: profiles },
@@ -61,7 +71,7 @@ export default function ReportsTab() {
       { data: lessonResponses },
       { data: eventsData },
     ] = await Promise.all([
-      supabase.from("profiles").select("user_id, full_name, community, area").eq("turma_id", profile.turma_id),
+      profilesQuery,
       supabase.from("attendance").select("user_id, event_id, status, created_at"),
       supabase.from("devotional_progress").select("user_id, completed_at"),
       supabase.from("lessons").select("id, title, course_id, order_num").order("order_num"),
