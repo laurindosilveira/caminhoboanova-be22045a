@@ -508,7 +508,7 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
                   Responda as perguntas e registre sua reflexão
                 </p>
                 <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
-                  +20 pontos de fé ao completar
+                  {isLateAccess ? "⚠️ Sem pontuação (prazo encerrado)" : "+20 pontos de fé ao completar"}
                 </p>
               </>
             )}
