@@ -209,6 +209,7 @@ export default function UserAgendaTab() {
       area: form.area || null,
       community: form.community || null,
       type: form.type,
+      linked_lesson_id: form.linked_lesson_id || null,
     };
 
     if (editingEvent) {
