@@ -418,9 +418,10 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
 
   if (selectedLesson) {
     if (selectedLessonMode === "study") {
+      const isLateAccessStudy = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id);
       return (
         <div className="px-5 pt-5 pb-6">
-          <JourneyLessonView lesson={selectedLesson} onBack={() => { setSelectedLesson(null); setSelectedLessonMode("choice"); }} />
+          <JourneyLessonView lesson={selectedLesson} onBack={() => { setSelectedLesson(null); setSelectedLessonMode("choice"); }} isLateAccess={isLateAccessStudy} />
         </div>
       );
     }
