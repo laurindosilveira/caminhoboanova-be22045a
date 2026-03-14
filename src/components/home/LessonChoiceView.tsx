@@ -244,7 +244,8 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
     if (!user) return;
     const now = new Date();
     const isWeekend = now.getDay() === 0 || now.getDay() === 6;
-    const pts = isWeekend ? 2 : 5;
+    // Late access = 0 points; weekend recovery = 2 pts; normal = 5 pts
+    const pts = isLateAccess ? 0 : isWeekend ? 2 : 5;
     await supabase.from("devotional_progress").insert({
       user_id: user.id,
       devotional_id: devotionalId,
@@ -263,10 +264,14 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
       setDevStatuses(statuses);
       setLockedIds(lockedSet);
     }
-    toast.success(`Devocional concluído! +${pts} pontos de fé ⭐`, {
-      description: isWeekend ? "Recuperação de fim de semana (2 pts)" : "Continue firme na sua caminhada!",
-      duration: 3000,
-    });
+    if (isLateAccess) {
+      toast.info("Devocional concluído! (sem pontuação — prazo encerrado)", { duration: 3000 });
+    } else {
+      toast.success(`Devocional concluído! +${pts} pontos de fé ⭐`, {
+        description: isWeekend ? "Recuperação de fim de semana (2 pts)" : "Continue firme na sua caminhada!",
+        duration: 3000,
+      });
+    }
   }
 
   const completedCount = devotionals.filter(d => completedIds.has(d.id)).length;
