@@ -141,20 +141,17 @@ export default function UserAgendaTab() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'events' },
         () => {
-           async function refetch() {
-              const { data: { user: currentUser } } = await supabase.auth.getUser();
-              const [{ data: eventsData }] = await Promise.all([
-                supabase.from("events").select("*").order("event_date"),
-              ]);
-              const all = (eventsData ?? []) as Event[];
-              const filtered = all.filter(e => {
-                if ((e as any).target_user_id && (e as any).target_user_id !== currentUser?.id) return false;
-                if (e.community && e.community !== profile?.community) return false;
-                if (e.area && e.area !== currentArea) return false;
-                return true;
-              });
-              setEvents(filtered);
-            }
+          async function refetch() {
+            const { data: { user: currentUser } } = await supabase.auth.getUser();
+            const { data: eventsData } = await supabase.from("events").select("*").order("event_date");
+            const all = (eventsData ?? []) as Event[];
+            const filtered = all.filter(e => {
+              if ((e as any).target_user_id && (e as any).target_user_id !== currentUser?.id) return false;
+              if (e.community && e.community !== profile?.community) return false;
+              if (e.area && e.area !== currentArea) return false;
+              return true;
+            });
+            setEvents(filtered);
           }
           if (profile) refetch();
         }
