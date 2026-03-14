@@ -144,6 +144,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const MONTH_NAMES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
     async function load() {
       const [{ data: ass }, { data: planData }, { data: notesData }, { data: lessonsData }, { data: attendanceData }, { data: progressData }, { data: allAssessments }, { data: evalData }, { data: worshipData }, { data: challengeParticipations }] = await Promise.all([
         supabase.from("spiritual_assessments").select("*").eq("user_id", p.user_id).eq("month", month).eq("year", year).maybeSingle(),
