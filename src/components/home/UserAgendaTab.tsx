@@ -65,7 +65,95 @@ type LessonOption = {
 
 const EMPTY_FORM: EventFormData = { title: "", description: "", event_date: "", location: "", area: "", community: "", type: "encontro", linked_lesson_id: "" };
 
-export default function UserAgendaTab() {
+const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+const MINUTES = ["00", "15", "30", "45"];
+
+function DateTimePickerField({ value, onChange }: { value: string; onChange: (val: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const parsed = value ? new Date(value) : null;
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(parsed && !isNaN(parsed.getTime()) ? parsed : undefined);
+  const [hour, setHour] = useState(parsed && !isNaN(parsed.getTime()) ? String(parsed.getHours()).padStart(2, "0") : "19");
+  const [minute, setMinute] = useState(parsed && !isNaN(parsed.getTime()) ? String(parsed.getMinutes()).padStart(2, "0") : "00");
+
+  useEffect(() => {
+    const p = value ? new Date(value) : null;
+    if (p && !isNaN(p.getTime())) {
+      setSelectedDate(p);
+      setHour(String(p.getHours()).padStart(2, "0"));
+      setMinute(String(p.getMinutes()).padStart(2, "0"));
+    }
+  }, [value]);
+
+  function handleConfirm() {
+    if (!selectedDate) {
+      toast.error("Selecione uma data");
+      return;
+    }
+    const y = selectedDate.getFullYear();
+    const m = String(selectedDate.getMonth() + 1).padStart(2, "0");
+    const d = String(selectedDate.getDate()).padStart(2, "0");
+    onChange(`${y}-${m}-${d}T${hour}:${minute}`);
+    setOpen(false);
+  }
+
+  const displayText = selectedDate
+    ? `${format(selectedDate, "dd/MM/yyyy", { locale: ptBR })} ${hour}:${minute}`
+    : "";
+
+  return (
+    <div>
+      <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Data e hora *</label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className={cn(
+              "w-full justify-start text-left font-normal text-sm",
+              !displayText && "text-muted-foreground"
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {displayText || "Selecione data e hora"}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <div className="p-3 space-y-3">
+            <Calendar
+              mode="single"
+              selected={selectedDate}
+              onSelect={setSelectedDate}
+              locale={ptBR}
+              className={cn("p-0 pointer-events-auto")}
+            />
+            <div className="flex items-center gap-2 px-1">
+              <Clock className="w-4 h-4 text-muted-foreground" />
+              <select
+                value={hour}
+                onChange={e => setHour(e.target.value)}
+                className="rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+              >
+                {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
+              </select>
+              <span className="font-bold text-muted-foreground">:</span>
+              <select
+                value={minute}
+                onChange={e => setMinute(e.target.value)}
+                className="rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+              >
+                {MINUTES.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+            <Button size="sm" className="w-full gap-1.5" onClick={handleConfirm}>
+              <Check className="w-3.5 h-3.5" /> Confirmar
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+
   const { profile, role } = useAuth();
   const { effectiveArea } = useAreaSwitch();
   const canManage = role === "admin" || role === "lider";
