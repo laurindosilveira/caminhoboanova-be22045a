@@ -305,3 +305,110 @@ function EventRemindersTrigger() {
     </div>
   );
 }
+
+interface LogEntry {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  target: string;
+  target_value: string | null;
+  sent_count: number;
+  failed_count: number;
+  created_at: string;
+}
+
+function PushLogHistory() {
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadLogs();
+  }, []);
+
+  async function loadLogs() {
+    setLoading(true);
+    const { data } = await supabase
+      .from("push_notification_log")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    setLogs((data as any as LogEntry[]) ?? []);
+    setLoading(false);
+  }
+
+  const typeLabels: Record<string, { label: string; emoji: string }> = {
+    manual: { label: "Push Manual", emoji: "📢" },
+    event_reminder: { label: "Lembrete de Evento", emoji: "🔔" },
+    attendance_reminder: { label: "Presença", emoji: "📋" },
+  };
+
+  function formatDate(iso: string) {
+    const d = new Date(iso);
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" }) +
+      " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function targetLabel(log: LogEntry) {
+    if (log.target === "all") return "Todos";
+    if (log.target === "auto") return "Automático";
+    if (log.target_value) return log.target_value;
+    return log.target;
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-border space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
+          <History className="w-5 h-5 text-muted-foreground" />
+        </div>
+        <div>
+          <h3 className="font-montserrat font-bold text-foreground text-sm">Histórico de Disparos</h3>
+          <p className="text-muted-foreground font-inter text-[10px]">Últimos 20 envios registrados</p>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-6">
+          <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+        </div>
+      ) : logs.length === 0 ? (
+        <p className="text-muted-foreground text-xs font-inter text-center py-4">Nenhum disparo registrado ainda.</p>
+      ) : (
+        <div className="space-y-2">
+          {logs.map((log) => {
+            const typeInfo = typeLabels[log.type] || { label: log.type, emoji: "📨" };
+            return (
+              <div key={log.id} className="p-3 rounded-xl border border-border bg-card space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-inter font-bold text-foreground">
+                    {typeInfo.emoji} {typeInfo.label}
+                  </span>
+                  <span className="text-[10px] font-inter text-muted-foreground flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {formatDate(log.created_at)}
+                  </span>
+                </div>
+                <p className="text-xs font-inter text-foreground font-medium truncate">{log.title}</p>
+                <p className="text-[10px] font-inter text-muted-foreground truncate">{log.body}</p>
+                <div className="flex items-center gap-3 pt-1">
+                  <span className="text-[10px] font-inter text-muted-foreground">
+                    🎯 {targetLabel(log)}
+                  </span>
+                  <span className="text-[10px] font-inter text-brand-green font-bold">
+                    ✅ {log.sent_count}
+                  </span>
+                  {log.failed_count > 0 && (
+                    <span className="text-[10px] font-inter text-destructive font-bold">
+                      ❌ {log.failed_count}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
