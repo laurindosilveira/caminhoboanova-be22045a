@@ -102,12 +102,15 @@ export default function UserAgendaTab() {
       const courses = coursesData ?? [];
       const lessons = lessonsData ?? [];
       const infoMap = new Map<string, LessonInfo>();
+      const opts: LessonOption[] = [];
       courses.forEach(c => {
         lessons.filter(l => l.course_id === c.id).forEach(l => {
           infoMap.set(l.id, { id: l.id, title: l.title, order_num: l.order_num, course_title: c.title, course_order: c.order_num });
+          opts.push({ id: l.id, title: l.title, order_num: l.order_num, course_title: c.title, course_order: c.order_num });
         });
       });
       setLessonInfoMap(infoMap);
+      setLessonOptions(opts);
 
       const contentMap = new Map<string, LessonContentInfo>();
       (lessonContentData ?? []).forEach((lc: any) => {
