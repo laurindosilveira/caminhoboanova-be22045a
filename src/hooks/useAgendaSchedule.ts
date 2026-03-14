@@ -36,12 +36,14 @@ export function getBusinessDaysBefore(date: Date, count: number): Date[] {
 
 export function useAgendaSchedule() {
   const { profile } = useAuth();
+  const { effectiveArea } = useAreaSwitch();
+  const currentArea = effectiveArea || profile?.area || "";
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (profile) fetchSchedule();
-  }, [profile?.area]);
+  }, [currentArea]);
 
   // Realtime subscription for events changes
   useEffect(() => {
