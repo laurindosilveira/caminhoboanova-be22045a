@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import { MessageSquare, Plus, Send, Users, MapPin, Globe, Trash2, GraduationCap, Eye, Share2, Bell } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -17,6 +18,7 @@ const AREA_2_COMMUNITIES = ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"];
 
 export default function MessagesTab() {
   const { profile } = useAuth();
+  const { effectiveArea } = useAreaSwitch();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -30,7 +32,7 @@ export default function MessagesTab() {
   const [loadingViewers, setLoadingViewers] = useState(false);
   const [sendingPush, setSendingPush] = useState<string | null>(null);
 
-  const communities = profile?.area === "Área 1" ? AREA_1_COMMUNITIES : AREA_2_COMMUNITIES;
+  const communities = effectiveArea === "Área 1" ? AREA_1_COMMUNITIES : AREA_2_COMMUNITIES;
 
   useEffect(() => {
     fetchMessages();
@@ -64,7 +66,7 @@ export default function MessagesTab() {
     if (!form.title || !form.body) return;
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
-    const msgArea = form.target === "all" ? null : form.target === "turma" ? null : profile?.area ?? null;
+    const msgArea = form.target === "all" ? null : form.target === "turma" ? null : effectiveArea ?? null;
     const msgCommunity = form.target === "community" ? form.community : null;
     const msgTurmaId = form.target === "turma" ? form.turmaId : null;
     await supabase.from("messages").insert({
@@ -78,7 +80,7 @@ export default function MessagesTab() {
 
     try {
       const pushTarget = form.target === "turma" ? "turma" : form.target === "all" ? "all" : form.target === "community" ? "community" : "area";
-      const pushTargetValue = form.target === "all" ? undefined : form.target === "turma" ? form.turmaId : form.target === "community" ? form.community : profile?.area;
+      const pushTargetValue = form.target === "all" ? undefined : form.target === "turma" ? form.turmaId : form.target === "community" ? form.community : effectiveArea;
       await supabase.functions.invoke("admin-push", {
         body: {
           title: "📢 Novo aviso no app!",
@@ -223,7 +225,7 @@ export default function MessagesTab() {
             <div className="grid grid-cols-2 gap-2">
               {([
                 { value: "all" as const, label: "Todos", icon: Globe },
-                { value: "area" as const, label: profile?.area ?? "Minha área", icon: MapPin },
+                { value: "area" as const, label: effectiveArea || "Minha área", icon: MapPin },
                 { value: "community" as const, label: "Comunidade", icon: Users },
                 ...(turmas.length > 0 ? [{ value: "turma" as const, label: "Turma", icon: GraduationCap }] : []),
               ] as const).map(opt => (

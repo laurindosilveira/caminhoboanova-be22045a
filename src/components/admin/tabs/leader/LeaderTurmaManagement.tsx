@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import { GraduationCap, CheckCircle2, RefreshCw, Users, Archive, ChevronDown, ChevronUp, Download, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -18,6 +19,7 @@ type Turma = {
 
 export default function LeaderTurmaManagement() {
   const { profile } = useAuth();
+  const { effectiveArea } = useAreaSwitch();
   const { toast } = useToast();
   const [turma, setTurma] = useState<Turma | null>(null);
   const [archivedTurmas, setArchivedTurmas] = useState<Turma[]>([]);
@@ -52,7 +54,7 @@ export default function LeaderTurmaManagement() {
     }
 
     // Filter archived turmas by same area
-    const myArea = profile?.area;
+    const myArea = effectiveArea || profile?.area;
     const filtered = (allTurmas ?? []).filter(t => t.area === myArea);
     const { data: allProfiles } = await supabase.from("profiles").select("turma_id");
     const countMap: Record<string, number> = {};
