@@ -664,6 +664,31 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
               </span>
             )}
           </div>
+          {/* Google Calendar link */}
+          {!past && (() => {
+            const start = new Date(event.event_date);
+            const end = new Date(start.getTime() + 90 * 60000); // 1h30 duration
+            const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+            const params = new URLSearchParams({
+              action: "TEMPLATE",
+              text: event.title,
+              dates: `${fmt(start)}/${fmt(end)}`,
+              details: event.description || "",
+              location: event.location || "",
+            });
+            const url = `https://calendar.google.com/calendar/render?${params.toString()}`;
+            return (
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors text-primary"
+              >
+                <ExternalLink className="w-3 h-3" />
+                <span className="font-inter text-[10px] font-semibold">Adicionar ao Google Agenda</span>
+              </a>
+            );
+          })()}
           {linkedLesson && (
             <>
               <button
