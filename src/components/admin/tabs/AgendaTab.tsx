@@ -101,7 +101,7 @@ export default function AgendaTab() {
       event_date: dateForInput,
       location: event.location ?? "",
       type: event.type,
-      area: event.area ?? profile?.area ?? "",
+      area: event.area ?? currentArea,
       community: event.community ?? "",
       linked_lesson_id: event.linked_lesson_id ?? "",
     });
