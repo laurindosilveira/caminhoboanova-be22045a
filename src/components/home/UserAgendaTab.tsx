@@ -46,9 +46,18 @@ interface EventFormData {
   area: string;
   community: string;
   type: string;
+  linked_lesson_id: string;
 }
 
-const EMPTY_FORM: EventFormData = { title: "", description: "", event_date: "", location: "", area: "", community: "", type: "encontro" };
+type LessonOption = {
+  id: string;
+  title: string;
+  order_num: number;
+  course_title: string;
+  course_order: number;
+};
+
+const EMPTY_FORM: EventFormData = { title: "", description: "", event_date: "", location: "", area: "", community: "", type: "encontro", linked_lesson_id: "" };
 
 export default function UserAgendaTab() {
   const { profile, role } = useAuth();
