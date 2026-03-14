@@ -164,6 +164,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
   const p = { ...pOriginal, ...localOverrides };
   const [typeFilter, setTypeFilter] = useState("todos");
   const [loading, setLoading] = useState(true);
+  const [showAvatarZoom, setShowAvatarZoom] = useState(false);
   const [showAuditLog, setShowAuditLog] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -709,10 +710,30 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       <div className="bg-card rounded-2xl border border-border p-5 mb-4 shadow-sm">
         <div className="flex items-center gap-4 mb-4">
           {p.avatar_url ? (
-            <img src={p.avatar_url} alt={p.full_name} className="w-14 h-14 rounded-2xl object-cover flex-shrink-0 border border-border" />
+            <img
+              src={p.avatar_url}
+              alt={p.full_name}
+              className="w-14 h-14 rounded-2xl object-cover flex-shrink-0 border border-border cursor-pointer hover:opacity-80 transition-opacity"
+              onClick={() => setShowAvatarZoom(true)}
+            />
           ) : (
             <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
               <span className="font-montserrat font-black text-primary text-2xl">{p.full_name.charAt(0).toUpperCase()}</span>
+            </div>
+          )}
+
+          {/* Avatar zoom dialog */}
+          {showAvatarZoom && p.avatar_url && (
+            <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6" onClick={() => setShowAvatarZoom(false)}>
+              <div className="relative max-w-sm w-full" onClick={e => e.stopPropagation()}>
+                <img src={p.avatar_url} alt={p.full_name} className="w-full rounded-2xl object-contain max-h-[70vh]" />
+                <button
+                  onClick={() => setShowAvatarZoom(false)}
+                  className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-card border border-border flex items-center justify-center shadow-lg"
+                >
+                  <X className="w-4 h-4 text-foreground" />
+                </button>
+              </div>
             </div>
           )}
           <div className="flex-1">
