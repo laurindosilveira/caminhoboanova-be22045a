@@ -446,6 +446,15 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
         )}
       </div>
 
+      {isLateAccess && (
+        <div className="rounded-2xl p-3 bg-accent/10 border border-accent/20 flex items-start gap-2">
+          <span className="text-sm">⚠️</span>
+          <p className="font-inter text-xs text-accent-foreground">
+            O prazo desta lição já encerrou. Você ainda pode estudar e fazer os devocionais, mas <strong>não receberá pontos</strong>.
+          </p>
+        </div>
+      )}
+
       <p className="font-inter text-sm text-muted-foreground text-center">Escolha o que deseja acessar:</p>
 
       <div className="grid grid-cols-1 gap-3">
