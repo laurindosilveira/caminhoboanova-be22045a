@@ -37,12 +37,31 @@ export default function MessagesTab() {
   useEffect(() => {
     fetchMessages();
     supabase.from("turmas").select("id, name, area").eq("is_active", true).order("name").then(({ data }) => setTurmas(data ?? []));
-  }, []);
+  }, [effectiveArea]);
 
   async function fetchMessages() {
     setLoading(true);
     const { data } = await supabase.from("messages").select("*").order("created_at", { ascending: false });
-    const msgs = data ?? [];
+    // Filter messages relevant to the effective area
+    const allMsgs = data ?? [];
+    const msgs = allMsgs.filter(m => {
+      // Global messages (no area, no community, no turma) — show always
+      if (!m.area && !m.community && !m.turma_id) return true;
+      // Messages for the effective area
+      if (m.area && m.area === effectiveArea) return true;
+      // Messages for a community in the effective area
+      if (m.community) {
+        const area1Communities = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
+        const communityArea = area1Communities.includes(m.community) ? "Área 1" : "Área 2";
+        return communityArea === effectiveArea;
+      }
+      // Turma messages — show if turma belongs to effective area
+      if (m.turma_id) {
+        const turma = turmas.find(t => t.id === m.turma_id);
+        return !turma || turma.area === effectiveArea;
+      }
+      return false;
+    });
     setMessages(msgs);
 
     // Fetch view counts
