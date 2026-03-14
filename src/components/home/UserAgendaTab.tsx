@@ -46,9 +46,18 @@ interface EventFormData {
   area: string;
   community: string;
   type: string;
+  linked_lesson_id: string;
 }
 
-const EMPTY_FORM: EventFormData = { title: "", description: "", event_date: "", location: "", area: "", community: "", type: "encontro" };
+type LessonOption = {
+  id: string;
+  title: string;
+  order_num: number;
+  course_title: string;
+  course_order: number;
+};
+
+const EMPTY_FORM: EventFormData = { title: "", description: "", event_date: "", location: "", area: "", community: "", type: "encontro", linked_lesson_id: "" };
 
 export default function UserAgendaTab() {
   const { profile, role } = useAuth();
@@ -57,6 +66,7 @@ export default function UserAgendaTab() {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [lessonInfoMap, setLessonInfoMap] = useState<Map<string, LessonInfo>>(new Map());
   const [lessonContentMap, setLessonContentMap] = useState<Map<string, LessonContentInfo>>(new Map());
+  const [lessonOptions, setLessonOptions] = useState<LessonOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>("agenda");
 
@@ -92,12 +102,15 @@ export default function UserAgendaTab() {
       const courses = coursesData ?? [];
       const lessons = lessonsData ?? [];
       const infoMap = new Map<string, LessonInfo>();
+      const opts: LessonOption[] = [];
       courses.forEach(c => {
         lessons.filter(l => l.course_id === c.id).forEach(l => {
           infoMap.set(l.id, { id: l.id, title: l.title, order_num: l.order_num, course_title: c.title, course_order: c.order_num });
+          opts.push({ id: l.id, title: l.title, order_num: l.order_num, course_title: c.title, course_order: c.order_num });
         });
       });
       setLessonInfoMap(infoMap);
+      setLessonOptions(opts);
 
       const contentMap = new Map<string, LessonContentInfo>();
       (lessonContentData ?? []).forEach((lc: any) => {
@@ -176,6 +189,7 @@ export default function UserAgendaTab() {
       area: event.area ?? "",
       community: event.community ?? "",
       type: event.type,
+      linked_lesson_id: event.linked_lesson_id ?? "",
     });
     setShowForm(true);
   }
@@ -195,6 +209,7 @@ export default function UserAgendaTab() {
       area: form.area || null,
       community: form.community || null,
       type: form.type,
+      linked_lesson_id: form.linked_lesson_id || null,
     };
 
     if (editingEvent) {
@@ -421,6 +436,21 @@ export default function UserAgendaTab() {
                 <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Comunidade</label>
                 <Input value={form.community} onChange={e => setForm(f => ({ ...f, community: e.target.value }))} className="text-sm" placeholder="Opcional" />
               </div>
+            </div>
+            <div>
+              <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">📖 Vincular a um estudo</label>
+              <select
+                value={form.linked_lesson_id}
+                onChange={e => setForm(f => ({ ...f, linked_lesson_id: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Sem vínculo</option>
+                {lessonOptions.map(l => (
+                  <option key={l.id} value={l.id}>
+                    Curso {l.course_order} — Lição {l.order_num}: {l.title}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Descrição</label>
