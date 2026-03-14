@@ -98,13 +98,14 @@ export default function UserAgendaTab() {
       ]);
       const { data: attendanceData } = attResult;
       const all = (eventsData ?? []) as Event[];
+      const isManager = role === "admin" || role === "lider";
       const filtered = all.filter(e => {
         // Personal events: only show to target user
         if ((e as any).target_user_id && (e as any).target_user_id !== user?.id) return false;
-        // If community is set, only show to that community
-        if (e.community && e.community !== profile?.community) return false;
         // If area is set, only show to that area
         if (e.area && e.area !== currentArea) return false;
+        // If community is set: admins/leaders managing a different area bypass this filter
+        if (e.community && !isManager && e.community !== profile?.community) return false;
         return true;
       });
       setEvents(filtered);
@@ -145,10 +146,11 @@ export default function UserAgendaTab() {
             const { data: { user: currentUser } } = await supabase.auth.getUser();
             const { data: eventsData } = await supabase.from("events").select("*").order("event_date");
             const all = (eventsData ?? []) as Event[];
+            const isManager = role === "admin" || role === "lider";
             const filtered = all.filter(e => {
               if ((e as any).target_user_id && (e as any).target_user_id !== currentUser?.id) return false;
-              if (e.community && e.community !== profile?.community) return false;
               if (e.area && e.area !== currentArea) return false;
+              if (e.community && !isManager && e.community !== profile?.community) return false;
               return true;
             });
             setEvents(filtered);
