@@ -19,6 +19,7 @@ type Turma = {
 
 export default function LeaderTurmaManagement() {
   const { profile } = useAuth();
+  const { effectiveArea } = useAreaSwitch();
   const { toast } = useToast();
   const [turma, setTurma] = useState<Turma | null>(null);
   const [archivedTurmas, setArchivedTurmas] = useState<Turma[]>([]);
