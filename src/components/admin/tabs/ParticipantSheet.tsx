@@ -494,10 +494,30 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       <div className="rounded-2xl p-4 relative overflow-hidden" style={{ background: "var(--gradient-hero)" }}>
         <div className="flex items-center gap-4 mb-3">
           {p.avatar_url ? (
-            <img src={p.avatar_url} alt={p.full_name} className="w-14 h-14 rounded-2xl object-cover flex-shrink-0 border-2 border-white/30" />
+            <img
+              src={p.avatar_url}
+              alt={p.full_name}
+              className="w-14 h-14 rounded-2xl object-cover flex-shrink-0 border-2 border-white/30 cursor-pointer hover:opacity-80 transition-opacity"
+              onClick={() => setShowAvatarZoom(true)}
+            />
           ) : (
             <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0 border border-white/20">
               <span className="font-montserrat font-black text-primary-foreground text-2xl">{p.full_name.charAt(0)}</span>
+            </div>
+          )}
+
+          {/* Avatar zoom dialog */}
+          {showAvatarZoom && p.avatar_url && (
+            <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6" onClick={() => setShowAvatarZoom(false)}>
+              <div className="relative max-w-sm w-full" onClick={e => e.stopPropagation()}>
+                <img src={p.avatar_url} alt={p.full_name} className="w-full rounded-2xl object-contain max-h-[70vh]" />
+                <button
+                  onClick={() => setShowAvatarZoom(false)}
+                  className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-card border border-border flex items-center justify-center shadow-lg"
+                >
+                  <span className="text-foreground text-sm font-bold">✕</span>
+                </button>
+              </div>
             </div>
           )}
           <div className="flex-1">
