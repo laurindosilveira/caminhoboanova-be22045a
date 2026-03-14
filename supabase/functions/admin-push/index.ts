@@ -169,6 +169,18 @@ Deno.serve(async (req) => {
       await supabase.from("push_subscriptions").delete().in("endpoint", failedEndpoints);
     }
 
+    // Log the dispatch
+    await supabase.from("push_notification_log").insert({
+      type: "manual",
+      title,
+      body,
+      target: target || "all",
+      target_value: targetValue || null,
+      sent_count: sent,
+      failed_count: failed,
+      sent_by: (await supabaseUser.auth.getUser(authHeader!.replace("Bearer ", ""))).data.user?.id || null,
+    });
+
     return new Response(
       JSON.stringify({ sent, failed, cleaned: failedEndpoints.length, total: subscriptions.length }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
