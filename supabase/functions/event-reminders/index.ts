@@ -193,6 +193,34 @@ Deno.serve(async (req) => {
       await supabase.from("push_subscriptions").delete().in("endpoint", failedEndpoints);
     }
 
+    // Log the dispatch
+    if (sent > 0 || failed > 0) {
+      const logEntries: any[] = [];
+      if ((upcomingEvents?.length ?? 0) > 0) {
+        logEntries.push({
+          type: "event_reminder",
+          title: "🔔 Evento em 2 dias!",
+          body: `Lembrete automático para ${upcomingEvents!.length} evento(s)`,
+          target: "auto",
+          sent_count: sent,
+          failed_count: failed,
+        });
+      }
+      if ((pastEvents?.length ?? 0) > 0) {
+        logEntries.push({
+          type: "attendance_reminder",
+          title: "📋 Confirme sua presença!",
+          body: `Lembrete de presença para ${pastEvents!.length} evento(s)`,
+          target: "auto",
+          sent_count: sent,
+          failed_count: failed,
+        });
+      }
+      if (logEntries.length > 0) {
+        await supabase.from("push_notification_log").insert(logEntries);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         sent, failed, skipped,
