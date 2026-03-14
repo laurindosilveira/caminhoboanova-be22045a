@@ -516,10 +516,10 @@ export default function UserAgendaTab() {
               <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Título *</label>
               <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="text-sm" placeholder="Ex: Encontro da Turma" />
             </div>
-            <div>
-              <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Data e hora *</label>
-              <Input type="datetime-local" value={form.event_date} onChange={e => setForm(f => ({ ...f, event_date: e.target.value }))} className="text-sm" />
-            </div>
+            <DateTimePickerField
+              value={form.event_date}
+              onChange={(val) => setForm(f => ({ ...f, event_date: val }))}
+            />
             <div>
               <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Tipo</label>
               <select
