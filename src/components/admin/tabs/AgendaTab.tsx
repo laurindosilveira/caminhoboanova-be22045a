@@ -50,6 +50,7 @@ export default function AgendaTab() {
   const { effectiveArea } = useAreaSwitch();
   const currentArea = effectiveArea || profile?.area || "";
   const [events, setEvents] = useState<Event[]>([]);
+  const [areaFilter, setAreaFilter] = useState<string>(currentArea);
   const [lessons, setLessons] = useState<LessonOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
