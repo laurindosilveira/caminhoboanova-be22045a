@@ -237,7 +237,7 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
       setLoading(false);
     }
     load();
-  }, [lesson.id, scheduledDevotionalDates]);
+  }, [lesson.id, scheduledDevotionalDates, isLateAccess]);
 
   async function handleCompleteDevotional(devotionalId: string) {
     const { data: { user } } = await supabase.auth.getUser();
