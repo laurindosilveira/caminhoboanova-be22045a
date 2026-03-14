@@ -98,11 +98,15 @@ export default function UserAgendaTab() {
       ]);
       const { data: attendanceData } = attResult;
       const all = (eventsData ?? []) as Event[];
-      const filtered = all.filter(e =>
-        !e.area ||
-        e.area === currentArea ||
-        e.community === profile?.community
-      );
+      const filtered = all.filter(e => {
+        // Personal events: only show to target user
+        if ((e as any).target_user_id && (e as any).target_user_id !== user?.id) return false;
+        // If community is set, only show to that community
+        if (e.community && e.community !== profile?.community) return false;
+        // If area is set, only show to that area
+        if (e.area && e.area !== currentArea) return false;
+        return true;
+      });
       setEvents(filtered);
       setAttendanceRecords((attendanceData ?? []) as AttendanceRecord[]);
 
