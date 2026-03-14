@@ -788,12 +788,13 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   } as any);
                   if (error) throw error;
 
-                  // Send push notification
-                  await supabase.functions.invoke("send-push-notifications", {
+                  // Send push notification via admin-push
+                  await supabase.functions.invoke("admin-push", {
                     body: {
-                      userIds: [p.user_id],
                       title: "💬 Conversa agendada!",
                       body: `Seu líder agendou uma conversa com você para ${new Date(eventDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })} às ${scheduleTime}. Confira na sua agenda!`,
+                      target: "user",
+                      targetValue: p.user_id,
                     },
                   });
 
