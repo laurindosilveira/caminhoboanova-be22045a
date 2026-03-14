@@ -215,6 +215,25 @@ export default function UserAgendaTab() {
     };
 
     if (editingEvent) {
+      const oldLessonId = editingEvent.linked_lesson_id ?? null;
+      const newLessonId = payload.linked_lesson_id;
+
+      // Check cascade for lesson change
+      if (oldLessonId !== newLessonId && newLessonId) {
+        const subsequentWithLessons = events.filter(
+          e => e.id !== editingEvent.id && e.event_date > editingEvent.event_date && e.linked_lesson_id
+        );
+        if (subsequentWithLessons.length > 0) {
+          // Save other fields first (without lesson change), then handle cascade
+          await supabase.from("events").update({ ...payload, linked_lesson_id: oldLessonId }).eq("id", editingEvent.id);
+          setCascadePending({ eventId: editingEvent.id, oldLessonId, newLessonId });
+          setShowCascadeDialog(true);
+          setShowForm(false);
+          setSaving(false);
+          return;
+        }
+      }
+
       const { error } = await supabase.from("events").update(payload).eq("id", editingEvent.id);
       if (error) {
         toast.error("Erro ao atualizar evento");
@@ -235,6 +254,49 @@ export default function UserAgendaTab() {
       }
     }
     setSaving(false);
+  }
+
+  async function executeCascade(doCascade: boolean) {
+    if (!cascadePending) return;
+    const { eventId, oldLessonId, newLessonId } = cascadePending;
+    const event = events.find(e => e.id === eventId);
+    if (!event) return;
+
+    await supabase.from("events").update({ linked_lesson_id: newLessonId }).eq("id", eventId);
+
+    if (doCascade) {
+      const subsequent = events
+        .filter(e => e.id !== eventId && e.event_date > event.event_date && e.linked_lesson_id)
+        .sort((a, b) => a.event_date.localeCompare(b.event_date));
+
+      if (subsequent.length > 0) {
+        const newLesson = lessonOptions.find(l => l.id === newLessonId);
+        if (newLesson) {
+          const allLessonsOrdered = [...lessonOptions].sort((a, b) => {
+            if (a.course_order !== b.course_order) return a.course_order - b.course_order;
+            return a.order_num - b.order_num;
+          });
+
+          const newIdx = allLessonsOrdered.findIndex(l => l.id === newLessonId);
+          if (newIdx >= 0) {
+            for (let i = 0; i < subsequent.length; i++) {
+              const nextLessonIdx = newIdx + 1 + i;
+              if (nextLessonIdx < allLessonsOrdered.length) {
+                await supabase.from("events")
+                  .update({ linked_lesson_id: allLessonsOrdered[nextLessonIdx].id })
+                  .eq("id", subsequent[i].id);
+              }
+            }
+            toast.success(`Lições atualizadas em ${subsequent.length + 1} eventos!`);
+          }
+        }
+      }
+    } else {
+      toast.success("Lição atualizada (sem cascata)!");
+    }
+
+    setShowCascadeDialog(false);
+    setCascadePending(null);
   }
 
   async function handleDeleteEvent(eventId: string) {
