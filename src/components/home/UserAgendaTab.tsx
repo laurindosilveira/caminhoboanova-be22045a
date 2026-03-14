@@ -345,9 +345,9 @@ export default function UserAgendaTab() {
               <Plus className="w-3.5 h-3.5" /> Novo Evento
             </Button>
           )}
-          {profile?.community && (
+          {currentArea && (
             <span className="text-xs font-inter text-muted-foreground bg-muted rounded-full px-3 py-1">
-              {profile.community}
+              {currentArea}
             </span>
           )}
         </div>
