@@ -47,6 +47,8 @@ const EMPTY_FORM = {
 
 export default function AgendaTab() {
   const { profile } = useAuth();
+  const { effectiveArea } = useAreaSwitch();
+  const currentArea = effectiveArea || profile?.area || "";
   const [events, setEvents] = useState<Event[]>([]);
   const [lessons, setLessons] = useState<LessonOption[]>([]);
   const [loading, setLoading] = useState(true);
