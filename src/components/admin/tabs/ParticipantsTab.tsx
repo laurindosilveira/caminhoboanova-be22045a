@@ -708,9 +708,13 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       {/* Profile card */}
       <div className="bg-card rounded-2xl border border-border p-5 mb-4 shadow-sm">
         <div className="flex items-center gap-4 mb-4">
-          <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <span className="font-montserrat font-black text-primary text-2xl">{p.full_name.charAt(0).toUpperCase()}</span>
-          </div>
+          {p.avatar_url ? (
+            <img src={p.avatar_url} alt={p.full_name} className="w-14 h-14 rounded-2xl object-cover flex-shrink-0 border border-border" />
+          ) : (
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <span className="font-montserrat font-black text-primary text-2xl">{p.full_name.charAt(0).toUpperCase()}</span>
+            </div>
+          )}
           <div className="flex-1">
             <h2 className="font-montserrat font-black text-foreground text-lg">{p.full_name}</h2>
             <span className={`px-2.5 py-0.5 rounded-lg text-xs font-inter font-medium ${status.bg} ${status.color}`}>{status.label}</span>
