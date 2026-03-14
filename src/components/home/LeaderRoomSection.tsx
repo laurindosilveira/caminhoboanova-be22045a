@@ -159,7 +159,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
   const [dataLoaded, setDataLoaded] = useState(false);
   const [waitingCount, setWaitingCount] = useState(0);
 
-  const turmaArea = profile?.area ?? "";
+  const turmaArea = effectiveArea || profile?.area || "";
 
   // Fetch waiting room count for the leader's area
   useEffect(() => {
