@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { CalendarDays, MapPin, Users, BookOpen, ChevronDown, ChevronUp, Plus, Pencil, Trash2, Save, X } from "lucide-react";
+import { CalendarDays, MapPin, Users, BookOpen, ChevronDown, ChevronUp, Plus, Pencil, Trash2, Save, X, Clock, Timer } from "lucide-react";
+import { differenceInDays, differenceInHours } from "date-fns";
 import WorshipConfirmation from "./WorshipConfirmation";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -654,15 +655,77 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
             )}
           </div>
           {linkedLesson && (
-            <button
-              onClick={handleLessonClick}
-              className="flex items-center gap-1.5 mt-2 px-2.5 py-1.5 rounded-lg bg-secondary/10 hover:bg-secondary/20 transition-colors w-full text-left"
-            >
-              <BookOpen className="w-3.5 h-3.5 text-secondary flex-shrink-0" />
-              <p className="font-inter text-[10px] text-secondary font-medium truncate">
-                📖 Ligado ao Curso {linkedLesson.course_order} — Lição {linkedLesson.order_num}: {linkedLesson.title}
-              </p>
-            </button>
+            <>
+              <button
+                onClick={handleLessonClick}
+                className="flex items-center gap-1.5 mt-2 px-2.5 py-1.5 rounded-lg bg-secondary/10 hover:bg-secondary/20 transition-colors w-full text-left"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-secondary flex-shrink-0" />
+                <p className="font-inter text-[10px] text-secondary font-medium truncate">
+                  📖 Ligado ao Curso {linkedLesson.course_order} — Lição {linkedLesson.order_num}: {linkedLesson.title}
+                </p>
+              </button>
+              {/* Countdown to study window */}
+              {!past && (() => {
+                const daysLeft = differenceInDays(dateObj, now);
+                const hoursLeft = differenceInHours(dateObj, now);
+                if (hoursLeft <= 0) return null;
+                
+                const isUrgent = daysLeft <= 1;
+                const isClose = daysLeft <= 3;
+                
+                const bgColor = isUrgent
+                  ? "bg-destructive/10 border-destructive/30"
+                  : isClose
+                  ? "bg-amber-500/10 border-amber-500/30"
+                  : "bg-primary/10 border-primary/30";
+                
+                const textColor = isUrgent
+                  ? "text-destructive"
+                  : isClose
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-primary";
+                
+                const numColor = isUrgent
+                  ? "text-destructive"
+                  : isClose
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-primary";
+
+                const label = daysLeft === 0
+                  ? `${hoursLeft}h restantes`
+                  : daysLeft === 1
+                  ? "1 dia restante"
+                  : `${daysLeft} dias restantes`;
+
+                const description = daysLeft === 0
+                  ? "O estudo abre hoje!"
+                  : daysLeft <= 2
+                  ? "Prepare-se para o estudo!"
+                  : "até a abertura do estudo vinculado";
+
+                return (
+                  <div className={`mt-1.5 flex items-center gap-2 px-2.5 py-1.5 rounded-lg border ${bgColor} animate-in fade-in duration-300`}>
+                    <div className={`flex items-center justify-center w-7 h-7 rounded-full ${isUrgent ? "bg-destructive/20" : isClose ? "bg-amber-500/20" : "bg-primary/20"}`}>
+                      <Timer className={`w-3.5 h-3.5 ${textColor}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`font-montserrat font-bold text-xs ${numColor}`}>
+                        ⏳ {label}
+                      </p>
+                      <p className="font-inter text-[10px] text-muted-foreground">
+                        {description}
+                      </p>
+                    </div>
+                    {daysLeft <= 3 && (
+                      <span className={`text-lg ${isUrgent ? "animate-pulse" : ""}`}>
+                        {isUrgent ? "🔥" : "📚"}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+            </>
           )}
           {/* Preparation section */}
           {!past && linkedLesson && lessonContent && (lessonContent.summary || lessonContent.prayer_prompt || (lessonContent.bible_texts && lessonContent.bible_texts.length > 0)) && (
