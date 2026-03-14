@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Send, Users, MapPin, Building, Megaphone, CheckCircle, AlertCircle } from "lucide-react";
+import { Send, Users, MapPin, Building, Megaphone, CheckCircle, AlertCircle, CalendarClock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
