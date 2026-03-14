@@ -418,12 +418,14 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
 
   if (selectedLesson) {
     if (selectedLessonMode === "study") {
+      const isLateAccessStudy = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id);
       return (
         <div className="px-5 pt-5 pb-6">
-          <JourneyLessonView lesson={selectedLesson} onBack={() => { setSelectedLesson(null); setSelectedLessonMode("choice"); }} />
+          <JourneyLessonView lesson={selectedLesson} onBack={() => { setSelectedLesson(null); setSelectedLessonMode("choice"); }} isLateAccess={isLateAccessStudy} />
         </div>
       );
     }
+    const isLateAccess = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id);
     return (
       <LessonChoiceView
         lesson={selectedLesson}
@@ -431,7 +433,8 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
         onOpenStudy={() => setSelectedLessonMode("study")}
         scheduledDevotionalDates={agendaSchedule.lessonDevotionalDates.get(selectedLesson.id)}
         eventDate={agendaSchedule.lessonEventDate.get(selectedLesson.id) ?? undefined}
-        isStudyLocked={!isLeaderOrAdmin && agendaSchedule.hasScheduledEvents && !agendaSchedule.studyOpenLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id)}
+        isStudyLocked={false}
+        isLateAccess={isLateAccess}
       />
     );
   }
@@ -939,9 +942,11 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
                         const isEventDay = eventDay ? todayZero.getTime() === eventDay.getTime() : false;
                         const isPastEvent = eventDay ? todayZero > eventDay : false;
                         
+                        const isLateAccess = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(lesson.id) && !isFullyDone;
+                        
                         // Leaders and admins always have full access
-                        // Study is accessible if: leader/admin, OR window open & before event day, OR fully completed
-                        const isAccessible = isLeaderOrAdmin || isStudyOpen || isFullyDone;
+                        // Study is accessible if: leader/admin, OR window open & before event day, OR late access (past event), OR fully completed
+                        const isAccessible = isLeaderOrAdmin || isStudyOpen || isLateAccess || isFullyDone;
                         // Locked if: has scheduled events but this lesson isn't accessible (never for leaders/admins)
                         const isLocked = !isLeaderOrAdmin && agendaSchedule.hasScheduledEvents && !isAccessible && !isFullyDone;
                         // Not yet scheduled (never locked for leaders/admins)
@@ -950,10 +955,8 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
                         let lockMessage = "";
                         if (isNotScheduled) {
                           lockMessage = "📅 Aguardando agendamento";
-                        } else if (isEventDay && !isFullyDone) {
-                          lockMessage = "📖 Dia do encontro — estudo encerrado";
-                        } else if (isPastEvent && !isFullyDone) {
-                          lockMessage = "⏰ Prazo encerrado";
+                        } else if (isLateAccess) {
+                          lockMessage = "⚠️ Atrasado — sem pontuação";
                         } else if (isLocked) {
                           const entry = agendaSchedule.schedule.find(e => e.lessonId === lesson.id);
                           if (entry) {

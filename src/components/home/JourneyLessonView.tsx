@@ -58,9 +58,10 @@ type Props = {
   onBack: () => void;
   isAdmin?: boolean;
   targetUserId?: string;
+  isLateAccess?: boolean;
 };
 
-export default function JourneyLessonView({ lesson, onBack, isAdmin = false, targetUserId }: Props) {
+export default function JourneyLessonView({ lesson, onBack, isAdmin = false, targetUserId, isLateAccess = false }: Props) {
   const [content, setContent] = useState<LessonContent>(getDefaultContent(lesson.order_num));
   const [responses, setResponses] = useState<Response>({});
   const [bibleRef, setBibleRef] = useState<string | null>(null);
@@ -166,7 +167,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     }
     setSaving(false);
     setLastSaved(new Date());
-    toast.success("Respostas salvas com sucesso! +20 pontos de fé ⭐");
+    toast.success(isLateAccess ? "Respostas salvas! (sem pontuação — prazo encerrado)" : "Respostas salvas com sucesso! +20 pontos de fé ⭐");
   }
 
   function updateResponse(key: string, value: string) {

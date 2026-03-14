@@ -41,6 +41,8 @@ type Props = {
   eventDate?: Date;
   /** Whether the study is locked (event day or past deadline) */
   isStudyLocked?: boolean;
+  /** Whether this is late access (after event date — no points) */
+  isLateAccess?: boolean;
 };
 
 /**
@@ -192,7 +194,7 @@ function computeDevotionalStatuses(
   return { statuses, lockedSet };
 }
 
-export default function LessonChoiceView({ lesson, onBack, onOpenStudy, scheduledDevotionalDates, eventDate, isStudyLocked }: Props) {
+export default function LessonChoiceView({ lesson, onBack, onOpenStudy, scheduledDevotionalDates, eventDate, isStudyLocked, isLateAccess }: Props) {
   const { role } = useAuth();
   const isLeaderOrAdmin = role === "admin" || role === "lider";
   const [devotionals, setDevotionals] = useState<DevotionalItem[]>([]);
@@ -220,8 +222,8 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
       setCompletedIds(new Set(progList.map((p: any) => p.devotional_id)));
       setCompletedDates(completedMap);
 
-      if (isLeaderOrAdmin) {
-        // Leaders/admins: all devotionals are available (no date locks)
+      if (isLeaderOrAdmin || isLateAccess) {
+        // Leaders/admins and late access: all devotionals are available (no date locks)
         const allAvailable = new Map<string, DevotionalStatus>();
         devList.forEach(d => allAvailable.set(d.id, completedMap.has(d.id) ? "completed" : "available"));
         setDevStatuses(allAvailable);
@@ -235,14 +237,15 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
       setLoading(false);
     }
     load();
-  }, [lesson.id, scheduledDevotionalDates]);
+  }, [lesson.id, scheduledDevotionalDates, isLateAccess]);
 
   async function handleCompleteDevotional(devotionalId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const now = new Date();
     const isWeekend = now.getDay() === 0 || now.getDay() === 6;
-    const pts = isWeekend ? 2 : 5;
+    // Late access = 0 points; weekend recovery = 2 pts; normal = 5 pts
+    const pts = isLateAccess ? 0 : isWeekend ? 2 : 5;
     await supabase.from("devotional_progress").insert({
       user_id: user.id,
       devotional_id: devotionalId,
@@ -251,7 +254,7 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
     newCompletedMap.set(devotionalId, now.toISOString());
     setCompletedDates(newCompletedMap);
     setCompletedIds(prev => new Set([...prev, devotionalId]));
-    if (isLeaderOrAdmin) {
+    if (isLeaderOrAdmin || isLateAccess) {
       const allAvailable = new Map<string, DevotionalStatus>();
       devotionals.forEach(d => allAvailable.set(d.id, newCompletedMap.has(d.id) ? "completed" : "available"));
       setDevStatuses(allAvailable);
@@ -261,10 +264,14 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
       setDevStatuses(statuses);
       setLockedIds(lockedSet);
     }
-    toast.success(`Devocional concluído! +${pts} pontos de fé ⭐`, {
-      description: isWeekend ? "Recuperação de fim de semana (2 pts)" : "Continue firme na sua caminhada!",
-      duration: 3000,
-    });
+    if (isLateAccess) {
+      toast.info("Devocional concluído! (sem pontuação — prazo encerrado)", { duration: 3000 });
+    } else {
+      toast.success(`Devocional concluído! +${pts} pontos de fé ⭐`, {
+        description: isWeekend ? "Recuperação de fim de semana (2 pts)" : "Continue firme na sua caminhada!",
+        duration: 3000,
+      });
+    }
   }
 
   const completedCount = devotionals.filter(d => completedIds.has(d.id)).length;
@@ -439,6 +446,15 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
         )}
       </div>
 
+      {isLateAccess && (
+        <div className="rounded-2xl p-3 bg-accent/10 border border-accent/20 flex items-start gap-2">
+          <span className="text-sm">⚠️</span>
+          <p className="font-inter text-xs text-accent-foreground">
+            O prazo desta lição já encerrou. Você ainda pode estudar e fazer os devocionais, mas <strong>não receberá pontos</strong>.
+          </p>
+        </div>
+      )}
+
       <p className="font-inter text-sm text-muted-foreground text-center">Escolha o que deseja acessar:</p>
 
       <div className="grid grid-cols-1 gap-3">
@@ -459,7 +475,7 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
               </div>
             )}
             <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
-              Preparação diária antes do encontro
+              {isLateAccess ? "⚠️ Sem pontuação (prazo encerrado)" : "Preparação diária antes do encontro"}
             </p>
           </div>
           <span className="text-brand-green font-montserrat font-bold text-lg">→</span>
@@ -492,7 +508,7 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
                   Responda as perguntas e registre sua reflexão
                 </p>
                 <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
-                  +20 pontos de fé ao completar
+                  {isLateAccess ? "⚠️ Sem pontuação (prazo encerrado)" : "+20 pontos de fé ao completar"}
                 </p>
               </>
             )}
