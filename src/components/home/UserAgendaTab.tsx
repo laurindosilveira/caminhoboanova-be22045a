@@ -75,6 +75,8 @@ export default function UserAgendaTab() {
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [form, setForm] = useState<EventFormData>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [showCascadeDialog, setShowCascadeDialog] = useState(false);
+  const [cascadePending, setCascadePending] = useState<{ eventId: string; oldLessonId: string | null; newLessonId: string } | null>(null);
 
   useEffect(() => {
     async function fetch() {
@@ -213,6 +215,25 @@ export default function UserAgendaTab() {
     };
 
     if (editingEvent) {
+      const oldLessonId = editingEvent.linked_lesson_id ?? null;
+      const newLessonId = payload.linked_lesson_id;
+
+      // Check cascade for lesson change
+      if (oldLessonId !== newLessonId && newLessonId) {
+        const subsequentWithLessons = events.filter(
+          e => e.id !== editingEvent.id && e.event_date > editingEvent.event_date && e.linked_lesson_id
+        );
+        if (subsequentWithLessons.length > 0) {
+          // Save other fields first (without lesson change), then handle cascade
+          await supabase.from("events").update({ ...payload, linked_lesson_id: oldLessonId }).eq("id", editingEvent.id);
+          setCascadePending({ eventId: editingEvent.id, oldLessonId, newLessonId });
+          setShowCascadeDialog(true);
+          setShowForm(false);
+          setSaving(false);
+          return;
+        }
+      }
+
       const { error } = await supabase.from("events").update(payload).eq("id", editingEvent.id);
       if (error) {
         toast.error("Erro ao atualizar evento");
@@ -233,6 +254,49 @@ export default function UserAgendaTab() {
       }
     }
     setSaving(false);
+  }
+
+  async function executeCascade(doCascade: boolean) {
+    if (!cascadePending) return;
+    const { eventId, oldLessonId, newLessonId } = cascadePending;
+    const event = events.find(e => e.id === eventId);
+    if (!event) return;
+
+    await supabase.from("events").update({ linked_lesson_id: newLessonId }).eq("id", eventId);
+
+    if (doCascade) {
+      const subsequent = events
+        .filter(e => e.id !== eventId && e.event_date > event.event_date && e.linked_lesson_id)
+        .sort((a, b) => a.event_date.localeCompare(b.event_date));
+
+      if (subsequent.length > 0) {
+        const newLesson = lessonOptions.find(l => l.id === newLessonId);
+        if (newLesson) {
+          const allLessonsOrdered = [...lessonOptions].sort((a, b) => {
+            if (a.course_order !== b.course_order) return a.course_order - b.course_order;
+            return a.order_num - b.order_num;
+          });
+
+          const newIdx = allLessonsOrdered.findIndex(l => l.id === newLessonId);
+          if (newIdx >= 0) {
+            for (let i = 0; i < subsequent.length; i++) {
+              const nextLessonIdx = newIdx + 1 + i;
+              if (nextLessonIdx < allLessonsOrdered.length) {
+                await supabase.from("events")
+                  .update({ linked_lesson_id: allLessonsOrdered[nextLessonIdx].id })
+                  .eq("id", subsequent[i].id);
+              }
+            }
+            toast.success(`Lições atualizadas em ${subsequent.length + 1} eventos!`);
+          }
+        }
+      }
+    } else {
+      toast.success("Lição atualizada (sem cascata)!");
+    }
+
+    setShowCascadeDialog(false);
+    setCascadePending(null);
   }
 
   async function handleDeleteEvent(eventId: string) {
@@ -382,6 +446,36 @@ export default function UserAgendaTab() {
                 </div>
               ) : null;
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* ── DIÁLOGO DE CASCATA ──────────────── */}
+      {showCascadeDialog && cascadePending && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in" onClick={() => { setShowCascadeDialog(false); setCascadePending(null); }}>
+          <div className="w-full max-w-sm bg-card rounded-2xl p-5 mx-4 space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="text-center">
+              <span className="text-3xl">📅</span>
+              <h3 className="font-montserrat font-bold text-foreground text-base mt-2">Prorrogar estudos?</h3>
+              <p className="text-muted-foreground font-inter text-xs mt-2 leading-relaxed">
+                Você mudou a lição deste encontro. Deseja que as próximas datas sejam atualizadas automaticamente com as lições seguintes?
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => executeCascade(false)}
+                className="flex-1 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm font-medium"
+              >
+                Só este evento
+              </button>
+              <button
+                onClick={() => executeCascade(true)}
+                className="flex-1 py-2.5 rounded-xl text-primary-foreground font-inter text-sm font-medium"
+                style={{ background: "var(--gradient-hero)" }}
+              >
+                Prorrogar todos
+              </button>
+            </div>
           </div>
         </div>
       )}
