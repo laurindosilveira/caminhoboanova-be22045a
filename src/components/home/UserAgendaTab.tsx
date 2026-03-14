@@ -66,6 +66,7 @@ export default function UserAgendaTab() {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [lessonInfoMap, setLessonInfoMap] = useState<Map<string, LessonInfo>>(new Map());
   const [lessonContentMap, setLessonContentMap] = useState<Map<string, LessonContentInfo>>(new Map());
+  const [lessonOptions, setLessonOptions] = useState<LessonOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>("agenda");
 
