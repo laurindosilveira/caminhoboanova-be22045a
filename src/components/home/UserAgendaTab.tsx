@@ -125,7 +125,7 @@ export default function UserAgendaTab() {
       setLoading(false);
     }
     if (profile) fetch();
-  }, [profile]);
+  }, [profile, currentArea]);
 
   // Realtime
   useEffect(() => {
