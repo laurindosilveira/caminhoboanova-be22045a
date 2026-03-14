@@ -225,7 +225,7 @@ export default function MessagesTab() {
             <div className="grid grid-cols-2 gap-2">
               {([
                 { value: "all" as const, label: "Todos", icon: Globe },
-                { value: "area" as const, label: profile?.area ?? "Minha área", icon: MapPin },
+                { value: "area" as const, label: effectiveArea || "Minha área", icon: MapPin },
                 { value: "community" as const, label: "Comunidade", icon: Users },
                 ...(turmas.length > 0 ? [{ value: "turma" as const, label: "Turma", icon: GraduationCap }] : []),
               ] as const).map(opt => (

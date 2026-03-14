@@ -30,6 +30,7 @@ type PastorInfo = { pastor_name: string; phone: string };
 
 export default function CourseGuideSubTab() {
   const { profile } = useAuth();
+  const { effectiveArea } = useAreaSwitch();
   const { toast } = useToast();
   const [courses, setCourses] = useState<Course[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -42,11 +43,12 @@ export default function CourseGuideSubTab() {
   const [savingNotes, setSavingNotes] = useState(false);
   const [pastorInfo, setPastorInfo] = useState<PastorInfo | null>(null);
 
-  useEffect(() => { fetchCourses(); fetchPastor(); }, []);
+  useEffect(() => { fetchCourses(); fetchPastor(); }, [effectiveArea]);
 
   async function fetchPastor() {
-    if (!profile?.area) return;
-    const { data } = await supabase.from("area_pastors").select("pastor_name, phone").eq("area", profile.area).maybeSingle();
+    const area = effectiveArea || profile?.area;
+    if (!area) return;
+    const { data } = await supabase.from("area_pastors").select("pastor_name, phone").eq("area", area).maybeSingle();
     if (data) setPastorInfo(data);
   }
 

@@ -53,7 +53,7 @@ export default function LeaderTurmaManagement() {
     }
 
     // Filter archived turmas by same area
-    const myArea = profile?.area;
+    const myArea = effectiveArea || profile?.area;
     const filtered = (allTurmas ?? []).filter(t => t.area === myArea);
     const { data: allProfiles } = await supabase.from("profiles").select("turma_id");
     const countMap: Record<string, number> = {};
