@@ -163,7 +163,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
   const [localOverrides, setLocalOverrides] = useState<Partial<Participant>>({});
   const p = { ...pOriginal, ...localOverrides };
   const [typeFilter, setTypeFilter] = useState("todos");
-  const [loading, setLoading] = useState(true);
+  const [showAvatarZoom, setShowAvatarZoom] = useState(false);
   const [showAuditLog, setShowAuditLog] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
