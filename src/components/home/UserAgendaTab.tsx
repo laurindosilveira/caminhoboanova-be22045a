@@ -62,7 +62,9 @@ const EMPTY_FORM: EventFormData = { title: "", description: "", event_date: "", 
 
 export default function UserAgendaTab() {
   const { profile, role } = useAuth();
+  const { effectiveArea } = useAreaSwitch();
   const canManage = role === "admin" || role === "lider";
+  const currentArea = effectiveArea || profile?.area || "";
   const [events, setEvents] = useState<Event[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [lessonInfoMap, setLessonInfoMap] = useState<Map<string, LessonInfo>>(new Map());
