@@ -286,15 +286,24 @@ export default function UserAgendaTab() {
 
           const newIdx = allLessonsOrdered.findIndex(l => l.id === newLessonId);
           if (newIdx >= 0) {
+            let updated = 0;
+            let overflow = 0;
             for (let i = 0; i < subsequent.length; i++) {
               const nextLessonIdx = newIdx + 1 + i;
               if (nextLessonIdx < allLessonsOrdered.length) {
                 await supabase.from("events")
                   .update({ linked_lesson_id: allLessonsOrdered[nextLessonIdx].id })
                   .eq("id", subsequent[i].id);
+                updated++;
+              } else {
+                overflow++;
               }
             }
-            toast.success(`Lições atualizadas em ${subsequent.length + 1} eventos!`);
+            if (overflow > 0) {
+              toast.warning(`${updated + 1} eventos atualizados. ${overflow} evento(s) não tinham lições suficientes para vincular.`);
+            } else {
+              toast.success(`Lições atualizadas em ${updated + 1} eventos!`);
+            }
           }
         }
       }
