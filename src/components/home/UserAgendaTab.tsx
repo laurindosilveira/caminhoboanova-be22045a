@@ -438,6 +438,21 @@ export default function UserAgendaTab() {
               </div>
             </div>
             <div>
+              <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">📖 Vincular a um estudo</label>
+              <select
+                value={form.linked_lesson_id}
+                onChange={e => setForm(f => ({ ...f, linked_lesson_id: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Sem vínculo</option>
+                {lessonOptions.map(l => (
+                  <option key={l.id} value={l.id}>
+                    Curso {l.course_order} — Lição {l.order_num}: {l.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Descrição</label>
               <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="text-sm resize-none" rows={3} placeholder="Detalhes do evento..." />
             </div>
