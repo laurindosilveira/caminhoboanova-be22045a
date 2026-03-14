@@ -18,6 +18,7 @@ const AREA_2_COMMUNITIES = ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"];
 
 export default function MessagesTab() {
   const { profile } = useAuth();
+  const { effectiveArea } = useAreaSwitch();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -31,7 +32,7 @@ export default function MessagesTab() {
   const [loadingViewers, setLoadingViewers] = useState(false);
   const [sendingPush, setSendingPush] = useState<string | null>(null);
 
-  const communities = profile?.area === "Área 1" ? AREA_1_COMMUNITIES : AREA_2_COMMUNITIES;
+  const communities = effectiveArea === "Área 1" ? AREA_1_COMMUNITIES : AREA_2_COMMUNITIES;
 
   useEffect(() => {
     fetchMessages();
