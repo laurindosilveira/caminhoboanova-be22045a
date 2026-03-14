@@ -199,13 +199,24 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
   }, []);
 
   async function fetchData() {
-    if (!profile?.turma_id) return;
+    // Admins can view any area even without a turma_id
+    const isAdmin = role === "admin";
+    if (!profile?.turma_id && !isAdmin) return;
     setLoading(true);
+
+    let profilesQuery = supabase.from("profiles").select("user_id, full_name, community, area, birth_date, phone, turma_id, confirmation_year, avatar_url, father_name, mother_name, father_phone, mother_phone, address");
+    
+    if (isAdmin) {
+      // Admin: fetch all profiles from the effective area
+      profilesQuery = profilesQuery.eq("area", turmaArea);
+    } else {
+      // Leader: fetch only their turma
+      profilesQuery = profilesQuery.eq("turma_id", profile!.turma_id!);
+    }
 
     const [{ data: activitiesData }, { data: profilesData }, userResult, { data: turmasData }] = await Promise.all([
       supabase.from("activities").select("*").order("order_num"),
-      supabase.from("profiles").select("user_id, full_name, community, area, birth_date, phone, turma_id, confirmation_year, avatar_url, father_name, mother_name, father_phone, mother_phone, address")
-        .eq("turma_id", profile.turma_id),
+      profilesQuery,
       supabase.auth.getUser(),
       supabase.from("turmas").select("id, name, area").eq("is_active", true),
     ]);
