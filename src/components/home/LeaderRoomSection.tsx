@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock, BookOpen, BarChart3, GraduationCap, FileText, BookMarked } from "lucide-react";
 
 const AttendanceTab = lazy(() => import("@/components/admin/tabs/AttendanceTab"));
@@ -47,6 +48,7 @@ const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
 
 export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }) {
   const { profile, role } = useAuth();
+  const { effectiveArea } = useAreaSwitch();
   const canView = role === "admin" || role === "lider";
 
   const [expanded, setExpanded] = useState(asTab);
@@ -157,7 +159,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
   const [dataLoaded, setDataLoaded] = useState(false);
   const [waitingCount, setWaitingCount] = useState(0);
 
-  const turmaArea = profile?.area ?? "";
+  const turmaArea = effectiveArea || profile?.area || "";
 
   // Fetch waiting room count for the leader's area
   useEffect(() => {
@@ -197,13 +199,24 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
   }, []);
 
   async function fetchData() {
-    if (!profile?.turma_id) return;
+    // Admins can view any area even without a turma_id
+    const isAdmin = role === "admin";
+    if (!profile?.turma_id && !isAdmin) return;
     setLoading(true);
+
+    let profilesQuery = supabase.from("profiles").select("user_id, full_name, community, area, birth_date, phone, turma_id, confirmation_year, avatar_url, father_name, mother_name, father_phone, mother_phone, address");
+    
+    if (isAdmin) {
+      // Admin: fetch all profiles from the effective area
+      profilesQuery = profilesQuery.eq("area", turmaArea as any);
+    } else {
+      // Leader: fetch only their turma
+      profilesQuery = profilesQuery.eq("turma_id", profile!.turma_id!);
+    }
 
     const [{ data: activitiesData }, { data: profilesData }, userResult, { data: turmasData }] = await Promise.all([
       supabase.from("activities").select("*").order("order_num"),
-      supabase.from("profiles").select("user_id, full_name, community, area, birth_date, phone, turma_id, confirmation_year, avatar_url, father_name, mother_name, father_phone, mother_phone, address")
-        .eq("turma_id", profile.turma_id),
+      profilesQuery,
       supabase.auth.getUser(),
       supabase.from("turmas").select("id, name, area").eq("is_active", true),
     ]);
@@ -229,6 +242,14 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
     setLoading(false);
     setDataLoaded(true);
   }
+
+  // Re-fetch when area changes (admin switching) or on first expand
+  useEffect(() => {
+    if (expanded && canView) {
+      setDataLoaded(false);
+      fetchData();
+    }
+  }, [expanded, canView, turmaArea]);
 
   useEffect(() => {
     if (expanded && !dataLoaded && canView) {

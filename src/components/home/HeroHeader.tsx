@@ -1,5 +1,6 @@
-import { Flame, Star, Heart, LogOut } from "lucide-react";
+import { Flame, Star, Heart, LogOut, ArrowLeftRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 
 interface HeroHeaderProps {
   streakDays: number;
@@ -9,8 +10,10 @@ interface HeroHeaderProps {
 }
 
 export default function HeroHeader({ streakDays, faithPoints, faithLevel, faithEnergy }: HeroHeaderProps) {
-  const { profile, signOut } = useAuth();
+  const { profile, role, signOut } = useAuth();
+  const { effectiveArea, setEffectiveArea, isOverriding } = useAreaSwitch();
   const firstName = profile?.full_name?.split(" ")[0] ?? "Bem-vindo";
+  const isAdmin = role === "admin";
 
   return (
     <div style={{ background: "var(--gradient-hero)" }}>
@@ -28,14 +31,40 @@ export default function HeroHeader({ streakDays, faithPoints, faithLevel, faithE
               </p>
             </div>
           </div>
-          <button
-            onClick={signOut}
-            title="Sair"
-            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
-          >
-            <LogOut className="w-4 h-4 text-primary-foreground" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Area switcher for admins */}
+            {isAdmin && (
+              <div className="relative">
+                <select
+                  value={effectiveArea}
+                  onChange={e => setEffectiveArea(e.target.value)}
+                  className="appearance-none bg-white/15 backdrop-blur border border-white/30 text-primary-foreground rounded-full pl-3 pr-7 py-1.5 text-xs font-inter font-semibold focus:outline-none focus:ring-2 focus:ring-white/40 cursor-pointer"
+                >
+                  <option value="Área 1" className="text-foreground">Área 1</option>
+                  <option value="Área 2" className="text-foreground">Área 2</option>
+                </select>
+                <ArrowLeftRight className="w-3 h-3 text-primary-foreground/70 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            )}
+            <button
+              onClick={signOut}
+              title="Sair"
+              className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
+            >
+              <LogOut className="w-4 h-4 text-primary-foreground" />
+            </button>
+          </div>
         </div>
+
+        {/* Area override indicator */}
+        {isOverriding && (
+          <div className="mb-3 bg-white/15 backdrop-blur rounded-xl px-3 py-2 flex items-center gap-2">
+            <ArrowLeftRight className="w-3.5 h-3.5 text-secondary" />
+            <span className="text-primary-foreground/90 text-xs font-inter">
+              Visualizando como <strong>{effectiveArea}</strong>
+            </span>
+          </div>
+        )}
 
         {/* Stats row */}
         <div className="grid grid-cols-3 gap-2.5">
