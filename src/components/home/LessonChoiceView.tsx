@@ -254,7 +254,7 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
     newCompletedMap.set(devotionalId, now.toISOString());
     setCompletedDates(newCompletedMap);
     setCompletedIds(prev => new Set([...prev, devotionalId]));
-    if (isLeaderOrAdmin) {
+    if (isLeaderOrAdmin || isLateAccess) {
       const allAvailable = new Map<string, DevotionalStatus>();
       devotionals.forEach(d => allAvailable.set(d.id, newCompletedMap.has(d.id) ? "completed" : "available"));
       setDevStatuses(allAvailable);
