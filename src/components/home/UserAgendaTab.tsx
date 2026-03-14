@@ -459,7 +459,7 @@ export default function UserAgendaTab() {
 
       {/* ── DIÁLOGO DE CASCATA ──────────────── */}
       {showCascadeDialog && cascadePending && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in" onClick={() => { setShowCascadeDialog(false); setCascadePending(null); }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in" onClick={() => executeCascade(false)}>
           <div className="w-full max-w-sm bg-card rounded-2xl p-5 mx-4 space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="text-center">
               <span className="text-3xl">📅</span>
