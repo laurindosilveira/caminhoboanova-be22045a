@@ -48,6 +48,7 @@ const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
 
 export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }) {
   const { profile, role } = useAuth();
+  const { effectiveArea } = useAreaSwitch();
   const canView = role === "admin" || role === "lider";
 
   const [expanded, setExpanded] = useState(asTab);
