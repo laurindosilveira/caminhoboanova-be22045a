@@ -11,13 +11,6 @@ import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 
-
-import ClassroomSettingsTab from "./ClassroomSettingsTab";
-
-import ChallengesTab from "./ChallengesTab";
-
-type SubTab = "sala";
-
 type Event = {
   id: string; title: string; event_date: string; type: string;
   location: string | null; community: string | null; area: string | null;
@@ -89,7 +82,6 @@ type AttendanceProps = {
 };
 
 export default function AttendanceTab({ participants, activities, communities, initialParticipant, onClearInitial, adminArea }: AttendanceProps) {
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>("sala");
   const { profile } = useAuth();
   const { toast } = useToast();
   const [events, setEvents] = useState<Event[]>([]);
