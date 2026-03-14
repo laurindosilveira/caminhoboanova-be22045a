@@ -21,14 +21,15 @@ export default function ConversationReminderBanner() {
     const { data } = await supabase
       .from("events")
       .select("title, event_date, description")
-      .eq("target_user_id" as any, user!.id)
       .eq("type", "conversa")
       .gte("event_date", now)
       .order("event_date")
-      .limit(1);
+      .limit(10);
 
-    if (data && data.length > 0) {
-      setEvent(data[0]);
+    // Filter client-side for target_user_id (not yet in types)
+    const personal = (data ?? []).filter((e: any) => (e as any).target_user_id === user!.id);
+    if (personal.length > 0) {
+      setEvent(personal[0]);
     }
   }
 

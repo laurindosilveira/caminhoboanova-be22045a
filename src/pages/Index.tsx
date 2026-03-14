@@ -70,6 +70,7 @@ export default function Index() {
           <>
             {/* Push activation reminder from leader */}
             <PushActivationBanner />
+            <ConversationReminderBanner />
 
             {/* Avisos do pastor no topo */}
             <div className="pt-4">
