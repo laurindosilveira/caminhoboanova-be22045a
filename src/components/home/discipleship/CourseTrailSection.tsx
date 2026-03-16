@@ -61,7 +61,7 @@ export default function CourseTrailSection({
       {/* Course accordion */}
       {courses.map((course) => {
         const isOpen = expandedCourse === course.id;
-        const isCourseUnlocked = unlockedCourseIds.has(course.id);
+        const isCourseUnlocked = isLeaderOrAdmin || unlockedCourseIds.has(course.id);
         const doneLessons = course.lessons.filter(l => fullyCompletedLessonIds.has(l.id)).length;
         const totalLessons = course.lessons.length;
         const coursePct = totalLessons > 0 ? Math.round((doneLessons / totalLessons) * 100) : 0;

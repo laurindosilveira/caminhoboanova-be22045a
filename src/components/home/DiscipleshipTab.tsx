@@ -22,9 +22,9 @@ import CourseTrailSection from "./discipleship/CourseTrailSection";
 
 // ─── Sub-tabs ─────────────────────────────────────────────
 const SUB_TABS = [
-  { key: "trilha" as const, label: "Trilha", icon: GraduationCap, color: "hsl(28, 100%, 50%)", bg: "bg-secondary/15" },
-  { key: "saude" as const, label: "Saúde", icon: Heart, color: "hsl(142, 71%, 45%)", bg: "bg-brand-green/15" },
-  { key: "crescimento" as const, label: "Crescimento", icon: Sparkles, color: "hsl(217, 91%, 33%)", bg: "bg-primary/15" },
+  { key: "trilha" as const, label: "Trilha", icon: GraduationCap, activeIconClass: "text-secondary" },
+  { key: "saude" as const, label: "Saúde", icon: Heart, activeIconClass: "text-brand-green" },
+  { key: "crescimento" as const, label: "Crescimento", icon: Sparkles, activeIconClass: "text-primary" },
 ];
 type SubTab = typeof SUB_TABS[number]["key"];
 
@@ -221,7 +221,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
   }
 
   // ── Waiting room ──
-  if (!profile?.turma_id) {
+  if (!profile?.turma_id && !isLeaderOrAdmin) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
         <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
@@ -354,7 +354,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
                 />
               )}
               <span className="relative z-10 flex items-center gap-2">
-                <Icon className="w-[18px] h-[18px]" style={isActive ? { color: tab.color } : {}} />
+                <Icon className={`w-5 h-5 ${isActive ? tab.activeIconClass : "text-muted-foreground"}`} />
                 <span>{tab.label}</span>
               </span>
             </button>
