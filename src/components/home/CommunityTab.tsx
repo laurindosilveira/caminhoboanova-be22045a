@@ -313,6 +313,17 @@ export default function CommunityTab() {
             <GraduationCap className="w-3.5 h-3.5" />
             Sala da Turma
           </button>
+          <button
+            onClick={() => setSubTab("galeria")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-montserrat font-bold transition-all ${
+              subTab === "galeria"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Camera className="w-3.5 h-3.5" />
+            Galeria
+          </button>
           {(role === "admin" || role === "lider") && (
             <button
               onClick={() => setSubTab("discipulador")}
