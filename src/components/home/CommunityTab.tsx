@@ -1,13 +1,14 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageCircle, GraduationCap, Cake, Sparkles, Send, Trash2, Target, Check, Users, ClipboardList, Upload, Image } from "lucide-react";
+import { MessageCircle, GraduationCap, Cake, Sparkles, Send, Trash2, Target, Check, Users, ClipboardList, Upload, Image, Camera } from "lucide-react";
 import ClassroomTab from "./ClassroomTab";
 import AnnouncementsSection from "./AnnouncementsSection";
 import LeaderRoomSection from "./LeaderRoomSection";
 import PollsSection from "./PollsSection";
 import CommunityAchievements from "./CommunityAchievements";
 import PrayerPairsSection from "./PrayerPairsSection";
+import EventPhotoGallery from "./EventPhotoGallery";
 
 const REACTION_EMOJIS = [
   { emoji: "🙏", label: "orando" },
