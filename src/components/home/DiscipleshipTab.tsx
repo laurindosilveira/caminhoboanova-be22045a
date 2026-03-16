@@ -426,6 +426,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
       );
     }
     const isLateAccess = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id);
+    const studyDone = completedLessonIds.has(selectedLesson.id);
     return (
       <LessonChoiceView
         lesson={selectedLesson}
@@ -435,6 +436,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
         eventDate={agendaSchedule.lessonEventDate.get(selectedLesson.id) ?? undefined}
         isStudyLocked={false}
         isLateAccess={isLateAccess}
+        isStudyCompleted={studyDone}
       />
     );
   }
