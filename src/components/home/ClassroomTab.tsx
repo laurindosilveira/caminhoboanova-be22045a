@@ -426,80 +426,130 @@ export default function ClassroomTab() {
 
         {/* Messages */}
         <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-          <div className="h-64 overflow-y-auto p-3 space-y-2">
-            {chatMessages.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <p className="text-2xl mb-1">💬</p>
-                  <p className="text-muted-foreground text-sm font-inter">Nenhuma mensagem ainda. Diga olá!</p>
+          {/* Thread panel or main chat */}
+          {threadRootId ? (() => {
+            const rootMsg = chatMessages.find(m => m.id === threadRootId);
+            const replies = chatMessages.filter(m => m.reply_to === threadRootId);
+            if (!rootMsg) { setThreadRootId(null); return null; }
+
+            return (
+              <>
+                <div className="border-b border-border px-3 py-2 flex items-center gap-2 bg-muted/30">
+                  <button onClick={() => setThreadRootId(null)} className="text-muted-foreground hover:text-foreground p-0.5">
+                    <X className="w-4 h-4" />
+                  </button>
+                  <MessageCircle className="w-3.5 h-3.5 text-primary" />
+                  <span className="font-montserrat font-bold text-foreground text-xs">Thread · {replies.length} resposta{replies.length !== 1 ? "s" : ""}</span>
                 </div>
-              </div>
-            ) : (
-              chatMessages.map((msg) => {
-                const isMe = msg.user_id === myUserId;
-                return (
-                  <div key={msg.id} className={`flex gap-2 ${isMe ? "flex-row-reverse" : "flex-row"}`}>
-                    {!isMe && (
-                      <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="text-xs font-montserrat font-black text-primary-foreground">
-                          {msg.user_name[0]?.toUpperCase()}
-                        </span>
-                      </div>
-                    )}
-                    <div className={`max-w-[75%] ${isMe ? "items-end" : "items-start"} flex flex-col`}>
+                <div className="h-64 overflow-y-auto p-3 space-y-2">
+                  {/* Original message */}
+                  {renderThreadMessage(rootMsg, true)}
+                  {/* Divider */}
+                  {replies.length > 0 && (
+                    <div className="flex items-center gap-2 py-1">
+                      <div className="flex-1 h-px bg-border" />
+                      <span className="text-[10px] text-muted-foreground font-inter">{replies.length} resposta{replies.length !== 1 ? "s" : ""}</span>
+                      <div className="flex-1 h-px bg-border" />
+                    </div>
+                  )}
+                  {/* Replies */}
+                  {replies
+                    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                    .map(r => renderThreadMessage(r, false))}
+                  <div ref={threadEndRef} />
+                </div>
+              </>
+            );
+          })() : (
+            <div className="h-64 overflow-y-auto p-3 space-y-2">
+              {chatMessages.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <p className="text-2xl mb-1">💬</p>
+                    <p className="text-muted-foreground text-sm font-inter">Nenhuma mensagem ainda. Diga olá!</p>
+                  </div>
+                </div>
+              ) : (
+                chatMessages.map((msg) => {
+                  const isMe = msg.user_id === myUserId;
+                  const replyCount = chatMessages.filter(m => m.reply_to === msg.id).length;
+                  return (
+                    <div key={msg.id} className={`flex gap-2 ${isMe ? "flex-row-reverse" : "flex-row"}`}>
                       {!isMe && (
-                        <span className="text-xs text-muted-foreground font-montserrat font-bold mb-0.5 px-1">
-                          {msg.user_name.split(" ")[0]}
-                        </span>
-                      )}
-                      {/* Reply context */}
-                      {msg.reply_to_name && (
-                        <div className={`flex items-center gap-1 px-2 py-1 mb-0.5 rounded-lg bg-muted/60 border-l-2 border-primary/40 max-w-full ${isMe ? "self-end" : "self-start"}`}>
-                          <Reply className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                          <span className="text-[10px] font-montserrat font-bold text-primary truncate">{msg.reply_to_name.split(" ")[0]}</span>
-                          <span className="text-[10px] font-inter text-muted-foreground truncate">{msg.reply_to_text}</span>
+                        <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <span className="text-xs font-montserrat font-black text-primary-foreground">
+                            {msg.user_name[0]?.toUpperCase()}
+                          </span>
                         </div>
                       )}
-                      <div
-                        className={`rounded-2xl px-3 py-2 text-sm font-inter leading-relaxed ${
-                          isMe
-                            ? "text-primary-foreground rounded-tr-sm"
-                            : "bg-muted text-foreground rounded-tl-sm"
-                        }`}
-                        style={isMe ? { background: "var(--gradient-hero)" } : undefined}
-                      >
-                        {msg.message}
-                      </div>
-                      <div className="flex items-center gap-1 mt-0.5 px-1">
-                        <span className="text-[10px] text-muted-foreground">
-                          {timeAgo(msg.created_at)}
-                        </span>
-                        {/* Reply button */}
-                        <button
-                          onClick={() => setReplyTo(msg)}
-                          className="p-0.5 rounded text-muted-foreground/50 hover:text-primary transition-colors"
-                          title="Responder"
-                        >
-                          <Reply className="w-3 h-3" />
-                        </button>
-                        {(isMe || canModerate) && (
+                      <div className={`max-w-[75%] ${isMe ? "items-end" : "items-start"} flex flex-col`}>
+                        {!isMe && (
+                          <span className="text-xs text-muted-foreground font-montserrat font-bold mb-0.5 px-1">
+                            {msg.user_name.split(" ")[0]}
+                          </span>
+                        )}
+                        {/* Reply context */}
+                        {msg.reply_to_name && (
                           <button
-                            onClick={() => deleteChatMessage(msg.id)}
-                            disabled={deletingId === msg.id}
-                            className="p-0.5 rounded text-muted-foreground/50 hover:text-destructive transition-colors disabled:opacity-40"
-                            title="Excluir mensagem"
+                            onClick={() => setThreadRootId(msg.reply_to)}
+                            className={`flex items-center gap-1 px-2 py-1 mb-0.5 rounded-lg bg-muted/60 border-l-2 border-primary/40 max-w-full cursor-pointer hover:bg-muted transition-colors ${isMe ? "self-end" : "self-start"}`}
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Reply className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                            <span className="text-[10px] font-montserrat font-bold text-primary truncate">{msg.reply_to_name.split(" ")[0]}</span>
+                            <span className="text-[10px] font-inter text-muted-foreground truncate">{msg.reply_to_text}</span>
                           </button>
                         )}
+                        <div
+                          className={`rounded-2xl px-3 py-2 text-sm font-inter leading-relaxed ${
+                            isMe
+                              ? "text-primary-foreground rounded-tr-sm"
+                              : "bg-muted text-foreground rounded-tl-sm"
+                          }`}
+                          style={isMe ? { background: "var(--gradient-hero)" } : undefined}
+                        >
+                          {msg.message}
+                        </div>
+                        <div className="flex items-center gap-1 mt-0.5 px-1">
+                          <span className="text-[10px] text-muted-foreground">
+                            {timeAgo(msg.created_at)}
+                          </span>
+                          {/* Thread badge */}
+                          {replyCount > 0 && (
+                            <button
+                              onClick={() => setThreadRootId(msg.id)}
+                              className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                            >
+                              <MessageCircle className="w-2.5 h-2.5" />
+                              <span className="text-[9px] font-inter font-bold">{replyCount}</span>
+                            </button>
+                          )}
+                          {/* Reply button */}
+                          <button
+                            onClick={() => setReplyTo(msg)}
+                            className="p-0.5 rounded text-muted-foreground/50 hover:text-primary transition-colors"
+                            title="Responder"
+                          >
+                            <Reply className="w-3 h-3" />
+                          </button>
+                          {(isMe || canModerate) && (
+                            <button
+                              onClick={() => deleteChatMessage(msg.id)}
+                              disabled={deletingId === msg.id}
+                              className="p-0.5 rounded text-muted-foreground/50 hover:text-destructive transition-colors disabled:opacity-40"
+                              title="Excluir mensagem"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })
-            )}
-            <div ref={chatEndRef} />
-          </div>
+                  );
+                })
+              )}
+              <div ref={chatEndRef} />
+            </div>
+          )}
 
           {/* Reply preview */}
           {replyTo && (
@@ -518,7 +568,7 @@ export default function ClassroomTab() {
           {/* Input */}
           <div className={`border-t border-border p-3 flex gap-2 ${replyTo ? "pt-2" : ""}`}>
             <Input
-              placeholder="Mensagem para a turma..."
+              placeholder={threadRootId ? "Responder na thread..." : "Mensagem para a turma..."}
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendChat()}
