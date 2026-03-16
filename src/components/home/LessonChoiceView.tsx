@@ -37,6 +37,8 @@ type Props = {
   onOpenStudy: () => void;
   /** Callback to open the lesson content editor (leaders/admins only) */
   onOpenEdit?: () => void;
+  /** Callback to open the devotional editor (leaders/admins only) */
+  onOpenEditDevotionals?: () => void;
   /** Schedule-based devotional dates (from agenda). If provided, overrides default anchoring. */
   scheduledDevotionalDates?: Date[];
   /** Event date for display */
