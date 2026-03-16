@@ -185,8 +185,12 @@ export default function ClassroomTab() {
       user_id: myUserId,
       user_name: myName,
       message: chatInput.trim(),
-    });
+      reply_to: replyTo?.id ?? null,
+      reply_to_name: replyTo?.user_name ?? null,
+      reply_to_text: replyTo ? replyTo.message.slice(0, 80) : null,
+    } as any);
     setChatInput("");
+    setReplyTo(null);
     setSendingChat(false);
   }
 
