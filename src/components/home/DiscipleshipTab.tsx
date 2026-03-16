@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Heart, GraduationCap, Sparkles, Lock } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import JourneyLessonView from "@/components/home/JourneyLessonView";
 import LessonContentEditor from "@/components/admin/tabs/LessonContentEditor";
 import LessonChoiceView from "@/components/home/LessonChoiceView";
@@ -21,11 +22,17 @@ import CourseTrailSection from "./discipleship/CourseTrailSection";
 
 // ─── Sub-tabs ─────────────────────────────────────────────
 const SUB_TABS = [
-  { key: "trilha" as const, label: "Trilha", icon: GraduationCap },
-  { key: "saude" as const, label: "Saúde", icon: Heart },
-  { key: "crescimento" as const, label: "Crescimento", icon: Sparkles },
+  { key: "trilha" as const, label: "Trilha", icon: GraduationCap, color: "hsl(28, 100%, 50%)", bg: "bg-secondary/15" },
+  { key: "saude" as const, label: "Saúde", icon: Heart, color: "hsl(142, 71%, 45%)", bg: "bg-brand-green/15" },
+  { key: "crescimento" as const, label: "Crescimento", icon: Sparkles, color: "hsl(217, 91%, 33%)", bg: "bg-primary/15" },
 ];
 type SubTab = typeof SUB_TABS[number]["key"];
+
+const subTabVariants = {
+  initial: { opacity: 0, y: 12, scale: 0.98 },
+  animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] } },
+  exit: { opacity: 0, y: -8, scale: 0.98, transition: { duration: 0.2, ease: "easeIn" as const } },
+};
 
 // ─── MAIN COMPONENT ──────────────────────────────────────
 type DiscipleshipTabProps = {
@@ -325,7 +332,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
       />
 
       {/* Sub-tab pills */}
-      <div className="flex gap-2 bg-muted/40 rounded-2xl p-1.5">
+      <div className="flex gap-1.5 bg-muted/50 rounded-2xl p-1.5 border border-border/50">
         {SUB_TABS.map(tab => {
           const Icon = tab.icon;
           const isActive = subTab === tab.key;
@@ -333,82 +340,91 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
             <button
               key={tab.key}
               onClick={() => setSubTab(tab.key)}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-inter text-xs font-semibold transition-all ${
+              className={`flex-1 relative flex items-center justify-center gap-2 py-3 rounded-xl font-inter text-xs font-bold transition-all duration-200 ${
                 isActive
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "text-foreground shadow-md"
+                  : "text-muted-foreground hover:text-foreground hover:bg-card/50"
               }`}
             >
-              <Icon className="w-3.5 h-3.5" />
-              {tab.label}
+              {isActive && (
+                <motion.div
+                  layoutId="activeSubTab"
+                  className="absolute inset-0 rounded-xl bg-card border border-border/60 shadow-sm"
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10 flex items-center gap-2">
+                <Icon className="w-[18px] h-[18px]" style={isActive ? { color: tab.color } : {}} />
+                <span>{tab.label}</span>
+              </span>
             </button>
           );
         })}
       </div>
 
-      {/* ═══ SUB-TAB: TRILHA ═══ */}
-      {subTab === "trilha" && (
-        <div className="space-y-4">
-          <CourseTrailSection
-            courses={courses}
-            expandedCourse={expandedCourse}
-            onExpandCourse={setExpandedCourse}
-            unlockedCourseIds={unlockedCourseIds}
-            completedLessonIds={completedLessonIds}
-            fullyCompletedLessonIds={fullyCompletedLessonIds}
-            agendaSchedule={agendaSchedule}
-            isLeaderOrAdmin={isLeaderOrAdmin}
-            onSelectLesson={(lesson) => {
-              setSelectedLesson(lesson);
-              setSelectedLessonMode("choice");
-            }}
-          />
-          <ResourceLibrary />
-        </div>
-      )}
+      {/* Animated sub-tab content */}
+      <AnimatePresence mode="wait">
+        {subTab === "trilha" && (
+          <motion.div key="trilha" variants={subTabVariants} initial="initial" animate="animate" exit="exit" className="space-y-4">
+            <CourseTrailSection
+              courses={courses}
+              expandedCourse={expandedCourse}
+              onExpandCourse={setExpandedCourse}
+              unlockedCourseIds={unlockedCourseIds}
+              completedLessonIds={completedLessonIds}
+              fullyCompletedLessonIds={fullyCompletedLessonIds}
+              agendaSchedule={agendaSchedule}
+              isLeaderOrAdmin={isLeaderOrAdmin}
+              onSelectLesson={(lesson) => {
+                setSelectedLesson(lesson);
+                setSelectedLessonMode("choice");
+              }}
+            />
+            <ResourceLibrary />
+          </motion.div>
+        )}
 
-      {/* ═══ SUB-TAB: SAÚDE ═══ */}
-      {subTab === "saude" && (
-        <div className="space-y-4">
-          <SpiritualHealthSection
-            doneDev={doneDev} totalDev={devocionais.length}
-            doneForm={doneForm} totalForm={formacoes.length}
-            doneEnc={doneEnc} totalEnc={encontros.length}
-            completedActs={completedActs} totalActs={totalActs} pct={pct}
-          />
-          <ThermometerSection dimensions={thermometerDimensions} />
-          <AssessmentSection
-            assessment={assessment}
-            showAssessment={showAssessment}
-            setShowAssessment={setShowAssessment}
-            form={form}
-            setForm={setForm}
-            saving={saving}
-            onSave={handleSaveAssessment}
-            month={month}
-            allAssessments={allAssessments}
-          />
-        </div>
-      )}
+        {subTab === "saude" && (
+          <motion.div key="saude" variants={subTabVariants} initial="initial" animate="animate" exit="exit" className="space-y-4">
+            <SpiritualHealthSection
+              doneDev={doneDev} totalDev={devocionais.length}
+              doneForm={doneForm} totalForm={formacoes.length}
+              doneEnc={doneEnc} totalEnc={encontros.length}
+              completedActs={completedActs} totalActs={totalActs} pct={pct}
+            />
+            <ThermometerSection dimensions={thermometerDimensions} />
+            <AssessmentSection
+              assessment={assessment}
+              showAssessment={showAssessment}
+              setShowAssessment={setShowAssessment}
+              form={form}
+              setForm={setForm}
+              saving={saving}
+              onSave={handleSaveAssessment}
+              month={month}
+              allAssessments={allAssessments}
+            />
+          </motion.div>
+        )}
 
-      {/* ═══ SUB-TAB: CRESCIMENTO ═══ */}
-      {subTab === "crescimento" && (
-        <div className="space-y-4">
-          <HelpSection
-            helpSent={helpSent}
-            showHelpModal={showHelpModal}
-            setShowHelpModal={setShowHelpModal}
-            helpType={helpType}
-            setHelpType={setHelpType}
-            helpMessage={helpMessage}
-            setHelpMessage={setHelpMessage}
-            helpSending={helpSending}
-            onSendHelp={handleSendHelp}
-          />
-          <RewardsSection rewards={spiritualRewards} />
-          <GrowthPlanSection plan={plan} />
-        </div>
-      )}
+        {subTab === "crescimento" && (
+          <motion.div key="crescimento" variants={subTabVariants} initial="initial" animate="animate" exit="exit" className="space-y-4">
+            <HelpSection
+              helpSent={helpSent}
+              showHelpModal={showHelpModal}
+              setShowHelpModal={setShowHelpModal}
+              helpType={helpType}
+              setHelpType={setHelpType}
+              helpMessage={helpMessage}
+              setHelpMessage={setHelpMessage}
+              helpSending={helpSending}
+              onSendHelp={handleSendHelp}
+            />
+            <RewardsSection rewards={spiritualRewards} />
+            <GrowthPlanSection plan={plan} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
