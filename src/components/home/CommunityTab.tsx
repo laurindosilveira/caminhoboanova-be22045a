@@ -6,6 +6,7 @@ import ClassroomTab from "./ClassroomTab";
 import AnnouncementsSection from "./AnnouncementsSection";
 import LeaderRoomSection from "./LeaderRoomSection";
 import PollsSection from "./PollsSection";
+import CommunityAchievements from "./CommunityAchievements";
 
 const REACTION_EMOJIS = [
   { emoji: "🙏", label: "orando" },
@@ -340,7 +341,10 @@ export default function CommunityTab() {
           {/* Pastor messages */}
           <AnnouncementsSection />
 
-          {/* 🎯 Desafios Comunitários */}
+          {/* 🏆 Conquistas da Comunidade */}
+          <CommunityAchievements />
+
+
           {challenges.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
