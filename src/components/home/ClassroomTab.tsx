@@ -709,8 +709,66 @@ export default function ClassroomTab() {
             </div>
           )}
 
+          {/* File preview */}
+          {attachedFile && (
+            <div className="border-t border-border px-3 py-2 bg-muted/30">
+              <div className="flex items-center gap-2">
+                {filePreviewUrl ? (
+                  <img src={filePreviewUrl} alt="Preview" className="w-16 h-16 rounded-xl object-cover" />
+                ) : (
+                  <div className="w-16 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <Mic className="w-5 h-5 text-primary" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-inter text-foreground truncate">{attachedFile.name}</p>
+                  <p className="text-[10px] text-muted-foreground">{(attachedFile.size / 1024).toFixed(0)} KB</p>
+                </div>
+                <button onClick={clearAttachment} className="text-muted-foreground hover:text-destructive p-1">
+                  <XCircle className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={`${ACCEPTED_IMAGES},${ACCEPTED_AUDIO}`}
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+
           {/* Input */}
-          <div className={`border-t border-border p-3 flex gap-2 ${replyTo ? "pt-2" : ""}`}>
+          <div className={`border-t border-border p-3 flex items-center gap-2 ${replyTo || attachedFile ? "pt-2" : ""}`}>
+            {/* Attachment buttons */}
+            <div className="flex gap-1 flex-shrink-0">
+              <button
+                onClick={() => {
+                  if (fileInputRef.current) {
+                    fileInputRef.current.accept = ACCEPTED_IMAGES;
+                    fileInputRef.current.click();
+                  }
+                }}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                title="Enviar imagem"
+              >
+                <Image className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => {
+                  if (fileInputRef.current) {
+                    fileInputRef.current.accept = ACCEPTED_AUDIO;
+                    fileInputRef.current.click();
+                  }
+                }}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                title="Enviar áudio"
+              >
+                <Mic className="w-4 h-4" />
+              </button>
+            </div>
             <Input
               placeholder={threadRootId ? "Responder na thread..." : "Mensagem para a turma..."}
               value={chatInput}
@@ -721,7 +779,7 @@ export default function ClassroomTab() {
             />
             <button
               onClick={sendChat}
-              disabled={!chatInput.trim() || sendingChat}
+              disabled={(!chatInput.trim() && !attachedFile) || sendingChat || uploadingFile}
               className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 disabled:opacity-40 transition-opacity"
               style={{ background: "var(--gradient-hero)" }}
             >
