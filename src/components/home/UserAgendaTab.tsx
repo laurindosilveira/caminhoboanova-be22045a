@@ -536,7 +536,7 @@ export default function UserAgendaTab() {
       ) : null}
 
       {/* ── HISTÓRICO DE PRESENÇA ────────────────── */}
-      {pastEvents.length > 0 && (
+      {viewMode === "list" && pastEvents.length > 0 && (
         <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
           <div className="px-4 py-3 flex items-center gap-2.5 border-b border-border bg-muted/30">
             <CalendarDays className="w-4 h-4 text-secondary" />
