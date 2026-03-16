@@ -6,6 +6,7 @@ import {
   Send, Sparkles, AlertCircle, ChevronRight, ChevronDown, CalendarDays, Lock
 } from "lucide-react";
 import JourneyLessonView from "@/components/home/JourneyLessonView";
+import LessonContentEditor from "@/components/admin/tabs/LessonContentEditor";
 import LessonChoiceView from "@/components/home/LessonChoiceView";
 import { useAgendaSchedule } from "@/hooks/useAgendaSchedule";
 import ResourceLibrary from "@/components/home/ResourceLibrary";
