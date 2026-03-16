@@ -67,6 +67,7 @@ const AppRoutes = () => (
     <Route path="/verificar-email" element={<VerifyEmail />} />
     <Route path="/redefinir-senha" element={<ResetPassword />} />
     <Route path="/instalar" element={<Install />} />
+    <Route path="/apresentacao" element={<Apresentacao />} />
     <Route path="/exportar-dados" element={<ProtectedRoute><ExportData /></ProtectedRoute>} />
 
     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
