@@ -127,7 +127,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
   const [saving, setSaving] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
-  const [selectedLessonMode, setSelectedLessonMode] = useState<"choice" | "study">("choice");
+  const [selectedLessonMode, setSelectedLessonMode] = useState<"choice" | "study" | "edit">("choice");
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
   // Lesson IDs that have at least one saved response
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
