@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { ChevronLeft, BookOpen, GraduationCap, CheckCircle2, Star, LockKeyhole, Calendar, Lock } from "lucide-react";
+import { ChevronLeft, BookOpen, GraduationCap, CheckCircle2, Star, LockKeyhole, Calendar, Lock, Pencil } from "lucide-react";
 import DevotionalView from "@/components/home/DevotionalView";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -35,6 +35,8 @@ type Props = {
   lesson: Lesson;
   onBack: () => void;
   onOpenStudy: () => void;
+  /** Callback to open the lesson content editor (leaders/admins only) */
+  onOpenEdit?: () => void;
   /** Schedule-based devotional dates (from agenda). If provided, overrides default anchoring. */
   scheduledDevotionalDates?: Date[];
   /** Event date for display */
@@ -196,7 +198,7 @@ function computeDevotionalStatuses(
   return { statuses, lockedSet };
 }
 
-export default function LessonChoiceView({ lesson, onBack, onOpenStudy, scheduledDevotionalDates, eventDate, isStudyLocked, isLateAccess, isStudyCompleted = true }: Props) {
+export default function LessonChoiceView({ lesson, onBack, onOpenStudy, onOpenEdit, scheduledDevotionalDates, eventDate, isStudyLocked, isLateAccess, isStudyCompleted = true }: Props) {
   const { role } = useAuth();
   const isLeaderOrAdmin = role === "admin" || role === "lider";
   const [devotionals, setDevotionals] = useState<DevotionalItem[]>([]);
@@ -582,6 +584,23 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
               )}
             </div>
             {!isStudyLocked && <span className="text-secondary font-montserrat font-bold text-lg">→</span>}
+          </button>
+        )}
+
+        {/* Editar conteúdo — leaders/admins only */}
+        {onOpenEdit && isLeaderOrAdmin && (
+          <button onClick={onOpenEdit}
+            className="flex items-center gap-4 p-5 bg-card rounded-2xl border border-primary/20 shadow-sm text-left hover:bg-primary/5 hover:border-primary/40 transition-all group">
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition-colors">
+              <Pencil className="w-7 h-7 text-primary" />
+            </div>
+            <div className="flex-1">
+              <p className="font-montserrat font-bold text-foreground text-base">✏️ Editar Conteúdo</p>
+              <p className="text-muted-foreground font-inter text-xs mt-0.5">
+                Editar saudação, perguntas, textos bíblicos e recursos
+              </p>
+            </div>
+            <span className="text-primary font-montserrat font-bold text-lg">→</span>
           </button>
         )}
       </div>

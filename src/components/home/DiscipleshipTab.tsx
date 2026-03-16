@@ -6,6 +6,7 @@ import {
   Send, Sparkles, AlertCircle, ChevronRight, ChevronDown, CalendarDays, Lock
 } from "lucide-react";
 import JourneyLessonView from "@/components/home/JourneyLessonView";
+import LessonContentEditor from "@/components/admin/tabs/LessonContentEditor";
 import LessonChoiceView from "@/components/home/LessonChoiceView";
 import { useAgendaSchedule } from "@/hooks/useAgendaSchedule";
 import ResourceLibrary from "@/components/home/ResourceLibrary";
@@ -126,7 +127,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
   const [saving, setSaving] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
-  const [selectedLessonMode, setSelectedLessonMode] = useState<"choice" | "study">("choice");
+  const [selectedLessonMode, setSelectedLessonMode] = useState<"choice" | "study" | "edit">("choice");
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
   // Lesson IDs that have at least one saved response
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
@@ -418,6 +419,13 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
   }
 
   if (selectedLesson) {
+    if (selectedLessonMode === "edit" && isLeaderOrAdmin) {
+      return (
+        <div className="px-5 pt-5 pb-6">
+          <LessonContentEditor lesson={selectedLesson} onBack={() => setSelectedLessonMode("choice")} />
+        </div>
+      );
+    }
     if (selectedLessonMode === "study") {
       const isLateAccessStudy = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id);
       return (
@@ -433,6 +441,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
         lesson={selectedLesson}
         onBack={() => { setSelectedLesson(null); setSelectedLessonMode("choice"); }}
         onOpenStudy={() => setSelectedLessonMode("study")}
+        onOpenEdit={isLeaderOrAdmin ? () => setSelectedLessonMode("edit") : undefined}
         scheduledDevotionalDates={agendaSchedule.lessonDevotionalDates.get(selectedLesson.id)}
         eventDate={agendaSchedule.lessonEventDate.get(selectedLesson.id) ?? undefined}
         isStudyLocked={false}
