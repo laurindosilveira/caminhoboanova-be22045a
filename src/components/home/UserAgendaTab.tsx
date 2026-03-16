@@ -165,7 +165,8 @@ export default function UserAgendaTab() {
   const [lessonContentMap, setLessonContentMap] = useState<Map<string, LessonContentInfo>>(new Map());
   const [lessonOptions, setLessonOptions] = useState<LessonOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<string>("agenda");
+   const [activeTab, setActiveTab] = useState<string>("agenda");
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
 
   // Event form state
   const [showForm, setShowForm] = useState(false);
