@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Send, MessageSquare, Heart, BookOpen, ExternalLink, Eye, EyeOff, Trash2, CheckCircle, Reply, X, ChevronRight, MessageCircle } from "lucide-react";
+import { Send, MessageSquare, Heart, BookOpen, ExternalLink, Eye, EyeOff, Trash2, CheckCircle, Reply, X, ChevronRight, MessageCircle, Paperclip, Image, Mic, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+
+const ACCEPTED_IMAGES = "image/jpeg,image/png,image/webp";
+const ACCEPTED_AUDIO = "audio/mpeg,audio/wav,audio/mp4,audio/webm";
 
 interface ChatMessage {
   id: string;
@@ -17,6 +20,8 @@ interface ChatMessage {
   reply_to: string | null;
   reply_to_name: string | null;
   reply_to_text: string | null;
+  file_url: string | null;
+  file_type: string | null;
 }
 
 interface PrayerRequest {
@@ -56,6 +61,10 @@ export default function ClassroomTab() {
   const [sendingChat, setSendingChat] = useState(false);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [threadRootId, setThreadRootId] = useState<string | null>(null);
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
@@ -179,22 +188,73 @@ export default function ClassroomTab() {
   }, [chatMessages]);
 
   // ---- Actions ----
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const isImage = file.type.startsWith("image/");
+    const isAudio = file.type.startsWith("audio/");
+    if (!isImage && !isAudio) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Arquivo muito grande (máx. 10MB)");
+      return;
+    }
+    setAttachedFile(file);
+    if (isImage) {
+      setFilePreviewUrl(URL.createObjectURL(file));
+    } else {
+      setFilePreviewUrl(null);
+    }
+    // Reset input so same file can be re-selected
+    e.target.value = "";
+  }
+
+  function clearAttachment() {
+    setAttachedFile(null);
+    if (filePreviewUrl) {
+      URL.revokeObjectURL(filePreviewUrl);
+      setFilePreviewUrl(null);
+    }
+  }
+
   async function sendChat() {
-    if (!chatInput.trim() || !community || !myUserId) return;
+    if ((!chatInput.trim() && !attachedFile) || !community || !myUserId) return;
     setSendingChat(true);
     const msgText = chatInput.trim();
     const replyTarget = replyTo;
+
+    let fileUrl: string | null = null;
+    let fileType: string | null = null;
+
+    // Upload file if attached
+    if (attachedFile) {
+      setUploadingFile(true);
+      const ext = attachedFile.name.split(".").pop() || "bin";
+      const path = `${myUserId}/${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage
+        .from("chat-files")
+        .upload(path, attachedFile, { cacheControl: "3600", upsert: false });
+      if (!uploadErr) {
+        const { data: urlData } = supabase.storage.from("chat-files").getPublicUrl(path);
+        fileUrl = urlData.publicUrl;
+        fileType = attachedFile.type.startsWith("image/") ? "image" : "audio";
+      }
+      setUploadingFile(false);
+    }
+
     await supabase.from("community_chat").insert({
       community,
       user_id: myUserId,
       user_name: myName,
-      message: msgText,
+      message: msgText || (fileType === "image" ? "📷 Imagem" : "🎵 Áudio"),
       reply_to: replyTarget?.id ?? null,
       reply_to_name: replyTarget?.user_name ?? null,
       reply_to_text: replyTarget ? replyTarget.message.slice(0, 80) : null,
+      file_url: fileUrl,
+      file_type: fileType,
     } as any);
     setChatInput("");
     setReplyTo(null);
+    clearAttachment();
     setSendingChat(false);
 
     // Send push notification to the original author (fire-and-forget)
@@ -203,7 +263,7 @@ export default function ClassroomTab() {
         body: {
           target_user_id: replyTarget.user_id,
           sender_name: myName,
-          message_preview: msgText,
+          message_preview: msgText || (fileType === "image" ? "📷 Imagem" : "🎵 Áudio"),
         },
       }).catch(() => {});
     }
@@ -264,6 +324,28 @@ export default function ClassroomTab() {
     return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   }
 
+  function renderFileContent(msg: ChatMessage) {
+    if (!msg.file_url) return null;
+    if (msg.file_type === "image") {
+      return (
+        <img
+          src={msg.file_url}
+          alt="Imagem"
+          className="rounded-xl max-w-full max-h-48 object-cover mt-1 cursor-pointer"
+          onClick={() => window.open(msg.file_url!, "_blank")}
+        />
+      );
+    }
+    if (msg.file_type === "audio") {
+      return (
+        <audio controls className="mt-1 max-w-full h-8" preload="metadata">
+          <source src={msg.file_url} />
+        </audio>
+      );
+    }
+    return null;
+  }
+
   function renderThreadMessage(msg: ChatMessage, isRoot: boolean) {
     const isMe = msg.user_id === myUserId;
     return (
@@ -281,7 +363,8 @@ export default function ClassroomTab() {
             <span className="text-[10px] text-muted-foreground font-inter">{formatDateTime(msg.created_at)}</span>
           </div>
           <div className={`rounded-2xl px-3 py-2 text-sm font-inter leading-relaxed ${isRoot ? "bg-primary/5 border border-primary/20" : "bg-muted"} text-foreground`}>
-            {msg.message}
+            {(!msg.file_url || (msg.message && msg.message !== "📷 Imagem" && msg.message !== "🎵 Áudio")) && msg.message}
+            {renderFileContent(msg)}
           </div>
           <div className="flex items-center gap-1 mt-0.5 px-1">
             <button
@@ -567,7 +650,8 @@ export default function ClassroomTab() {
                           }`}
                           style={isMe ? { background: "var(--gradient-hero)" } : undefined}
                         >
-                          {msg.message}
+                          {(!msg.file_url || (msg.message && msg.message !== "📷 Imagem" && msg.message !== "🎵 Áudio")) && msg.message}
+                          {renderFileContent(msg)}
                         </div>
                         <div className="flex items-center gap-1 mt-0.5 px-1">
                           <span className="text-[10px] text-muted-foreground">
@@ -625,8 +709,66 @@ export default function ClassroomTab() {
             </div>
           )}
 
+          {/* File preview */}
+          {attachedFile && (
+            <div className="border-t border-border px-3 py-2 bg-muted/30">
+              <div className="flex items-center gap-2">
+                {filePreviewUrl ? (
+                  <img src={filePreviewUrl} alt="Preview" className="w-16 h-16 rounded-xl object-cover" />
+                ) : (
+                  <div className="w-16 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <Mic className="w-5 h-5 text-primary" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-inter text-foreground truncate">{attachedFile.name}</p>
+                  <p className="text-[10px] text-muted-foreground">{(attachedFile.size / 1024).toFixed(0)} KB</p>
+                </div>
+                <button onClick={clearAttachment} className="text-muted-foreground hover:text-destructive p-1">
+                  <XCircle className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={`${ACCEPTED_IMAGES},${ACCEPTED_AUDIO}`}
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+
           {/* Input */}
-          <div className={`border-t border-border p-3 flex gap-2 ${replyTo ? "pt-2" : ""}`}>
+          <div className={`border-t border-border p-3 flex items-center gap-2 ${replyTo || attachedFile ? "pt-2" : ""}`}>
+            {/* Attachment buttons */}
+            <div className="flex gap-1 flex-shrink-0">
+              <button
+                onClick={() => {
+                  if (fileInputRef.current) {
+                    fileInputRef.current.accept = ACCEPTED_IMAGES;
+                    fileInputRef.current.click();
+                  }
+                }}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                title="Enviar imagem"
+              >
+                <Image className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => {
+                  if (fileInputRef.current) {
+                    fileInputRef.current.accept = ACCEPTED_AUDIO;
+                    fileInputRef.current.click();
+                  }
+                }}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                title="Enviar áudio"
+              >
+                <Mic className="w-4 h-4" />
+              </button>
+            </div>
             <Input
               placeholder={threadRootId ? "Responder na thread..." : "Mensagem para a turma..."}
               value={chatInput}
@@ -637,7 +779,7 @@ export default function ClassroomTab() {
             />
             <button
               onClick={sendChat}
-              disabled={!chatInput.trim() || sendingChat}
+              disabled={(!chatInput.trim() && !attachedFile) || sendingChat || uploadingFile}
               className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 disabled:opacity-40 transition-opacity"
               style={{ background: "var(--gradient-hero)" }}
             >
