@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { CalendarDays, MapPin, Users, BookOpen, ChevronDown, ChevronUp, Plus, Pencil, Trash2, Save, X, Clock, Timer, ExternalLink, CalendarIcon, Check } from "lucide-react";
+import { CalendarDays, MapPin, Users, BookOpen, ChevronDown, ChevronUp, Plus, Pencil, Trash2, Save, X, Clock, Timer, ExternalLink, CalendarIcon, Check, LayoutList, CalendarRange } from "lucide-react";
 import { differenceInDays, differenceInHours } from "date-fns";
 import WorshipConfirmation from "./WorshipConfirmation";
 import { format } from "date-fns";
@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import CalendarView from "./CalendarView";
 
 type Event = {
   id: string;
@@ -164,7 +165,8 @@ export default function UserAgendaTab() {
   const [lessonContentMap, setLessonContentMap] = useState<Map<string, LessonContentInfo>>(new Map());
   const [lessonOptions, setLessonOptions] = useState<LessonOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<string>("agenda");
+   const [activeTab, setActiveTab] = useState<string>("agenda");
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
 
   // Event form state
   const [showForm, setShowForm] = useState(false);
@@ -433,6 +435,23 @@ export default function UserAgendaTab() {
       <div className="flex items-center justify-between">
         <h2 className="font-montserrat font-black text-foreground text-xl">📅 Agenda</h2>
         <div className="flex items-center gap-2">
+          {/* View mode toggle */}
+          <div className="flex bg-muted rounded-xl p-0.5">
+            <button
+              onClick={() => setViewMode("list")}
+              className={`p-1.5 rounded-lg transition-colors ${viewMode === "list" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
+              title="Visualização em lista"
+            >
+              <LayoutList className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setViewMode("calendar")}
+              className={`p-1.5 rounded-lg transition-colors ${viewMode === "calendar" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
+              title="Visualização em calendário"
+            >
+              <CalendarRange className="w-3.5 h-3.5" />
+            </button>
+          </div>
           {canManage && (
             <Button size="sm" variant="outline" className="h-8 rounded-xl text-xs gap-1.5 border-primary/40 text-primary" onClick={openCreateForm}>
               <Plus className="w-3.5 h-3.5" /> Novo Evento
@@ -449,19 +468,25 @@ export default function UserAgendaTab() {
       {/* ── CONFIRMAÇÃO DE PRESENÇA EM EVENTOS ──── */}
       <WorshipConfirmation />
 
-      {loading ? (
+      {/* ── CALENDAR VIEW ──── */}
+      {viewMode === "calendar" && !loading && (
+        <CalendarView events={events} />
+      )}
+
+      {/* ── LIST VIEW ──── */}
+      {viewMode === "list" && loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => (
             <div key={i} className="bg-muted rounded-2xl h-24 animate-pulse" />
           ))}
         </div>
-      ) : upcoming.length === 0 && past.length === 0 ? (
+      ) : viewMode === "list" && upcoming.length === 0 && past.length === 0 ? (
         <div className="bg-card rounded-2xl border border-border p-8 text-center shadow-sm">
           <CalendarDays className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
           <p className="font-montserrat font-bold text-foreground text-base mb-1">Nenhum evento cadastrado</p>
           <p className="text-muted-foreground text-sm font-inter">Os próximos encontros e eventos aparecerão aqui.</p>
         </div>
-      ) : (
+      ) : viewMode === "list" ? (
         <>
           {upcoming.length > 0 && (
             <div className="space-y-3">
@@ -508,10 +533,10 @@ export default function UserAgendaTab() {
             </div>
           )}
         </>
-      )}
+      ) : null}
 
       {/* ── HISTÓRICO DE PRESENÇA ────────────────── */}
-      {pastEvents.length > 0 && (
+      {viewMode === "list" && pastEvents.length > 0 && (
         <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
           <div className="px-4 py-3 flex items-center gap-2.5 border-b border-border bg-muted/30">
             <CalendarDays className="w-4 h-4 text-secondary" />
