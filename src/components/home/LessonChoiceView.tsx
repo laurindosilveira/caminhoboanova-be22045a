@@ -224,12 +224,25 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
       setCompletedIds(new Set(progList.map((p: any) => p.devotional_id)));
       setCompletedDates(completedMap);
 
-      if (isLeaderOrAdmin || isLateAccess) {
-        // Leaders/admins and late access: all devotionals are available (no date locks)
+      if (isLeaderOrAdmin) {
         const allAvailable = new Map<string, DevotionalStatus>();
         devList.forEach(d => allAvailable.set(d.id, completedMap.has(d.id) ? "completed" : "available"));
         setDevStatuses(allAvailable);
         setLockedIds(new Set());
+      } else if (isLateAccess) {
+        // Late access: only already-completed devotionals stay, rest are locked
+        const lateStatuses = new Map<string, DevotionalStatus>();
+        const lateLockedSet = new Set<string>();
+        devList.forEach(d => {
+          if (completedMap.has(d.id)) {
+            lateStatuses.set(d.id, "completed");
+          } else {
+            lateStatuses.set(d.id, "locked");
+            lateLockedSet.add(d.id);
+          }
+        });
+        setDevStatuses(lateStatuses);
+        setLockedIds(lateLockedSet);
       } else {
         const { statuses, lockedSet } = computeDevotionalStatuses(devList, completedMap, scheduledDevotionalDates);
         setDevStatuses(statuses);
@@ -256,11 +269,25 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
     newCompletedMap.set(devotionalId, now.toISOString());
     setCompletedDates(newCompletedMap);
     setCompletedIds(prev => new Set([...prev, devotionalId]));
-    if (isLeaderOrAdmin || isLateAccess) {
+    if (isLeaderOrAdmin) {
       const allAvailable = new Map<string, DevotionalStatus>();
       devotionals.forEach(d => allAvailable.set(d.id, newCompletedMap.has(d.id) ? "completed" : "available"));
       setDevStatuses(allAvailable);
       setLockedIds(new Set());
+    } else if (isLateAccess) {
+      // Late access: don't unlock anything new (shouldn't reach here since locked devs can't be completed)
+      const lateStatuses = new Map<string, DevotionalStatus>();
+      const lateLockedSet = new Set<string>();
+      devotionals.forEach(d => {
+        if (newCompletedMap.has(d.id)) {
+          lateStatuses.set(d.id, "completed");
+        } else {
+          lateStatuses.set(d.id, "locked");
+          lateLockedSet.add(d.id);
+        }
+      });
+      setDevStatuses(lateStatuses);
+      setLockedIds(lateLockedSet);
     } else {
       const { statuses, lockedSet } = computeDevotionalStatuses(devotionals, newCompletedMap, scheduledDevotionalDates);
       setDevStatuses(statuses);
@@ -452,19 +479,19 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
         <div className="rounded-2xl p-3 bg-accent/10 border border-accent/20 flex items-start gap-2">
           <span className="text-sm">⚠️</span>
           <p className="font-inter text-xs text-accent-foreground">
-            O prazo desta lição já encerrou. Você ainda pode estudar e fazer os devocionais, mas <strong>não receberá pontos</strong>.
+            O prazo desta lição já encerrou. Você ainda pode completar o <strong>estudo</strong>, mas <strong>sem pontuação</strong>. Os devocionais não realizados estão bloqueados.
           </p>
         </div>
       )}
 
-      {/* Warning: study not done yet */}
-      {!isLeaderOrAdmin && !isStudyCompleted && (
+      {/* Warning: study not done yet (only during normal access, not late) */}
+      {!isLeaderOrAdmin && !isStudyCompleted && !isLateAccess && (
         <div className="rounded-2xl p-3 bg-secondary/10 border border-secondary/20 flex items-start gap-2.5">
           <span className="text-base mt-0.5">💡</span>
           <div>
             <p className="font-montserrat font-bold text-foreground text-xs">Dica importante</p>
             <p className="font-inter text-xs text-muted-foreground mt-0.5 leading-relaxed">
-              Recomendamos <strong>completar o estudo da lição primeiro</strong> para um melhor aproveitamento dos devocionais. O estudo traz a base para as reflexões diárias.
+              Recomendamos <strong>completar o estudo da lição primeiro</strong> para um melhor aproveitamento dos devocionais.
             </p>
           </div>
         </div>
