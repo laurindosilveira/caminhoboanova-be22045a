@@ -1076,6 +1076,51 @@ export type Database = {
         }
         Relationships: []
       }
+      prayer_pairs: {
+        Row: {
+          community: string
+          created_at: string
+          id: string
+          user_a_confirmed: boolean
+          user_a_id: string
+          user_a_name: string
+          user_a_testimony: string | null
+          user_b_confirmed: boolean
+          user_b_id: string
+          user_b_name: string
+          user_b_testimony: string | null
+          week_start: string
+        }
+        Insert: {
+          community: string
+          created_at?: string
+          id?: string
+          user_a_confirmed?: boolean
+          user_a_id: string
+          user_a_name?: string
+          user_a_testimony?: string | null
+          user_b_confirmed?: boolean
+          user_b_id: string
+          user_b_name?: string
+          user_b_testimony?: string | null
+          week_start: string
+        }
+        Update: {
+          community?: string
+          created_at?: string
+          id?: string
+          user_a_confirmed?: boolean
+          user_a_id?: string
+          user_a_name?: string
+          user_a_testimony?: string | null
+          user_b_confirmed?: boolean
+          user_b_id?: string
+          user_b_name?: string
+          user_b_testimony?: string | null
+          week_start?: string
+        }
+        Relationships: []
+      }
       prayer_requests: {
         Row: {
           amen_count: number
