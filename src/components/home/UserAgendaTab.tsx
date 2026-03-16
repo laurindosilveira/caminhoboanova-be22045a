@@ -533,7 +533,7 @@ export default function UserAgendaTab() {
             </div>
           )}
         </>
-      )}
+      ) : null}
 
       {/* ── HISTÓRICO DE PRESENÇA ────────────────── */}
       {pastEvents.length > 0 && (
