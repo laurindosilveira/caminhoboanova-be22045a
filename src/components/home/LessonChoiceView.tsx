@@ -276,7 +276,25 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
     newCompletedMap.set(devotionalId, now.toISOString());
     setCompletedDates(newCompletedMap);
     setCompletedIds(prev => new Set([...prev, devotionalId]));
-    if (isLeaderOrAdmin || isLateAccess) {
+    if (isLeaderOrAdmin) {
+      const allAvailable = new Map<string, DevotionalStatus>();
+      devotionals.forEach(d => allAvailable.set(d.id, newCompletedMap.has(d.id) ? "completed" : "available"));
+      setDevStatuses(allAvailable);
+      setLockedIds(new Set());
+    } else if (isLateAccess && !isStudyCompleted) {
+      const blocked = new Map<string, DevotionalStatus>();
+      const blockedSet = new Set<string>();
+      devotionals.forEach(d => {
+        if (newCompletedMap.has(d.id)) {
+          blocked.set(d.id, "completed");
+        } else {
+          blocked.set(d.id, "locked");
+          blockedSet.add(d.id);
+        }
+      });
+      setDevStatuses(blocked);
+      setLockedIds(blockedSet);
+    } else if (isLateAccess) {
       const allAvailable = new Map<string, DevotionalStatus>();
       devotionals.forEach(d => allAvailable.set(d.id, newCompletedMap.has(d.id) ? "completed" : "available"));
       setDevStatuses(allAvailable);
