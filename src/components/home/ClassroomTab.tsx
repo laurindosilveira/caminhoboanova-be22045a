@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Send, MessageSquare, Heart, BookOpen, ExternalLink, Eye, EyeOff, Trash2, CheckCircle } from "lucide-react";
+import { Send, MessageSquare, Heart, BookOpen, ExternalLink, Eye, EyeOff, Trash2, CheckCircle, Reply, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,9 @@ interface ChatMessage {
   message: string;
   created_at: string;
   community: string;
+  reply_to: string | null;
+  reply_to_name: string | null;
+  reply_to_text: string | null;
 }
 
 interface PrayerRequest {
@@ -51,6 +54,7 @@ export default function ClassroomTab() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Orações
@@ -181,8 +185,12 @@ export default function ClassroomTab() {
       user_id: myUserId,
       user_name: myName,
       message: chatInput.trim(),
-    });
+      reply_to: replyTo?.id ?? null,
+      reply_to_name: replyTo?.user_name ?? null,
+      reply_to_text: replyTo ? replyTo.message.slice(0, 80) : null,
+    } as any);
     setChatInput("");
+    setReplyTo(null);
     setSendingChat(false);
   }
 
@@ -442,6 +450,14 @@ export default function ClassroomTab() {
                           {msg.user_name.split(" ")[0]}
                         </span>
                       )}
+                      {/* Reply context */}
+                      {msg.reply_to_name && (
+                        <div className={`flex items-center gap-1 px-2 py-1 mb-0.5 rounded-lg bg-muted/60 border-l-2 border-primary/40 max-w-full ${isMe ? "self-end" : "self-start"}`}>
+                          <Reply className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                          <span className="text-[10px] font-montserrat font-bold text-primary truncate">{msg.reply_to_name.split(" ")[0]}</span>
+                          <span className="text-[10px] font-inter text-muted-foreground truncate">{msg.reply_to_text}</span>
+                        </div>
+                      )}
                       <div
                         className={`rounded-2xl px-3 py-2 text-sm font-inter leading-relaxed ${
                           isMe
@@ -456,6 +472,14 @@ export default function ClassroomTab() {
                         <span className="text-[10px] text-muted-foreground">
                           {timeAgo(msg.created_at)}
                         </span>
+                        {/* Reply button */}
+                        <button
+                          onClick={() => setReplyTo(msg)}
+                          className="p-0.5 rounded text-muted-foreground/50 hover:text-primary transition-colors"
+                          title="Responder"
+                        >
+                          <Reply className="w-3 h-3" />
+                        </button>
                         {(isMe || canModerate) && (
                           <button
                             onClick={() => deleteChatMessage(msg.id)}
@@ -475,8 +499,22 @@ export default function ClassroomTab() {
             <div ref={chatEndRef} />
           </div>
 
+          {/* Reply preview */}
+          {replyTo && (
+            <div className="border-t border-border px-3 pt-2 flex items-center gap-2 bg-muted/30">
+              <Reply className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <span className="text-[10px] font-montserrat font-bold text-primary">{replyTo.user_name.split(" ")[0]}</span>
+                <p className="text-[10px] font-inter text-muted-foreground truncate">{replyTo.message.slice(0, 60)}</p>
+              </div>
+              <button onClick={() => setReplyTo(null)} className="text-muted-foreground hover:text-foreground p-0.5">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Input */}
-          <div className="border-t border-border p-3 flex gap-2">
+          <div className={`border-t border-border p-3 flex gap-2 ${replyTo ? "pt-2" : ""}`}>
             <Input
               placeholder="Mensagem para a turma..."
               value={chatInput}

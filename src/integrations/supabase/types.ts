@@ -258,6 +258,9 @@ export type Database = {
           created_at: string
           id: string
           message: string
+          reply_to: string | null
+          reply_to_name: string | null
+          reply_to_text: string | null
           user_id: string
           user_name: string
         }
@@ -266,6 +269,9 @@ export type Database = {
           created_at?: string
           id?: string
           message: string
+          reply_to?: string | null
+          reply_to_name?: string | null
+          reply_to_text?: string | null
           user_id: string
           user_name: string
         }
@@ -274,10 +280,21 @@ export type Database = {
           created_at?: string
           id?: string
           message?: string
+          reply_to?: string | null
+          reply_to_name?: string | null
+          reply_to_text?: string | null
           user_id?: string
           user_name?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "community_chat_reply_to_fkey"
+            columns: ["reply_to"]
+            isOneToOne: false
+            referencedRelation: "community_chat"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       community_settings: {
         Row: {
