@@ -341,7 +341,10 @@ export default function CommunityTab() {
           {/* Pastor messages */}
           <AnnouncementsSection />
 
-          {/* 🎯 Desafios Comunitários */}
+          {/* 🏆 Conquistas da Comunidade */}
+          <CommunityAchievements />
+
+
           {challenges.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
