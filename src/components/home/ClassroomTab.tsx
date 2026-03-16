@@ -450,6 +450,14 @@ export default function ClassroomTab() {
                           {msg.user_name.split(" ")[0]}
                         </span>
                       )}
+                      {/* Reply context */}
+                      {msg.reply_to_name && (
+                        <div className={`flex items-center gap-1 px-2 py-1 mb-0.5 rounded-lg bg-muted/60 border-l-2 border-primary/40 max-w-full ${isMe ? "self-end" : "self-start"}`}>
+                          <Reply className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                          <span className="text-[10px] font-montserrat font-bold text-primary truncate">{msg.reply_to_name.split(" ")[0]}</span>
+                          <span className="text-[10px] font-inter text-muted-foreground truncate">{msg.reply_to_text}</span>
+                        </div>
+                      )}
                       <div
                         className={`rounded-2xl px-3 py-2 text-sm font-inter leading-relaxed ${
                           isMe
@@ -464,6 +472,14 @@ export default function ClassroomTab() {
                         <span className="text-[10px] text-muted-foreground">
                           {timeAgo(msg.created_at)}
                         </span>
+                        {/* Reply button */}
+                        <button
+                          onClick={() => setReplyTo(msg)}
+                          className="p-0.5 rounded text-muted-foreground/50 hover:text-primary transition-colors"
+                          title="Responder"
+                        >
+                          <Reply className="w-3 h-3" />
+                        </button>
                         {(isMe || canModerate) && (
                           <button
                             onClick={() => deleteChatMessage(msg.id)}
