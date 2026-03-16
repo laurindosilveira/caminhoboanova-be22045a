@@ -324,6 +324,28 @@ export default function ClassroomTab() {
     return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   }
 
+  function renderFileContent(msg: ChatMessage) {
+    if (!msg.file_url) return null;
+    if (msg.file_type === "image") {
+      return (
+        <img
+          src={msg.file_url}
+          alt="Imagem"
+          className="rounded-xl max-w-full max-h-48 object-cover mt-1 cursor-pointer"
+          onClick={() => window.open(msg.file_url!, "_blank")}
+        />
+      );
+    }
+    if (msg.file_type === "audio") {
+      return (
+        <audio controls className="mt-1 max-w-full h-8" preload="metadata">
+          <source src={msg.file_url} />
+        </audio>
+      );
+    }
+    return null;
+  }
+
   function renderThreadMessage(msg: ChatMessage, isRoot: boolean) {
     const isMe = msg.user_id === myUserId;
     return (
@@ -341,7 +363,8 @@ export default function ClassroomTab() {
             <span className="text-[10px] text-muted-foreground font-inter">{formatDateTime(msg.created_at)}</span>
           </div>
           <div className={`rounded-2xl px-3 py-2 text-sm font-inter leading-relaxed ${isRoot ? "bg-primary/5 border border-primary/20" : "bg-muted"} text-foreground`}>
-            {msg.message}
+            {(!msg.file_url || (msg.message && msg.message !== "📷 Imagem" && msg.message !== "🎵 Áudio")) && msg.message}
+            {renderFileContent(msg)}
           </div>
           <div className="flex items-center gap-1 mt-0.5 px-1">
             <button
