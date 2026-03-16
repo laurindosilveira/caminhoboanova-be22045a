@@ -8,6 +8,7 @@ import {
 import JourneyLessonView from "@/components/home/JourneyLessonView";
 import LessonChoiceView from "@/components/home/LessonChoiceView";
 import { useAgendaSchedule } from "@/hooks/useAgendaSchedule";
+import ResourceLibrary from "@/components/home/ResourceLibrary";
 
 import { toast } from "sonner";
 
