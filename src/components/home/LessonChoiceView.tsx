@@ -198,7 +198,7 @@ function computeDevotionalStatuses(
   return { statuses, lockedSet };
 }
 
-export default function LessonChoiceView({ lesson, onBack, onOpenStudy, scheduledDevotionalDates, eventDate, isStudyLocked, isLateAccess, isStudyCompleted = true }: Props) {
+export default function LessonChoiceView({ lesson, onBack, onOpenStudy, onOpenEdit, scheduledDevotionalDates, eventDate, isStudyLocked, isLateAccess, isStudyCompleted = true }: Props) {
   const { role } = useAuth();
   const isLeaderOrAdmin = role === "admin" || role === "lider";
   const [devotionals, setDevotionals] = useState<DevotionalItem[]>([]);
