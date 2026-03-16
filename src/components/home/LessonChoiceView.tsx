@@ -479,19 +479,19 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
         <div className="rounded-2xl p-3 bg-accent/10 border border-accent/20 flex items-start gap-2">
           <span className="text-sm">⚠️</span>
           <p className="font-inter text-xs text-accent-foreground">
-            O prazo desta lição já encerrou. Você ainda pode estudar e fazer os devocionais, mas <strong>não receberá pontos</strong>.
+            O prazo desta lição já encerrou. Você ainda pode completar o <strong>estudo</strong>, mas <strong>sem pontuação</strong>. Os devocionais não realizados estão bloqueados.
           </p>
         </div>
       )}
 
-      {/* Warning: study not done yet */}
-      {!isLeaderOrAdmin && !isStudyCompleted && (
+      {/* Warning: study not done yet (only during normal access, not late) */}
+      {!isLeaderOrAdmin && !isStudyCompleted && !isLateAccess && (
         <div className="rounded-2xl p-3 bg-secondary/10 border border-secondary/20 flex items-start gap-2.5">
           <span className="text-base mt-0.5">💡</span>
           <div>
             <p className="font-montserrat font-bold text-foreground text-xs">Dica importante</p>
             <p className="font-inter text-xs text-muted-foreground mt-0.5 leading-relaxed">
-              Recomendamos <strong>completar o estudo da lição primeiro</strong> para um melhor aproveitamento dos devocionais. O estudo traz a base para as reflexões diárias.
+              Recomendamos <strong>completar o estudo da lição primeiro</strong> para um melhor aproveitamento dos devocionais.
             </p>
           </div>
         </div>
