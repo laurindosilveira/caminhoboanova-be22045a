@@ -61,6 +61,10 @@ export default function ClassroomTab() {
   const [sendingChat, setSendingChat] = useState(false);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [threadRootId, setThreadRootId] = useState<string | null>(null);
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
