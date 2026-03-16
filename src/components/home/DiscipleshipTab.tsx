@@ -354,7 +354,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
                 />
               )}
               <span className="relative z-10 flex items-center gap-2">
-                <Icon className="w-[18px] h-[18px]" style={isActive ? { color: tab.color } : {}} />
+                <Icon className={`w-5 h-5 ${isActive ? tab.activeIconClass : "text-muted-foreground"}`} />
                 <span>{tab.label}</span>
               </span>
             </button>
