@@ -224,28 +224,8 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
       setCompletedIds(new Set(progList.map((p: any) => p.devotional_id)));
       setCompletedDates(completedMap);
 
-      if (isLeaderOrAdmin) {
-        // Leaders/admins: all devotionals are available (no date locks)
-        const allAvailable = new Map<string, DevotionalStatus>();
-        devList.forEach(d => allAvailable.set(d.id, completedMap.has(d.id) ? "completed" : "available"));
-        setDevStatuses(allAvailable);
-        setLockedIds(new Set());
-      } else if (isLateAccess && !isStudyCompleted) {
-        // Late access but study not completed: block all non-completed devotionals
-        const blocked = new Map<string, DevotionalStatus>();
-        const blockedSet = new Set<string>();
-        devList.forEach(d => {
-          if (completedMap.has(d.id)) {
-            blocked.set(d.id, "completed");
-          } else {
-            blocked.set(d.id, "locked");
-            blockedSet.add(d.id);
-          }
-        });
-        setDevStatuses(blocked);
-        setLockedIds(blockedSet);
-      } else if (isLateAccess) {
-        // Late access with study completed: all devotionals available (no date locks)
+      if (isLeaderOrAdmin || isLateAccess) {
+        // Leaders/admins and late access: all devotionals are available (no date locks)
         const allAvailable = new Map<string, DevotionalStatus>();
         devList.forEach(d => allAvailable.set(d.id, completedMap.has(d.id) ? "completed" : "available"));
         setDevStatuses(allAvailable);
@@ -276,25 +256,7 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
     newCompletedMap.set(devotionalId, now.toISOString());
     setCompletedDates(newCompletedMap);
     setCompletedIds(prev => new Set([...prev, devotionalId]));
-    if (isLeaderOrAdmin) {
-      const allAvailable = new Map<string, DevotionalStatus>();
-      devotionals.forEach(d => allAvailable.set(d.id, newCompletedMap.has(d.id) ? "completed" : "available"));
-      setDevStatuses(allAvailable);
-      setLockedIds(new Set());
-    } else if (isLateAccess && !isStudyCompleted) {
-      const blocked = new Map<string, DevotionalStatus>();
-      const blockedSet = new Set<string>();
-      devotionals.forEach(d => {
-        if (newCompletedMap.has(d.id)) {
-          blocked.set(d.id, "completed");
-        } else {
-          blocked.set(d.id, "locked");
-          blockedSet.add(d.id);
-        }
-      });
-      setDevStatuses(blocked);
-      setLockedIds(blockedSet);
-    } else if (isLateAccess) {
+    if (isLeaderOrAdmin || isLateAccess) {
       const allAvailable = new Map<string, DevotionalStatus>();
       devotionals.forEach(d => allAvailable.set(d.id, newCompletedMap.has(d.id) ? "completed" : "available"));
       setDevStatuses(allAvailable);
@@ -495,83 +457,106 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
         </div>
       )}
 
+      {/* Warning: study not done yet */}
+      {!isLeaderOrAdmin && !isStudyCompleted && (
+        <div className="rounded-2xl p-3 bg-secondary/10 border border-secondary/20 flex items-start gap-2.5">
+          <span className="text-base mt-0.5">💡</span>
+          <div>
+            <p className="font-montserrat font-bold text-foreground text-xs">Dica importante</p>
+            <p className="font-inter text-xs text-muted-foreground mt-0.5 leading-relaxed">
+              Recomendamos <strong>completar o estudo da lição primeiro</strong> para um melhor aproveitamento dos devocionais. O estudo traz a base para as reflexões diárias.
+            </p>
+          </div>
+        </div>
+      )}
+
       <p className="font-inter text-sm text-muted-foreground text-center">Escolha o que deseja acessar:</p>
 
       <div className="grid grid-cols-1 gap-3">
-        {/* Devocionais */}
-        {!isLeaderOrAdmin && isLateAccess && !isStudyCompleted ? (
-          <div className="flex items-center gap-4 p-5 bg-card rounded-2xl border border-destructive/20 shadow-sm text-left opacity-60">
-            <div className="w-14 h-14 rounded-2xl bg-destructive/10 flex items-center justify-center flex-shrink-0">
-              <Lock className="w-7 h-7 text-destructive/60" />
+        {/* Estudo — show first when not completed */}
+        {!isStudyCompleted && !isLeaderOrAdmin && (
+          <button onClick={() => {
+              if (isStudyLocked) return;
+              onOpenStudy();
+            }}
+            className={`flex items-center gap-4 p-5 bg-card rounded-2xl border shadow-sm text-left transition-all group ${
+              isStudyLocked ? "border-border opacity-50 cursor-not-allowed" : "border-secondary/30 hover:bg-secondary/5 ring-2 ring-secondary/20"
+            }`}>
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 transition-colors ${
+              isStudyLocked ? "bg-muted" : "bg-secondary/10 group-hover:bg-secondary/20"
+            }`}>
+              {isStudyLocked ? <Lock className="w-7 h-7 text-muted-foreground" /> : <GraduationCap className="w-7 h-7 text-secondary" />}
             </div>
             <div className="flex-1">
-              <p className="font-montserrat font-bold text-foreground text-base">📖 Devocionais</p>
-              <p className="text-destructive font-inter text-xs mt-0.5 font-semibold">
-                🔒 Conclua o estudo da lição primeiro
+              <p className="font-montserrat font-bold text-foreground text-base">🎓 Estudo da Lição</p>
+              <p className="text-secondary font-inter text-xs mt-0.5 font-semibold">
+                ⭐ Recomendado — faça primeiro!
               </p>
               <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
-                Os devocionais serão liberados após você completar o estudo
+                {isLateAccess ? "⚠️ Sem pontuação (prazo encerrado)" : "+20 pontos de fé ao completar"}
               </p>
             </div>
-          </div>
-        ) : (
-          <button onClick={() => setShowDevotionals(true)}
-            className="flex items-center gap-4 p-5 bg-card rounded-2xl border border-border shadow-sm text-left hover:bg-brand-green/5 hover:border-brand-green/30 transition-all group">
-            <div className="w-14 h-14 rounded-2xl bg-brand-green/10 flex items-center justify-center flex-shrink-0 group-hover:bg-brand-green/20 transition-colors">
-              <BookOpen className="w-7 h-7 text-brand-green" />
-            </div>
-            <div className="flex-1">
-              <p className="font-montserrat font-bold text-foreground text-base">📖 Devocionais</p>
-              <p className="text-muted-foreground font-inter text-xs mt-0.5">
-                {loading ? "Carregando..." : totalCount > 0 ? `${completedCount}/${totalCount} concluídos` : `${totalCount} devocional(is)`}
-              </p>
-              {totalCount > 0 && !loading && (
-                <div className="mt-1.5 h-1 bg-muted rounded-full overflow-hidden w-24">
-                  <div className="h-full bg-brand-green rounded-full transition-all" style={{ width: `${progressPct}%` }} />
-                </div>
-              )}
-              <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
-                {isLateAccess ? "⚠️ Sem pontuação (prazo encerrado)" : "Preparação diária antes do encontro"}
-              </p>
-            </div>
-            <span className="text-brand-green font-montserrat font-bold text-lg">→</span>
+            {!isStudyLocked && <span className="text-secondary font-montserrat font-bold text-lg">→</span>}
           </button>
         )}
 
-        {/* Estudo */}
-        <button onClick={() => {
-            if (isStudyLocked) {
-              return;
-            }
-            onOpenStudy();
-          }}
-          className={`flex items-center gap-4 p-5 bg-card rounded-2xl border border-border shadow-sm text-left transition-all group ${
-            isStudyLocked ? "opacity-50 cursor-not-allowed" : "hover:bg-secondary/5 hover:border-secondary/30"
-          }`}>
-          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 transition-colors ${
-            isStudyLocked ? "bg-muted" : "bg-secondary/10 group-hover:bg-secondary/20"
-          }`}>
-            {isStudyLocked ? <Lock className="w-7 h-7 text-muted-foreground" /> : <GraduationCap className="w-7 h-7 text-secondary" />}
+        {/* Devocionais */}
+        <button onClick={() => setShowDevotionals(true)}
+          className="flex items-center gap-4 p-5 bg-card rounded-2xl border border-border shadow-sm text-left hover:bg-brand-green/5 hover:border-brand-green/30 transition-all group">
+          <div className="w-14 h-14 rounded-2xl bg-brand-green/10 flex items-center justify-center flex-shrink-0 group-hover:bg-brand-green/20 transition-colors">
+            <BookOpen className="w-7 h-7 text-brand-green" />
           </div>
           <div className="flex-1">
-            <p className="font-montserrat font-bold text-foreground text-base">🎓 Estudo da Lição</p>
-            {isStudyLocked ? (
-              <p className="text-destructive font-inter text-xs mt-0.5">
-                ⏰ Prazo encerrado — disponível apenas durante a semana de preparação
-              </p>
-            ) : (
-              <>
-                <p className="text-muted-foreground font-inter text-xs mt-0.5">
-                  Responda as perguntas e registre sua reflexão
-                </p>
-                <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
-                  {isLateAccess ? "⚠️ Sem pontuação (prazo encerrado)" : "+20 pontos de fé ao completar"}
-                </p>
-              </>
+            <p className="font-montserrat font-bold text-foreground text-base">📖 Devocionais</p>
+            <p className="text-muted-foreground font-inter text-xs mt-0.5">
+              {loading ? "Carregando..." : totalCount > 0 ? `${completedCount}/${totalCount} concluídos` : `${totalCount} devocional(is)`}
+            </p>
+            {totalCount > 0 && !loading && (
+              <div className="mt-1.5 h-1 bg-muted rounded-full overflow-hidden w-24">
+                <div className="h-full bg-brand-green rounded-full transition-all" style={{ width: `${progressPct}%` }} />
+              </div>
             )}
+            <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
+              {isLateAccess ? "⚠️ Sem pontuação (prazo encerrado)" : "Preparação diária antes do encontro"}
+            </p>
           </div>
-          {!isStudyLocked && <span className="text-secondary font-montserrat font-bold text-lg">→</span>}
+          <span className="text-brand-green font-montserrat font-bold text-lg">→</span>
         </button>
+
+        {/* Estudo — show here when study is already completed or for leaders */}
+        {(isStudyCompleted || isLeaderOrAdmin) && (
+          <button onClick={() => {
+              if (isStudyLocked) return;
+              onOpenStudy();
+            }}
+            className={`flex items-center gap-4 p-5 bg-card rounded-2xl border border-border shadow-sm text-left transition-all group ${
+              isStudyLocked ? "opacity-50 cursor-not-allowed" : "hover:bg-secondary/5 hover:border-secondary/30"
+            }`}>
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 transition-colors ${
+              isStudyLocked ? "bg-muted" : "bg-secondary/10 group-hover:bg-secondary/20"
+            }`}>
+              {isStudyLocked ? <Lock className="w-7 h-7 text-muted-foreground" /> : <GraduationCap className="w-7 h-7 text-secondary" />}
+            </div>
+            <div className="flex-1">
+              <p className="font-montserrat font-bold text-foreground text-base">🎓 Estudo da Lição</p>
+              {isStudyLocked ? (
+                <p className="text-destructive font-inter text-xs mt-0.5">
+                  ⏰ Prazo encerrado — disponível apenas durante a semana de preparação
+                </p>
+              ) : (
+                <>
+                  <p className="text-muted-foreground font-inter text-xs mt-0.5">
+                    Responda as perguntas e registre sua reflexão
+                  </p>
+                  <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
+                    {isLateAccess ? "⚠️ Sem pontuação (prazo encerrado)" : "+20 pontos de fé ao completar"}
+                  </p>
+                </>
+              )}
+            </div>
+            {!isStudyLocked && <span className="text-secondary font-montserrat font-bold text-lg">→</span>}
+          </button>
+        )}
       </div>
     </div>
   );
