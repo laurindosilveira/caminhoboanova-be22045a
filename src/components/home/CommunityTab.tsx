@@ -1,13 +1,14 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageCircle, GraduationCap, Cake, Sparkles, Send, Trash2, Target, Check, Users, ClipboardList, Upload, Image } from "lucide-react";
+import { MessageCircle, GraduationCap, Cake, Sparkles, Send, Trash2, Target, Check, Users, ClipboardList, Upload, Image, Camera } from "lucide-react";
 import ClassroomTab from "./ClassroomTab";
 import AnnouncementsSection from "./AnnouncementsSection";
 import LeaderRoomSection from "./LeaderRoomSection";
 import PollsSection from "./PollsSection";
 import CommunityAchievements from "./CommunityAchievements";
 import PrayerPairsSection from "./PrayerPairsSection";
+import EventPhotoGallery from "./EventPhotoGallery";
 
 const REACTION_EMOJIS = [
   { emoji: "🙏", label: "orando" },
@@ -56,7 +57,7 @@ interface BirthdayPerson {
   day: number;
 }
 
-type SubTab = "comunidade" | "sala" | "discipulador";
+type SubTab = "comunidade" | "sala" | "discipulador" | "galeria";
 
 export default function CommunityTab() {
   const { profile, role } = useAuth();
@@ -312,6 +313,17 @@ export default function CommunityTab() {
             <GraduationCap className="w-3.5 h-3.5" />
             Sala da Turma
           </button>
+          <button
+            onClick={() => setSubTab("galeria")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-montserrat font-bold transition-all ${
+              subTab === "galeria"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Camera className="w-3.5 h-3.5" />
+            Galeria
+          </button>
           {(role === "admin" || role === "lider") && (
             <button
               onClick={() => setSubTab("discipulador")}
@@ -331,6 +343,13 @@ export default function CommunityTab() {
       {/* ===== DISCIPULADOR (admin/lider) ===== */}
       {subTab === "discipulador" && (role === "admin" || role === "lider") && (
         <LeaderRoomSection asTab />
+      )}
+
+      {/* ===== GALERIA ===== */}
+      {subTab === "galeria" && (
+        <div className="px-5">
+          <EventPhotoGallery />
+        </div>
       )}
 
       {/* ===== SALA DA TURMA ===== */}
