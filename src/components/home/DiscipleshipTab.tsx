@@ -5,6 +5,7 @@ import { Heart, GraduationCap, Sparkles, Lock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import JourneyLessonView from "@/components/home/JourneyLessonView";
 import LessonContentEditor from "@/components/admin/tabs/LessonContentEditor";
+import LessonDevotionalEditor from "@/components/admin/tabs/LessonDevotionalEditor";
 import LessonChoiceView from "@/components/home/LessonChoiceView";
 import ResourceLibrary from "@/components/home/ResourceLibrary";
 import { useAgendaSchedule } from "@/hooks/useAgendaSchedule";
@@ -55,7 +56,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
   const [saving, setSaving] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
-  const [selectedLessonMode, setSelectedLessonMode] = useState<"choice" | "study" | "edit">("choice");
+  const [selectedLessonMode, setSelectedLessonMode] = useState<"choice" | "study" | "edit" | "edit-devotionals">("choice");
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
   const [fullyCompletedLessonIds, setFullyCompletedLessonIds] = useState<Set<string>>(new Set());
@@ -297,6 +298,13 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
         </div>
       );
     }
+    if (selectedLessonMode === "edit-devotionals" && isLeaderOrAdmin) {
+      return (
+        <div className="px-5 pt-5 pb-6">
+          <LessonDevotionalEditor lesson={selectedLesson} onBack={() => setSelectedLessonMode("choice")} />
+        </div>
+      );
+    }
     if (selectedLessonMode === "study") {
       const isLateAccessStudy = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id);
       return (
@@ -313,6 +321,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
         onBack={() => { setSelectedLesson(null); setSelectedLessonMode("choice"); }}
         onOpenStudy={() => setSelectedLessonMode("study")}
         onOpenEdit={isLeaderOrAdmin ? () => setSelectedLessonMode("edit") : undefined}
+        onOpenEditDevotionals={isLeaderOrAdmin ? () => setSelectedLessonMode("edit-devotionals") : undefined}
         scheduledDevotionalDates={agendaSchedule.lessonDevotionalDates.get(selectedLesson.id)}
         eventDate={agendaSchedule.lessonEventDate.get(selectedLesson.id) ?? undefined}
         isStudyLocked={false}

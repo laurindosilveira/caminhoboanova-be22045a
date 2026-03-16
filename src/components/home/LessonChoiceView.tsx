@@ -37,6 +37,8 @@ type Props = {
   onOpenStudy: () => void;
   /** Callback to open the lesson content editor (leaders/admins only) */
   onOpenEdit?: () => void;
+  /** Callback to open the devotional editor (leaders/admins only) */
+  onOpenEditDevotionals?: () => void;
   /** Schedule-based devotional dates (from agenda). If provided, overrides default anchoring. */
   scheduledDevotionalDates?: Date[];
   /** Event date for display */
@@ -198,7 +200,7 @@ function computeDevotionalStatuses(
   return { statuses, lockedSet };
 }
 
-export default function LessonChoiceView({ lesson, onBack, onOpenStudy, onOpenEdit, scheduledDevotionalDates, eventDate, isStudyLocked, isLateAccess, isStudyCompleted = true }: Props) {
+export default function LessonChoiceView({ lesson, onBack, onOpenStudy, onOpenEdit, onOpenEditDevotionals, scheduledDevotionalDates, eventDate, isStudyLocked, isLateAccess, isStudyCompleted = true }: Props) {
   const { role } = useAuth();
   const isLeaderOrAdmin = role === "admin" || role === "lider";
   const [devotionals, setDevotionals] = useState<DevotionalItem[]>([]);
@@ -595,12 +597,29 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, onOpenEd
               <Pencil className="w-7 h-7 text-primary" />
             </div>
             <div className="flex-1">
-              <p className="font-montserrat font-bold text-foreground text-base">✏️ Editar Conteúdo</p>
+              <p className="font-montserrat font-bold text-foreground text-base">✏️ Editar Conteúdo da Lição</p>
               <p className="text-muted-foreground font-inter text-xs mt-0.5">
                 Editar saudação, perguntas, textos bíblicos e recursos
               </p>
             </div>
             <span className="text-primary font-montserrat font-bold text-lg">→</span>
+          </button>
+        )}
+
+        {/* Editar devocionais — leaders/admins only */}
+        {onOpenEditDevotionals && isLeaderOrAdmin && (
+          <button onClick={onOpenEditDevotionals}
+            className="flex items-center gap-4 p-5 bg-card rounded-2xl border border-brand-green/20 shadow-sm text-left hover:bg-brand-green/5 hover:border-brand-green/40 transition-all group">
+            <div className="w-14 h-14 rounded-2xl bg-brand-green/10 flex items-center justify-center flex-shrink-0 group-hover:bg-brand-green/20 transition-colors">
+              <Pencil className="w-7 h-7 text-brand-green" />
+            </div>
+            <div className="flex-1">
+              <p className="font-montserrat font-bold text-foreground text-base">✏️ Editar Devocionais</p>
+              <p className="text-muted-foreground font-inter text-xs mt-0.5">
+                Criar e editar os 5 devocionais desta lição
+              </p>
+            </div>
+            <span className="text-brand-green font-montserrat font-bold text-lg">→</span>
           </button>
         )}
       </div>
