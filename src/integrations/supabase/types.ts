@@ -256,6 +256,8 @@ export type Database = {
         Row: {
           community: string
           created_at: string
+          file_type: string | null
+          file_url: string | null
           id: string
           message: string
           reply_to: string | null
@@ -267,6 +269,8 @@ export type Database = {
         Insert: {
           community: string
           created_at?: string
+          file_type?: string | null
+          file_url?: string | null
           id?: string
           message: string
           reply_to?: string | null
@@ -278,6 +282,8 @@ export type Database = {
         Update: {
           community?: string
           created_at?: string
+          file_type?: string | null
+          file_url?: string | null
           id?: string
           message?: string
           reply_to?: string | null
