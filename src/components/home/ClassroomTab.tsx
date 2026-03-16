@@ -55,7 +55,9 @@ export default function ClassroomTab() {
   const [chatInput, setChatInput] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [threadRootId, setThreadRootId] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const threadEndRef = useRef<HTMLDivElement>(null);
 
   // Orações
   const [prayers, setPrayers] = useState<PrayerRequest[]>([]);
