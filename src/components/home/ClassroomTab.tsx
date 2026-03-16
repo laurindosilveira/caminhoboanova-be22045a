@@ -246,6 +246,53 @@ export default function ClassroomTab() {
     setDeletingId(null);
   }
 
+  function formatDateTime(dateStr: string) {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function renderThreadMessage(msg: ChatMessage, isRoot: boolean) {
+    const isMe = msg.user_id === myUserId;
+    return (
+      <div key={msg.id} className={`flex gap-2 ${isRoot ? "" : "ml-4"}`}>
+        <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center flex-shrink-0 mt-0.5">
+          <span className="text-xs font-montserrat font-black text-primary-foreground">
+            {msg.user_name[0]?.toUpperCase()}
+          </span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className={`text-xs font-montserrat font-bold ${isMe ? "text-primary" : "text-foreground"}`}>
+              {msg.user_name.split(" ")[0]}
+            </span>
+            <span className="text-[10px] text-muted-foreground font-inter">{formatDateTime(msg.created_at)}</span>
+          </div>
+          <div className={`rounded-2xl px-3 py-2 text-sm font-inter leading-relaxed ${isRoot ? "bg-primary/5 border border-primary/20" : "bg-muted"} text-foreground`}>
+            {msg.message}
+          </div>
+          <div className="flex items-center gap-1 mt-0.5 px-1">
+            <button
+              onClick={() => { setReplyTo(msg); }}
+              className="p-0.5 rounded text-muted-foreground/50 hover:text-primary transition-colors"
+              title="Responder"
+            >
+              <Reply className="w-3 h-3" />
+            </button>
+            {(isMe || canModerate) && (
+              <button
+                onClick={() => deleteChatMessage(msg.id)}
+                disabled={deletingId === msg.id}
+                className="p-0.5 rounded text-muted-foreground/50 hover:text-destructive transition-colors disabled:opacity-40"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!community) return null;
 
   return (
