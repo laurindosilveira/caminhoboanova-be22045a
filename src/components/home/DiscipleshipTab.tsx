@@ -1029,6 +1029,9 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
           })}
         </div>
       )}
+
+      {/* ── BIBLIOTECA DE RECURSOS ────────────────── */}
+      <ResourceLibrary />
     </div>
   );
 }
