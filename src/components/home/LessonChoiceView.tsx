@@ -523,40 +523,40 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
           <span className="text-brand-green font-montserrat font-bold text-lg">→</span>
         </button>
 
-        {/* Estudo */}
-        <button onClick={() => {
-            if (isStudyLocked) {
-              return;
-            }
-            onOpenStudy();
-          }}
-          className={`flex items-center gap-4 p-5 bg-card rounded-2xl border border-border shadow-sm text-left transition-all group ${
-            isStudyLocked ? "opacity-50 cursor-not-allowed" : "hover:bg-secondary/5 hover:border-secondary/30"
-          }`}>
-          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 transition-colors ${
-            isStudyLocked ? "bg-muted" : "bg-secondary/10 group-hover:bg-secondary/20"
-          }`}>
-            {isStudyLocked ? <Lock className="w-7 h-7 text-muted-foreground" /> : <GraduationCap className="w-7 h-7 text-secondary" />}
-          </div>
-          <div className="flex-1">
-            <p className="font-montserrat font-bold text-foreground text-base">🎓 Estudo da Lição</p>
-            {isStudyLocked ? (
-              <p className="text-destructive font-inter text-xs mt-0.5">
-                ⏰ Prazo encerrado — disponível apenas durante a semana de preparação
-              </p>
-            ) : (
-              <>
-                <p className="text-muted-foreground font-inter text-xs mt-0.5">
-                  Responda as perguntas e registre sua reflexão
+        {/* Estudo — show here when study is already completed or for leaders */}
+        {(isStudyCompleted || isLeaderOrAdmin) && (
+          <button onClick={() => {
+              if (isStudyLocked) return;
+              onOpenStudy();
+            }}
+            className={`flex items-center gap-4 p-5 bg-card rounded-2xl border border-border shadow-sm text-left transition-all group ${
+              isStudyLocked ? "opacity-50 cursor-not-allowed" : "hover:bg-secondary/5 hover:border-secondary/30"
+            }`}>
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 transition-colors ${
+              isStudyLocked ? "bg-muted" : "bg-secondary/10 group-hover:bg-secondary/20"
+            }`}>
+              {isStudyLocked ? <Lock className="w-7 h-7 text-muted-foreground" /> : <GraduationCap className="w-7 h-7 text-secondary" />}
+            </div>
+            <div className="flex-1">
+              <p className="font-montserrat font-bold text-foreground text-base">🎓 Estudo da Lição</p>
+              {isStudyLocked ? (
+                <p className="text-destructive font-inter text-xs mt-0.5">
+                  ⏰ Prazo encerrado — disponível apenas durante a semana de preparação
                 </p>
-                <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
-                  {isLateAccess ? "⚠️ Sem pontuação (prazo encerrado)" : "+20 pontos de fé ao completar"}
-                </p>
-              </>
-            )}
-          </div>
-          {!isStudyLocked && <span className="text-secondary font-montserrat font-bold text-lg">→</span>}
-        </button>
+              ) : (
+                <>
+                  <p className="text-muted-foreground font-inter text-xs mt-0.5">
+                    Responda as perguntas e registre sua reflexão
+                  </p>
+                  <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
+                    {isLateAccess ? "⚠️ Sem pontuação (prazo encerrado)" : "+20 pontos de fé ao completar"}
+                  </p>
+                </>
+              )}
+            </div>
+            {!isStudyLocked && <span className="text-secondary font-montserrat font-bold text-lg">→</span>}
+          </button>
+        )}
       </div>
     </div>
   );
