@@ -43,6 +43,8 @@ type Props = {
   isStudyLocked?: boolean;
   /** Whether this is late access (after event date — no points) */
   isLateAccess?: boolean;
+  /** Whether the study (lesson responses) has been completed */
+  isStudyCompleted?: boolean;
 };
 
 /**
@@ -194,7 +196,7 @@ function computeDevotionalStatuses(
   return { statuses, lockedSet };
 }
 
-export default function LessonChoiceView({ lesson, onBack, onOpenStudy, scheduledDevotionalDates, eventDate, isStudyLocked, isLateAccess }: Props) {
+export default function LessonChoiceView({ lesson, onBack, onOpenStudy, scheduledDevotionalDates, eventDate, isStudyLocked, isLateAccess, isStudyCompleted = true }: Props) {
   const { role } = useAuth();
   const isLeaderOrAdmin = role === "admin" || role === "lider";
   const [devotionals, setDevotionals] = useState<DevotionalItem[]>([]);
@@ -222,8 +224,28 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
       setCompletedIds(new Set(progList.map((p: any) => p.devotional_id)));
       setCompletedDates(completedMap);
 
-      if (isLeaderOrAdmin || isLateAccess) {
-        // Leaders/admins and late access: all devotionals are available (no date locks)
+      if (isLeaderOrAdmin) {
+        // Leaders/admins: all devotionals are available (no date locks)
+        const allAvailable = new Map<string, DevotionalStatus>();
+        devList.forEach(d => allAvailable.set(d.id, completedMap.has(d.id) ? "completed" : "available"));
+        setDevStatuses(allAvailable);
+        setLockedIds(new Set());
+      } else if (isLateAccess && !isStudyCompleted) {
+        // Late access but study not completed: block all non-completed devotionals
+        const blocked = new Map<string, DevotionalStatus>();
+        const blockedSet = new Set<string>();
+        devList.forEach(d => {
+          if (completedMap.has(d.id)) {
+            blocked.set(d.id, "completed");
+          } else {
+            blocked.set(d.id, "locked");
+            blockedSet.add(d.id);
+          }
+        });
+        setDevStatuses(blocked);
+        setLockedIds(blockedSet);
+      } else if (isLateAccess) {
+        // Late access with study completed: all devotionals available (no date locks)
         const allAvailable = new Map<string, DevotionalStatus>();
         devList.forEach(d => allAvailable.set(d.id, completedMap.has(d.id) ? "completed" : "available"));
         setDevStatuses(allAvailable);
@@ -237,7 +259,7 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
       setLoading(false);
     }
     load();
-  }, [lesson.id, scheduledDevotionalDates, isLateAccess]);
+  }, [lesson.id, scheduledDevotionalDates, isLateAccess, isStudyCompleted]);
 
   async function handleCompleteDevotional(devotionalId: string) {
     const { data: { user } } = await supabase.auth.getUser();
@@ -254,7 +276,25 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
     newCompletedMap.set(devotionalId, now.toISOString());
     setCompletedDates(newCompletedMap);
     setCompletedIds(prev => new Set([...prev, devotionalId]));
-    if (isLeaderOrAdmin || isLateAccess) {
+    if (isLeaderOrAdmin) {
+      const allAvailable = new Map<string, DevotionalStatus>();
+      devotionals.forEach(d => allAvailable.set(d.id, newCompletedMap.has(d.id) ? "completed" : "available"));
+      setDevStatuses(allAvailable);
+      setLockedIds(new Set());
+    } else if (isLateAccess && !isStudyCompleted) {
+      const blocked = new Map<string, DevotionalStatus>();
+      const blockedSet = new Set<string>();
+      devotionals.forEach(d => {
+        if (newCompletedMap.has(d.id)) {
+          blocked.set(d.id, "completed");
+        } else {
+          blocked.set(d.id, "locked");
+          blockedSet.add(d.id);
+        }
+      });
+      setDevStatuses(blocked);
+      setLockedIds(blockedSet);
+    } else if (isLateAccess) {
       const allAvailable = new Map<string, DevotionalStatus>();
       devotionals.forEach(d => allAvailable.set(d.id, newCompletedMap.has(d.id) ? "completed" : "available"));
       setDevStatuses(allAvailable);
@@ -459,27 +499,44 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
 
       <div className="grid grid-cols-1 gap-3">
         {/* Devocionais */}
-        <button onClick={() => setShowDevotionals(true)}
-          className="flex items-center gap-4 p-5 bg-card rounded-2xl border border-border shadow-sm text-left hover:bg-brand-green/5 hover:border-brand-green/30 transition-all group">
-          <div className="w-14 h-14 rounded-2xl bg-brand-green/10 flex items-center justify-center flex-shrink-0 group-hover:bg-brand-green/20 transition-colors">
-            <BookOpen className="w-7 h-7 text-brand-green" />
+        {!isLeaderOrAdmin && isLateAccess && !isStudyCompleted ? (
+          <div className="flex items-center gap-4 p-5 bg-card rounded-2xl border border-destructive/20 shadow-sm text-left opacity-60">
+            <div className="w-14 h-14 rounded-2xl bg-destructive/10 flex items-center justify-center flex-shrink-0">
+              <Lock className="w-7 h-7 text-destructive/60" />
+            </div>
+            <div className="flex-1">
+              <p className="font-montserrat font-bold text-foreground text-base">📖 Devocionais</p>
+              <p className="text-destructive font-inter text-xs mt-0.5 font-semibold">
+                🔒 Conclua o estudo da lição primeiro
+              </p>
+              <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
+                Os devocionais serão liberados após você completar o estudo
+              </p>
+            </div>
           </div>
-          <div className="flex-1">
-            <p className="font-montserrat font-bold text-foreground text-base">📖 Devocionais</p>
-            <p className="text-muted-foreground font-inter text-xs mt-0.5">
-              {loading ? "Carregando..." : totalCount > 0 ? `${completedCount}/${totalCount} concluídos` : `${totalCount} devocional(is)`}
-            </p>
-            {totalCount > 0 && !loading && (
-              <div className="mt-1.5 h-1 bg-muted rounded-full overflow-hidden w-24">
-                <div className="h-full bg-brand-green rounded-full transition-all" style={{ width: `${progressPct}%` }} />
-              </div>
-            )}
-            <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
-              {isLateAccess ? "⚠️ Sem pontuação (prazo encerrado)" : "Preparação diária antes do encontro"}
-            </p>
-          </div>
-          <span className="text-brand-green font-montserrat font-bold text-lg">→</span>
-        </button>
+        ) : (
+          <button onClick={() => setShowDevotionals(true)}
+            className="flex items-center gap-4 p-5 bg-card rounded-2xl border border-border shadow-sm text-left hover:bg-brand-green/5 hover:border-brand-green/30 transition-all group">
+            <div className="w-14 h-14 rounded-2xl bg-brand-green/10 flex items-center justify-center flex-shrink-0 group-hover:bg-brand-green/20 transition-colors">
+              <BookOpen className="w-7 h-7 text-brand-green" />
+            </div>
+            <div className="flex-1">
+              <p className="font-montserrat font-bold text-foreground text-base">📖 Devocionais</p>
+              <p className="text-muted-foreground font-inter text-xs mt-0.5">
+                {loading ? "Carregando..." : totalCount > 0 ? `${completedCount}/${totalCount} concluídos` : `${totalCount} devocional(is)`}
+              </p>
+              {totalCount > 0 && !loading && (
+                <div className="mt-1.5 h-1 bg-muted rounded-full overflow-hidden w-24">
+                  <div className="h-full bg-brand-green rounded-full transition-all" style={{ width: `${progressPct}%` }} />
+                </div>
+              )}
+              <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
+                {isLateAccess ? "⚠️ Sem pontuação (prazo encerrado)" : "Preparação diária antes do encontro"}
+              </p>
+            </div>
+            <span className="text-brand-green font-montserrat font-bold text-lg">→</span>
+          </button>
+        )}
 
         {/* Estudo */}
         <button onClick={() => {
