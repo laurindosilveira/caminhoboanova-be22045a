@@ -616,7 +616,7 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, onOpenEd
             <div className="flex-1">
               <p className="font-montserrat font-bold text-foreground text-base">✏️ Editar Devocionais</p>
               <p className="text-muted-foreground font-inter text-xs mt-0.5">
-                Criar e editar os 5 devocionais desta lição
+                Criar e editar os {totalCount} devocionais desta lição
               </p>
             </div>
             <span className="text-brand-green font-montserrat font-bold text-lg">→</span>
