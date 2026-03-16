@@ -30,8 +30,8 @@ type SubTab = typeof SUB_TABS[number]["key"];
 
 const subTabVariants = {
   initial: { opacity: 0, y: 12, scale: 0.98 },
-  animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } },
-  exit: { opacity: 0, y: -8, scale: 0.98, transition: { duration: 0.2, ease: "easeIn" } },
+  animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] } },
+  exit: { opacity: 0, y: -8, scale: 0.98, transition: { duration: 0.2, ease: "easeIn" as const } },
 };
 
 // ─── MAIN COMPONENT ──────────────────────────────────────
