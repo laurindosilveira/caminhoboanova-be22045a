@@ -499,8 +499,22 @@ export default function ClassroomTab() {
             <div ref={chatEndRef} />
           </div>
 
+          {/* Reply preview */}
+          {replyTo && (
+            <div className="border-t border-border px-3 pt-2 flex items-center gap-2 bg-muted/30">
+              <Reply className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <span className="text-[10px] font-montserrat font-bold text-primary">{replyTo.user_name.split(" ")[0]}</span>
+                <p className="text-[10px] font-inter text-muted-foreground truncate">{replyTo.message.slice(0, 60)}</p>
+              </div>
+              <button onClick={() => setReplyTo(null)} className="text-muted-foreground hover:text-foreground p-0.5">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Input */}
-          <div className="border-t border-border p-3 flex gap-2">
+          <div className={`border-t border-border p-3 flex gap-2 ${replyTo ? "pt-2" : ""}`}>
             <Input
               placeholder="Mensagem para a turma..."
               value={chatInput}
