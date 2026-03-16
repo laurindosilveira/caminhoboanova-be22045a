@@ -586,6 +586,23 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, onOpenEd
             {!isStudyLocked && <span className="text-secondary font-montserrat font-bold text-lg">→</span>}
           </button>
         )}
+
+        {/* Editar conteúdo — leaders/admins only */}
+        {onOpenEdit && isLeaderOrAdmin && (
+          <button onClick={onOpenEdit}
+            className="flex items-center gap-4 p-5 bg-card rounded-2xl border border-primary/20 shadow-sm text-left hover:bg-primary/5 hover:border-primary/40 transition-all group">
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition-colors">
+              <Pencil className="w-7 h-7 text-primary" />
+            </div>
+            <div className="flex-1">
+              <p className="font-montserrat font-bold text-foreground text-base">✏️ Editar Conteúdo</p>
+              <p className="text-muted-foreground font-inter text-xs mt-0.5">
+                Editar saudação, perguntas, textos bíblicos e recursos
+              </p>
+            </div>
+            <span className="text-primary font-montserrat font-bold text-lg">→</span>
+          </button>
+        )}
       </div>
     </div>
   );
