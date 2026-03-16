@@ -224,12 +224,25 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, schedule
       setCompletedIds(new Set(progList.map((p: any) => p.devotional_id)));
       setCompletedDates(completedMap);
 
-      if (isLeaderOrAdmin || isLateAccess) {
-        // Leaders/admins and late access: all devotionals are available (no date locks)
+      if (isLeaderOrAdmin) {
         const allAvailable = new Map<string, DevotionalStatus>();
         devList.forEach(d => allAvailable.set(d.id, completedMap.has(d.id) ? "completed" : "available"));
         setDevStatuses(allAvailable);
         setLockedIds(new Set());
+      } else if (isLateAccess) {
+        // Late access: only already-completed devotionals stay, rest are locked
+        const lateStatuses = new Map<string, DevotionalStatus>();
+        const lateLockedSet = new Set<string>();
+        devList.forEach(d => {
+          if (completedMap.has(d.id)) {
+            lateStatuses.set(d.id, "completed");
+          } else {
+            lateStatuses.set(d.id, "locked");
+            lateLockedSet.add(d.id);
+          }
+        });
+        setDevStatuses(lateStatuses);
+        setLockedIds(lateLockedSet);
       } else {
         const { statuses, lockedSet } = computeDevotionalStatuses(devList, completedMap, scheduledDevotionalDates);
         setDevStatuses(statuses);
