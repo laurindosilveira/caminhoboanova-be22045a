@@ -182,18 +182,31 @@ export default function ClassroomTab() {
   async function sendChat() {
     if (!chatInput.trim() || !community || !myUserId) return;
     setSendingChat(true);
+    const msgText = chatInput.trim();
+    const replyTarget = replyTo;
     await supabase.from("community_chat").insert({
       community,
       user_id: myUserId,
       user_name: myName,
-      message: chatInput.trim(),
-      reply_to: replyTo?.id ?? null,
-      reply_to_name: replyTo?.user_name ?? null,
-      reply_to_text: replyTo ? replyTo.message.slice(0, 80) : null,
+      message: msgText,
+      reply_to: replyTarget?.id ?? null,
+      reply_to_name: replyTarget?.user_name ?? null,
+      reply_to_text: replyTarget ? replyTarget.message.slice(0, 80) : null,
     } as any);
     setChatInput("");
     setReplyTo(null);
     setSendingChat(false);
+
+    // Send push notification to the original author (fire-and-forget)
+    if (replyTarget && replyTarget.user_id !== myUserId) {
+      supabase.functions.invoke("notify-chat-reply", {
+        body: {
+          target_user_id: replyTarget.user_id,
+          sender_name: myName,
+          message_preview: msgText,
+        },
+      }).catch(() => {});
+    }
   }
 
   async function sendPrayer() {
