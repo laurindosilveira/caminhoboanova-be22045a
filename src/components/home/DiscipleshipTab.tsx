@@ -221,7 +221,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
   }
 
   // ── Waiting room ──
-  if (!profile?.turma_id) {
+  if (!profile?.turma_id && !isLeaderOrAdmin) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
         <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
