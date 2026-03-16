@@ -455,7 +455,10 @@ export default function CommunityTab() {
             </div>
           )}
 
-          {/* ✨ Testemunhos */}
+          {/* 📊 Enquetes */}
+          <PollsSection />
+
+
           <div>
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="w-4 h-4 text-secondary" />
