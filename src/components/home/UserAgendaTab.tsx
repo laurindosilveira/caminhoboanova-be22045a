@@ -468,13 +468,19 @@ export default function UserAgendaTab() {
       {/* ── CONFIRMAÇÃO DE PRESENÇA EM EVENTOS ──── */}
       <WorshipConfirmation />
 
-      {loading ? (
+      {/* ── CALENDAR VIEW ──── */}
+      {viewMode === "calendar" && !loading && (
+        <CalendarView events={events} />
+      )}
+
+      {/* ── LIST VIEW ──── */}
+      {viewMode === "list" && loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => (
             <div key={i} className="bg-muted rounded-2xl h-24 animate-pulse" />
           ))}
         </div>
-      ) : upcoming.length === 0 && past.length === 0 ? (
+      ) : viewMode === "list" && upcoming.length === 0 && past.length === 0 ? (
         <div className="bg-card rounded-2xl border border-border p-8 text-center shadow-sm">
           <CalendarDays className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
           <p className="font-montserrat font-bold text-foreground text-base mb-1">Nenhum evento cadastrado</p>
