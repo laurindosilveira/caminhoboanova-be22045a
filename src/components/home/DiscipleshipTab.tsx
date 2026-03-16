@@ -22,9 +22,9 @@ import CourseTrailSection from "./discipleship/CourseTrailSection";
 
 // ─── Sub-tabs ─────────────────────────────────────────────
 const SUB_TABS = [
-  { key: "trilha" as const, label: "Trilha", icon: GraduationCap, color: "hsl(28, 100%, 50%)", bg: "bg-secondary/15" },
-  { key: "saude" as const, label: "Saúde", icon: Heart, color: "hsl(142, 71%, 45%)", bg: "bg-brand-green/15" },
-  { key: "crescimento" as const, label: "Crescimento", icon: Sparkles, color: "hsl(217, 91%, 33%)", bg: "bg-primary/15" },
+  { key: "trilha" as const, label: "Trilha", icon: GraduationCap, activeIconClass: "text-secondary" },
+  { key: "saude" as const, label: "Saúde", icon: Heart, activeIconClass: "text-brand-green" },
+  { key: "crescimento" as const, label: "Crescimento", icon: Sparkles, activeIconClass: "text-primary" },
 ];
 type SubTab = typeof SUB_TABS[number]["key"];
 
