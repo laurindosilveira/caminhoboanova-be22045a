@@ -650,7 +650,8 @@ export default function ClassroomTab() {
                           }`}
                           style={isMe ? { background: "var(--gradient-hero)" } : undefined}
                         >
-                          {msg.message}
+                          {(!msg.file_url || (msg.message && msg.message !== "📷 Imagem" && msg.message !== "🎵 Áudio")) && msg.message}
+                          {renderFileContent(msg)}
                         </div>
                         <div className="flex items-center gap-1 mt-0.5 px-1">
                           <span className="text-[10px] text-muted-foreground">
