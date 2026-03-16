@@ -7,6 +7,7 @@ import AnnouncementsSection from "./AnnouncementsSection";
 import LeaderRoomSection from "./LeaderRoomSection";
 import PollsSection from "./PollsSection";
 import CommunityAchievements from "./CommunityAchievements";
+import PrayerPairsSection from "./PrayerPairsSection";
 
 const REACTION_EMOJIS = [
   { emoji: "🙏", label: "orando" },
