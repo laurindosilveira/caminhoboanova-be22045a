@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Send, MessageSquare, Heart, BookOpen, ExternalLink, Eye, EyeOff, Trash2, CheckCircle, Reply, X, ChevronRight, MessageCircle } from "lucide-react";
+import { Send, MessageSquare, Heart, BookOpen, ExternalLink, Eye, EyeOff, Trash2, CheckCircle, Reply, X, ChevronRight, MessageCircle, Paperclip, Image, Mic, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+
+const ACCEPTED_IMAGES = "image/jpeg,image/png,image/webp";
+const ACCEPTED_AUDIO = "audio/mpeg,audio/wav,audio/mp4,audio/webm";
 
 interface ChatMessage {
   id: string;
@@ -17,6 +20,8 @@ interface ChatMessage {
   reply_to: string | null;
   reply_to_name: string | null;
   reply_to_text: string | null;
+  file_url: string | null;
+  file_type: string | null;
 }
 
 interface PrayerRequest {
