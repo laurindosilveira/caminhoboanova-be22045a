@@ -21,6 +21,7 @@ import StreakRiskReminder from "@/components/home/StreakRiskReminder";
 import UserAgendaTab from "@/components/home/UserAgendaTab";
 import NotificationSettings from "@/components/home/NotificationSettings";
 import InstallAppCard from "@/components/home/InstallAppCard";
+import TypingMetricsPanel from "@/components/home/TypingMetricsPanel";
 import PushActivationBanner from "@/components/home/PushActivationBanner";
 import ConversationReminderBanner from "@/components/home/ConversationReminderBanner";
 import BottomNav, { type Tab } from "@/components/home/BottomNav";
@@ -130,6 +131,7 @@ export default function Index() {
               streakDays={stats.streakDays}
               completedCount={stats.completedCount}
             />
+            <TypingMetricsPanel />
           </div>
         )}
 
