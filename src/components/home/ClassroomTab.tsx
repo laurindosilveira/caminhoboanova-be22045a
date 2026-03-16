@@ -188,22 +188,73 @@ export default function ClassroomTab() {
   }, [chatMessages]);
 
   // ---- Actions ----
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const isImage = file.type.startsWith("image/");
+    const isAudio = file.type.startsWith("audio/");
+    if (!isImage && !isAudio) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Arquivo muito grande (máx. 10MB)");
+      return;
+    }
+    setAttachedFile(file);
+    if (isImage) {
+      setFilePreviewUrl(URL.createObjectURL(file));
+    } else {
+      setFilePreviewUrl(null);
+    }
+    // Reset input so same file can be re-selected
+    e.target.value = "";
+  }
+
+  function clearAttachment() {
+    setAttachedFile(null);
+    if (filePreviewUrl) {
+      URL.revokeObjectURL(filePreviewUrl);
+      setFilePreviewUrl(null);
+    }
+  }
+
   async function sendChat() {
-    if (!chatInput.trim() || !community || !myUserId) return;
+    if ((!chatInput.trim() && !attachedFile) || !community || !myUserId) return;
     setSendingChat(true);
     const msgText = chatInput.trim();
     const replyTarget = replyTo;
+
+    let fileUrl: string | null = null;
+    let fileType: string | null = null;
+
+    // Upload file if attached
+    if (attachedFile) {
+      setUploadingFile(true);
+      const ext = attachedFile.name.split(".").pop() || "bin";
+      const path = `${myUserId}/${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage
+        .from("chat-files")
+        .upload(path, attachedFile, { cacheControl: "3600", upsert: false });
+      if (!uploadErr) {
+        const { data: urlData } = supabase.storage.from("chat-files").getPublicUrl(path);
+        fileUrl = urlData.publicUrl;
+        fileType = attachedFile.type.startsWith("image/") ? "image" : "audio";
+      }
+      setUploadingFile(false);
+    }
+
     await supabase.from("community_chat").insert({
       community,
       user_id: myUserId,
       user_name: myName,
-      message: msgText,
+      message: msgText || (fileType === "image" ? "📷 Imagem" : "🎵 Áudio"),
       reply_to: replyTarget?.id ?? null,
       reply_to_name: replyTarget?.user_name ?? null,
       reply_to_text: replyTarget ? replyTarget.message.slice(0, 80) : null,
+      file_url: fileUrl,
+      file_type: fileType,
     } as any);
     setChatInput("");
     setReplyTo(null);
+    clearAttachment();
     setSendingChat(false);
 
     // Send push notification to the original author (fire-and-forget)
@@ -212,7 +263,7 @@ export default function ClassroomTab() {
         body: {
           target_user_id: replyTarget.user_id,
           sender_name: myName,
-          message_preview: msgText,
+          message_preview: msgText || (fileType === "image" ? "📷 Imagem" : "🎵 Áudio"),
         },
       }).catch(() => {});
     }
