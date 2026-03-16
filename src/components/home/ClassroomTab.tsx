@@ -14,6 +14,9 @@ interface ChatMessage {
   message: string;
   created_at: string;
   community: string;
+  reply_to: string | null;
+  reply_to_name: string | null;
+  reply_to_text: string | null;
 }
 
 interface PrayerRequest {
