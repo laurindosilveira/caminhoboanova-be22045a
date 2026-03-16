@@ -43,6 +43,8 @@ type Props = {
   isStudyLocked?: boolean;
   /** Whether this is late access (after event date — no points) */
   isLateAccess?: boolean;
+  /** Whether the study (lesson responses) has been completed */
+  isStudyCompleted?: boolean;
 };
 
 /**
