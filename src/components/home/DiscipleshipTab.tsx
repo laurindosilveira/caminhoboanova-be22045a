@@ -5,6 +5,7 @@ import { Heart, GraduationCap, Sparkles, Lock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import JourneyLessonView from "@/components/home/JourneyLessonView";
 import LessonContentEditor from "@/components/admin/tabs/LessonContentEditor";
+import LessonDevotionalEditor from "@/components/admin/tabs/LessonDevotionalEditor";
 import LessonChoiceView from "@/components/home/LessonChoiceView";
 import ResourceLibrary from "@/components/home/ResourceLibrary";
 import { useAgendaSchedule } from "@/hooks/useAgendaSchedule";
