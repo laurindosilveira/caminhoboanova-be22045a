@@ -486,7 +486,7 @@ export default function UserAgendaTab() {
           <p className="font-montserrat font-bold text-foreground text-base mb-1">Nenhum evento cadastrado</p>
           <p className="text-muted-foreground text-sm font-inter">Os próximos encontros e eventos aparecerão aqui.</p>
         </div>
-      ) : (
+      ) : viewMode === "list" ? (
         <>
           {upcoming.length > 0 && (
             <div className="space-y-3">
