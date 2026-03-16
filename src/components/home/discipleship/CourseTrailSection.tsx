@@ -8,7 +8,7 @@ type AgendaSchedule = {
   scheduledLessonIds: Set<string>;
   studyOpenLessonIds: Set<string>;
   lateAccessLessonIds: Set<string>;
-  lessonEventDate: Map<string, string>;
+  lessonEventDate: Map<string, Date>;
   lessonDevotionalDates: Map<string, string[]>;
   schedule: { lessonId: string; windowStart: Date }[];
 };
