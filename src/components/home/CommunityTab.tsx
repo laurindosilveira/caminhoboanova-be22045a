@@ -463,6 +463,9 @@ export default function CommunityTab() {
           {/* 📊 Enquetes */}
           <PollsSection />
 
+          {/* 🙏 Dupla de Oração */}
+          <PrayerPairsSection />
+
 
           <div>
             <div className="flex items-center gap-2 mb-3">
