@@ -131,6 +131,7 @@ export default function Index() {
               streakDays={stats.streakDays}
               completedCount={stats.completedCount}
             />
+            <TypingMetricsPanel />
           </div>
         )}
 
