@@ -82,6 +82,7 @@ const FAQ = [
 
 export default function Apresentacao() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  // landing page v2
 
   return (
     <div className="min-h-screen bg-white text-gray-900 overflow-x-hidden">
