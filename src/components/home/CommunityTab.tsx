@@ -5,6 +5,7 @@ import { MessageCircle, GraduationCap, Cake, Sparkles, Send, Trash2, Target, Che
 import ClassroomTab from "./ClassroomTab";
 import AnnouncementsSection from "./AnnouncementsSection";
 import LeaderRoomSection from "./LeaderRoomSection";
+import PollsSection from "./PollsSection";
 
 const REACTION_EMOJIS = [
   { emoji: "🙏", label: "orando" },
@@ -454,7 +455,10 @@ export default function CommunityTab() {
             </div>
           )}
 
-          {/* ✨ Testemunhos */}
+          {/* 📊 Enquetes */}
+          <PollsSection />
+
+
           <div>
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="w-4 h-4 text-secondary" />

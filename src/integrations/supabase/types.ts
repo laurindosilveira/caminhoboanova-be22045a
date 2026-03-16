@@ -988,6 +988,77 @@ export type Database = {
         }
         Relationships: []
       }
+      poll_votes: {
+        Row: {
+          id: string
+          option_index: number
+          poll_id: string
+          user_id: string
+          voted_at: string
+        }
+        Insert: {
+          id?: string
+          option_index: number
+          poll_id: string
+          user_id: string
+          voted_at?: string
+        }
+        Update: {
+          id?: string
+          option_index?: number
+          poll_id?: string
+          user_id?: string
+          voted_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poll_votes_poll_id_fkey"
+            columns: ["poll_id"]
+            isOneToOne: false
+            referencedRelation: "polls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      polls: {
+        Row: {
+          area: string | null
+          community: string
+          created_at: string
+          created_by: string
+          emoji: string
+          ends_at: string | null
+          id: string
+          is_active: boolean
+          options: string[]
+          question: string
+        }
+        Insert: {
+          area?: string | null
+          community: string
+          created_at?: string
+          created_by: string
+          emoji?: string
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          options?: string[]
+          question: string
+        }
+        Update: {
+          area?: string | null
+          community?: string
+          created_at?: string
+          created_by?: string
+          emoji?: string
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          options?: string[]
+          question?: string
+        }
+        Relationships: []
+      }
       prayer_requests: {
         Row: {
           amen_count: number
