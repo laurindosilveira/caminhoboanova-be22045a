@@ -345,6 +345,13 @@ export default function CommunityTab() {
         <LeaderRoomSection asTab />
       )}
 
+      {/* ===== GALERIA ===== */}
+      {subTab === "galeria" && (
+        <div className="px-5">
+          <EventPhotoGallery />
+        </div>
+      )}
+
       {/* ===== SALA DA TURMA ===== */}
       {subTab === "sala" && <ClassroomTab />}
 
