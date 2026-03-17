@@ -194,6 +194,88 @@ export default function ClassroomTab() {
     return () => { supabase.removeChannel(channel); };
   }, [community]);
 
+  // ---- Presence: typing indicator + online status ----
+  useEffect(() => {
+    if (!community || !myUserId || !myName) return;
+
+    const presenceChannel = supabase.channel(`presence:${community}`, {
+      config: { presence: { key: myUserId } },
+    });
+
+    presenceChannel
+      .on("presence", { event: "sync" }, () => {
+        const state = presenceChannel.presenceState();
+        const allUsers = Object.keys(state);
+        setOnlineCount(allUsers.length);
+        
+        // Extract typing users
+        const typing: string[] = [];
+        for (const [uid, presences] of Object.entries(state)) {
+          const p = presences as any[];
+          if (p.some((pr: any) => pr.typing) && uid !== myUserId) {
+            const name = p[0]?.name?.split(" ")[0] || "Alguém";
+            typing.push(name);
+          }
+        }
+        setTypingUsers(typing);
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await presenceChannel.track({ name: myName, typing: false });
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(presenceChannel);
+    };
+  }, [community, myUserId, myName]);
+
+  // Broadcast typing status
+  const broadcastTyping = useCallback(() => {
+    if (!community || !myUserId) return;
+    const now = Date.now();
+    if (now - lastTypingBroadcast.current < 2000) return; // throttle
+    lastTypingBroadcast.current = now;
+
+    const channel = supabase.channel(`presence:${community}`);
+    channel.track({ name: myName, typing: true });
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      channel.track({ name: myName, typing: false });
+    }, 3000);
+  }, [community, myUserId, myName]);
+
+  // Load more messages (infinite scroll up)
+  const loadMoreMessages = useCallback(async () => {
+    if (!community || loadingMore || !hasMore || chatMessages.length === 0) return;
+    setLoadingMore(true);
+    const oldestDate = chatMessages[0]?.created_at;
+    const { data } = await supabase
+      .from("community_chat")
+      .select("*")
+      .eq("community", community)
+      .lt("created_at", oldestDate)
+      .order("created_at", { ascending: false })
+      .limit(PAGE_SIZE);
+
+    if (!data || data.length === 0) {
+      setHasMore(false);
+    } else {
+      setChatMessages(prev => [...(data as ChatMessage[]).reverse(), ...prev]);
+      if (data.length < PAGE_SIZE) setHasMore(false);
+    }
+    setLoadingMore(false);
+  }, [community, loadingMore, hasMore, chatMessages]);
+
+  // Handle chat scroll for infinite scroll
+  const handleChatScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (el.scrollTop < 40 && hasMore && !loadingMore) {
+      loadMoreMessages();
+    }
+  }, [hasMore, loadingMore, loadMoreMessages]);
+
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
