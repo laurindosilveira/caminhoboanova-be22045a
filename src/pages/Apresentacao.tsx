@@ -36,11 +36,6 @@ const STATS = [
   { value: "24/7", label: "Acesso multiplataforma", icon: Globe },
 ];
 
-const TESTIMONIALS = [
-  { name: "Pastor Ricardo M.", church: "Igreja Renascer", text: "O app transformou nosso discipulado. Antes perdíamos o contato durante a semana, agora os jovens estão engajados todos os dias com os devocionais.", avatar: "🧑‍💼" },
-  { name: "Líder Ana Paula", church: "Comunidade Vida Nova", text: "O termômetro espiritual me permitiu identificar membros em dificuldade antes que se afastassem. É uma ferramenta pastoral indispensável.", avatar: "👩‍💻" },
-  { name: "Pr. Marcos Silva", church: "Igreja Fonte da Vida", text: "A gamificação trouxe uma energia incrível. Os jovens competem de forma saudável e aprendem mais sobre a Palavra.", avatar: "👨‍🏫" },
-];
 
 const PLANS = [
   {
