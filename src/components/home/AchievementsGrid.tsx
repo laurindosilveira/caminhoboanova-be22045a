@@ -214,6 +214,9 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     { id: 17, key: "apto", icon: "✝️", title: "Pronto para a Profissão de Fé", desc: "Seu pastor confirmou: você está pronto!", unlocked: isApto, current: isApto ? 1 : 0, target: 1, secret: true, bonusPoints: 50 },
   ];
 
+  // Track newly unlocked for animation
+  const [newlyUnlockedKeys, setNewlyUnlockedKeys] = useState<Set<string>>(new Set());
+
   // Auto-save newly unlocked achievements
   useEffect(() => {
     async function saveNewUnlocks() {
@@ -222,6 +225,9 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
 
       const newlyUnlocked = achievements.filter(a => a.unlocked && !unlockedKeys.has(a.key));
       if (newlyUnlocked.length === 0) return;
+
+      // Track for animation
+      setNewlyUnlockedKeys(new Set(newlyUnlocked.map(a => a.key)));
 
       for (const a of newlyUnlocked) {
         await supabase.from("achievement_unlocks").insert({
@@ -242,6 +248,12 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
         description: newlyUnlocked.map(a => `${a.icon} ${a.title}`).join(" · "),
         duration: 5000,
       });
+
+      // Fire confetti for unlock
+      confetti({ particleCount: 60, spread: 70, origin: { y: 0.6 } });
+
+      // Clear animation state after delay
+      setTimeout(() => setNewlyUnlockedKeys(new Set()), 3000);
     }
     saveNewUnlocks();
   // eslint-disable-next-line react-hooks/exhaustive-deps
