@@ -73,6 +73,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
   const [videoWatched, setVideoWatched] = useState(false);
   const [audioListened, setAudioListened] = useState(false);
   const [saveAttempted, setSaveAttempted] = useState(false);
+  const [showCompletionAnim, setShowCompletionAnim] = useState(false);
 
   // Load lesson content from DB (set by admin)
   useEffect(() => {
