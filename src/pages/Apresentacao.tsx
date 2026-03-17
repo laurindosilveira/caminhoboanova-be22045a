@@ -7,7 +7,7 @@ import {
   BookOpen, Users, Calendar, Bell, BarChart3, Shield, MessageCircle,
   Trophy, Heart, ChevronDown, Check, Star, Smartphone,
   TrendingUp, Clock, Globe, ArrowRight, Church, Sparkles,
-  Menu, X
+  Menu, X, Play
 } from "lucide-react";
 import heroPhone from "@/assets/landing-hero-phone.png";
 import communityImg from "@/assets/landing-community.png";
@@ -196,6 +196,7 @@ export default function Apresentacao() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showVideo, setShowVideo] = useState(false);
 
   // Show toast on checkout return
   useEffect(() => {
@@ -573,6 +574,42 @@ export default function Apresentacao() {
               </motion.div>
             ))}
           </div>
+
+          {/* Vídeo demonstração */}
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={4}
+            className="mt-16 max-w-3xl mx-auto"
+          >
+            <div className="text-center mb-6">
+              <h3 className="font-montserrat font-bold text-xl text-foreground mb-2">🎬 Veja o Caminho em ação</h3>
+              <p className="text-muted-foreground text-sm font-inter">Assista uma demonstração rápida e descubra como o app funciona na prática.</p>
+            </div>
+            <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-primary/10 border border-border bg-card aspect-video">
+              {showVideo ? (
+                <iframe
+                  src="https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0"
+                  title="Demonstração do app Caminho"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="absolute inset-0 w-full h-full"
+                />
+              ) : (
+                <button
+                  onClick={() => setShowVideo(true)}
+                  className="absolute inset-0 w-full h-full flex flex-col items-center justify-center gap-4 group cursor-pointer"
+                  style={{ background: "var(--gradient-hero)" }}
+                  aria-label="Reproduzir vídeo de demonstração"
+                >
+                  <div className="w-20 h-20 rounded-full bg-primary-foreground/20 backdrop-blur-sm flex items-center justify-center group-hover:scale-110 group-hover:bg-primary-foreground/30 transition-all duration-300 shadow-lg">
+                    <Play className="w-9 h-9 text-primary-foreground ml-1" fill="currentColor" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-primary-foreground font-montserrat font-bold text-lg">Assistir demonstração</p>
+                    <p className="text-primary-foreground/60 font-inter text-sm mt-1">1 minuto • Visão geral do app</p>
+                  </div>
+                </button>
+              )}
+            </div>
+          </motion.div>
         </div>
       </section>
 
