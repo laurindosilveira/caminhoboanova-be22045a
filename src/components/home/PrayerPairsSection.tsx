@@ -36,7 +36,6 @@ export default function PrayerPairsSection() {
     if (!user) return;
     setLoading(true);
 
-    // Get current week's Monday
     const now = new Date();
     const dayOfWeek = now.getDay();
     const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
@@ -56,7 +55,7 @@ export default function PrayerPairsSection() {
   }
 
   async function confirmPrayer() {
-    if (!pair || !user) return;
+    if (!pair || !user || !profile) return;
     setSubmitting(true);
 
     const isA = pair.user_a_id === user.id;
@@ -75,6 +74,15 @@ export default function PrayerPairsSection() {
       toast({ title: "🙏 Confirmado!", description: "Obrigado por orar pela sua dupla!" });
       setPair(prev => prev ? { ...prev, ...updateData } : null);
       setTestimony("");
+
+      // Send push notification to partner (fire-and-forget)
+      const partnerId = isA ? pair.user_b_id : pair.user_a_id;
+      supabase.functions.invoke("notify-prayer-confirm", {
+        body: {
+          partner_user_id: partnerId,
+          sender_name: profile.full_name,
+        },
+      }).catch(() => {});
     }
     setSubmitting(false);
   }

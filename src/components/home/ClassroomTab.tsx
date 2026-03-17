@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Send, MessageSquare, Heart, BookOpen, ExternalLink, Eye, EyeOff, Trash2, CheckCircle, Reply, X, ChevronRight, MessageCircle, Paperclip, Image, Mic, XCircle } from "lucide-react";
+import { Send, MessageSquare, Heart, BookOpen, ExternalLink, Eye, EyeOff, Trash2, CheckCircle, Reply, X, ChevronRight, MessageCircle, Paperclip, Image, Mic, XCircle, Loader2, Wifi } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +67,18 @@ export default function ClassroomTab() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // Infinite scroll
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const PAGE_SIZE = 50;
+
+  // Typing indicator & online status
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [onlineCount, setOnlineCount] = useState(0);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingBroadcast = useRef(0);
 
   // Orações
   const [prayers, setPrayers] = useState<PrayerRequest[]>([]);
@@ -181,6 +193,88 @@ export default function ClassroomTab() {
 
     return () => { supabase.removeChannel(channel); };
   }, [community]);
+
+  // ---- Presence: typing indicator + online status ----
+  useEffect(() => {
+    if (!community || !myUserId || !myName) return;
+
+    const presenceChannel = supabase.channel(`presence:${community}`, {
+      config: { presence: { key: myUserId } },
+    });
+
+    presenceChannel
+      .on("presence", { event: "sync" }, () => {
+        const state = presenceChannel.presenceState();
+        const allUsers = Object.keys(state);
+        setOnlineCount(allUsers.length);
+        
+        // Extract typing users
+        const typing: string[] = [];
+        for (const [uid, presences] of Object.entries(state)) {
+          const p = presences as any[];
+          if (p.some((pr: any) => pr.typing) && uid !== myUserId) {
+            const name = p[0]?.name?.split(" ")[0] || "Alguém";
+            typing.push(name);
+          }
+        }
+        setTypingUsers(typing);
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await presenceChannel.track({ name: myName, typing: false });
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(presenceChannel);
+    };
+  }, [community, myUserId, myName]);
+
+  // Broadcast typing status
+  const broadcastTyping = useCallback(() => {
+    if (!community || !myUserId) return;
+    const now = Date.now();
+    if (now - lastTypingBroadcast.current < 2000) return; // throttle
+    lastTypingBroadcast.current = now;
+
+    const channel = supabase.channel(`presence:${community}`);
+    channel.track({ name: myName, typing: true });
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      channel.track({ name: myName, typing: false });
+    }, 3000);
+  }, [community, myUserId, myName]);
+
+  // Load more messages (infinite scroll up)
+  const loadMoreMessages = useCallback(async () => {
+    if (!community || loadingMore || !hasMore || chatMessages.length === 0) return;
+    setLoadingMore(true);
+    const oldestDate = chatMessages[0]?.created_at;
+    const { data } = await supabase
+      .from("community_chat")
+      .select("*")
+      .eq("community", community)
+      .lt("created_at", oldestDate)
+      .order("created_at", { ascending: false })
+      .limit(PAGE_SIZE);
+
+    if (!data || data.length === 0) {
+      setHasMore(false);
+    } else {
+      setChatMessages(prev => [...(data as ChatMessage[]).reverse(), ...prev]);
+      if (data.length < PAGE_SIZE) setHasMore(false);
+    }
+    setLoadingMore(false);
+  }, [community, loadingMore, hasMore, chatMessages]);
+
+  // Handle chat scroll for infinite scroll
+  const handleChatScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (el.scrollTop < 40 && hasMore && !loadingMore) {
+      loadMoreMessages();
+    }
+  }, [hasMore, loadingMore, loadMoreMessages]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -564,7 +658,15 @@ export default function ClassroomTab() {
         <div className="flex items-center gap-2 mb-3">
           <MessageSquare className="w-4 h-4 text-primary" />
           <span className="font-montserrat font-bold text-foreground text-sm">Chat da Turma</span>
-          <span className="text-xs text-muted-foreground font-inter ml-auto">tempo real</span>
+          <div className="flex items-center gap-2 ml-auto">
+            {onlineCount > 0 && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-inter text-muted-foreground">
+                <Wifi className="w-3 h-3 text-brand-green" />
+                {onlineCount} online
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground font-inter">tempo real</span>
+          </div>
         </div>
 
         {/* Messages */}
@@ -604,7 +706,15 @@ export default function ClassroomTab() {
               </>
             );
           })() : (
-            <div className="h-64 overflow-y-auto p-3 space-y-2">
+            <div ref={chatContainerRef} className="h-64 overflow-y-auto p-3 space-y-2" onScroll={handleChatScroll}>
+              {loadingMore && (
+                <div className="flex justify-center py-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              {!hasMore && chatMessages.length > PAGE_SIZE && (
+                <p className="text-center text-[10px] text-muted-foreground font-inter py-1">Início da conversa</p>
+              )}
               {chatMessages.length === 0 ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
@@ -740,6 +850,20 @@ export default function ClassroomTab() {
             onChange={handleFileSelect}
           />
 
+          {/* Typing indicator */}
+          {typingUsers.length > 0 && (
+            <div className="border-t border-border px-3 py-1.5 bg-muted/20">
+              <p className="text-[10px] font-inter text-muted-foreground animate-pulse">
+                {typingUsers.length === 1
+                  ? `${typingUsers[0]} está digitando...`
+                  : typingUsers.length === 2
+                  ? `${typingUsers[0]} e ${typingUsers[1]} estão digitando...`
+                  : `${typingUsers[0]} e mais ${typingUsers.length - 1} estão digitando...`
+                }
+              </p>
+            </div>
+          )}
+
           {/* Input */}
           <div className={`border-t border-border p-3 flex items-center gap-2 ${replyTo || attachedFile ? "pt-2" : ""}`}>
             {/* Attachment buttons */}
@@ -772,7 +896,7 @@ export default function ClassroomTab() {
             <Input
               placeholder={threadRootId ? "Responder na thread..." : "Mensagem para a turma..."}
               value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
+              onChange={(e) => { setChatInput(e.target.value); broadcastTyping(); }}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendChat()}
               className="flex-1 h-9 text-sm border-border rounded-xl"
               maxLength={500}
