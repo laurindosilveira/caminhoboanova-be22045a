@@ -6,7 +6,8 @@ import { toast } from "@/hooks/use-toast";
 import {
   BookOpen, Users, Calendar, Bell, BarChart3, Shield, MessageCircle,
   Trophy, Heart, ChevronDown, Check, Star, Smartphone,
-  TrendingUp, Clock, Globe, ArrowRight, Church, Sparkles
+  TrendingUp, Clock, Globe, ArrowRight, Church, Sparkles,
+  Menu, X
 } from "lucide-react";
 import heroPhone from "@/assets/landing-hero-phone.png";
 import communityImg from "@/assets/landing-community.png";
