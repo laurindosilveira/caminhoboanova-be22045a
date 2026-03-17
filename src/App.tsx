@@ -16,6 +16,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import Install from "./pages/Install";
 import ExportData from "./pages/ExportData";
 import Apresentacao from "./pages/Apresentacao";
+import MinhaIgreja from "./pages/MinhaIgreja";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
