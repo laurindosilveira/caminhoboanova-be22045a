@@ -193,6 +193,34 @@ const FAQ = [
 
 export default function Apresentacao() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+
+  // Show toast on checkout return
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("checkout") === "success") {
+      toast({ title: "🎉 Assinatura realizada!", description: "Bem-vindo ao Caminho Boa Nova! Você receberá um email de confirmação." });
+      window.history.replaceState({}, "", "/apresentacao");
+    } else if (params.get("checkout") === "cancel") {
+      toast({ title: "Checkout cancelado", description: "Você pode assinar a qualquer momento." });
+      window.history.replaceState({}, "", "/apresentacao");
+    }
+  }, []);
+
+  const handleCheckout = useCallback(async (priceId: string) => {
+    setCheckoutLoading(priceId);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: { priceId },
+      });
+      if (error) throw error;
+      if (data?.url) window.location.href = data.url;
+    } catch (err: any) {
+      toast({ title: "Erro", description: "Não foi possível iniciar o checkout. Tente novamente.", variant: "destructive" });
+    } finally {
+      setCheckoutLoading(null);
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
