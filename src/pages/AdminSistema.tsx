@@ -49,11 +49,14 @@ export default function AdminSistema() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
+  const ALLOWED_EMAILS = ["laurindosilveira@gmail.com"];
+  const isAllowed = isSuper && user?.email && ALLOWED_EMAILS.includes(user.email);
+
   useEffect(() => {
-    if (!authLoading && (!user || !isSuper)) {
+    if (!authLoading && (!user || !isAllowed)) {
       navigate("/", { replace: true });
     }
-  }, [user, isSuper, authLoading, navigate]);
+  }, [user, isAllowed, authLoading, navigate]);
 
   useEffect(() => {
     if (user && isSuper) fetchChurches();
