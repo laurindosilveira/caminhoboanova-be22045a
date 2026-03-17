@@ -433,6 +433,96 @@ export default function Apresentacao() {
         </div>
       </section>
 
+      {/* ─── ANTES vs DEPOIS ────────────────────────────── */}
+      <section className="py-20 lg:py-28">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0} className="text-center max-w-2xl mx-auto mb-16">
+            <p className="text-primary font-inter font-semibold text-sm uppercase tracking-wider mb-3">Transformação real</p>
+            <h2 className="text-3xl sm:text-4xl font-montserrat font-black tracking-tight mb-4 text-foreground">
+              Antes e depois do <span className="bg-clip-text text-transparent" style={{ backgroundImage: "var(--gradient-hero)" }}>Caminho</span>
+            </h2>
+            <p className="text-muted-foreground text-lg font-inter">Veja como o app transforma a realidade do discipulado na sua igreja.</p>
+          </motion.div>
+
+          <div className="grid md:grid-cols-2 gap-6 lg:gap-8">
+            {/* ANTES */}
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={1}
+              className="relative rounded-2xl border border-destructive/20 bg-destructive/5 p-6 sm:p-8 space-y-5"
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center">
+                  <X className="w-5 h-5 text-destructive" />
+                </div>
+                <h3 className="font-montserrat font-black text-xl text-destructive">Antes do Caminho</h3>
+              </div>
+              {[
+                { title: "Comunicação dispersa", desc: "Múltiplos grupos de WhatsApp sem organização. Avisos se perdem entre memes e conversas." },
+                { title: "Acompanhamento manual", desc: "Pastor anota presenças em caderno. Não sabe quem está afastado até ser tarde demais." },
+                { title: "Engajamento baixo", desc: "Jovens só aparecem no domingo. Sem conexão diária com a fé durante a semana." },
+                { title: "Sem métricas", desc: "Impossível medir crescimento espiritual. Decisões pastorais baseadas apenas em intuição." },
+                { title: "Formação inconsistente", desc: "Material impresso que se perde. Cada líder ensina de um jeito diferente." },
+              ].map((item, i) => (
+                <div key={i} className="flex gap-3">
+                  <div className="w-5 h-5 rounded-full bg-destructive/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <X className="w-3 h-3 text-destructive" />
+                  </div>
+                  <div>
+                    <p className="font-montserrat font-bold text-sm text-foreground">{item.title}</p>
+                    <p className="text-muted-foreground text-xs font-inter mt-0.5 leading-relaxed">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </motion.div>
+
+            {/* DEPOIS */}
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={2}
+              className="relative rounded-2xl border border-primary/20 bg-primary/5 p-6 sm:p-8 space-y-5"
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Check className="w-5 h-5 text-primary" />
+                </div>
+                <h3 className="font-montserrat font-black text-xl text-primary">Depois do Caminho</h3>
+              </div>
+              {[
+                { title: "Comunicação centralizada", desc: "Chat, avisos e enquetes em um só lugar. Todos recebem notificações push instantâneas." },
+                { title: "Acompanhamento em tempo real", desc: "Dashboard mostra quem está ativo, quem completou devocionais e quem precisa de atenção pastoral." },
+                { title: "Engajamento diário", desc: "Gamificação, streaks e conquistas mantêm jovens conectados à fé todos os dias da semana." },
+                { title: "Dados e relatórios claros", desc: "Métricas de presença, progresso espiritual e relatórios pastorais automáticos para decisões assertivas." },
+                { title: "Formação estruturada", desc: "28+ lições organizadas em cursos, com guia do líder, devocionais e avaliações integradas." },
+              ].map((item, i) => (
+                <div key={i} className="flex gap-3">
+                  <div className="w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Check className="w-3 h-3 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-montserrat font-bold text-sm text-foreground">{item.title}</p>
+                    <p className="text-muted-foreground text-xs font-inter mt-0.5 leading-relaxed">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </motion.div>
+          </div>
+
+          {/* Highlight stats */}
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={3}
+            className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-4"
+          >
+            {[
+              { value: "3x", label: "mais engajamento semanal" },
+              { value: "85%", label: "dos membros ativos diariamente" },
+              { value: "-70%", label: "menos evasão de jovens" },
+              { value: "100%", label: "visibilidade pastoral" },
+            ].map((stat, i) => (
+              <div key={i} className="text-center p-4 rounded-2xl bg-card border border-border">
+                <p className="text-2xl sm:text-3xl font-montserrat font-black bg-clip-text text-transparent" style={{ backgroundImage: "var(--gradient-hero)" }}>{stat.value}</p>
+                <p className="text-muted-foreground text-xs sm:text-sm font-inter mt-1">{stat.label}</p>
+              </div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
       {/* ─── DASHBOARD SHOWCASE ─────────────────────────── */}
       <section className="py-20 lg:py-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
