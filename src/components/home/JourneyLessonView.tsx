@@ -6,6 +6,8 @@ import {
   Pen, Heart, CheckCircle2, Save, Play, Link, Volume2, Download, FileText, Share2, AlertCircle
 } from "lucide-react";
 import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
+import confetti from "canvas-confetti";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
 import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
@@ -71,6 +73,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
   const [videoWatched, setVideoWatched] = useState(false);
   const [audioListened, setAudioListened] = useState(false);
   const [saveAttempted, setSaveAttempted] = useState(false);
+  const [showCompletionAnim, setShowCompletionAnim] = useState(false);
 
   // Load lesson content from DB (set by admin)
   useEffect(() => {
@@ -167,6 +170,15 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     }
     setSaving(false);
     setLastSaved(new Date());
+
+    if (!isLateAccess) {
+      // Celebration animation
+      setShowCompletionAnim(true);
+      confetti({ particleCount: 80, spread: 90, origin: { y: 0.7 } });
+      setTimeout(() => confetti({ particleCount: 40, spread: 60, origin: { x: 0.3, y: 0.6 } }), 300);
+      setTimeout(() => setShowCompletionAnim(false), 3500);
+    }
+
     toast.success(isLateAccess ? "Respostas salvas! (sem pontuação — prazo encerrado)" : "Respostas salvas com sucesso! +20 pontos de fé ⭐");
   }
 
@@ -693,7 +705,30 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
 
       {/* Save button (only for users) */}
       {!isAdmin && (
-        <div className="space-y-2">
+        <div className="space-y-2 relative">
+          {/* Completion celebration overlay */}
+          <AnimatePresence>
+            {showCompletionAnim && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="absolute -top-20 left-0 right-0 z-10 flex flex-col items-center"
+              >
+                <motion.div
+                  initial={{ y: 20 }}
+                  animate={{ y: [20, -10, 0] }}
+                  transition={{ duration: 0.6, ease: "easeOut" }}
+                  className="bg-brand-green/95 text-primary-foreground px-6 py-3 rounded-2xl shadow-lg flex items-center gap-2"
+                >
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span className="font-montserrat font-bold text-sm">Lição concluída! 🎉</span>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <button
             onClick={handleSaveAll}
             disabled={saving}
