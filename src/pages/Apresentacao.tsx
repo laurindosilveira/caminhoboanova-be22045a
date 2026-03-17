@@ -649,18 +649,17 @@ export default function Apresentacao() {
                   ))}
                 </ul>
 
-                <button
-                  onClick={() => handleCheckout(p.priceId)}
-                  disabled={checkoutLoading === p.priceId}
-                  className={`w-full block py-3.5 rounded-2xl font-montserrat font-bold text-sm text-center transition-all disabled:opacity-60 ${
+                <a
+                  href={`/onboarding?plano=${p.planKey}`}
+                  className={`w-full block py-3.5 rounded-2xl font-montserrat font-bold text-sm text-center transition-all ${
                     p.highlight
                       ? "bg-card text-primary hover:bg-card/90 hover:shadow-lg"
                       : "text-primary-foreground hover:shadow-lg hover:shadow-primary/25"
                   }`}
                   style={!p.highlight ? { background: "var(--gradient-hero)" } : undefined}
                 >
-                  {checkoutLoading === p.priceId ? "Redirecionando..." : "Começar teste grátis"}
-                </button>
+                  Começar teste grátis
+                </a>
               </motion.div>
             ))}
           </div>
