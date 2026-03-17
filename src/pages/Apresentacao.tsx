@@ -581,7 +581,7 @@ export default function Apresentacao() {
               Pronto para transformar o discipulado da sua igreja?
             </motion.h2>
             <motion.p variants={fadeUp} custom={1} className="text-primary-foreground/60 font-inter text-lg mb-10 max-w-xl mx-auto">
-              Junte-se a mais de 200 igrejas que já utilizam o Caminho para engajar, discipular e cuidar de seus membros.
+              Agende uma demonstração ou inicie um período de teste e veja, na prática, como o Caminho Boa Nova pode ajudar sua igreja a crescer em fé, comunhão e cuidado.
             </motion.p>
             <motion.div variants={fadeUp} custom={2} className="flex flex-col sm:flex-row gap-4 justify-center">
               <a href="#planos" className="inline-flex items-center justify-center gap-2 px-10 py-4 rounded-2xl bg-card text-primary font-montserrat font-bold text-lg hover:shadow-2xl hover:-translate-y-1 transition-all">
