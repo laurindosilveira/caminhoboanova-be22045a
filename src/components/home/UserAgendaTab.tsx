@@ -2,10 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { CalendarDays, MapPin, Users, BookOpen, ChevronDown, ChevronUp, Plus, Pencil, Trash2, Save, X, Clock, Timer, ExternalLink, CalendarIcon, Check, LayoutList, CalendarRange } from "lucide-react";
-import { differenceInDays, differenceInHours } from "date-fns";
+import { CalendarDays, MapPin, Users, BookOpen, ChevronDown, ChevronUp, Plus, Pencil, Trash2, Save, X, Clock, Timer, ExternalLink, CalendarIcon, Check, LayoutList, CalendarRange, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { differenceInDays, differenceInHours, startOfWeek, endOfWeek, addWeeks, subWeeks, isSameDay, isWithinInterval, format } from "date-fns";
 import WorshipConfirmation from "./WorshipConfirmation";
-import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -16,6 +15,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import CalendarView from "./CalendarView";
+import emptyAgendaImg from "@/assets/empty-agenda.png";
 
 type Event = {
   id: string;
@@ -166,7 +166,8 @@ export default function UserAgendaTab() {
   const [lessonOptions, setLessonOptions] = useState<LessonOption[]>([]);
   const [loading, setLoading] = useState(true);
    const [activeTab, setActiveTab] = useState<string>("agenda");
-  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
+  const [viewMode, setViewMode] = useState<"list" | "calendar" | "week">("list");
+  const [weekOffset, setWeekOffset] = useState(0);
 
   // Event form state
   const [showForm, setShowForm] = useState(false);
@@ -440,14 +441,21 @@ export default function UserAgendaTab() {
             <button
               onClick={() => setViewMode("list")}
               className={`p-1.5 rounded-lg transition-colors ${viewMode === "list" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
-              title="Visualização em lista"
+              title="Lista"
             >
               <LayoutList className="w-3.5 h-3.5" />
             </button>
             <button
+              onClick={() => setViewMode("week")}
+              className={`p-1.5 rounded-lg transition-colors ${viewMode === "week" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
+              title="Semana"
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+            </button>
+            <button
               onClick={() => setViewMode("calendar")}
               className={`p-1.5 rounded-lg transition-colors ${viewMode === "calendar" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
-              title="Visualização em calendário"
+              title="Mês"
             >
               <CalendarRange className="w-3.5 h-3.5" />
             </button>
@@ -473,6 +481,78 @@ export default function UserAgendaTab() {
         <CalendarView events={events} />
       )}
 
+      {/* ── WEEKLY VIEW ──── */}
+      {viewMode === "week" && !loading && (() => {
+        const weekStart = startOfWeek(addWeeks(now, weekOffset), { weekStartsOn: 0, locale: ptBR });
+        const weekEnd = endOfWeek(addWeeks(now, weekOffset), { weekStartsOn: 0, locale: ptBR });
+        const weekEvents = events.filter(e => {
+          const d = new Date(e.event_date);
+          return isWithinInterval(d, { start: weekStart, end: weekEnd });
+        }).sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
+        const days = Array.from({ length: 7 }, (_, i) => {
+          const d = new Date(weekStart);
+          d.setDate(d.getDate() + i);
+          return d;
+        });
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <button onClick={() => setWeekOffset(w => w - 1)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                <ChevronLeft className="w-4 h-4 text-muted-foreground" />
+              </button>
+              <p className="font-montserrat font-bold text-foreground text-sm">
+                {format(weekStart, "d MMM", { locale: ptBR })} — {format(weekEnd, "d MMM yyyy", { locale: ptBR })}
+              </p>
+              <button onClick={() => setWeekOffset(w => w + 1)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+            {weekOffset !== 0 && (
+              <button onClick={() => setWeekOffset(0)} className="text-[10px] font-inter font-semibold text-primary hover:underline mx-auto block">
+                Voltar para esta semana
+              </button>
+            )}
+            <div className="space-y-1">
+              {days.map((day, idx) => {
+                const dayEvents = weekEvents.filter(e => isSameDay(new Date(e.event_date), day));
+                const isToday = isSameDay(day, now);
+                return (
+                  <div key={idx} className={`rounded-xl border ${isToday ? "border-primary/40 bg-primary/5" : "border-border bg-card"} p-3`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`font-montserrat font-bold text-xs ${isToday ? "text-primary" : "text-muted-foreground"}`}>
+                        {format(day, "EEE", { locale: ptBR }).toUpperCase()}
+                      </span>
+                      <span className={`font-montserrat font-black text-sm ${isToday ? "text-primary" : "text-foreground"}`}>
+                        {format(day, "d")}
+                      </span>
+                      {isToday && <span className="text-[9px] font-inter font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">HOJE</span>}
+                    </div>
+                    {dayEvents.length === 0 ? (
+                      <p className="text-muted-foreground font-inter text-[10px] ml-1">—</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {dayEvents.map(evt => {
+                          const typeInfo = EVENT_TYPES[evt.type] ?? EVENT_TYPES.evento;
+                          const time = format(new Date(evt.event_date), "HH:mm");
+                          return (
+                            <div key={evt.id} className="flex items-center gap-2 ml-1">
+                              <span className="text-sm">{typeInfo.emoji}</span>
+                              <span className="font-inter text-xs text-foreground font-medium">{time}</span>
+                              <span className="font-inter text-xs text-foreground truncate">{evt.title}</span>
+                              {evt.location && <span className="text-muted-foreground text-[10px] font-inter truncate hidden sm:inline">📍 {evt.location}</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── LIST VIEW ──── */}
       {viewMode === "list" && loading ? (
         <div className="space-y-3">
@@ -482,9 +562,11 @@ export default function UserAgendaTab() {
         </div>
       ) : viewMode === "list" && upcoming.length === 0 && past.length === 0 ? (
         <div className="bg-card rounded-2xl border border-border p-8 text-center shadow-sm">
-          <CalendarDays className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-          <p className="font-montserrat font-bold text-foreground text-base mb-1">Nenhum evento cadastrado</p>
-          <p className="text-muted-foreground text-sm font-inter">Os próximos encontros e eventos aparecerão aqui.</p>
+          <img src={emptyAgendaImg} alt="Agenda vazia" className="w-28 h-28 mx-auto mb-3 opacity-80" />
+          <p className="font-montserrat font-bold text-foreground text-base mb-1">Nenhum evento agendado</p>
+          <p className="text-muted-foreground text-sm font-inter">
+            Os próximos encontros e eventos aparecerão aqui. Fique atento! 🙏
+          </p>
         </div>
       ) : viewMode === "list" ? (
         <>
@@ -786,10 +868,10 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
               </span>
             )}
           </div>
-          {/* Google Calendar link */}
+          {/* Calendar links: Google + Apple (.ics) */}
           {!past && (() => {
             const start = new Date(event.event_date);
-            const end = new Date(start.getTime() + 90 * 60000); // 1h30 duration
+            const end = new Date(start.getTime() + 90 * 60000);
             const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
             const params = new URLSearchParams({
               action: "TEMPLATE",
@@ -798,17 +880,54 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
               details: event.description || "",
               location: event.location || "",
             });
-            const url = `https://calendar.google.com/calendar/render?${params.toString()}`;
+            const googleUrl = `https://calendar.google.com/calendar/render?${params.toString()}`;
+
+            const handleDownloadIcs = () => {
+              const pad = (n: number) => String(n).padStart(2, "0");
+              const fmtIcs = (d: Date) => `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
+              const ics = [
+                "BEGIN:VCALENDAR",
+                "VERSION:2.0",
+                "PRODID:-//Caminho//App//PT",
+                "BEGIN:VEVENT",
+                `DTSTART:${fmtIcs(start)}`,
+                `DTEND:${fmtIcs(end)}`,
+                `SUMMARY:${event.title}`,
+                `DESCRIPTION:${(event.description || "").replace(/\n/g, "\\n")}`,
+                `LOCATION:${event.location || ""}`,
+                `UID:${event.id}@caminho.app`,
+                "END:VEVENT",
+                "END:VCALENDAR",
+              ].join("\r\n");
+              const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `${event.title.replace(/[^a-zA-Z0-9]/g, "_")}.ics`;
+              a.click();
+              URL.revokeObjectURL(url);
+              toast.success("Arquivo .ics baixado!");
+            };
+
             return (
-              <a
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors text-primary"
-              >
-                <ExternalLink className="w-3 h-3" />
-                <span className="font-inter text-[10px] font-semibold">Adicionar ao Google Agenda</span>
-              </a>
+              <div className="mt-2 flex gap-2 flex-wrap">
+                <a
+                  href={googleUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors text-primary"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span className="font-inter text-[10px] font-semibold">Google Agenda</span>
+                </a>
+                <button
+                  onClick={handleDownloadIcs}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-secondary/10 hover:bg-secondary/20 transition-colors text-secondary"
+                >
+                  <Download className="w-3 h-3" />
+                  <span className="font-inter text-[10px] font-semibold">Apple Calendar (.ics)</span>
+                </button>
+              </div>
             );
           })()}
           {linkedLesson && (
