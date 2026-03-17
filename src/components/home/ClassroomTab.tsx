@@ -706,7 +706,15 @@ export default function ClassroomTab() {
               </>
             );
           })() : (
-            <div className="h-64 overflow-y-auto p-3 space-y-2">
+            <div ref={chatContainerRef} className="h-64 overflow-y-auto p-3 space-y-2" onScroll={handleChatScroll}>
+              {loadingMore && (
+                <div className="flex justify-center py-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              {!hasMore && chatMessages.length > PAGE_SIZE && (
+                <p className="text-center text-[10px] text-muted-foreground font-inter py-1">Início da conversa</p>
+              )}
               {chatMessages.length === 0 ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
