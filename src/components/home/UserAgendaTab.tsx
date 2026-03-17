@@ -441,14 +441,21 @@ export default function UserAgendaTab() {
             <button
               onClick={() => setViewMode("list")}
               className={`p-1.5 rounded-lg transition-colors ${viewMode === "list" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
-              title="Visualização em lista"
+              title="Lista"
             >
               <LayoutList className="w-3.5 h-3.5" />
             </button>
             <button
+              onClick={() => setViewMode("week")}
+              className={`p-1.5 rounded-lg transition-colors ${viewMode === "week" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
+              title="Semana"
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+            </button>
+            <button
               onClick={() => setViewMode("calendar")}
               className={`p-1.5 rounded-lg transition-colors ${viewMode === "calendar" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
-              title="Visualização em calendário"
+              title="Mês"
             >
               <CalendarRange className="w-3.5 h-3.5" />
             </button>
