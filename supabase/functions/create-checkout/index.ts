@@ -48,9 +48,12 @@ serve(async (req) => {
       customer_email: customerId ? undefined : email,
       line_items: [{ price: priceId, quantity: 1 }],
       mode: "subscription",
+      subscription_data: {
+        trial_period_days: 30,
+      },
+      payment_method_collection: "if_required",
       success_url: `${origin}/apresentacao?checkout=success`,
       cancel_url: `${origin}/apresentacao?checkout=cancel`,
-      payment_method_types: ["card"],
       locale: "pt-BR",
     });
 
