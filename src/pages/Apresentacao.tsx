@@ -24,24 +24,24 @@ function JsonLdScript() {
       offers: [
         {
           "@type": "Offer",
-          name: "Essencial",
-          price: "97.00",
+          name: "Comunidade",
+          price: "79.00",
           priceCurrency: "BRL",
-          description: "Ideal para comunidades pequenas — até 50 membros",
+          description: "Ideal para igrejas menores ou grupos iniciantes — até 100 membros",
         },
         {
           "@type": "Offer",
-          name: "Comunidade",
-          price: "197.00",
+          name: "Crescimento",
+          price: "129.00",
           priceCurrency: "BRL",
-          description: "Para igrejas em crescimento — até 200 membros",
+          description: "Para igrejas em desenvolvimento — até 250 membros",
         },
         {
           "@type": "Offer",
           name: "Pastoral",
-          price: "347.00",
+          price: "199.00",
           priceCurrency: "BRL",
-          description: "Para igrejas grandes ou redes — membros ilimitados",
+          description: "Para igrejas maiores ou com múltiplas comunidades — membros ilimitados",
         },
       ],
       aggregateRating: {
@@ -146,30 +146,33 @@ const STATS = [
 
 const PLANS = [
   {
-    name: "Essencial",
-    price: "R$ 97",
+    name: "Comunidade",
+    emoji: "🟢",
+    price: "R$ 79",
     period: "/mês",
-    desc: "Ideal para comunidades pequenas",
-    members: "Até 50 membros",
-    features: ["Devocionais diários", "Agenda de eventos", "Chat comunitário", "Controle de presença", "1 administrador", "Suporte por e-mail"],
+    desc: "Ideal para igrejas menores ou grupos iniciantes",
+    members: "Até 100 membros",
+    features: ["Trilhas de discipulado", "Devocionais diários", "Agenda da igreja", "Chat comunitário", "Pedidos de oração", "Controle de presença"],
     highlight: false,
   },
   {
-    name: "Comunidade",
-    price: "R$ 197",
+    name: "Crescimento",
+    emoji: "🔵",
+    price: "R$ 129",
     period: "/mês",
-    desc: "Para igrejas em crescimento",
-    members: "Até 200 membros",
-    features: ["Tudo do Essencial", "Gamificação completa", "Desafios comunitários", "Relatórios em PDF", "Até 5 líderes", "Suporte prioritário"],
+    desc: "Para igrejas em desenvolvimento e com múltiplos grupos",
+    members: "Até 250 membros",
+    features: ["Tudo do plano Comunidade", "Gamificação (pontos, conquistas, desafios)", "Relatórios de engajamento", "Gestão de turmas e grupos", "Notificações segmentadas"],
     highlight: true,
   },
   {
     name: "Pastoral",
-    price: "R$ 347",
+    emoji: "🟣",
+    price: "R$ 199",
     period: "/mês",
-    desc: "Para igrejas grandes ou redes",
+    desc: "Para igrejas maiores ou com múltiplas comunidades",
     members: "Membros ilimitados",
-    features: ["Tudo do Comunidade", "Multi-comunidades", "Termômetro espiritual", "Planos de crescimento", "Líderes ilimitados", "Onboarding dedicado"],
+    features: ["Tudo do plano Crescimento", "Termômetro espiritual", "Plano de crescimento individual", "Multi-comunidades / multi-áreas", "Relatórios pastorais completos", "Suporte prioritário"],
     highlight: false,
   },
 ];
@@ -400,9 +403,9 @@ export default function Apresentacao() {
       <section id="planos" className="py-20 lg:py-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0} className="text-center max-w-2xl mx-auto mb-16">
-            <p className="text-primary font-inter font-semibold text-sm uppercase tracking-wider mb-3">Planos</p>
-            <h2 className="text-3xl sm:text-4xl font-montserrat font-black tracking-tight mb-4 text-foreground">Escolha o plano ideal para sua igreja</h2>
-            <p className="text-muted-foreground text-lg font-inter">Todos os planos incluem 30 dias de teste gratuito. Sem fidelidade.</p>
+            <p className="text-primary font-inter font-semibold text-sm uppercase tracking-wider mb-3">💰 Planos e Investimento</p>
+            <h2 className="text-3xl sm:text-4xl font-montserrat font-black tracking-tight mb-4 text-foreground">Simples, acessível e pensado para a realidade das igrejas</h2>
+            <p className="text-muted-foreground text-lg font-inter">O Caminho Boa Nova foi desenvolvido para servir igrejas de diferentes tamanhos, com um modelo de investimento justo e sustentável.</p>
           </motion.div>
 
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
@@ -420,7 +423,7 @@ export default function Apresentacao() {
                     Mais popular
                   </div>
                 )}
-                <p className={`font-montserrat font-bold text-lg ${p.highlight ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{p.name}</p>
+                <p className={`font-montserrat font-bold text-lg ${p.highlight ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{p.emoji} {p.name}</p>
                 <div className="flex items-baseline gap-1 mt-3 mb-1">
                   <span className={`text-4xl font-montserrat font-black ${p.highlight ? "text-primary-foreground" : "text-foreground"}`}>{p.price}</span>
                   <span className={`text-sm font-inter ${p.highlight ? "text-primary-foreground/60" : "text-muted-foreground"}`}>{p.period}</span>
@@ -452,6 +455,58 @@ export default function Apresentacao() {
                 </a>
               </motion.div>
             ))}
+          </div>
+
+          {/* ─── BONUS + TRIAL + VALUE ───────────────────── */}
+          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto mt-16">
+            {/* Bônus */}
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0}
+              className="bg-card rounded-2xl border border-border p-8">
+              <p className="text-2xl mb-2">🎁</p>
+              <h3 className="font-montserrat font-bold text-lg text-foreground mb-3">Bônus para novas comunidades</h3>
+              <ul className="space-y-2.5">
+                {["Implantação assistida gratuita", "Apoio na organização da primeira turma", "Treinamento de líderes", "Acompanhamento inicial próximo"].map((b, i) => (
+                  <li key={i} className="flex items-center gap-2.5 text-sm font-inter text-muted-foreground">
+                    <Check className="w-4 h-4 text-primary flex-shrink-0" />
+                    {b}
+                  </li>
+                ))}
+              </ul>
+            </motion.div>
+
+            {/* Teste */}
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={1}
+              className="bg-card rounded-2xl border border-border p-8">
+              <p className="text-2xl mb-2">🧪</p>
+              <h3 className="font-montserrat font-bold text-lg text-foreground mb-3">Teste sem compromisso</h3>
+              <p className="text-sm text-muted-foreground font-inter mb-4">Experimente o Caminho Boa Nova com sua comunidade:</p>
+              <ul className="space-y-2.5">
+                {["30 dias gratuitos", "Sem taxa de adesão", "Cancelamento simples a qualquer momento"].map((b, i) => (
+                  <li key={i} className="flex items-center gap-2.5 text-sm font-inter text-muted-foreground">
+                    <Check className="w-4 h-4 text-primary flex-shrink-0" />
+                    {b}
+                  </li>
+                ))}
+              </ul>
+            </motion.div>
+
+            {/* Valor */}
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={2}
+              className="bg-card rounded-2xl border border-border p-8">
+              <p className="text-2xl mb-2">💡</p>
+              <h3 className="font-montserrat font-bold text-lg text-foreground mb-3">Um investimento acessível</h3>
+              <p className="text-sm text-muted-foreground font-inter mb-2">Na prática, o valor representa:</p>
+              <p className="text-primary font-montserrat font-bold text-lg mb-4">👉 menos de R$1 por membro/mês</p>
+              <p className="text-sm text-muted-foreground font-inter mb-2">Um investimento pequeno para fortalecer:</p>
+              <ul className="space-y-2.5">
+                {["O discipulado", "O cuidado pastoral", "A vida espiritual da igreja"].map((b, i) => (
+                  <li key={i} className="flex items-center gap-2.5 text-sm font-inter text-muted-foreground">
+                    <Check className="w-4 h-4 text-primary flex-shrink-0" />
+                    {b}
+                  </li>
+                ))}
+              </ul>
+            </motion.div>
           </div>
         </div>
       </section>
@@ -523,10 +578,10 @@ export default function Apresentacao() {
         <div className="relative max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }}>
             <motion.h2 variants={fadeUp} custom={0} className="text-3xl sm:text-4xl lg:text-5xl font-montserrat font-black text-primary-foreground tracking-tight mb-6">
-              Pronto para transformar o discipulado da sua igreja?
+              🚀 Comece com sua comunidade
             </motion.h2>
             <motion.p variants={fadeUp} custom={1} className="text-primary-foreground/60 font-inter text-lg mb-10 max-w-xl mx-auto">
-              Junte-se a mais de 200 igrejas que já utilizam o Caminho para engajar, discipular e cuidar de seus membros.
+              Agende uma demonstração ou inicie um período de teste e veja, na prática, como o Caminho Boa Nova pode ajudar sua igreja a crescer em fé, comunhão e cuidado.
             </motion.p>
             <motion.div variants={fadeUp} custom={2} className="flex flex-col sm:flex-row gap-4 justify-center">
               <a href="#planos" className="inline-flex items-center justify-center gap-2 px-10 py-4 rounded-2xl bg-card text-primary font-montserrat font-bold text-lg hover:shadow-2xl hover:-translate-y-1 transition-all">
