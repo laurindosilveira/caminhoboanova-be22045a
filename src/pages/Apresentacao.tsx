@@ -1,5 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { supabase } from "@/integrations/supabase/client";
+import { STRIPE_PLANS } from "@/lib/stripePlans";
+import { toast } from "@/hooks/use-toast";
 import {
   BookOpen, Users, Calendar, Bell, BarChart3, Shield, MessageCircle,
   Trophy, Heart, ChevronDown, Check, Star, Smartphone,
@@ -154,6 +157,7 @@ const PLANS = [
     members: "Até 100 membros",
     features: ["Trilhas de discipulado", "Devocionais diários", "Agenda da igreja", "Chat comunitário", "Pedidos de oração", "Controle de presença"],
     highlight: false,
+    priceId: STRIPE_PLANS.comunidade.price_id,
   },
   {
     name: "Crescimento",
@@ -164,6 +168,7 @@ const PLANS = [
     members: "Até 250 membros",
     features: ["Tudo do plano Comunidade", "Gamificação (pontos, conquistas, desafios)", "Relatórios de engajamento", "Gestão de turmas e grupos", "Notificações segmentadas"],
     highlight: true,
+    priceId: STRIPE_PLANS.crescimento.price_id,
   },
   {
     name: "Pastoral",
@@ -174,6 +179,7 @@ const PLANS = [
     members: "Membros ilimitados",
     features: ["Tudo do plano Crescimento", "Termômetro espiritual", "Plano de crescimento individual", "Multi-comunidades / multi-áreas", "Relatórios pastorais completos", "Suporte prioritário"],
     highlight: false,
+    priceId: STRIPE_PLANS.pastoral.price_id,
   },
 ];
 
@@ -187,6 +193,34 @@ const FAQ = [
 
 export default function Apresentacao() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+
+  // Show toast on checkout return
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("checkout") === "success") {
+      toast({ title: "🎉 Assinatura realizada!", description: "Bem-vindo ao Caminho Boa Nova! Você receberá um email de confirmação." });
+      window.history.replaceState({}, "", "/apresentacao");
+    } else if (params.get("checkout") === "cancel") {
+      toast({ title: "Checkout cancelado", description: "Você pode assinar a qualquer momento." });
+      window.history.replaceState({}, "", "/apresentacao");
+    }
+  }, []);
+
+  const handleCheckout = useCallback(async (priceId: string) => {
+    setCheckoutLoading(priceId);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: { priceId },
+      });
+      if (error) throw error;
+      if (data?.url) window.location.href = data.url;
+    } catch (err: any) {
+      toast({ title: "Erro", description: "Não foi possível iniciar o checkout. Tente novamente.", variant: "destructive" });
+    } finally {
+      setCheckoutLoading(null);
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
@@ -440,19 +474,18 @@ export default function Apresentacao() {
                   ))}
                 </ul>
 
-                <a
-                  href={WHATSAPP_LINK}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`w-full block py-3.5 rounded-2xl font-montserrat font-bold text-sm text-center transition-all ${
+                <button
+                  onClick={() => handleCheckout(p.priceId)}
+                  disabled={checkoutLoading === p.priceId}
+                  className={`w-full block py-3.5 rounded-2xl font-montserrat font-bold text-sm text-center transition-all disabled:opacity-60 ${
                     p.highlight
                       ? "bg-card text-primary hover:bg-card/90 hover:shadow-lg"
                       : "text-primary-foreground hover:shadow-lg hover:shadow-primary/25"
                   }`}
                   style={!p.highlight ? { background: "var(--gradient-hero)" } : undefined}
                 >
-                  Começar teste grátis
-                </a>
+                  {checkoutLoading === p.priceId ? "Redirecionando..." : "Começar teste grátis"}
+                </button>
               </motion.div>
             ))}
           </div>
