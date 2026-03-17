@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "@/integrations/supabase/client";
 import { STRIPE_PLANS } from "@/lib/stripePlans";
 import { toast } from "@/hooks/use-toast";
 import {
