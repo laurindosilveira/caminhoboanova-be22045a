@@ -468,45 +468,83 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
 
       {/* Achievements Grid */}
       <div className="grid grid-cols-2 gap-3">
-        {achievements.filter(a => !a.secret || a.unlocked).map((a) => (
-          <div
-            key={a.id}
-            className={`rounded-2xl p-4 border transition-all ${
-              a.unlocked
-                ? a.secret
-                  ? "bg-card border-amber-400/40 shadow-lg ring-1 ring-amber-400/20"
-                  : "bg-card border-accent/30 shadow-md"
-                : "bg-muted border-border opacity-50"
-            }`}
-          >
-            <span className="text-3xl block mb-2">{a.unlocked ? a.icon : "🔒"}</span>
-            <p className="font-montserrat font-bold text-card-foreground text-sm leading-tight">
-              {a.secret && a.unlocked && <span className="text-amber-500 text-[10px] font-inter block mb-0.5">✨ SURPRESA!</span>}
-              {a.title}
-            </p>
-            <p className="text-muted-foreground text-xs font-inter mt-1">{a.desc}</p>
-            {a.unlocked ? (
-              <div className="mt-2 flex items-center gap-1">
-                <div className={`w-1.5 h-1.5 rounded-full ${a.secret ? "bg-amber-500" : "bg-brand-green"}`} />
-                <span className={`text-xs font-inter ${a.secret ? "text-amber-500" : "text-brand-green"}`}>
-                  +{a.bonusPoints} pts bônus
-                </span>
-              </div>
-            ) : (
-              <div className="mt-2">
-                <div className="h-1.5 bg-muted-foreground/20 rounded-full overflow-hidden mb-1">
-                  <div
-                    className="h-full rounded-full bg-secondary/60 transition-all"
-                    style={{ width: `${Math.min(100, (a.current / a.target) * 100)}%` }}
-                  />
-                </div>
-                <p className="text-muted-foreground text-[10px] font-inter">
-                  Faltam {Math.max(0, a.target - a.current)} {a.target <= 10 && a.title.includes("dias") ? "dias" : ""}
+        <AnimatePresence>
+          {achievements.filter(a => !a.secret || a.unlocked).map((a, idx) => {
+            const isNewlyUnlocked = newlyUnlockedKeys.has(a.key);
+            const progressPct = Math.min(100, (a.current / a.target) * 100);
+
+            return (
+              <motion.div
+                key={a.id}
+                initial={isNewlyUnlocked ? { scale: 0.5, opacity: 0, rotateY: 180 } : { opacity: 1 }}
+                animate={isNewlyUnlocked
+                  ? { scale: [0.5, 1.15, 1], opacity: 1, rotateY: [180, 0] }
+                  : { opacity: 1 }
+                }
+                transition={isNewlyUnlocked
+                  ? { duration: 0.7, ease: "easeOut", times: [0, 0.6, 1] }
+                  : { duration: 0.3, delay: idx * 0.05 }
+                }
+                className={`rounded-2xl p-4 border transition-all ${
+                  a.unlocked
+                    ? a.secret
+                      ? "bg-card border-amber-400/40 shadow-lg ring-1 ring-amber-400/20"
+                      : "bg-card border-accent/30 shadow-md"
+                    : "bg-muted border-border opacity-60"
+                } ${isNewlyUnlocked ? "ring-2 ring-secondary ring-offset-2" : ""}`}
+              >
+                <span className="text-3xl block mb-2">{a.unlocked ? a.icon : "🔒"}</span>
+                <p className="font-montserrat font-bold text-card-foreground text-sm leading-tight">
+                  {a.secret && a.unlocked && <span className="text-amber-500 text-[10px] font-inter block mb-0.5">✨ SURPRESA!</span>}
+                  {a.title}
                 </p>
-              </div>
-            )}
-          </div>
-        ))}
+                <p className="text-muted-foreground text-xs font-inter mt-1">{a.desc}</p>
+                {a.unlocked ? (
+                  <div className="mt-2 space-y-1.5">
+                    <div className="flex items-center gap-1">
+                      <div className={`w-1.5 h-1.5 rounded-full ${a.secret ? "bg-amber-500" : "bg-brand-green"}`} />
+                      <span className={`text-xs font-inter ${a.secret ? "text-amber-500" : "text-brand-green"}`}>
+                        +{a.bonusPoints} pts bônus
+                      </span>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        shareAchievement(a);
+                      }}
+                      className="flex items-center gap-1 text-[10px] font-inter font-semibold text-secondary hover:text-secondary/80 transition-colors"
+                    >
+                      <Share2 className="w-3 h-3" />
+                      Compartilhar
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-muted-foreground text-[10px] font-inter font-semibold">
+                        {a.current}/{a.target}
+                      </span>
+                      <span className="text-muted-foreground text-[10px] font-inter">
+                        {Math.round(progressPct)}%
+                      </span>
+                    </div>
+                    <div className="h-2 bg-muted-foreground/15 rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${progressPct}%` }}
+                        transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
+                        className="h-full rounded-full bg-secondary/50"
+                      />
+                    </div>
+                    <p className="text-muted-foreground text-[10px] font-inter mt-1">
+                      Faltam {Math.max(0, a.target - a.current)}
+                    </p>
+                  </div>
+                )}
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
 
         {/* Placeholder para conquistas secretas não desbloqueadas */}
         {achievements.filter(a => a.secret && !a.unlocked).length > 0 && (
