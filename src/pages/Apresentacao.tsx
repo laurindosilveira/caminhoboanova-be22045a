@@ -93,7 +93,7 @@ export default function Apresentacao() {
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
             <a href="#funcionalidades" className="hover:text-emerald-600 transition-colors">Funcionalidades</a>
             <a href="#beneficios" className="hover:text-emerald-600 transition-colors">Benefícios</a>
-            <a href="#depoimentos" className="hover:text-emerald-600 transition-colors">Depoimentos</a>
+            
             <a href="#planos" className="hover:text-emerald-600 transition-colors">Planos</a>
           </div>
           <a href="#planos" className="px-5 py-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-semibold hover:shadow-lg hover:shadow-emerald-500/25 transition-all">
