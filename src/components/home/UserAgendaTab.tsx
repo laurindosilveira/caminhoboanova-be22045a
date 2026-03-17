@@ -481,6 +481,78 @@ export default function UserAgendaTab() {
         <CalendarView events={events} />
       )}
 
+      {/* ── WEEKLY VIEW ──── */}
+      {viewMode === "week" && !loading && (() => {
+        const weekStart = startOfWeek(addWeeks(now, weekOffset), { weekStartsOn: 0, locale: ptBR });
+        const weekEnd = endOfWeek(addWeeks(now, weekOffset), { weekStartsOn: 0, locale: ptBR });
+        const weekEvents = events.filter(e => {
+          const d = new Date(e.event_date);
+          return isWithinInterval(d, { start: weekStart, end: weekEnd });
+        }).sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
+        const days = Array.from({ length: 7 }, (_, i) => {
+          const d = new Date(weekStart);
+          d.setDate(d.getDate() + i);
+          return d;
+        });
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <button onClick={() => setWeekOffset(w => w - 1)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                <ChevronLeft className="w-4 h-4 text-muted-foreground" />
+              </button>
+              <p className="font-montserrat font-bold text-foreground text-sm">
+                {format(weekStart, "d MMM", { locale: ptBR })} — {format(weekEnd, "d MMM yyyy", { locale: ptBR })}
+              </p>
+              <button onClick={() => setWeekOffset(w => w + 1)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+            {weekOffset !== 0 && (
+              <button onClick={() => setWeekOffset(0)} className="text-[10px] font-inter font-semibold text-primary hover:underline mx-auto block">
+                Voltar para esta semana
+              </button>
+            )}
+            <div className="space-y-1">
+              {days.map((day, idx) => {
+                const dayEvents = weekEvents.filter(e => isSameDay(new Date(e.event_date), day));
+                const isToday = isSameDay(day, now);
+                return (
+                  <div key={idx} className={`rounded-xl border ${isToday ? "border-primary/40 bg-primary/5" : "border-border bg-card"} p-3`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`font-montserrat font-bold text-xs ${isToday ? "text-primary" : "text-muted-foreground"}`}>
+                        {format(day, "EEE", { locale: ptBR }).toUpperCase()}
+                      </span>
+                      <span className={`font-montserrat font-black text-sm ${isToday ? "text-primary" : "text-foreground"}`}>
+                        {format(day, "d")}
+                      </span>
+                      {isToday && <span className="text-[9px] font-inter font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">HOJE</span>}
+                    </div>
+                    {dayEvents.length === 0 ? (
+                      <p className="text-muted-foreground font-inter text-[10px] ml-1">—</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {dayEvents.map(evt => {
+                          const typeInfo = EVENT_TYPES[evt.type] ?? EVENT_TYPES.evento;
+                          const time = format(new Date(evt.event_date), "HH:mm");
+                          return (
+                            <div key={evt.id} className="flex items-center gap-2 ml-1">
+                              <span className="text-sm">{typeInfo.emoji}</span>
+                              <span className="font-inter text-xs text-foreground font-medium">{time}</span>
+                              <span className="font-inter text-xs text-foreground truncate">{evt.title}</span>
+                              {evt.location && <span className="text-muted-foreground text-[10px] font-inter truncate hidden sm:inline">📍 {evt.location}</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── LIST VIEW ──── */}
       {viewMode === "list" && loading ? (
         <div className="space-y-3">
@@ -490,9 +562,11 @@ export default function UserAgendaTab() {
         </div>
       ) : viewMode === "list" && upcoming.length === 0 && past.length === 0 ? (
         <div className="bg-card rounded-2xl border border-border p-8 text-center shadow-sm">
-          <CalendarDays className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-          <p className="font-montserrat font-bold text-foreground text-base mb-1">Nenhum evento cadastrado</p>
-          <p className="text-muted-foreground text-sm font-inter">Os próximos encontros e eventos aparecerão aqui.</p>
+          <img src={emptyAgendaImg} alt="Agenda vazia" className="w-28 h-28 mx-auto mb-3 opacity-80" />
+          <p className="font-montserrat font-bold text-foreground text-base mb-1">Nenhum evento agendado</p>
+          <p className="text-muted-foreground text-sm font-inter">
+            Os próximos encontros e eventos aparecerão aqui. Fique atento! 🙏
+          </p>
         </div>
       ) : viewMode === "list" ? (
         <>
