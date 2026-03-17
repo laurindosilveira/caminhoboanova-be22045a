@@ -1,5 +1,16 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import confetti from "canvas-confetti";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Trophy, Lock, Flame, RefreshCw, Share2 } from "lucide-react";
