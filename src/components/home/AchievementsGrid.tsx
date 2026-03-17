@@ -261,6 +261,76 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
 
   const unlockedCount = achievements.filter(a => a.unlocked).length;
 
+  async function shareAchievement(achievement: Achievement) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 600;
+    canvas.height = 400;
+    const ctx = canvas.getContext("2d")!;
+
+    // Background gradient
+    const grad = ctx.createLinearGradient(0, 0, 600, 400);
+    grad.addColorStop(0, "#1F3C88");
+    grad.addColorStop(1, "#E8880A");
+    ctx.fillStyle = grad;
+    ctx.roundRect(0, 0, 600, 400, 20);
+    ctx.fill();
+
+    // Dark overlay
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.fillRect(0, 0, 600, 400);
+
+    // Icon
+    ctx.font = "80px serif";
+    ctx.textAlign = "center";
+    ctx.fillText(achievement.icon, 300, 150);
+
+    // Title
+    ctx.font = "bold 28px sans-serif";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillText(achievement.title, 300, 220);
+
+    // Description
+    ctx.font = "16px sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.fillText(achievement.desc, 300, 260);
+
+    // Points
+    ctx.font = "bold 20px sans-serif";
+    ctx.fillStyle = "#FFD700";
+    ctx.fillText(`+${achievement.bonusPoints} pts bônus`, 300, 310);
+
+    // App name
+    ctx.font = "14px sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.fillText("Caminho — Profissão de Fé", 300, 370);
+
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      const file = new File([blob], "conquista.png", { type: "image/png" });
+
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: `Conquista: ${achievement.title}`,
+            text: `${achievement.icon} Desbloqueei "${achievement.title}" no Caminho! ${achievement.desc}`,
+            files: [file],
+          });
+        } catch {
+          // User cancelled
+        }
+      } else {
+        // Fallback: download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "conquista.png";
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success("Imagem da conquista baixada!");
+      }
+    }, "image/png");
+  }
+
   async function handleResetGame() {
     setResettingGame(true);
     const userIds = members.map(m => m.user_id);
