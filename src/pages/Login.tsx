@@ -98,14 +98,16 @@ export default function Login() {
           <form onSubmit={handleLogin} className="space-y-4">
             {/* Email */}
             <div>
-              <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Email</label>
+              <label htmlFor="login-email" className="block text-sm font-inter font-medium text-foreground mb-1.5">Email</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
                 <input
+                  id="login-email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="seu@email.com"
+                  aria-describedby={error ? "login-error" : undefined}
                   className="w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent transition-all"
                   autoComplete="email"
                   required
@@ -115,14 +117,16 @@ export default function Login() {
 
             {/* Password */}
             <div>
-              <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Senha</label>
+              <label htmlFor="login-password" className="block text-sm font-inter font-medium text-foreground mb-1.5">Senha</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
+                  id="login-password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
+                  aria-describedby={error ? "login-error" : undefined}
                   className="w-full pl-10 pr-11 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent transition-all"
                   autoComplete="current-password"
                   required
@@ -147,7 +151,7 @@ export default function Login() {
 
             {/* Error */}
             {error && (
-              <div className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3">
+              <div className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3" role="alert" id="login-error">
                 <p className="text-destructive font-inter text-sm">{error}</p>
               </div>
             )}

@@ -18,7 +18,11 @@ const tabs = [
 
 export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
   return (
-    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-card border-t border-border shadow-xl">
+    <nav
+      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-card border-t border-border shadow-xl"
+      aria-label="Navegação principal"
+      role="tablist"
+    >
       <div className="grid grid-cols-6 py-1.5">
         {tabs.map(({ tab, icon: Icon, label, badge }) => {
           const isActive = activeTab === tab;
@@ -26,6 +30,9 @@ export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
           return (
             <button
               key={tab}
+              role="tab"
+              aria-selected={isActive}
+              aria-label={badge ? `${label} (novo)` : label}
               onClick={() => onChange(tab)}
               className={`flex flex-col items-center gap-0.5 py-1.5 px-0.5 rounded-xl transition-all active:scale-95 ${
                 isActive ? (isDiscipulado ? "text-primary" : "text-secondary") : "text-muted-foreground"
@@ -34,15 +41,15 @@ export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
               <div className={`relative w-7 h-7 flex items-center justify-center rounded-xl transition-all ${
                 isActive ? (isDiscipulado ? "bg-primary/10" : "bg-secondary/10") : ""
               }`}>
-                <Icon className={`w-4 h-4 ${isActive ? (isDiscipulado ? "text-primary" : "text-secondary") : "text-muted-foreground"}`} />
+                <Icon className={`w-4 h-4 ${isActive ? (isDiscipulado ? "text-primary" : "text-secondary") : "text-muted-foreground"}`} aria-hidden="true" />
                 {badge && (
-                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-secondary rounded-full" />
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-secondary rounded-full" aria-hidden="true" />
                 )}
               </div>
               <span className={`text-[9px] font-inter leading-none ${isActive ? (isDiscipulado ? "font-bold text-primary" : "font-bold text-secondary") : "font-medium"}`}>
                 {label}
               </span>
-              {isActive && <div className={`w-1 h-1 rounded-full ${isDiscipulado ? "bg-primary" : "bg-secondary"}`} />}
+              {isActive && <div className={`w-1 h-1 rounded-full ${isDiscipulado ? "bg-primary" : "bg-secondary"}`} aria-hidden="true" />}
             </button>
           );
         })}

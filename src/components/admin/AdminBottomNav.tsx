@@ -22,7 +22,11 @@ export default function AdminBottomNav({ active, onChange, userRole }: Props) {
   const tabs = userRole === "lider" ? ALL_TABS.filter(t => LIDER_TABS.includes(t.id)) : ALL_TABS;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border">
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border"
+      aria-label="Navegação do painel administrativo"
+      role="tablist"
+    >
       <div className="max-w-2xl mx-auto flex overflow-x-auto">
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -30,11 +34,15 @@ export default function AdminBottomNav({ active, onChange, userRole }: Props) {
           return (
             <button
               key={tab.id}
+              role="tab"
+              aria-selected={isActive}
+              aria-label={tab.label}
               onClick={() => onChange(tab.id)}
               className="flex-1 min-w-[60px] flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors"
             >
               <Icon
                 className={`w-5 h-5 ${isActive ? "text-primary" : "text-muted-foreground"}`}
+                aria-hidden="true"
               />
               <span
                 className={`text-[10px] font-inter font-medium leading-none ${
