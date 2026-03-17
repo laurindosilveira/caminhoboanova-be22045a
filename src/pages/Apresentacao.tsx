@@ -157,6 +157,7 @@ const PLANS = [
     members: "Até 100 membros",
     features: ["Trilhas de discipulado", "Devocionais diários", "Agenda da igreja", "Chat comunitário", "Pedidos de oração", "Controle de presença"],
     highlight: false,
+    priceId: STRIPE_PLANS.comunidade.price_id,
   },
   {
     name: "Crescimento",
@@ -167,6 +168,7 @@ const PLANS = [
     members: "Até 250 membros",
     features: ["Tudo do plano Comunidade", "Gamificação (pontos, conquistas, desafios)", "Relatórios de engajamento", "Gestão de turmas e grupos", "Notificações segmentadas"],
     highlight: true,
+    priceId: STRIPE_PLANS.crescimento.price_id,
   },
   {
     name: "Pastoral",
@@ -177,6 +179,7 @@ const PLANS = [
     members: "Membros ilimitados",
     features: ["Tudo do plano Crescimento", "Termômetro espiritual", "Plano de crescimento individual", "Multi-comunidades / multi-áreas", "Relatórios pastorais completos", "Suporte prioritário"],
     highlight: false,
+    priceId: STRIPE_PLANS.pastoral.price_id,
   },
 ];
 
