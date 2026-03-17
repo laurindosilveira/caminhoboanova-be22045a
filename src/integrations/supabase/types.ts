@@ -207,6 +207,81 @@ export type Database = {
           },
         ]
       }
+      church_subscriptions: {
+        Row: {
+          activities: string | null
+          average_age: string | null
+          church_address: string | null
+          church_email: string
+          church_name: string
+          church_phone: string | null
+          created_at: string
+          id: string
+          member_count: string | null
+          needs: string | null
+          objectives: string | null
+          pastor_email: string | null
+          pastor_name: string
+          pastor_phone: string | null
+          pastor_role: string | null
+          preferences: string | null
+          recommended_plan: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          subscription_status: string
+          trial_ends_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          activities?: string | null
+          average_age?: string | null
+          church_address?: string | null
+          church_email: string
+          church_name: string
+          church_phone?: string | null
+          created_at?: string
+          id?: string
+          member_count?: string | null
+          needs?: string | null
+          objectives?: string | null
+          pastor_email?: string | null
+          pastor_name: string
+          pastor_phone?: string | null
+          pastor_role?: string | null
+          preferences?: string | null
+          recommended_plan?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_status?: string
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          activities?: string | null
+          average_age?: string | null
+          church_address?: string | null
+          church_email?: string
+          church_name?: string
+          church_phone?: string | null
+          created_at?: string
+          id?: string
+          member_count?: string | null
+          needs?: string | null
+          objectives?: string | null
+          pastor_email?: string | null
+          pastor_name?: string
+          pastor_phone?: string | null
+          pastor_role?: string | null
+          preferences?: string | null
+          recommended_plan?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_status?: string
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       community_challenges: {
         Row: {
           area: string | null
