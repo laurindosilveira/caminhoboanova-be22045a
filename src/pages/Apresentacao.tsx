@@ -24,24 +24,24 @@ function JsonLdScript() {
       offers: [
         {
           "@type": "Offer",
-          name: "Essencial",
-          price: "97.00",
+          name: "Comunidade",
+          price: "79.00",
           priceCurrency: "BRL",
-          description: "Ideal para comunidades pequenas — até 50 membros",
+          description: "Ideal para igrejas menores ou grupos iniciantes — até 100 membros",
         },
         {
           "@type": "Offer",
-          name: "Comunidade",
-          price: "197.00",
+          name: "Crescimento",
+          price: "129.00",
           priceCurrency: "BRL",
-          description: "Para igrejas em crescimento — até 200 membros",
+          description: "Para igrejas em desenvolvimento — até 250 membros",
         },
         {
           "@type": "Offer",
           name: "Pastoral",
-          price: "347.00",
+          price: "199.00",
           priceCurrency: "BRL",
-          description: "Para igrejas grandes ou redes — membros ilimitados",
+          description: "Para igrejas maiores ou com múltiplas comunidades — membros ilimitados",
         },
       ],
       aggregateRating: {
