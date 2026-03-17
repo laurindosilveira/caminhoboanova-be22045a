@@ -250,36 +250,6 @@ export default function Apresentacao() {
         </div>
       </section>
 
-      {/* ─── TESTIMONIALS ───────────────────────────────── */}
-      <section id="depoimentos" className="py-20 lg:py-28 bg-gradient-to-br from-emerald-50 to-teal-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0} className="text-center max-w-2xl mx-auto mb-16">
-            <p className="text-emerald-600 font-semibold text-sm uppercase tracking-wider mb-3">Depoimentos</p>
-            <h2 className="text-3xl sm:text-4xl font-black tracking-tight">O que dizem nossos parceiros</h2>
-          </motion.div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {TESTIMONIALS.map((t, i) => (
-              <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={i}
-                className="bg-white p-8 rounded-2xl shadow-lg shadow-emerald-100/30 border border-emerald-100/50 relative">
-                <div className="absolute top-6 right-6 text-5xl text-emerald-100 font-serif">"</div>
-                <div className="flex gap-0.5 text-amber-400 mb-4">
-                  {[1, 2, 3, 4, 5].map(s => <Star key={s} className="w-4 h-4 fill-current" />)}
-                </div>
-                <p className="text-gray-600 leading-relaxed mb-6 relative z-10">"{t.text}"</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center text-2xl">{t.avatar}</div>
-                  <div>
-                    <p className="font-bold text-sm">{t.name}</p>
-                    <p className="text-gray-400 text-xs">{t.church}</p>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ─── PRICING ────────────────────────────────────── */}
       <section id="planos" className="py-20 lg:py-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
