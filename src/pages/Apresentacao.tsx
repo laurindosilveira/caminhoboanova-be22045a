@@ -6,7 +6,8 @@ import { toast } from "@/hooks/use-toast";
 import {
   BookOpen, Users, Calendar, Bell, BarChart3, Shield, MessageCircle,
   Trophy, Heart, ChevronDown, Check, Star, Smartphone,
-  TrendingUp, Clock, Globe, ArrowRight, Church, Sparkles
+  TrendingUp, Clock, Globe, ArrowRight, Church, Sparkles,
+  Menu, X
 } from "lucide-react";
 import heroPhone from "@/assets/landing-hero-phone.png";
 import communityImg from "@/assets/landing-community.png";
@@ -194,6 +195,7 @@ const FAQ = [
 export default function Apresentacao() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Show toast on checkout return
   useEffect(() => {
@@ -241,10 +243,61 @@ export default function Apresentacao() {
             <a href="#beneficios" className="hover:text-primary transition-colors">Benefícios</a>
             <a href="#planos" className="hover:text-primary transition-colors">Planos</a>
           </div>
-          <a href="#planos" className="px-5 py-2.5 rounded-full text-primary-foreground text-sm font-semibold hover:shadow-lg transition-all" style={{ background: "var(--gradient-hero)" }}>
-            Começar agora
-          </a>
+          <div className="flex items-center gap-3">
+            <a href="#planos" className="hidden sm:inline-flex px-5 py-2.5 rounded-full text-primary-foreground text-sm font-semibold hover:shadow-lg transition-all" style={{ background: "var(--gradient-hero)" }}>
+              Começar agora
+            </a>
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 rounded-lg text-foreground hover:bg-muted transition-colors"
+              aria-label="Abrir menu"
+            >
+              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
         </div>
+
+        {/* Mobile menu */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="md:hidden border-t border-border bg-background/95 backdrop-blur-xl overflow-hidden"
+            >
+              <div className="px-4 py-4 space-y-1">
+                {[
+                  { href: "#funcionalidades", icon: Sparkles, label: "Funcionalidades" },
+                  { href: "#beneficios", icon: TrendingUp, label: "Benefícios" },
+                  { href: "#planos", icon: Star, label: "Planos" },
+                  { href: "#faq", icon: MessageCircle, label: "Perguntas Frequentes" },
+                ].map((item) => (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-foreground font-inter font-medium text-sm hover:bg-primary/10 hover:text-primary transition-colors"
+                  >
+                    <item.icon className="w-5 h-5 text-primary" />
+                    {item.label}
+                  </a>
+                ))}
+                <div className="pt-2">
+                  <a
+                    href="#planos"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center justify-center gap-2 w-full px-5 py-3 rounded-full text-primary-foreground text-sm font-semibold transition-all"
+                    style={{ background: "var(--gradient-hero)" }}
+                  >
+                    Começar agora <ArrowRight className="w-4 h-4" />
+                  </a>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </nav>
 
       {/* ─── HERO ───────────────────────────────────────── */}
