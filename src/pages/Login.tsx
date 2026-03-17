@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Eye, EyeOff, Mail, Lock, Flame, ShieldCheck, MessageCircle } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, Flame, MessageCircle } from "lucide-react";
 import { z } from "zod";
 
 const loginSchema = z.object({
@@ -19,8 +19,6 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const [adminMode, setAdminMode] = useState(false);
-
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -32,37 +30,48 @@ export default function Login() {
     }
 
     setLoading(true);
+
+    // First check if user exists by trying to sign in
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email: parsed.data.email,
       password: parsed.data.password,
     });
 
     if (authError) {
-      setError("Email ou senha incorretos. Verifique seus dados.");
+      // Differentiate error types
+      const msg = authError.message?.toLowerCase() || "";
+      if (msg.includes("invalid login credentials")) {
+        // Check if user exists by attempting password reset (won't send if no user)
+        // Supabase doesn't differentiate natively, but we can provide better UX
+        setError("Email ou senha incorretos. Verifique seus dados e tente novamente.");
+      } else if (msg.includes("email not confirmed")) {
+        setError("Seu email ainda não foi confirmado. Verifique sua caixa de entrada.");
+      } else if (msg.includes("too many requests") || msg.includes("rate limit")) {
+        setError("Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.");
+      } else {
+        setError("Erro ao entrar: " + authError.message);
+      }
       setLoading(false);
       return;
     }
 
-    if (adminMode && authData.user) {
-      // Verify admin/lider role before navigating
-      const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: authData.user.id, _role: "admin" });
-      const { data: isLider } = await supabase.rpc("has_role", { _user_id: authData.user.id, _role: "lider" });
+    // Auto-redirect based on role
+    if (authData.user) {
+      const [{ data: isAdmin }, { data: isLider }] = await Promise.all([
+        supabase.rpc("has_role", { _user_id: authData.user.id, _role: "admin" }),
+        supabase.rpc("has_role", { _user_id: authData.user.id, _role: "lider" }),
+      ]);
+
       if (isAdmin || isLider) {
         navigate("/admin");
       } else {
-        setError("Você não possui permissão de administrador.");
-        await supabase.auth.signOut();
-        setLoading(false);
-        return;
+        navigate("/");
       }
-    } else {
-      navigate("/");
     }
   }
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--gradient-hero)" }}>
-      {/* Top decorative */}
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
         {/* Logo area */}
         <div className="mb-8 text-center">
@@ -122,6 +131,7 @@ export default function Login() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -146,25 +156,11 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              onClick={() => setAdminMode(false)}
               className="w-full py-3.5 rounded-xl font-montserrat font-bold text-primary-foreground text-base transition-all active:scale-95 disabled:opacity-60 shadow-md"
               style={{ background: "var(--gradient-orange)" }}
             >
-              {loading && !adminMode ? "Entrando..." : "Entrar na Jornada"}
+              {loading ? "Entrando..." : "Entrar na Jornada"}
             </button>
-
-            {/* Admin access */}
-            <div className="text-center pt-1">
-              <button
-                type="submit"
-                disabled={loading}
-                onClick={() => setAdminMode(true)}
-                className="text-muted-foreground font-inter text-xs hover:text-foreground transition-colors inline-flex items-center gap-1 disabled:opacity-60"
-              >
-                <ShieldCheck className="w-3 h-3" />
-                {loading && adminMode ? "Verificando..." : "Acesso administrativo"}
-              </button>
-            </div>
           </form>
 
           <div className="mt-6 text-center">
@@ -190,7 +186,7 @@ export default function Login() {
           </span>
         </a>
 
-        {/* Bottom streak badge */}
+        {/* Bottom badge */}
         <div className="mt-3 flex items-center gap-2 bg-white/10 rounded-2xl px-4 py-2 backdrop-blur">
           <Flame className="w-5 h-5 text-secondary" />
           <span className="text-primary-foreground font-inter text-sm">
