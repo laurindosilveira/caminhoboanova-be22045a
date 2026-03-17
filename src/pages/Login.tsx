@@ -151,7 +151,7 @@ export default function Login() {
 
             {/* Error */}
             {error && (
-              <div className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3">
+              <div className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3" role="alert" id="login-error">
                 <p className="text-destructive font-inter text-sm">{error}</p>
               </div>
             )}
