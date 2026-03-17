@@ -474,19 +474,18 @@ export default function Apresentacao() {
                   ))}
                 </ul>
 
-                <a
-                  href={WHATSAPP_LINK}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`w-full block py-3.5 rounded-2xl font-montserrat font-bold text-sm text-center transition-all ${
+                <button
+                  onClick={() => handleCheckout(p.priceId)}
+                  disabled={checkoutLoading === p.priceId}
+                  className={`w-full block py-3.5 rounded-2xl font-montserrat font-bold text-sm text-center transition-all disabled:opacity-60 ${
                     p.highlight
                       ? "bg-card text-primary hover:bg-card/90 hover:shadow-lg"
                       : "text-primary-foreground hover:shadow-lg hover:shadow-primary/25"
                   }`}
                   style={!p.highlight ? { background: "var(--gradient-hero)" } : undefined}
                 >
-                  Começar teste grátis
-                </a>
+                  {checkoutLoading === p.priceId ? "Redirecionando..." : "Começar teste grátis"}
+                </button>
               </motion.div>
             ))}
           </div>
