@@ -59,8 +59,8 @@ export default function AdminSistema() {
   }, [user, isAllowed, authLoading, navigate]);
 
   useEffect(() => {
-    if (user && isSuper) fetchChurches();
-  }, [user, isSuper]);
+    if (user && isAllowed) fetchChurches();
+  }, [user, isAllowed]);
 
   async function fetchChurches() {
     setLoading(true);
