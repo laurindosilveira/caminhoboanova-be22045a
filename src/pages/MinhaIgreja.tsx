@@ -102,7 +102,7 @@ export default function MinhaIgreja() {
           <h1 className="font-montserrat font-black text-xl text-foreground">⛪ Minha Igreja</h1>
           <p className="text-muted-foreground text-xs font-inter">Gerencie sua assinatura e recibos</p>
         </div>
-        <button onClick={fetchSubscription} className="ml-auto w-10 h-10 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors">
+        <button onClick={fetchSubscription} aria-label="Atualizar status da assinatura" className="ml-auto w-10 h-10 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors">
           <RefreshCw className="w-4 h-4 text-muted-foreground" />
         </button>
       </div>
