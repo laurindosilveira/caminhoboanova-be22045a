@@ -705,7 +705,30 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
 
       {/* Save button (only for users) */}
       {!isAdmin && (
-        <div className="space-y-2">
+        <div className="space-y-2 relative">
+          {/* Completion celebration overlay */}
+          <AnimatePresence>
+            {showCompletionAnim && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="absolute -top-20 left-0 right-0 z-10 flex flex-col items-center"
+              >
+                <motion.div
+                  initial={{ y: 20 }}
+                  animate={{ y: [20, -10, 0] }}
+                  transition={{ duration: 0.6, ease: "easeOut" }}
+                  className="bg-brand-green/95 text-primary-foreground px-6 py-3 rounded-2xl shadow-lg flex items-center gap-2"
+                >
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span className="font-montserrat font-bold text-sm">Lição concluída! 🎉</span>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <button
             onClick={handleSaveAll}
             disabled={saving}
