@@ -53,7 +53,7 @@ export default function Index() {
   // Not by the legacy user_progress table
 
   return (
-    <div className="min-h-screen bg-background flex flex-col max-w-md mx-auto relative">
+    <div id="main-content" className="min-h-screen bg-background flex flex-col max-w-md mx-auto relative">
       {/* Hero header — always visible */}
       <HeroHeader
         streakDays={stats.streakDays}
