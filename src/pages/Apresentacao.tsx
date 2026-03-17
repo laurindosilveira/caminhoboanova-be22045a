@@ -226,7 +226,7 @@ export default function Apresentacao() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
+    <div id="topo" className="min-h-screen bg-background text-foreground overflow-x-hidden">
       {/* JSON-LD structured data for SEO */}
       <JsonLdScript />
 
@@ -251,7 +251,9 @@ export default function Apresentacao() {
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="md:hidden p-2 rounded-lg text-foreground hover:bg-muted transition-colors"
-              aria-label="Abrir menu"
+              aria-label={mobileMenuOpen ? "Fechar menu" : "Abrir menu"}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-navigation"
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -262,6 +264,7 @@ export default function Apresentacao() {
         <AnimatePresence>
           {mobileMenuOpen && (
             <motion.div
+              id="mobile-navigation"
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
@@ -270,15 +273,20 @@ export default function Apresentacao() {
             >
               <div className="px-4 py-4 space-y-1">
                 {[
+                  { href: "#topo", icon: Church, label: "Início" },
                   { href: "#funcionalidades", icon: Sparkles, label: "Funcionalidades" },
                   { href: "#beneficios", icon: TrendingUp, label: "Benefícios" },
+                  { href: "#como-funciona", icon: Calendar, label: "Como funciona" },
                   { href: "#planos", icon: Star, label: "Planos" },
-                  { href: "#faq", icon: MessageCircle, label: "Perguntas Frequentes" },
+                  { href: "#faq", icon: MessageCircle, label: "Perguntas frequentes" },
+                  { href: WHATSAPP_LINK, icon: Smartphone, label: "Contato", external: true },
                 ].map((item) => (
                   <a
-                    key={item.href}
+                    key={item.label}
                     href={item.href}
                     onClick={() => setMobileMenuOpen(false)}
+                    target={item.external ? "_blank" : undefined}
+                    rel={item.external ? "noopener noreferrer" : undefined}
                     className="flex items-center gap-3 px-4 py-3 rounded-xl text-foreground font-inter font-medium text-sm hover:bg-primary/10 hover:text-primary transition-colors"
                   >
                     <item.icon className="w-5 h-5 text-primary" />
