@@ -241,16 +241,8 @@ export default function Apresentacao() {
                 </a>
               </motion.div>
               <motion.div variants={fadeUp} custom={4} className="flex items-center gap-6 pt-2">
-                <div className="flex -space-x-3">
-                  {["🧑‍💼", "👩‍🏫", "👨‍💻", "👩‍💻"].map((e, i) => (
-                    <div key={i} className="w-10 h-10 rounded-full bg-primary/10 border-2 border-background flex items-center justify-center text-lg">{e}</div>
-                  ))}
-                </div>
-                <div>
-                  <div className="flex gap-0.5 text-accent text-sm" aria-label="5 estrelas">
-                    {[1, 2, 3, 4, 5].map(i => <Star key={i} className="w-4 h-4 fill-current" />)}
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-0.5 font-inter">+200 igrejas já utilizam</p>
+                <div className="flex gap-0.5 text-accent text-sm" aria-label="5 estrelas">
+                  {[1, 2, 3, 4, 5].map(i => <Star key={i} className="w-4 h-4 fill-current" />)}
                 </div>
               </motion.div>
             </motion.div>
