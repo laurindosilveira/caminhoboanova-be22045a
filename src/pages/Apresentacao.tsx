@@ -250,6 +250,37 @@ export default function Apresentacao() {
         </div>
       </section>
 
+      {/* ─── COMO FUNCIONA ─────────────────────────────── */}
+      <section id="como-funciona" className="py-20 lg:py-28 bg-gradient-to-br from-emerald-50 to-teal-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0} className="text-center max-w-2xl mx-auto mb-16">
+            <p className="text-emerald-600 font-semibold text-sm uppercase tracking-wider mb-3">Como funciona</p>
+            <h2 className="text-3xl sm:text-4xl font-black tracking-tight">Comece em 4 passos simples</h2>
+          </motion.div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            {[
+              { step: 1, title: "Cadastre sua igreja", desc: "Crie sua conta e configure as comunidades, áreas e turmas da sua igreja.", icon: Church },
+              { step: 2, title: "Convide os membros", desc: "Compartilhe o link de cadastro com líderes e jovens da sua comunidade.", icon: Users },
+              { step: 3, title: "Configure o conteúdo", desc: "Adicione cursos, lições, devocionais e eventos no painel administrativo.", icon: BookOpen },
+              { step: 4, title: "Acompanhe o crescimento", desc: "Monitore o engajamento, presença e saúde espiritual em tempo real.", icon: TrendingUp },
+            ].map((item, i) => (
+              <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={i}
+                className="relative bg-white rounded-2xl p-8 shadow-lg shadow-emerald-100/30 border border-emerald-100/50 text-center">
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white font-bold text-sm flex items-center justify-center shadow-md">
+                  {item.step}
+                </div>
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center mx-auto mb-4 mt-2">
+                  <item.icon className="w-7 h-7 text-emerald-600" />
+                </div>
+                <h3 className="font-bold text-lg mb-2">{item.title}</h3>
+                <p className="text-gray-500 text-sm leading-relaxed">{item.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ─── PRICING ────────────────────────────────────── */}
       <section id="planos" className="py-20 lg:py-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
