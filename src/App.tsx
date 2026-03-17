@@ -75,6 +75,7 @@ const AppRoutes = () => (
     <Route path="/exportar-dados" element={<ProtectedRoute><ExportData /></ProtectedRoute>} />
     <Route path="/minha-igreja" element={<ProtectedRoute><MinhaIgreja /></ProtectedRoute>} />
     <Route path="/onboarding" element={<Onboarding />} />
+    <Route path="/admin-sistema" element={<ProtectedRoute><AdminSistema /></ProtectedRoute>} />
 
     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
     <Route path="*" element={<NotFound />} />

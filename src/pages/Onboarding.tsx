@@ -145,6 +145,32 @@ export default function Onboarding() {
   const handleCheckout = useCallback(async (priceId: string) => {
     setCheckoutLoading(true);
     try {
+      // Save church data to database before checkout
+      const trialEndsAt = new Date();
+      trialEndsAt.setDate(trialEndsAt.getDate() + 30);
+
+      const { error: insertError } = await supabase.from("church_subscriptions" as any).insert({
+        church_name: church.name,
+        church_address: church.address,
+        church_phone: church.phone,
+        church_email: church.email,
+        pastor_name: pastor.fullName,
+        pastor_role: pastor.role,
+        pastor_phone: pastor.phone,
+        pastor_email: pastor.email,
+        member_count: community.memberCount,
+        average_age: community.averageAge,
+        activities: community.activities,
+        objectives: questionnaire.objectives,
+        needs: questionnaire.needs,
+        preferences: questionnaire.preferences,
+        recommended_plan: recommendedPlan,
+        subscription_status: "pending_checkout",
+        trial_ends_at: trialEndsAt.toISOString(),
+      });
+
+      if (insertError) console.error("Erro ao salvar dados da igreja:", insertError);
+
       const { data, error } = await supabase.functions.invoke("create-checkout", {
         body: { priceId },
       });
@@ -155,7 +181,7 @@ export default function Onboarding() {
     } finally {
       setCheckoutLoading(false);
     }
-  }, []);
+  }, [church, pastor, community, questionnaire, recommendedPlan]);
 
   // ─── Field helpers ─────────────────────────────────────
   const inputClass = "bg-card border-border focus:border-primary";
