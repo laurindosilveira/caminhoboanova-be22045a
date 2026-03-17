@@ -3,12 +3,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
-import { supabase } from "@/integrations/supabase/client";
 
 import HeroHeader from "@/components/home/HeroHeader";
 import AnnouncementsSection from "@/components/home/AnnouncementsSection";
 import NextCourseActivityCard from "@/components/home/NextCourseActivityCard";
-import MissionCard from "@/components/home/MissionCard";
 import JourneyPath from "@/components/home/JourneyPath";
 import AchievementsGrid from "@/components/home/AchievementsGrid";
 import DiscipleProfile from "@/components/home/DiscipleProfile";
@@ -24,12 +22,16 @@ import PushActivationBanner from "@/components/home/PushActivationBanner";
 import RemindersSection from "@/components/home/RemindersSection";
 import PersonalizedGreeting from "@/components/home/PersonalizedGreeting";
 import BottomNav, { type Tab } from "@/components/home/BottomNav";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUserStats } from "@/hooks/useUserStats";
 import { useAppNotifications } from "@/hooks/useAppNotifications";
+
+type ProfileSubTab = "meu-perfil" | "minha-jornada" | "configuracoes";
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>("jornada");
   const [targetLessonId, setTargetLessonId] = useState<string | null>(null);
+  const [profileSubTab, setProfileSubTab] = useState<ProfileSubTab>("meu-perfil");
   const { profile, role } = useAuth();
   const navigate = useNavigate();
   const stats = useUserStats();
@@ -170,49 +172,75 @@ export default function Index() {
 
         {/* ===== PERFIL ===== */}
         {activeTab === "perfil" && (
-          <div className="pt-5 pb-4">
-            <div className="px-5 mb-4">
-              <h2 className="font-montserrat font-black text-foreground text-xl">👤 Meu Perfil</h2>
+          <div className="pt-5 pb-4 space-y-4">
+            <div className="px-5">
+              <h2 className="font-montserrat font-black text-foreground text-xl">👤 Perfil</h2>
             </div>
-            <DiscipleProfile
-              faithPoints={stats.faithPoints}
-              faithLevel={stats.faithLevel}
-              streakDays={stats.streakDays}
-              completedCount={stats.completedCount}
-              community={profile?.community}
-              area={profile?.area}
-            />
 
-            {/* Edição de dados pessoais */}
-            <EditProfileForm />
+            <div className="px-5">
+              <Tabs value={profileSubTab} onValueChange={(value) => setProfileSubTab(value as ProfileSubTab)}>
+                <TabsList className="grid w-full grid-cols-3 h-11">
+                  <TabsTrigger value="meu-perfil" className="text-[11px] sm:text-xs">Meu Perfil</TabsTrigger>
+                  <TabsTrigger value="minha-jornada" className="text-[11px] sm:text-xs">Minha Jornada</TabsTrigger>
+                  <TabsTrigger value="configuracoes" className="text-[11px] sm:text-xs">Configurações</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
 
-            {/* Notificações */}
-            <NotificationSettings />
+            {profileSubTab === "meu-perfil" && (
+              <>
+                <DiscipleProfile
+                  faithPoints={stats.faithPoints}
+                  faithLevel={stats.faithLevel}
+                  streakDays={stats.streakDays}
+                  completedCount={stats.completedCount}
+                  community={profile?.community}
+                  area={profile?.area}
+                />
 
-            {/* Banner instalar app */}
-            <InstallAppCard />
+                {/* Banner instalar app */}
+                <InstallAppCard />
 
-            {/* Admin/Líder access */}
-            {(role === "admin" || role === "lider") && (
-              <div className="px-5 mt-3">
-                <button
-                  onClick={() => navigate("/admin")}
-                  className="w-full flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm hover:bg-muted/50 transition-colors"
-                >
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
-                    <ShieldCheck className="w-5 h-5 text-primary-foreground" />
+                {/* Admin/Líder access */}
+                {(role === "admin" || role === "lider") && (
+                  <div className="px-5 mt-3">
+                    <button
+                      onClick={() => navigate("/admin")}
+                      className="w-full flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
+                        <ShieldCheck className="w-5 h-5 text-primary-foreground" />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-montserrat font-bold text-foreground text-sm">
+                          {role === "admin" ? "Área do Administrador" : "Área do Líder"}
+                        </p>
+                        <p className="text-muted-foreground text-xs font-inter">
+                          {role === "admin" ? "Gerenciar participantes e conteúdo" : "Gerenciar cursos e usuários"}
+                        </p>
+                      </div>
+                      <span className="ml-auto text-muted-foreground text-xs">→</span>
+                    </button>
                   </div>
-                  <div className="text-left">
-                    <p className="font-montserrat font-bold text-foreground text-sm">
-                      {role === "admin" ? "Área do Administrador" : "Área do Líder"}
-                    </p>
-                    <p className="text-muted-foreground text-xs font-inter">
-                      {role === "admin" ? "Gerenciar participantes e conteúdo" : "Gerenciar cursos e usuários"}
-                    </p>
-                  </div>
-                  <span className="ml-auto text-muted-foreground text-xs">→</span>
-                </button>
-              </div>
+                )}
+              </>
+            )}
+
+            {profileSubTab === "minha-jornada" && (
+              <>
+                <NextCourseActivityCard onNavigateToDiscipulado={() => setActiveTab("discipulado")} />
+                <JourneyPath />
+              </>
+            )}
+
+            {profileSubTab === "configuracoes" && (
+              <>
+                {/* Edição de dados pessoais */}
+                <EditProfileForm />
+
+                {/* Notificações */}
+                <NotificationSettings />
+              </>
             )}
           </div>
         )}
