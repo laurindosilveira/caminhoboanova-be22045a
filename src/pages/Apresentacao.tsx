@@ -151,6 +151,7 @@ const STATS = [
 const PLANS = [
   {
     name: "Comunidade",
+    planKey: "comunidade",
     emoji: "🟢",
     price: "R$ 79",
     period: "/mês",
@@ -162,6 +163,7 @@ const PLANS = [
   },
   {
     name: "Crescimento",
+    planKey: "crescimento",
     emoji: "🔵",
     price: "R$ 129",
     period: "/mês",
@@ -173,6 +175,7 @@ const PLANS = [
   },
   {
     name: "Pastoral",
+    planKey: "pastoral",
     emoji: "🟣",
     price: "R$ 199",
     period: "/mês",
