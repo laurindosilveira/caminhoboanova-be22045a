@@ -1,18 +1,20 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
 
 import AdminHeader from "@/components/admin/AdminHeader";
 import AdminBottomNav, { AdminTab } from "@/components/admin/AdminBottomNav";
-import CoursesTab from "@/components/admin/tabs/CoursesTab";
-import AttendanceTab from "@/components/admin/tabs/AttendanceTab";
-import UsersTab from "@/components/admin/tabs/UsersTab";
-import AdminPushTab from "@/components/admin/tabs/AdminPushTab";
-import AdminOverviewTab from "@/components/admin/tabs/AdminOverviewTab";
-import AdminAlertsTab from "@/components/admin/tabs/AdminAlertsTab";
-import AdminLeadersTab from "@/components/admin/tabs/AdminLeadersTab";
+
+// Lazy-loaded tab components
+const CoursesTab = lazy(() => import("@/components/admin/tabs/CoursesTab"));
+const AttendanceTab = lazy(() => import("@/components/admin/tabs/AttendanceTab"));
+const UsersTab = lazy(() => import("@/components/admin/tabs/UsersTab"));
+const AdminPushTab = lazy(() => import("@/components/admin/tabs/AdminPushTab"));
+const AdminOverviewTab = lazy(() => import("@/components/admin/tabs/AdminOverviewTab"));
+const AdminAlertsTab = lazy(() => import("@/components/admin/tabs/AdminAlertsTab"));
+const AdminLeadersTab = lazy(() => import("@/components/admin/tabs/AdminLeadersTab"));
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
 const AREA_2_COMMUNITIES = ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"];
@@ -29,6 +31,17 @@ type Participant = {
 type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
 type Turma = { id: string; name: string; area: string | null; year: number; is_active: boolean; description: string | null };
 
+function TabSkeleton() {
+  return (
+    <div className="flex flex-col items-center justify-center py-20">
+      <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
+        <span className="text-2xl">✝️</span>
+      </div>
+      <p className="text-muted-foreground font-inter text-sm">Carregando...</p>
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { profile, role, isSuper, signOut } = useAuth();
@@ -43,6 +56,7 @@ export default function AdminDashboard() {
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [selectedTurma, setSelectedTurma] = useState<Turma | null>(null);
   const [expandedArea, setExpandedArea] = useState<string | null>(null);
+  const [turmaSearch, setTurmaSearch] = useState("");
 
   useEffect(() => {
     if (role !== "admin" && role !== "lider") { navigate("/"); return; }
@@ -77,7 +91,7 @@ export default function AdminDashboard() {
     setPlans(map);
   }, []);
 
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     const [{ data: activitiesData }, { data: profilesData }, userResult, { data: turmasData }] = await Promise.all([
       supabase.from("activities").select("*").order("order_num"),
@@ -105,148 +119,65 @@ export default function AdminDashboard() {
     setTurmas(turmasData ?? []);
     await fetchPlans(participantList.map(p => p.user_id));
     setLoading(false);
-  }
+  }, [fetchPlans]);
 
-  // Filter participants by selected turma
-  const filteredParticipants = selectedTurma
-    ? participants.filter(p => (p as any).turma_id === selectedTurma.id)
-    : participants;
+  // Memoized filtered participants
+  const filteredParticipants = useMemo(() =>
+    selectedTurma
+      ? participants.filter(p => (p as any).turma_id === selectedTurma.id)
+      : participants,
+    [selectedTurma, participants]
+  );
 
-  const communities = selectedTurma?.area
-    ? (selectedTurma.area === "Área 1" ? AREA_1_COMMUNITIES : AREA_2_COMMUNITIES)
-    : ALL_COMMUNITIES;
+  const communities = useMemo(() =>
+    selectedTurma?.area
+      ? (selectedTurma.area === "Área 1" ? AREA_1_COMMUNITIES : AREA_2_COMMUNITIES)
+      : ALL_COMMUNITIES,
+    [selectedTurma]
+  );
 
-  const stats = {
+  const stats = useMemo(() => ({
     total: filteredParticipants.length,
     avancados: filteredParticipants.filter(p => activities.length > 0 && p.completed_count / activities.length >= 0.7).length,
     semAtividade: filteredParticipants.filter(p => p.completed_count === 0).length,
     mediaProgresso: filteredParticipants.length > 0
       ? Math.round(filteredParticipants.reduce((s, p) => s + (activities.length > 0 ? (p.completed_count / activities.length) * 100 : 0), 0) / filteredParticipants.length)
       : 0,
-  };
+  }), [filteredParticipants, activities]);
+
+  const handleChangeCommunity = useCallback(() => {
+    if (role === "lider") {
+      navigate("/");
+    } else {
+      setSelectedTurma(null);
+      setExpandedArea(null);
+    }
+  }, [role, navigate]);
+
+  const handleSelectTurmaFromUsers = useCallback((turma: { area: string }) => {
+    const found = turmas.find(t => t.area === turma.area);
+    if (found) {
+      setSelectedTurma(found);
+      setActiveTab("overview");
+    }
+  }, [turmas]);
 
   // ===== TURMA SELECTOR SCREEN =====
   if (!selectedTurma) {
-    const area1Turmas = turmas.filter(t => t.area === "Área 1");
-    const area2Turmas = turmas.filter(t => t.area === "Área 2");
-
-    const adminArea = profile?.area ?? "";
-    const areasToShow = isSuper
-      ? [{ name: "Área 1", turmas: area1Turmas, communities: AREA_1_COMMUNITIES, icon: "⛪" },
-         { name: "Área 2", turmas: area2Turmas, communities: AREA_2_COMMUNITIES, icon: "✝️" }]
-      : adminArea === "Área 1"
-        ? [{ name: "Área 1", turmas: area1Turmas, communities: AREA_1_COMMUNITIES, icon: "⛪" }]
-        : [{ name: "Área 2", turmas: area2Turmas, communities: AREA_2_COMMUNITIES, icon: "✝️" }];
-
     return (
-      <div className="min-h-screen bg-background">
-        <header className="px-4 pt-8 pb-6" style={{ background: "var(--gradient-hero)" }}>
-          <div className="max-w-2xl mx-auto">
-            <button
-              onClick={() => navigate("/")}
-              className="flex items-center gap-1.5 text-primary-foreground/70 font-inter text-xs mb-3 hover:text-primary-foreground transition-colors"
-            >
-              <span className="text-sm">←</span> Voltar para área geral
-            </button>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-2xl bg-white/15 border border-white/30 flex items-center justify-center">
-                <span className="text-xl">{isSuper ? "👑" : "✝️"}</span>
-              </div>
-              <div>
-                <p className="text-primary-foreground/60 font-inter text-xs">
-                  {isSuper ? "Super Administrador" : "Painel do Administrador"}
-                </p>
-                <h1 className="font-montserrat font-black text-primary-foreground text-lg">Selecione a Turma</h1>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <main className="max-w-2xl mx-auto px-4 py-6 space-y-3">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-20">
-              <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
-                <span className="text-2xl">✝️</span>
-              </div>
-              <p className="text-muted-foreground font-inter text-sm">Carregando painel...</p>
-            </div>
-          ) : (
-            <>
-              <p className="text-center text-muted-foreground font-inter text-xs">
-                Escolha uma turma para gerenciar
-              </p>
-
-              {areasToShow.map(areaInfo => {
-                const isExpanded = expandedArea === areaInfo.name;
-                const areaParticipants = participants.filter(p => p.area === areaInfo.name);
-
-                return (
-                  <div key={areaInfo.name} className="space-y-2">
-                    <button
-                      onClick={() => setExpandedArea(isExpanded ? null : areaInfo.name)}
-                      className={`w-full flex items-center gap-4 p-4 bg-card rounded-2xl border-2 shadow-sm transition-all ${
-                        isExpanded ? "border-primary/50 bg-primary/5" : "border-border hover:border-primary/30 hover:bg-primary/5"
-                      }`}
-                    >
-                      <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center">
-                        <span className="text-2xl">{areaInfo.icon}</span>
-                      </div>
-                      <div className="text-left flex-1">
-                        <p className="font-montserrat font-bold text-foreground text-sm">{areaInfo.name}</p>
-                        <p className="text-muted-foreground font-inter text-[11px] mt-0.5 leading-snug">
-                          {areaInfo.communities.join(", ")}
-                        </p>
-                        <p className="text-muted-foreground font-inter text-[10px] mt-1">
-                          {areaParticipants.length} participante{areaParticipants.length !== 1 ? "s" : ""} · {areaInfo.turmas.length} turma{areaInfo.turmas.length !== 1 ? "s" : ""}
-                        </p>
-                      </div>
-                      {isExpanded
-                        ? <ChevronUp className="w-5 h-5 text-primary" />
-                        : <ChevronDown className="w-5 h-5 text-muted-foreground" />
-                      }
-                    </button>
-
-                    {isExpanded && (
-                      <div className="pl-6 space-y-2 animate-in slide-in-from-top-2 duration-200">
-                        {areaInfo.turmas.length === 0 ? (
-                          <p className="text-muted-foreground font-inter text-xs py-3 text-center">
-                            Nenhuma turma ativa nesta área.
-                          </p>
-                        ) : (
-                          areaInfo.turmas.map(turma => {
-                            const turmaParticipants = participants.filter(p => (p as any).turma_id === turma.id);
-                            return (
-                              <button
-                                key={turma.id}
-                                onClick={() => setSelectedTurma(turma)}
-                                className="w-full flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-sm hover:border-primary/50 hover:bg-primary/5 transition-all"
-                              >
-                                <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
-                                  <span className="text-base">📚</span>
-                                </div>
-                                <div className="text-left flex-1">
-                                  <p className="font-montserrat font-bold text-foreground text-xs">{turma.name}</p>
-                                  {turma.description && (
-                                    <p className="text-muted-foreground font-inter text-[10px] mt-0.5">{turma.description}</p>
-                                  )}
-                                  <p className="text-muted-foreground font-inter text-[10px] mt-0.5">
-                                    {turmaParticipants.length} participante{turmaParticipants.length !== 1 ? "s" : ""}
-                                  </p>
-                                </div>
-                                <span className="text-muted-foreground text-sm">→</span>
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </>
-          )}
-        </main>
-      </div>
+      <TurmaSelector
+        loading={loading}
+        turmas={turmas}
+        participants={participants}
+        isSuper={isSuper}
+        adminArea={profile?.area ?? ""}
+        expandedArea={expandedArea}
+        setExpandedArea={setExpandedArea}
+        turmaSearch={turmaSearch}
+        setTurmaSearch={setTurmaSearch}
+        onSelectTurma={setSelectedTurma}
+        onBack={() => navigate("/")}
+      />
     );
   }
 
@@ -266,26 +197,14 @@ export default function AdminDashboard() {
         participants={filteredParticipants}
         activities={activities}
         turmaLabel={turmaName}
-        onChangeCommunity={() => {
-          if (role === "lider") {
-            navigate("/");
-          } else {
-            setSelectedTurma(null);
-            setExpandedArea(null);
-          }
-        }}
+        onChangeCommunity={handleChangeCommunity}
       />
 
       <main className="max-w-2xl mx-auto px-4 py-5 pb-24">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
-              <span className="text-2xl">✝️</span>
-            </div>
-            <p className="text-muted-foreground font-inter text-sm">Carregando painel...</p>
-          </div>
+          <TabSkeleton />
         ) : (
-          <>
+          <Suspense fallback={<TabSkeleton />}>
             {activeTab === "overview" && (
               <AdminOverviewTab
                 participants={filteredParticipants}
@@ -307,18 +226,182 @@ export default function AdminDashboard() {
             {activeTab === "courses" && <CoursesTab />}
             {activeTab === "leaders" && <AdminLeadersTab turmas={turmas} />}
             {activeTab === "push" && <AdminPushTab turmas={turmas} />}
-            {activeTab === "users" && <UsersTab onSelectTurma={(turma) => {
-              const found = turmas.find(t => t.area === turma.area);
-              if (found) {
-                setSelectedTurma(found);
-                setActiveTab("overview");
-              }
-            }} />}
-          </>
+            {activeTab === "users" && <UsersTab onSelectTurma={handleSelectTurmaFromUsers} />}
+          </Suspense>
         )}
       </main>
 
       <AdminBottomNav active={activeTab} onChange={setActiveTab} userRole={role as "admin" | "lider" | null} />
+    </div>
+  );
+}
+
+// ===== Turma Selector extracted component =====
+function TurmaSelector({
+  loading, turmas, participants, isSuper, adminArea,
+  expandedArea, setExpandedArea, turmaSearch, setTurmaSearch,
+  onSelectTurma, onBack,
+}: {
+  loading: boolean;
+  turmas: Turma[];
+  participants: Participant[];
+  isSuper: boolean;
+  adminArea: string;
+  expandedArea: string | null;
+  setExpandedArea: (a: string | null) => void;
+  turmaSearch: string;
+  setTurmaSearch: (s: string) => void;
+  onSelectTurma: (t: Turma) => void;
+  onBack: () => void;
+}) {
+  const area1Turmas = turmas.filter(t => t.area === "Área 1");
+  const area2Turmas = turmas.filter(t => t.area === "Área 2");
+
+  const areasToShow = isSuper
+    ? [{ name: "Área 1", turmas: area1Turmas, communities: AREA_1_COMMUNITIES, icon: "⛪" },
+       { name: "Área 2", turmas: area2Turmas, communities: AREA_2_COMMUNITIES, icon: "✝️" }]
+    : adminArea === "Área 1"
+      ? [{ name: "Área 1", turmas: area1Turmas, communities: AREA_1_COMMUNITIES, icon: "⛪" }]
+      : [{ name: "Área 2", turmas: area2Turmas, communities: AREA_2_COMMUNITIES, icon: "✝️" }];
+
+  // Filter turmas by search
+  const searchLower = turmaSearch.toLowerCase().trim();
+  const filteredAreas = areasToShow.map(areaInfo => ({
+    ...areaInfo,
+    turmas: searchLower
+      ? areaInfo.turmas.filter(t =>
+          t.name.toLowerCase().includes(searchLower) ||
+          (t.description ?? "").toLowerCase().includes(searchLower)
+        )
+      : areaInfo.turmas,
+  }));
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="px-4 pt-8 pb-6" style={{ background: "var(--gradient-hero)" }}>
+        <div className="max-w-2xl mx-auto">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1.5 text-primary-foreground/70 font-inter text-xs mb-3 hover:text-primary-foreground transition-colors"
+          >
+            <span className="text-sm">←</span> Voltar para área geral
+          </button>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-2xl bg-white/15 border border-white/30 flex items-center justify-center">
+              <span className="text-xl">{isSuper ? "👑" : "✝️"}</span>
+            </div>
+            <div>
+              <p className="text-primary-foreground/60 font-inter text-xs">
+                {isSuper ? "Super Administrador" : "Painel do Administrador"}
+              </p>
+              <h1 className="font-montserrat font-black text-primary-foreground text-lg">Selecione a Turma</h1>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-2xl mx-auto px-4 py-6 space-y-3">
+        {loading ? (
+          <TabSkeleton />
+        ) : (
+          <>
+            <p className="text-center text-muted-foreground font-inter text-xs">
+              Escolha uma turma para gerenciar
+            </p>
+
+            {/* Search bar for turmas */}
+            {turmas.length > 3 && (
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Buscar turma..."
+                  value={turmaSearch}
+                  onChange={e => setTurmaSearch(e.target.value)}
+                  className="w-full h-10 rounded-xl border border-input bg-background pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-inter"
+                />
+                {turmaSearch && (
+                  <button
+                    onClick={() => setTurmaSearch("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            )}
+
+            {filteredAreas.map(areaInfo => {
+              const isExpanded = expandedArea === areaInfo.name || !!searchLower;
+              const areaParticipants = participants.filter(p => p.area === areaInfo.name);
+
+              return (
+                <div key={areaInfo.name} className="space-y-2">
+                  <button
+                    onClick={() => setExpandedArea(isExpanded && !searchLower ? null : areaInfo.name)}
+                    className={`w-full flex items-center gap-4 p-4 bg-card rounded-2xl border-2 shadow-sm transition-all ${
+                      isExpanded ? "border-primary/50 bg-primary/5" : "border-border hover:border-primary/30 hover:bg-primary/5"
+                    }`}
+                  >
+                    <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center">
+                      <span className="text-2xl">{areaInfo.icon}</span>
+                    </div>
+                    <div className="text-left flex-1">
+                      <p className="font-montserrat font-bold text-foreground text-sm">{areaInfo.name}</p>
+                      <p className="text-muted-foreground font-inter text-[11px] mt-0.5 leading-snug">
+                        {areaInfo.communities.join(", ")}
+                      </p>
+                      <p className="text-muted-foreground font-inter text-[10px] mt-1">
+                        {areaParticipants.length} participante{areaParticipants.length !== 1 ? "s" : ""} · {areaInfo.turmas.length} turma{areaInfo.turmas.length !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                    {!searchLower && (
+                      isExpanded
+                        ? <ChevronUp className="w-5 h-5 text-primary" />
+                        : <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                    )}
+                  </button>
+
+                  {isExpanded && (
+                    <div className="pl-6 space-y-2 animate-in slide-in-from-top-2 duration-200">
+                      {areaInfo.turmas.length === 0 ? (
+                        <p className="text-muted-foreground font-inter text-xs py-3 text-center">
+                          {searchLower ? "Nenhuma turma encontrada." : "Nenhuma turma ativa nesta área."}
+                        </p>
+                      ) : (
+                        areaInfo.turmas.map(turma => {
+                          const turmaParticipants = participants.filter(p => (p as any).turma_id === turma.id);
+                          return (
+                            <button
+                              key={turma.id}
+                              onClick={() => onSelectTurma(turma)}
+                              className="w-full flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-sm hover:border-primary/50 hover:bg-primary/5 transition-all"
+                            >
+                              <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
+                                <span className="text-base">📚</span>
+                              </div>
+                              <div className="text-left flex-1">
+                                <p className="font-montserrat font-bold text-foreground text-xs">{turma.name}</p>
+                                {turma.description && (
+                                  <p className="text-muted-foreground font-inter text-[10px] mt-0.5">{turma.description}</p>
+                                )}
+                                <p className="text-muted-foreground font-inter text-[10px] mt-0.5">
+                                  {turmaParticipants.length} participante{turmaParticipants.length !== 1 ? "s" : ""}
+                                </p>
+                              </div>
+                              <span className="text-muted-foreground text-sm">→</span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </>
+        )}
+      </main>
     </div>
   );
 }
