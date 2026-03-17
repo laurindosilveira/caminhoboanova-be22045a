@@ -70,55 +70,75 @@ export default function Index() {
           <>
             {/* Push activation reminder from leader */}
             <PushActivationBanner />
-            <ConversationReminderBanner />
 
             {/* Avisos do pastor no topo */}
-            <div className="pt-4">
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+              className="pt-4"
+            >
               <AnnouncementsSection />
-            </div>
+            </motion.div>
 
-            {/* Cabeçalho explicativo */}
-            <div className="px-5 pt-3 pb-1">
-              <p className="text-muted-foreground font-inter text-xs leading-relaxed">
-                ✨ Complete atividades para ganhar pontos e avançar na sua jornada de fé
-              </p>
-            </div>
-
-            {/* Avisos rápidos — agrupados */}
-            <div className="space-y-0">
-              <DevotionalReminder onNavigateToDiscipulado={() => setActiveTab("discipulado")} />
-              <UpcomingEventReminder onNavigateToAgenda={() => setActiveTab("agenda")} />
-              <StreakRiskReminder onNavigateToJornada={() => setActiveTab("discipulado")} />
-            </div>
+            {/* Personalized greeting based on last activity */}
+            <PersonalizedGreeting />
 
             {/* Indicador de impacto espiritual */}
-            {(() => {
-              const indicators = [];
-              if (stats.faithLevel >= 3) indicators.push("✨ Você está crescendo");
-              if (stats.streakDays >= 3) indicators.push("✨ Em constância");
-              if (stats.faithEnergy >= 3) indicators.push("✨ Em comunhão");
-              if (indicators.length === 0) indicators.push("🌱 Comece sua jornada!");
-              return (
-                <div className="px-5 mb-2">
-                  <div className="flex flex-wrap gap-2">
-                    {indicators.map((text, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-secondary/10 text-secondary font-inter text-xs font-semibold">
-                        {text}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.35, delay: 0.15, ease: "easeOut" }}
+              className="px-5 mb-2"
+            >
+              <div className="flex flex-wrap gap-2">
+                {(() => {
+                  const indicators: string[] = [];
+                  if (stats.faithLevel >= 3) indicators.push("✨ Você está crescendo");
+                  if (stats.streakDays >= 3) indicators.push("✨ Em constância");
+                  if (stats.faithEnergy >= 3) indicators.push("✨ Em comunhão");
+                  if (indicators.length === 0) indicators.push("🌱 Comece sua jornada!");
+                  return indicators.map((text, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-secondary/10 text-secondary font-inter text-xs font-semibold">
+                      {text}
+                    </span>
+                  ));
+                })()}
+              </div>
+            </motion.div>
 
             {/* Próximo encontro */}
-            <NextMeetingCard onNavigateToAgenda={() => setActiveTab("agenda")} />
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.2, ease: "easeOut" }}
+            >
+              <NextMeetingCard onNavigateToAgenda={() => setActiveTab("agenda")} />
+            </motion.div>
+
+            {/* Caminho da jornada — posição proeminente */}
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.25, ease: "easeOut" }}
+            >
+              <JourneyPath />
+            </motion.div>
 
             {/* Próxima etapa do curso ativo */}
-            <NextCourseActivityCard onNavigateToDiscipulado={() => setActiveTab("discipulado")} />
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.3, ease: "easeOut" }}
+            >
+              <NextCourseActivityCard onNavigateToDiscipulado={() => setActiveTab("discipulado")} />
+            </motion.div>
 
-            {/* Caminho da jornada */}
-            <JourneyPath />
+            {/* Lembretes agrupados — seção colapsável */}
+            <RemindersSection
+              onNavigateToDiscipulado={() => setActiveTab("discipulado")}
+              onNavigateToAgenda={() => setActiveTab("agenda")}
+            />
           </>
         )}
 
