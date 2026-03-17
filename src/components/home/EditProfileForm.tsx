@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Pencil, Save, X, User, Phone, Calendar, MapPin, ChevronDown, Home, Users, Camera, GraduationCap } from "lucide-react";
+import { Pencil, Save, X, User, Phone, Calendar, MapPin, ChevronDown, Home, Users, Camera, GraduationCap, CheckCircle2, AlertCircle, Shield, Heart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -24,8 +24,8 @@ const CONFIRMATION_YEARS = [
 ];
 
 const profileSchema = z.object({
-  full_name: z.string().trim().min(3, "Nome deve ter ao menos 3 caracteres").max(100),
-  phone: z.string().trim().min(8, "Telefone inválido").max(20),
+  full_name: z.string().trim().min(3, "Nome deve ter ao menos 3 caracteres").max(100, "Máximo 100 caracteres"),
+  phone: z.string().trim().min(8, "Telefone inválido").max(20, "Máximo 20 caracteres"),
   birth_date: z.string().min(1, "Data de nascimento é obrigatória"),
   community: z.enum(COMMUNITIES, { required_error: "Selecione uma comunidade" }),
   father_name: z.string().max(100).optional(),
@@ -37,6 +37,26 @@ const profileSchema = z.object({
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
+
+function FieldStatus({ error, isDirty, isValid }: { error?: string; isDirty: boolean; isValid: boolean }) {
+  if (error) {
+    return (
+      <div className="flex items-center gap-1 mt-1">
+        <AlertCircle className="w-3 h-3 text-destructive" />
+        <p className="text-[11px] text-destructive font-inter">{error}</p>
+      </div>
+    );
+  }
+  if (isDirty && isValid) {
+    return (
+      <div className="flex items-center gap-1 mt-1">
+        <CheckCircle2 className="w-3 h-3 text-brand-green" />
+        <p className="text-[11px] text-brand-green font-inter">Válido</p>
+      </div>
+    );
+  }
+  return null;
+}
 
 export default function EditProfileForm() {
   const { profile, user, refreshProfile } = useAuth();
@@ -50,9 +70,11 @@ export default function EditProfileForm() {
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    watch,
+    formState: { errors, dirtyFields, touchedFields },
   } = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
+    mode: "onChange",
     defaultValues: {
       full_name: profile?.full_name ?? "",
       phone: profile?.phone ?? "",
@@ -66,6 +88,9 @@ export default function EditProfileForm() {
       confirmation_year: profile?.confirmation_year ? String(profile.confirmation_year) : "",
     },
   });
+
+  // Watch values for real-time validation feedback
+  const watchedValues = watch();
 
   function handleCancel() {
     reset({
@@ -190,16 +215,27 @@ export default function EditProfileForm() {
     </div>
   );
 
+  const inputClass = (fieldName: keyof ProfileFormValues) => {
+    const hasError = !!errors[fieldName];
+    const isDirty = !!dirtyFields[fieldName];
+    const isValid = isDirty && !hasError;
+    return `w-full h-10 rounded-xl border px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 transition-colors ${
+      hasError
+        ? "border-destructive focus-visible:ring-destructive/30 bg-destructive/5"
+        : isValid
+        ? "border-brand-green focus-visible:ring-brand-green/30 bg-brand-green/5"
+        : "border-input bg-background focus-visible:ring-ring"
+    }`;
+  };
+
   if (!isEditing) {
     return (
-      <div className="px-5 mt-4">
-        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <div className="flex items-center gap-2">
-              <User className="w-4 h-4 text-primary" />
-              <span className="font-montserrat font-bold text-foreground text-sm">Dados Pessoais</span>
-            </div>
+      <div className="px-5 mt-4 space-y-3">
+        {/* Personal Info Card */}
+        <SectionCard
+          icon={<User className="w-4 h-4 text-primary" />}
+          title="Dados Pessoais"
+          action={
             <button
               onClick={() => setIsEditing(true)}
               className="flex items-center gap-1.5 text-xs font-inter text-primary bg-primary/10 rounded-full px-3 py-1.5 hover:bg-primary/20 transition-colors"
@@ -207,11 +243,9 @@ export default function EditProfileForm() {
               <Pencil className="w-3 h-3" />
               Editar
             </button>
-          </div>
-
+          }
+        >
           <PhotoSection />
-
-          {/* Info list */}
           <div className="divide-y divide-border">
             <InfoRow icon={<User className="w-4 h-4 text-muted-foreground" />} label="Nome completo" value={profile?.full_name ?? "—"} />
             <InfoRow icon={<Phone className="w-4 h-4 text-muted-foreground" />} label="Telefone" value={profile?.phone ?? "—"} />
@@ -227,172 +261,202 @@ export default function EditProfileForm() {
             <InfoRow icon={<MapPin className="w-4 h-4 text-muted-foreground" />} label="Comunidade" value={profile?.community ?? "—"} />
             <InfoRow icon={<MapPin className="w-4 h-4 text-muted-foreground" />} label="Área" value={profile?.area ?? "—"} />
             <InfoRow icon={<Home className="w-4 h-4 text-muted-foreground" />} label="Endereço" value={profile?.address || "—"} />
-            <InfoRow icon={<GraduationCap className="w-4 h-4 text-muted-foreground" />} label="Ano do Ensino Confirmatório" value={profile?.confirmation_year ? `${profile.confirmation_year}º Ano` : "Não definido"} />
+            <InfoRow icon={<GraduationCap className="w-4 h-4 text-muted-foreground" />} label="Ano Confirmatório" value={profile?.confirmation_year ? `${profile.confirmation_year}º Ano` : "Não definido"} />
+          </div>
+        </SectionCard>
+
+        {/* Family Card */}
+        <SectionCard
+          icon={<Heart className="w-4 h-4 text-secondary" />}
+          title="Dados Familiares"
+        >
+          <div className="divide-y divide-border">
             <InfoRow icon={<Users className="w-4 h-4 text-muted-foreground" />} label="Nome do pai" value={profile?.father_name || "—"} />
             <InfoRow icon={<Phone className="w-4 h-4 text-muted-foreground" />} label="Contato do pai" value={profile?.father_phone || "—"} />
             <InfoRow icon={<Users className="w-4 h-4 text-muted-foreground" />} label="Nome da mãe" value={profile?.mother_name || "—"} />
             <InfoRow icon={<Phone className="w-4 h-4 text-muted-foreground" />} label="Contato da mãe" value={profile?.mother_phone || "—"} />
           </div>
-        </div>
+        </SectionCard>
       </div>
     );
   }
 
   return (
-    <div className="px-5 mt-4">
-      <form onSubmit={handleSubmit(onSubmit)} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <div className="flex items-center gap-2">
-            <Pencil className="w-4 h-4 text-primary" />
-            <span className="font-montserrat font-bold text-foreground text-sm">Editar Dados</span>
-          </div>
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="flex items-center gap-1 text-xs font-inter text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <X className="w-3 h-3" />
-            Cancelar
-          </button>
-        </div>
+    <div className="px-5 mt-4 space-y-3">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+        {/* Personal Info Edit Card */}
+        <SectionCard
+          icon={<Pencil className="w-4 h-4 text-primary" />}
+          title="Editar Dados Pessoais"
+          action={
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="flex items-center gap-1 text-xs font-inter text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="w-3 h-3" />
+              Cancelar
+            </button>
+          }
+        >
+          <PhotoSection />
 
-        <PhotoSection />
-
-        <div className="p-4 space-y-4">
-          {/* Nome */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-inter font-medium text-muted-foreground">Nome completo</label>
-            <input
-              {...register("full_name")}
-              placeholder="Seu nome completo"
-              className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-            {errors.full_name && <p className="text-xs text-destructive font-inter">{errors.full_name.message}</p>}
-          </div>
-
-          {/* Telefone */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-inter font-medium text-muted-foreground">Telefone / WhatsApp</label>
-            <input
-              {...register("phone")}
-              placeholder="(00) 00000-0000"
-              className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-            {errors.phone && <p className="text-xs text-destructive font-inter">{errors.phone.message}</p>}
-          </div>
-
-          {/* Data de nascimento */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-inter font-medium text-muted-foreground">Data de nascimento</label>
-            <input
-              type="date"
-              {...register("birth_date")}
-              className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-            {errors.birth_date && <p className="text-xs text-destructive font-inter">{errors.birth_date.message}</p>}
-          </div>
-
-          {/* Comunidade */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-inter font-medium text-muted-foreground">Comunidade</label>
-            <div className="relative">
-              <select
-                {...register("community")}
-                className="w-full h-10 rounded-xl border border-input bg-background px-3 pr-8 text-sm text-foreground appearance-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">Selecione sua comunidade</option>
-                {COMMUNITIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <div className="p-4 space-y-4">
+            {/* Nome */}
+            <div className="space-y-1">
+              <label className="text-xs font-inter font-medium text-muted-foreground">Nome completo *</label>
+              <input
+                {...register("full_name")}
+                placeholder="Seu nome completo"
+                className={inputClass("full_name")}
+              />
+              <FieldStatus
+                error={errors.full_name?.message}
+                isDirty={!!dirtyFields.full_name}
+                isValid={!!dirtyFields.full_name && !errors.full_name}
+              />
             </div>
-            {errors.community && <p className="text-xs text-destructive font-inter">{errors.community.message}</p>}
-          </div>
 
-          {/* Endereço */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-inter font-medium text-muted-foreground">Endereço</label>
-            <input
-              {...register("address")}
-              placeholder="Rua, nº, bairro, cidade"
-              className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </div>
+            {/* Telefone */}
+            <div className="space-y-1">
+              <label className="text-xs font-inter font-medium text-muted-foreground">Telefone / WhatsApp *</label>
+              <input
+                {...register("phone")}
+                placeholder="(00) 00000-0000"
+                className={inputClass("phone")}
+              />
+              <FieldStatus
+                error={errors.phone?.message}
+                isDirty={!!dirtyFields.phone}
+                isValid={!!dirtyFields.phone && !errors.phone}
+              />
+            </div>
 
-          {/* Ano do Ensino Confirmatório */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-inter font-medium text-muted-foreground">Ano do Ensino Confirmatório</label>
-            <div className="relative">
-              <select
-                {...register("confirmation_year")}
-                className="w-full h-10 rounded-xl border border-input bg-background px-3 pr-8 text-sm text-foreground appearance-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {CONFIRMATION_YEARS.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            {/* Data de nascimento */}
+            <div className="space-y-1">
+              <label className="text-xs font-inter font-medium text-muted-foreground">Data de nascimento *</label>
+              <input
+                type="date"
+                {...register("birth_date")}
+                className={inputClass("birth_date")}
+              />
+              <FieldStatus
+                error={errors.birth_date?.message}
+                isDirty={!!dirtyFields.birth_date}
+                isValid={!!dirtyFields.birth_date && !errors.birth_date}
+              />
+            </div>
+
+            {/* Comunidade */}
+            <div className="space-y-1">
+              <label className="text-xs font-inter font-medium text-muted-foreground">Comunidade *</label>
+              <div className="relative">
+                <select
+                  {...register("community")}
+                  className={`${inputClass("community")} pr-8 appearance-none`}
+                >
+                  <option value="">Selecione sua comunidade</option>
+                  {COMMUNITIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              </div>
+              <FieldStatus
+                error={errors.community?.message}
+                isDirty={!!dirtyFields.community}
+                isValid={!!dirtyFields.community && !errors.community}
+              />
+            </div>
+
+            {/* Endereço */}
+            <div className="space-y-1">
+              <label className="text-xs font-inter font-medium text-muted-foreground">Endereço</label>
+              <input
+                {...register("address")}
+                placeholder="Rua, nº, bairro, cidade"
+                className={inputClass("address")}
+              />
+            </div>
+
+            {/* Ano Confirmatório */}
+            <div className="space-y-1">
+              <label className="text-xs font-inter font-medium text-muted-foreground">Ano do Ensino Confirmatório</label>
+              <div className="relative">
+                <select
+                  {...register("confirmation_year")}
+                  className={`${inputClass("confirmation_year")} pr-8 appearance-none`}
+                >
+                  {CONFIRMATION_YEARS.map((c) => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              </div>
             </div>
           </div>
+        </SectionCard>
 
-          {/* Nome do Pai */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-inter font-medium text-muted-foreground">Nome do pai</label>
-            <input
-              {...register("father_name")}
-              placeholder="Nome completo do pai"
-              className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
+        {/* Family Edit Card */}
+        <SectionCard
+          icon={<Heart className="w-4 h-4 text-secondary" />}
+          title="Dados Familiares"
+        >
+          <div className="p-4 space-y-4">
+            <div className="space-y-1">
+              <label className="text-xs font-inter font-medium text-muted-foreground">Nome do pai</label>
+              <input {...register("father_name")} placeholder="Nome completo do pai" className={inputClass("father_name")} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-inter font-medium text-muted-foreground">Contato do pai</label>
+              <input {...register("father_phone")} placeholder="(00) 00000-0000" className={inputClass("father_phone")} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-inter font-medium text-muted-foreground">Nome da mãe</label>
+              <input {...register("mother_name")} placeholder="Nome completo da mãe" className={inputClass("mother_name")} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-inter font-medium text-muted-foreground">Contato da mãe</label>
+              <input {...register("mother_phone")} placeholder="(00) 00000-0000" className={inputClass("mother_phone")} />
+            </div>
           </div>
+        </SectionCard>
 
-          {/* Contato do Pai */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-inter font-medium text-muted-foreground">Contato do pai</label>
-            <input
-              {...register("father_phone")}
-              placeholder="(00) 00000-0000"
-              className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </div>
-
-          {/* Nome da Mãe */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-inter font-medium text-muted-foreground">Nome da mãe</label>
-            <input
-              {...register("mother_name")}
-              placeholder="Nome completo da mãe"
-              className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </div>
-
-          {/* Contato da Mãe */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-inter font-medium text-muted-foreground">Contato da mãe</label>
-            <input
-              {...register("mother_phone")}
-              placeholder="(00) 00000-0000"
-              className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </div>
-
-          {/* Save button */}
-          <button
-            type="submit"
-            disabled={saving}
-            className="w-full flex items-center justify-center gap-2 h-11 rounded-xl font-montserrat font-bold text-sm text-primary-foreground transition-opacity disabled:opacity-60"
-            style={{ background: "var(--gradient-hero)" }}
-          >
-            {saving ? (
-              <span className="animate-spin w-4 h-4 border-2 border-white/40 border-t-white rounded-full" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
-            {saving ? "Salvando..." : "Salvar Alterações"}
-          </button>
-        </div>
+        {/* Save button */}
+        <button
+          type="submit"
+          disabled={saving || Object.keys(errors).length > 0}
+          className="w-full flex items-center justify-center gap-2 h-11 rounded-xl font-montserrat font-bold text-sm text-primary-foreground transition-opacity disabled:opacity-60"
+          style={{ background: "var(--gradient-hero)" }}
+        >
+          {saving ? (
+            <span className="animate-spin w-4 h-4 border-2 border-white/40 border-t-white rounded-full" />
+          ) : (
+            <Save className="w-4 h-4" />
+          )}
+          {saving ? "Salvando..." : "Salvar Alterações"}
+        </button>
       </form>
+    </div>
+  );
+}
+
+function SectionCard({ icon, title, action, children }: {
+  icon: React.ReactNode;
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="flex items-center gap-2">
+          {icon}
+          <span className="font-montserrat font-bold text-foreground text-sm">{title}</span>
+        </div>
+        {action}
+      </div>
+      {children}
     </div>
   );
 }

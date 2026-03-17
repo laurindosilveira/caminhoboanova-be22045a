@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Bell, BellOff, BookOpen, CalendarDays, Flame, ChevronDown, ChevronUp, MessageSquare, AlertCircle, Send, Wifi, Clock } from "lucide-react";
+import { Bell, BellOff, BookOpen, CalendarDays, Flame, ChevronDown, ChevronUp, MessageSquare, AlertCircle, Send, Wifi, Clock, Smartphone, X } from "lucide-react";
 import { requestNotificationPermission, isNotificationEnabled, sendNotification } from "@/lib/notifications";
 import { subscribeToWebPush, unsubscribeFromWebPush, isWebPushSubscribed } from "@/lib/webPush";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +21,47 @@ const defaultPrefs: NotifPrefs = {
 
 const HOUR_OPTIONS = Array.from({ length: 18 }, (_, i) => i + 5); // 5h to 22h
 
+const NOTIF_PREVIEWS: Record<string, { title: string; body: string; icon: string }> = {
+  devocional: { title: "📖 Devocional do Dia", body: "Seu devocional de hoje está disponível!", icon: "📖" },
+  eventos: { title: "📅 Encontro Amanhã", body: "Não esqueça do encontro amanhã às 19h!", icon: "📅" },
+  streak: { title: "🔥 Sequência em Risco!", body: "Complete o devocional para manter sua sequência de 7 dias!", icon: "🔥" },
+  mensagens: { title: "💬 Nova Mensagem", body: "Seu pastor enviou um comunicado para a turma.", icon: "💬" },
+};
+
+function NotificationPreview({ type, visible, onClose }: { type: string; visible: boolean; onClose: () => void }) {
+  const preview = NOTIF_PREVIEWS[type];
+  if (!visible || !preview) return null;
+
+  return (
+    <div className="mx-4 mb-2 animate-in slide-in-from-top-2 fade-in duration-300">
+      <div className="bg-card border border-border rounded-2xl p-3 shadow-lg relative">
+        <button onClick={onClose} className="absolute top-2 right-2 text-muted-foreground hover:text-foreground p-0.5">
+          <X className="w-3 h-3" />
+        </button>
+        <div className="flex items-center gap-1 mb-2">
+          <Smartphone className="w-3 h-3 text-muted-foreground" />
+          <span className="text-[9px] font-inter font-bold text-muted-foreground uppercase tracking-wider">Preview da notificação</span>
+        </div>
+        {/* Mock phone notification */}
+        <div className="bg-muted rounded-xl p-3 border border-border/50">
+          <div className="flex items-start gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0">
+              <span className="text-lg">{preview.icon}</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-montserrat font-bold text-foreground text-xs truncate">{preview.title}</p>
+                <span className="text-[9px] text-muted-foreground font-inter flex-shrink-0">agora</span>
+              </div>
+              <p className="text-muted-foreground text-[11px] font-inter mt-0.5 leading-snug">{preview.body}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function NotificationSettings() {
   const { user } = useAuth();
   const [masterOn, setMasterOn] = useState(false);
@@ -30,6 +71,7 @@ export default function NotificationSettings() {
   const [loading, setLoading] = useState(true);
   const [permissionError, setPermissionError] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [previewType, setPreviewType] = useState<string | null>(null);
 
   const NOTIF_OPTIONS = [
     { key: "devocional" as const, label: "Devocional diário", desc: `Lembrete às ${preferredHour}h para o devocional`, icon: BookOpen, color: "text-brand-green" },
@@ -93,6 +135,7 @@ export default function NotificationSettings() {
       localStorage.setItem("caminho_notifications_enabled", "false");
       setExpanded(false);
       setPermissionError(false);
+      setPreviewType(null);
       await saveToDb(false, prefs);
     } else {
       setPermissionError(false);
@@ -115,7 +158,6 @@ export default function NotificationSettings() {
 
   async function trySubscribeWebPush() {
     try {
-      // Ensure notification permission first
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
         setPermissionError(true);
@@ -151,6 +193,14 @@ export default function NotificationSettings() {
     const updated = { ...prefs, [key]: !prefs[key] };
     setPrefs(updated);
     await saveToDb(masterOn, updated);
+
+    // Show preview when enabling
+    if (!prefs[key]) {
+      setPreviewType(key);
+      setTimeout(() => setPreviewType(null), 5000);
+    } else {
+      if (previewType === key) setPreviewType(null);
+    }
   }
 
   async function handleHourChange(newHour: number) {
@@ -223,6 +273,13 @@ export default function NotificationSettings() {
                   </div>
                 )}
 
+                {/* Notification preview */}
+                <NotificationPreview
+                  type={previewType ?? ""}
+                  visible={!!previewType}
+                  onClose={() => setPreviewType(null)}
+                />
+
                 {NOTIF_OPTIONS.map(({ key, label, desc, icon: Icon, color }) => (
                   <button
                     key={key}
@@ -240,6 +297,26 @@ export default function NotificationSettings() {
                   </button>
                 ))}
 
+                {/* Preferred hour */}
+                <div className="border-t border-border px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <Clock className="w-4 h-4 text-muted-foreground" />
+                    <div className="flex-1">
+                      <p className="font-inter text-sm font-semibold text-foreground">Horário do devocional</p>
+                      <p className="text-muted-foreground text-[10px] font-inter">Horário preferido para o lembrete</p>
+                    </div>
+                    <select
+                      value={preferredHour}
+                      onChange={e => handleHourChange(Number(e.target.value))}
+                      className="h-8 rounded-lg border border-input bg-background px-2 text-sm text-foreground appearance-none focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      {HOUR_OPTIONS.map(h => (
+                        <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
                 {/* Test notification button */}
                 <button
                   onClick={handleTestNotification}
@@ -249,7 +326,7 @@ export default function NotificationSettings() {
                   Enviar notificação de teste
                 </button>
 
-                {/* Deactivate all - at the bottom */}
+                {/* Deactivate all */}
                 <button
                   onClick={handleToggleMaster}
                   className="w-full flex items-center justify-center gap-2 py-3 text-sm font-inter font-bold text-destructive hover:bg-destructive/5 transition-colors border-t border-border"
