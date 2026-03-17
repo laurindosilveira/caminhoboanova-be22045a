@@ -67,6 +67,18 @@ export default function ClassroomTab() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // Infinite scroll
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const PAGE_SIZE = 50;
+
+  // Typing indicator & online status
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [onlineCount, setOnlineCount] = useState(0);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingBroadcast = useRef(0);
 
   // Orações
   const [prayers, setPrayers] = useState<PrayerRequest[]>([]);
