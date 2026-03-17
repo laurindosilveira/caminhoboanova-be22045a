@@ -403,9 +403,9 @@ export default function Apresentacao() {
       <section id="planos" className="py-20 lg:py-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0} className="text-center max-w-2xl mx-auto mb-16">
-            <p className="text-primary font-inter font-semibold text-sm uppercase tracking-wider mb-3">Planos</p>
-            <h2 className="text-3xl sm:text-4xl font-montserrat font-black tracking-tight mb-4 text-foreground">Escolha o plano ideal para sua igreja</h2>
-            <p className="text-muted-foreground text-lg font-inter">Todos os planos incluem 30 dias de teste gratuito. Sem fidelidade.</p>
+            <p className="text-primary font-inter font-semibold text-sm uppercase tracking-wider mb-3">💰 Planos e Investimento</p>
+            <h2 className="text-3xl sm:text-4xl font-montserrat font-black tracking-tight mb-4 text-foreground">Simples, acessível e pensado para a realidade das igrejas</h2>
+            <p className="text-muted-foreground text-lg font-inter">O Caminho Boa Nova foi desenvolvido para servir igrejas de diferentes tamanhos, com um modelo de investimento justo e sustentável.</p>
           </motion.div>
 
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
@@ -423,7 +423,7 @@ export default function Apresentacao() {
                     Mais popular
                   </div>
                 )}
-                <p className={`font-montserrat font-bold text-lg ${p.highlight ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{p.name}</p>
+                <p className={`font-montserrat font-bold text-lg ${p.highlight ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{p.emoji} {p.name}</p>
                 <div className="flex items-baseline gap-1 mt-3 mb-1">
                   <span className={`text-4xl font-montserrat font-black ${p.highlight ? "text-primary-foreground" : "text-foreground"}`}>{p.price}</span>
                   <span className={`text-sm font-inter ${p.highlight ? "text-primary-foreground/60" : "text-muted-foreground"}`}>{p.period}</span>
@@ -455,6 +455,58 @@ export default function Apresentacao() {
                 </a>
               </motion.div>
             ))}
+          </div>
+
+          {/* ─── BONUS + TRIAL + VALUE ───────────────────── */}
+          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto mt-16">
+            {/* Bônus */}
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0}
+              className="bg-card rounded-2xl border border-border p-8">
+              <p className="text-2xl mb-2">🎁</p>
+              <h3 className="font-montserrat font-bold text-lg text-foreground mb-3">Bônus para novas comunidades</h3>
+              <ul className="space-y-2.5">
+                {["Implantação assistida gratuita", "Apoio na organização da primeira turma", "Treinamento de líderes", "Acompanhamento inicial próximo"].map((b, i) => (
+                  <li key={i} className="flex items-center gap-2.5 text-sm font-inter text-muted-foreground">
+                    <Check className="w-4 h-4 text-primary flex-shrink-0" />
+                    {b}
+                  </li>
+                ))}
+              </ul>
+            </motion.div>
+
+            {/* Teste */}
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={1}
+              className="bg-card rounded-2xl border border-border p-8">
+              <p className="text-2xl mb-2">🧪</p>
+              <h3 className="font-montserrat font-bold text-lg text-foreground mb-3">Teste sem compromisso</h3>
+              <p className="text-sm text-muted-foreground font-inter mb-4">Experimente o Caminho Boa Nova com sua comunidade:</p>
+              <ul className="space-y-2.5">
+                {["30 dias gratuitos", "Sem taxa de adesão", "Cancelamento simples a qualquer momento"].map((b, i) => (
+                  <li key={i} className="flex items-center gap-2.5 text-sm font-inter text-muted-foreground">
+                    <Check className="w-4 h-4 text-primary flex-shrink-0" />
+                    {b}
+                  </li>
+                ))}
+              </ul>
+            </motion.div>
+
+            {/* Valor */}
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={2}
+              className="bg-card rounded-2xl border border-border p-8">
+              <p className="text-2xl mb-2">💡</p>
+              <h3 className="font-montserrat font-bold text-lg text-foreground mb-3">Um investimento acessível</h3>
+              <p className="text-sm text-muted-foreground font-inter mb-2">Na prática, o valor representa:</p>
+              <p className="text-primary font-montserrat font-bold text-lg mb-4">👉 menos de R$1 por membro/mês</p>
+              <p className="text-sm text-muted-foreground font-inter mb-2">Um investimento pequeno para fortalecer:</p>
+              <ul className="space-y-2.5">
+                {["O discipulado", "O cuidado pastoral", "A vida espiritual da igreja"].map((b, i) => (
+                  <li key={i} className="flex items-center gap-2.5 text-sm font-inter text-muted-foreground">
+                    <Check className="w-4 h-4 text-primary flex-shrink-0" />
+                    {b}
+                  </li>
+                ))}
+              </ul>
+            </motion.div>
           </div>
         </div>
       </section>
