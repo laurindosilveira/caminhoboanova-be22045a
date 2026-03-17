@@ -1,6 +1,17 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Keyboard, RotateCcw, Play, Pause, Zap, Flame, Crown } from "lucide-react";
+import { Keyboard, RotateCcw, Play, Pause, Zap, Flame, Crown, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
 type Difficulty = "facil" | "medio" | "dificil";
 
@@ -287,16 +298,62 @@ export default function TypingMetricsPanel() {
                   <Button onClick={() => startTest(difficulty!)} variant="outline" className="rounded-xl gap-2 text-xs">
                     <RotateCcw className="w-3.5 h-3.5" /> Repetir
                   </Button>
-                  <Button onClick={resetTest} variant="ghost" className="rounded-xl gap-2 text-xs">
-                    Trocar Nível
-                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" className="rounded-xl gap-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10">
+                        <AlertTriangle className="w-3.5 h-3.5" /> Trocar Nível
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="rounded-2xl max-w-xs">
+                      <AlertDialogHeader>
+                        <div className="mx-auto w-12 h-12 rounded-full bg-warning/10 flex items-center justify-center mb-1">
+                          <AlertTriangle className="w-6 h-6 text-warning" />
+                        </div>
+                        <AlertDialogTitle className="text-center font-montserrat font-bold text-base">
+                          Resetar progresso?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-center font-inter text-sm">
+                          Seu resultado atual será descartado ao trocar de nível.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter className="flex-row gap-2 sm:flex-row">
+                        <AlertDialogCancel className="flex-1 rounded-xl font-montserrat font-bold text-xs">Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={resetTest} className="flex-1 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 font-montserrat font-bold text-xs gap-1">
+                          <RotateCcw className="w-3.5 h-3.5" /> Trocar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </div>
             ) : (
               <div className="flex justify-end">
-                <Button onClick={resetTest} variant="ghost" size="sm" className="gap-1 text-xs">
-                  <Pause className="w-3 h-3" /> Cancelar
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="sm" className="gap-1 text-xs text-destructive hover:text-destructive hover:bg-destructive/10">
+                      <AlertTriangle className="w-3 h-3" /> Cancelar teste
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent className="rounded-2xl max-w-xs">
+                    <AlertDialogHeader>
+                      <div className="mx-auto w-12 h-12 rounded-full bg-warning/10 flex items-center justify-center mb-1">
+                        <AlertTriangle className="w-6 h-6 text-warning" />
+                      </div>
+                      <AlertDialogTitle className="text-center font-montserrat font-bold text-base">
+                        Cancelar teste?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription className="text-center font-inter text-sm">
+                        Todo o progresso deste teste será perdido.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="flex-row gap-2 sm:flex-row">
+                      <AlertDialogCancel className="flex-1 rounded-xl font-montserrat font-bold text-xs">Continuar</AlertDialogCancel>
+                      <AlertDialogAction onClick={resetTest} className="flex-1 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 font-montserrat font-bold text-xs gap-1">
+                        <Pause className="w-3 h-3" /> Sim, cancelar
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             )}
           </>

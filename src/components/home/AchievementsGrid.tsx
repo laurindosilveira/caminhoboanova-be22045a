@@ -1,8 +1,19 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import confetti from "canvas-confetti";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Trophy, Lock, Flame, RefreshCw, Share2 } from "lucide-react";
+import { Trophy, Lock, Flame, RefreshCw, Share2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import GameRulesDialog from "./GameRulesDialog";
@@ -454,38 +465,44 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
             <span className="font-montserrat font-bold text-foreground text-sm">Ranking da turma</span>
           </div>
           {canManage && (
-            <button
-              onClick={() => setShowResetConfirm(true)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-destructive/10 text-destructive text-[10px] font-inter font-bold hover:bg-destructive/20 transition-colors"
-            >
-              <RefreshCw className="w-3 h-3" />
-              Resetar
-            </button>
+            <AlertDialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
+              <AlertDialogTrigger asChild>
+                <button
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-destructive/10 text-destructive text-[10px] font-inter font-bold hover:bg-destructive/20 transition-colors"
+                >
+                  <AlertTriangle className="w-3 h-3" />
+                  Resetar
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="rounded-2xl max-w-sm">
+                <AlertDialogHeader>
+                  <div className="mx-auto w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center mb-2">
+                    <AlertTriangle className="w-7 h-7 text-destructive" />
+                  </div>
+                  <AlertDialogTitle className="text-center font-montserrat font-black text-lg">
+                    ⚠️ Resetar pontuações?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="text-center font-inter text-sm">
+                    Isso vai <strong className="text-destructive font-bold">zerar permanentemente</strong> o progresso de <strong>{members.length} participantes</strong> da comunidade. Esta ação <strong className="text-destructive font-bold">não pode ser desfeita</strong>.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className="flex-row gap-2 sm:flex-row">
+                  <AlertDialogCancel className="flex-1 rounded-xl font-montserrat font-bold">
+                    Cancelar
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleResetGame}
+                    disabled={resettingGame}
+                    className="flex-1 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 font-montserrat font-bold gap-1.5"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${resettingGame ? "animate-spin" : ""}`} />
+                    {resettingGame ? "Resetando..." : "Sim, resetar tudo"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
         </div>
-
-        {/* Reset confirmation */}
-        {showResetConfirm && (
-          <div className="bg-destructive/5 border border-destructive/20 rounded-2xl p-4 mb-3 space-y-3">
-            <p className="font-montserrat font-bold text-foreground text-sm">⚠️ Resetar pontuações?</p>
-            <p className="text-muted-foreground font-inter text-xs">
-              Isso vai zerar o progresso de <strong>todos os membros</strong> da comunidade ({members.length} participantes). Esta ação não pode ser desfeita.
-            </p>
-            <div className="flex gap-2">
-              <button onClick={() => setShowResetConfirm(false)} className="flex-1 py-2 rounded-xl bg-muted text-foreground text-xs font-inter font-bold">
-                Cancelar
-              </button>
-              <button
-                onClick={handleResetGame}
-                disabled={resettingGame}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-destructive text-destructive-foreground text-xs font-inter font-bold disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${resettingGame ? "animate-spin" : ""}`} />
-                {resettingGame ? "Resetando..." : "Confirmar"}
-              </button>
-            </div>
-          </div>
-        )}
 
         {loadingMembers ? (
           <div className="space-y-2">
