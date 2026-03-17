@@ -658,7 +658,15 @@ export default function ClassroomTab() {
         <div className="flex items-center gap-2 mb-3">
           <MessageSquare className="w-4 h-4 text-primary" />
           <span className="font-montserrat font-bold text-foreground text-sm">Chat da Turma</span>
-          <span className="text-xs text-muted-foreground font-inter ml-auto">tempo real</span>
+          <div className="flex items-center gap-2 ml-auto">
+            {onlineCount > 0 && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-inter text-muted-foreground">
+                <Wifi className="w-3 h-3 text-brand-green" />
+                {onlineCount} online
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground font-inter">tempo real</span>
+          </div>
         </div>
 
         {/* Messages */}
