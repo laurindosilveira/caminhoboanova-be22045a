@@ -1,5 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { supabase } from "@/integrations/supabase/client";
+import { STRIPE_PLANS } from "@/lib/stripePlans";
+import { toast } from "@/hooks/use-toast";
 import {
   BookOpen, Users, Calendar, Bell, BarChart3, Shield, MessageCircle,
   Trophy, Heart, ChevronDown, Check, Star, Smartphone,
