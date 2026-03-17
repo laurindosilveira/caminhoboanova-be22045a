@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { BarChart3, Plus, X, Check, Users } from "lucide-react";
+import { BarChart3, Plus, X, Check, Users, Timer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,42 @@ interface PollVote {
   poll_id: string;
   user_id: string;
   option_index: number;
+}
+
+function useCountdown(endsAt: string | null) {
+  const [remaining, setRemaining] = useState("");
+
+  useEffect(() => {
+    if (!endsAt) { setRemaining(""); return; }
+    const update = () => {
+      const diff = new Date(endsAt).getTime() - Date.now();
+      if (diff <= 0) { setRemaining("Encerrada"); return; }
+      const d = Math.floor(diff / 86400000);
+      const h = Math.floor((diff % 86400000) / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      if (d > 0) setRemaining(`${d}d ${h}h`);
+      else if (h > 0) setRemaining(`${h}h ${m}min`);
+      else setRemaining(`${m}:${String(s).padStart(2, "0")}`);
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [endsAt]);
+
+  return remaining;
+}
+
+function PollCountdown({ endsAt }: { endsAt: string | null }) {
+  const remaining = useCountdown(endsAt);
+  if (!remaining) return null;
+  const isExpired = remaining === "Encerrada";
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-inter font-semibold ${isExpired ? "text-destructive" : "text-muted-foreground"}`}>
+      <Timer className="w-3 h-3" />
+      {remaining}
+    </span>
+  );
 }
 
 export default function PollsSection() {
@@ -87,7 +123,7 @@ export default function PollsSection() {
   async function vote(pollId: string, optionIndex: number) {
     if (!user) return;
     const existing = votes.find(v => v.poll_id === pollId && v.user_id === user.id);
-    if (existing) return; // Already voted
+    if (existing) return;
 
     setVoting(pollId);
     const { error } = await supabase.from("poll_votes").insert({
@@ -198,13 +234,21 @@ export default function PollsSection() {
             const totalVotes = pollVotes.length;
             const myVote = user ? pollVotes.find(v => v.user_id === user.id) : null;
             const hasVoted = !!myVote;
+            const isExpired = poll.ends_at && new Date(poll.ends_at).getTime() < Date.now();
 
             return (
               <div key={poll.id} className="bg-card rounded-2xl border border-border p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="flex items-start gap-2">
                     <span className="text-lg">{poll.emoji}</span>
-                    <h4 className="font-montserrat font-bold text-foreground text-sm leading-snug">{poll.question}</h4>
+                    <div>
+                      <h4 className="font-montserrat font-bold text-foreground text-sm leading-snug">{poll.question}</h4>
+                      {poll.ends_at && (
+                        <div className="mt-1">
+                          <PollCountdown endsAt={poll.ends_at} />
+                        </div>
+                      )}
+                    </div>
                   </div>
                   {isManager && poll.created_by === user?.id && (
                     <button onClick={() => closePoll(poll.id)} className="text-muted-foreground hover:text-destructive p-1 flex-shrink-0">
@@ -222,8 +266,8 @@ export default function PollsSection() {
                     return (
                       <button
                         key={i}
-                        onClick={() => !hasVoted && vote(poll.id, i)}
-                        disabled={hasVoted || voting === poll.id}
+                        onClick={() => !hasVoted && !isExpired && vote(poll.id, i)}
+                        disabled={hasVoted || voting === poll.id || !!isExpired}
                         className={`w-full relative overflow-hidden rounded-xl border transition-all text-left ${
                           isMyVote
                             ? "border-primary bg-primary/5"
