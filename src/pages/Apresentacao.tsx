@@ -1,13 +1,119 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BookOpen, Users, Calendar, Bell, BarChart3, Shield, MessageCircle,
-  Trophy, Heart, ChevronDown, ChevronRight, Check, Star, Smartphone,
-  Zap, TrendingUp, Clock, Globe, ArrowRight, Church, Sparkles
+  Trophy, Heart, ChevronDown, Check, Star, Smartphone,
+  TrendingUp, Clock, Globe, ArrowRight, Church, Sparkles
 } from "lucide-react";
 import heroPhone from "@/assets/landing-hero-phone.png";
 import communityImg from "@/assets/landing-community.png";
 import dashboardImg from "@/assets/landing-dashboard.png";
+
+// ─── SEO: JSON-LD structured data ────────────────────────
+function JsonLdScript() {
+  useEffect(() => {
+    const jsonLd = {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: "Caminho — Plataforma de Discipulado Digital",
+      applicationCategory: "ReligiousApp",
+      operatingSystem: "Web",
+      description:
+        "Plataforma completa para engajar membros, acompanhar crescimento espiritual e simplificar a gestão pastoral da sua igreja.",
+      url: "https://caminhoboanova.lovable.app/apresentacao",
+      offers: [
+        {
+          "@type": "Offer",
+          name: "Essencial",
+          price: "97.00",
+          priceCurrency: "BRL",
+          description: "Ideal para comunidades pequenas — até 50 membros",
+        },
+        {
+          "@type": "Offer",
+          name: "Comunidade",
+          price: "197.00",
+          priceCurrency: "BRL",
+          description: "Para igrejas em crescimento — até 200 membros",
+        },
+        {
+          "@type": "Offer",
+          name: "Pastoral",
+          price: "347.00",
+          priceCurrency: "BRL",
+          description: "Para igrejas grandes ou redes — membros ilimitados",
+        },
+      ],
+      aggregateRating: {
+        "@type": "AggregateRating",
+        ratingValue: "5",
+        reviewCount: "200",
+      },
+    };
+
+    const faqJsonLd = {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: FAQ.map((item) => ({
+        "@type": "Question",
+        name: item.q,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: item.a,
+        },
+      })),
+    };
+
+    const orgJsonLd = {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "Caminho",
+      url: "https://caminhoboanova.lovable.app",
+      logo: "https://caminhoboanova.lovable.app/pwa-512x512.png",
+      contactPoint: {
+        "@type": "ContactPoint",
+        contactType: "sales",
+        url: WHATSAPP_LINK,
+        availableLanguage: "pt-BR",
+      },
+    };
+
+    const scripts = [jsonLd, faqJsonLd, orgJsonLd].map((data) => {
+      const el = document.createElement("script");
+      el.type = "application/ld+json";
+      el.textContent = JSON.stringify(data);
+      document.head.appendChild(el);
+      return el;
+    });
+
+    // SEO meta tags
+    document.title = "Caminho — Plataforma de Discipulado Digital para Igrejas";
+    let metaDesc = document.querySelector('meta[name="description"]');
+    if (!metaDesc) {
+      metaDesc = document.createElement("meta");
+      metaDesc.setAttribute("name", "description");
+      document.head.appendChild(metaDesc);
+    }
+    metaDesc.setAttribute(
+      "content",
+      "Transforme o discipulado da sua igreja com devocionais, gamificação, gestão pastoral e comunidade digital. Teste grátis por 30 dias."
+    );
+
+    let canonical = document.querySelector('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.setAttribute("rel", "canonical");
+      document.head.appendChild(canonical);
+    }
+    canonical.setAttribute("href", "https://caminhoboanova.lovable.app/apresentacao");
+
+    return () => {
+      scripts.forEach((s) => s.remove());
+    };
+  }, []);
+
+  return null;
+}
 
 // ─── Fade-in animation helper ────────────────────────────
 const fadeUp = {
@@ -18,15 +124,17 @@ const fadeUp = {
   }),
 };
 
+const WHATSAPP_LINK = "https://wa.me/5551999999999?text=Olá!%20Gostaria%20de%20saber%20mais%20sobre%20o%20Caminho.";
+
 const FEATURES = [
-  { icon: BookOpen, title: "Trilha de Discipulado", desc: "Cursos estruturados com lições, devocionais diários e acompanhamento espiritual progressivo.", color: "from-emerald-500 to-teal-600" },
-  { icon: Calendar, title: "Agenda Integrada", desc: "Calendário de eventos, encontros e cultos com lembretes automáticos e controle de presença.", color: "from-blue-500 to-indigo-600" },
-  { icon: MessageCircle, title: "Comunidade Digital", desc: "Chat, enquetes, pedidos de oração, testemunhos e duplas de oração semanais.", color: "from-violet-500 to-purple-600" },
-  { icon: Trophy, title: "Gamificação", desc: "Pontos de fé, ranking, conquistas e desafios que incentivam o engajamento diário.", color: "from-amber-500 to-orange-600" },
-  { icon: BarChart3, title: "Painel Administrativo", desc: "Dashboard completo com relatórios, métricas de engajamento e gestão de turmas.", color: "from-rose-500 to-pink-600" },
-  { icon: Bell, title: "Notificações Push", desc: "Lembretes inteligentes segmentados por comunidade, área ou turma.", color: "from-cyan-500 to-blue-600" },
-  { icon: Heart, title: "Cuidado Pastoral", desc: "Termômetro espiritual, autoavaliações mensais e planos de crescimento individuais.", color: "from-red-500 to-rose-600" },
-  { icon: Shield, title: "Segurança & Privacidade", desc: "Dados protegidos, acesso por papéis (admin, líder, membro) e controle total.", color: "from-slate-500 to-gray-700" },
+  { icon: BookOpen, title: "Trilha de Discipulado", desc: "Cursos estruturados com lições, devocionais diários e acompanhamento espiritual progressivo.", color: "bg-gradient-to-br from-[hsl(var(--brand-green))] to-[hsl(160,60%,35%)]" },
+  { icon: Calendar, title: "Agenda Integrada", desc: "Calendário de eventos, encontros e cultos com lembretes automáticos e controle de presença.", color: "bg-gradient-to-br from-[hsl(var(--primary))] to-[hsl(250,55%,45%)]" },
+  { icon: MessageCircle, title: "Comunidade Digital", desc: "Chat, enquetes, pedidos de oração, testemunhos e duplas de oração semanais.", color: "bg-gradient-to-br from-[hsl(270,60%,55%)] to-[hsl(280,55%,45%)]" },
+  { icon: Trophy, title: "Gamificação", desc: "Pontos de fé, ranking, conquistas e desafios que incentivam o engajamento diário.", color: "bg-gradient-to-br from-[hsl(var(--secondary))] to-[hsl(var(--accent))]" },
+  { icon: BarChart3, title: "Painel Administrativo", desc: "Dashboard completo com relatórios, métricas de engajamento e gestão de turmas.", color: "bg-gradient-to-br from-[hsl(350,70%,55%)] to-[hsl(340,60%,50%)]" },
+  { icon: Bell, title: "Notificações Push", desc: "Lembretes inteligentes segmentados por comunidade, área ou turma.", color: "bg-gradient-to-br from-[hsl(190,70%,50%)] to-[hsl(var(--primary))]" },
+  { icon: Heart, title: "Cuidado Pastoral", desc: "Termômetro espiritual, autoavaliações mensais e planos de crescimento individuais.", color: "bg-gradient-to-br from-[hsl(0,70%,55%)] to-[hsl(350,65%,50%)]" },
+  { icon: Shield, title: "Segurança & Privacidade", desc: "Dados protegidos, acesso por papéis (admin, líder, membro) e controle total.", color: "bg-gradient-to-br from-[hsl(var(--muted-foreground))] to-[hsl(var(--brand-gray))]" },
 ];
 
 const STATS = [
@@ -35,7 +143,6 @@ const STATS = [
   { value: "-80%", label: "Tempo de gestão", icon: Clock },
   { value: "24/7", label: "Acesso multiplataforma", icon: Globe },
 ];
-
 
 const PLANS = [
   {
@@ -77,26 +184,27 @@ const FAQ = [
 
 export default function Apresentacao() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  // landing page v2
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 overflow-x-hidden">
+    <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
+      {/* JSON-LD structured data for SEO */}
+      <JsonLdScript />
+
       {/* ─── NAVBAR ─────────────────────────────────────── */}
-      <nav className="fixed top-0 w-full z-50 backdrop-blur-xl bg-white/80 border-b border-gray-100">
+      <nav className="fixed top-0 w-full z-50 backdrop-blur-xl bg-background/80 border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-              <Church className="w-5 h-5 text-white" />
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
+              <Church className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="font-bold text-lg tracking-tight">Caminho</span>
+            <span className="font-montserrat font-bold text-lg tracking-tight text-foreground">Caminho</span>
           </div>
-          <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
-            <a href="#funcionalidades" className="hover:text-emerald-600 transition-colors">Funcionalidades</a>
-            <a href="#beneficios" className="hover:text-emerald-600 transition-colors">Benefícios</a>
-            
-            <a href="#planos" className="hover:text-emerald-600 transition-colors">Planos</a>
+          <div className="hidden md:flex items-center gap-8 text-sm font-inter font-medium text-muted-foreground">
+            <a href="#funcionalidades" className="hover:text-primary transition-colors">Funcionalidades</a>
+            <a href="#beneficios" className="hover:text-primary transition-colors">Benefícios</a>
+            <a href="#planos" className="hover:text-primary transition-colors">Planos</a>
           </div>
-          <a href="#planos" className="px-5 py-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-semibold hover:shadow-lg hover:shadow-emerald-500/25 transition-all">
+          <a href="#planos" className="px-5 py-2.5 rounded-full text-primary-foreground text-sm font-semibold hover:shadow-lg transition-all" style={{ background: "var(--gradient-hero)" }}>
             Começar agora
           </a>
         </div>
@@ -104,53 +212,58 @@ export default function Apresentacao() {
 
       {/* ─── HERO ───────────────────────────────────────── */}
       <section className="relative pt-32 pb-20 lg:pt-40 lg:pb-32 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 via-white to-teal-50" />
-        <div className="absolute top-20 right-0 w-[600px] h-[600px] rounded-full bg-emerald-100/40 blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full bg-teal-100/30 blur-3xl" />
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-secondary/5" />
+        <div className="absolute top-20 right-0 w-[600px] h-[600px] rounded-full bg-primary/5 blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full bg-secondary/5 blur-3xl" />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <motion.div initial="hidden" animate="visible" className="space-y-8">
-              <motion.div variants={fadeUp} custom={0} className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-100 text-emerald-700 text-sm font-medium">
+              <motion.div variants={fadeUp} custom={0} className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-inter font-medium">
                 <Sparkles className="w-4 h-4" /> Plataforma #1 para igrejas digitais
               </motion.div>
-              <motion.h1 variants={fadeUp} custom={1} className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.1]">
+              <motion.h1 variants={fadeUp} custom={1} className="text-4xl sm:text-5xl lg:text-6xl font-montserrat font-black tracking-tight leading-[1.1] text-foreground">
                 Transforme o{" "}
-                <span className="bg-gradient-to-r from-emerald-500 to-teal-600 bg-clip-text text-transparent">
+                <span className="bg-clip-text text-transparent" style={{ backgroundImage: "var(--gradient-hero)" }}>
                   discipulado
                 </span>{" "}
                 da sua igreja
               </motion.h1>
-              <motion.p variants={fadeUp} custom={2} className="text-lg sm:text-xl text-gray-600 max-w-lg leading-relaxed">
+              <motion.p variants={fadeUp} custom={2} className="text-lg sm:text-xl text-muted-foreground font-inter max-w-lg leading-relaxed">
                 A plataforma completa para engajar membros, acompanhar o crescimento espiritual e simplificar a gestão pastoral — tudo em um só lugar.
               </motion.p>
               <motion.div variants={fadeUp} custom={3} className="flex flex-col sm:flex-row gap-4">
-                <a href="#planos" className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-lg hover:shadow-xl hover:shadow-emerald-500/30 hover:-translate-y-0.5 transition-all">
+                <a href="#planos" className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl text-primary-foreground font-montserrat font-bold text-lg hover:shadow-xl hover:-translate-y-0.5 transition-all" style={{ background: "var(--gradient-hero)" }}>
                   Teste grátis por 30 dias <ArrowRight className="w-5 h-5" />
                 </a>
-                <a href="#funcionalidades" className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl border-2 border-gray-200 text-gray-700 font-semibold text-lg hover:border-emerald-300 hover:text-emerald-700 transition-all">
+                <a href="#funcionalidades" className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl border-2 border-border text-foreground font-semibold text-lg hover:border-primary/40 hover:text-primary transition-all">
                   Ver funcionalidades
                 </a>
               </motion.div>
               <motion.div variants={fadeUp} custom={4} className="flex items-center gap-6 pt-2">
                 <div className="flex -space-x-3">
                   {["🧑‍💼", "👩‍🏫", "👨‍💻", "👩‍💻"].map((e, i) => (
-                    <div key={i} className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-100 to-teal-100 border-2 border-white flex items-center justify-center text-lg">{e}</div>
+                    <div key={i} className="w-10 h-10 rounded-full bg-primary/10 border-2 border-background flex items-center justify-center text-lg">{e}</div>
                   ))}
                 </div>
                 <div>
-                  <div className="flex gap-0.5 text-amber-400 text-sm">
+                  <div className="flex gap-0.5 text-accent text-sm" aria-label="5 estrelas">
                     {[1, 2, 3, 4, 5].map(i => <Star key={i} className="w-4 h-4 fill-current" />)}
                   </div>
-                  <p className="text-sm text-gray-500 mt-0.5">+200 igrejas já utilizam</p>
+                  <p className="text-sm text-muted-foreground mt-0.5 font-inter">+200 igrejas já utilizam</p>
                 </div>
               </motion.div>
             </motion.div>
 
             <motion.div initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.8, delay: 0.3 }} className="relative flex justify-center lg:justify-end">
               <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/20 to-teal-400/20 rounded-[3rem] blur-2xl scale-110" />
-                <img src={heroPhone} alt="App Caminho em smartphone" className="relative w-[320px] sm:w-[380px] drop-shadow-2xl" />
+                <div className="absolute inset-0 bg-primary/10 rounded-[3rem] blur-2xl scale-110" />
+                <img
+                  src={heroPhone}
+                  alt="App Caminho em smartphone mostrando trilha de discipulado"
+                  loading="eager"
+                  className="relative w-[320px] sm:w-[380px] drop-shadow-2xl"
+                />
               </div>
             </motion.div>
           </div>
@@ -158,14 +271,14 @@ export default function Apresentacao() {
       </section>
 
       {/* ─── STATS ──────────────────────────────────────── */}
-      <section className="py-16 bg-gradient-to-r from-emerald-600 to-teal-700">
+      <section className="py-16" style={{ background: "var(--gradient-hero)" }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
             {STATS.map((s, i) => (
-              <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={i} className="text-center text-white">
+              <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={i} className="text-center text-primary-foreground">
                 <s.icon className="w-8 h-8 mx-auto mb-3 opacity-80" />
-                <p className="text-3xl sm:text-4xl font-black">{s.value}</p>
-                <p className="text-emerald-100 text-sm mt-1">{s.label}</p>
+                <p className="text-3xl sm:text-4xl font-montserrat font-black">{s.value}</p>
+                <p className="text-primary-foreground/60 text-sm font-inter mt-1">{s.label}</p>
               </motion.div>
             ))}
           </div>
@@ -176,20 +289,20 @@ export default function Apresentacao() {
       <section id="funcionalidades" className="py-20 lg:py-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0} className="text-center max-w-2xl mx-auto mb-16">
-            <p className="text-emerald-600 font-semibold text-sm uppercase tracking-wider mb-3">Funcionalidades</p>
-            <h2 className="text-3xl sm:text-4xl font-black tracking-tight mb-4">Tudo que sua igreja precisa em um só app</h2>
-            <p className="text-gray-500 text-lg">Ferramentas poderosas para discipulado, comunidade e gestão pastoral.</p>
+            <p className="text-primary font-inter font-semibold text-sm uppercase tracking-wider mb-3">Funcionalidades</p>
+            <h2 className="text-3xl sm:text-4xl font-montserrat font-black tracking-tight mb-4 text-foreground">Tudo que sua igreja precisa em um só app</h2>
+            <p className="text-muted-foreground text-lg font-inter">Ferramentas poderosas para discipulado, comunidade e gestão pastoral.</p>
           </motion.div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {FEATURES.map((f, i) => (
               <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={i}
-                className="group p-6 rounded-2xl border border-gray-100 bg-white hover:shadow-xl hover:shadow-gray-100/50 hover:-translate-y-1 transition-all duration-300">
-                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${f.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
+                className="group p-6 rounded-2xl border border-border bg-card hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-1 transition-all duration-300">
+                <div className={`w-12 h-12 rounded-xl ${f.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
                   <f.icon className="w-6 h-6 text-white" />
                 </div>
-                <h3 className="font-bold text-lg mb-2">{f.title}</h3>
-                <p className="text-gray-500 text-sm leading-relaxed">{f.desc}</p>
+                <h3 className="font-montserrat font-bold text-lg mb-2 text-foreground">{f.title}</h3>
+                <p className="text-muted-foreground text-sm font-inter leading-relaxed">{f.desc}</p>
               </motion.div>
             ))}
           </div>
@@ -197,13 +310,13 @@ export default function Apresentacao() {
       </section>
 
       {/* ─── BENEFITS ───────────────────────────────────── */}
-      <section id="beneficios" className="py-20 lg:py-28 bg-gray-50">
+      <section id="beneficios" className="py-20 lg:py-28 bg-muted/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }}>
-              <motion.p variants={fadeUp} custom={0} className="text-emerald-600 font-semibold text-sm uppercase tracking-wider mb-3">Benefícios</motion.p>
-              <motion.h2 variants={fadeUp} custom={1} className="text-3xl sm:text-4xl font-black tracking-tight mb-6">
-                Por que escolher o <span className="bg-gradient-to-r from-emerald-500 to-teal-600 bg-clip-text text-transparent">Caminho</span>?
+              <motion.p variants={fadeUp} custom={0} className="text-primary font-inter font-semibold text-sm uppercase tracking-wider mb-3">Benefícios</motion.p>
+              <motion.h2 variants={fadeUp} custom={1} className="text-3xl sm:text-4xl font-montserrat font-black tracking-tight mb-6 text-foreground">
+                Por que escolher o <span className="bg-clip-text text-transparent" style={{ backgroundImage: "var(--gradient-hero)" }}>Caminho</span>?
               </motion.h2>
               <div className="space-y-5">
                 {[
@@ -214,12 +327,12 @@ export default function Apresentacao() {
                   { title: "Multi-comunidade", desc: "Gerencie múltiplas comunidades e áreas com controle independente de uma só plataforma." },
                 ].map((b, i) => (
                   <motion.div key={i} variants={fadeUp} custom={i + 2} className="flex gap-4">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <Check className="w-5 h-5 text-emerald-600" />
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Check className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-base">{b.title}</h4>
-                      <p className="text-gray-500 text-sm mt-1">{b.desc}</p>
+                      <h4 className="font-montserrat font-bold text-base text-foreground">{b.title}</h4>
+                      <p className="text-muted-foreground text-sm font-inter mt-1">{b.desc}</p>
                     </div>
                   </motion.div>
                 ))}
@@ -227,7 +340,12 @@ export default function Apresentacao() {
             </motion.div>
 
             <motion.div initial={{ opacity: 0, x: 40 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.7 }}>
-              <img src={communityImg} alt="Comunidade conectada" className="w-full max-w-md mx-auto" />
+              <img
+                src={communityImg}
+                alt="Comunidade conectada através do app Caminho"
+                loading="lazy"
+                className="w-full max-w-md mx-auto"
+              />
             </motion.div>
           </div>
         </div>
@@ -237,25 +355,30 @@ export default function Apresentacao() {
       <section className="py-20 lg:py-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0} className="text-center max-w-2xl mx-auto mb-12">
-            <p className="text-emerald-600 font-semibold text-sm uppercase tracking-wider mb-3">Painel de controle</p>
-            <h2 className="text-3xl sm:text-4xl font-black tracking-tight mb-4">Gestão inteligente na palma da mão</h2>
-            <p className="text-gray-500 text-lg">Dashboard completo com métricas de engajamento, relatórios pastorais e gestão de turmas.</p>
+            <p className="text-primary font-inter font-semibold text-sm uppercase tracking-wider mb-3">Painel de controle</p>
+            <h2 className="text-3xl sm:text-4xl font-montserrat font-black tracking-tight mb-4 text-foreground">Gestão inteligente na palma da mão</h2>
+            <p className="text-muted-foreground text-lg font-inter">Dashboard completo com métricas de engajamento, relatórios pastorais e gestão de turmas.</p>
           </motion.div>
           <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }}>
-            <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-gray-200/50 border border-gray-100">
-              <img src={dashboardImg} alt="Dashboard administrativo" className="w-full" />
-              <div className="absolute inset-0 bg-gradient-to-t from-white/60 via-transparent to-transparent" />
+            <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-primary/10 border border-border">
+              <img
+                src={dashboardImg}
+                alt="Dashboard administrativo do Caminho com métricas de engajamento"
+                loading="lazy"
+                className="w-full"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-background/60 via-transparent to-transparent" />
             </div>
           </motion.div>
         </div>
       </section>
 
       {/* ─── COMO FUNCIONA ─────────────────────────────── */}
-      <section id="como-funciona" className="py-20 lg:py-28 bg-gradient-to-br from-emerald-50 to-teal-50">
+      <section id="como-funciona" className="py-20 lg:py-28 bg-primary/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0} className="text-center max-w-2xl mx-auto mb-16">
-            <p className="text-emerald-600 font-semibold text-sm uppercase tracking-wider mb-3">Como funciona</p>
-            <h2 className="text-3xl sm:text-4xl font-black tracking-tight">Comece em 4 passos simples</h2>
+            <p className="text-primary font-inter font-semibold text-sm uppercase tracking-wider mb-3">Como funciona</p>
+            <h2 className="text-3xl sm:text-4xl font-montserrat font-black tracking-tight text-foreground">Comece em 4 passos simples</h2>
           </motion.div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -266,15 +389,15 @@ export default function Apresentacao() {
               { step: 4, title: "Acompanhe o crescimento", desc: "Monitore o engajamento, presença e saúde espiritual em tempo real.", icon: TrendingUp },
             ].map((item, i) => (
               <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={i}
-                className="relative bg-white rounded-2xl p-8 shadow-lg shadow-emerald-100/30 border border-emerald-100/50 text-center">
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white font-bold text-sm flex items-center justify-center shadow-md">
+                className="relative bg-card rounded-2xl p-8 shadow-lg shadow-primary/5 border border-border text-center">
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full text-primary-foreground font-bold text-sm flex items-center justify-center shadow-md" style={{ background: "var(--gradient-hero)" }}>
                   {item.step}
                 </div>
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center mx-auto mb-4 mt-2">
-                  <item.icon className="w-7 h-7 text-emerald-600" />
+                <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4 mt-2">
+                  <item.icon className="w-7 h-7 text-primary" />
                 </div>
-                <h3 className="font-bold text-lg mb-2">{item.title}</h3>
-                <p className="text-gray-500 text-sm leading-relaxed">{item.desc}</p>
+                <h3 className="font-montserrat font-bold text-lg mb-2 text-foreground">{item.title}</h3>
+                <p className="text-muted-foreground text-sm font-inter leading-relaxed">{item.desc}</p>
               </motion.div>
             ))}
           </div>
@@ -285,9 +408,9 @@ export default function Apresentacao() {
       <section id="planos" className="py-20 lg:py-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0} className="text-center max-w-2xl mx-auto mb-16">
-            <p className="text-emerald-600 font-semibold text-sm uppercase tracking-wider mb-3">Planos</p>
-            <h2 className="text-3xl sm:text-4xl font-black tracking-tight mb-4">Escolha o plano ideal para sua igreja</h2>
-            <p className="text-gray-500 text-lg">Todos os planos incluem 30 dias de teste gratuito. Sem fidelidade.</p>
+            <p className="text-primary font-inter font-semibold text-sm uppercase tracking-wider mb-3">Planos</p>
+            <h2 className="text-3xl sm:text-4xl font-montserrat font-black tracking-tight mb-4 text-foreground">Escolha o plano ideal para sua igreja</h2>
+            <p className="text-muted-foreground text-lg font-inter">Todos os planos incluem 30 dias de teste gratuito. Sem fidelidade.</p>
           </motion.div>
 
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
@@ -295,38 +418,46 @@ export default function Apresentacao() {
               <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={i}
                 className={`relative rounded-3xl p-8 transition-all ${
                   p.highlight
-                    ? "bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-2xl shadow-emerald-500/30 scale-105 border-0"
-                    : "bg-white border-2 border-gray-100 hover:border-emerald-200 hover:shadow-xl"
-                }`}>
+                    ? "text-primary-foreground shadow-2xl shadow-primary/30 scale-105 border-0"
+                    : "bg-card border-2 border-border hover:border-primary/30 hover:shadow-xl"
+                }`}
+                style={p.highlight ? { background: "var(--gradient-hero)" } : undefined}
+              >
                 {p.highlight && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-amber-400 text-amber-900 text-xs font-bold uppercase tracking-wide">
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-accent text-accent-foreground text-xs font-bold uppercase tracking-wide">
                     Mais popular
                   </div>
                 )}
-                <p className={`font-bold text-lg ${p.highlight ? "text-emerald-100" : "text-gray-400"}`}>{p.name}</p>
+                <p className={`font-montserrat font-bold text-lg ${p.highlight ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{p.name}</p>
                 <div className="flex items-baseline gap-1 mt-3 mb-1">
-                  <span className="text-4xl font-black">{p.price}</span>
-                  <span className={`text-sm ${p.highlight ? "text-emerald-200" : "text-gray-400"}`}>{p.period}</span>
+                  <span className={`text-4xl font-montserrat font-black ${p.highlight ? "text-primary-foreground" : "text-foreground"}`}>{p.price}</span>
+                  <span className={`text-sm font-inter ${p.highlight ? "text-primary-foreground/60" : "text-muted-foreground"}`}>{p.period}</span>
                 </div>
-                <p className={`text-sm mb-2 ${p.highlight ? "text-emerald-200" : "text-gray-500"}`}>{p.desc}</p>
-                <p className={`text-xs font-semibold mb-6 ${p.highlight ? "text-emerald-100" : "text-emerald-600"}`}>{p.members}</p>
+                <p className={`text-sm font-inter mb-2 ${p.highlight ? "text-primary-foreground/60" : "text-muted-foreground"}`}>{p.desc}</p>
+                <p className={`text-xs font-inter font-semibold mb-6 ${p.highlight ? "text-primary-foreground/80" : "text-primary"}`}>{p.members}</p>
 
                 <ul className="space-y-3 mb-8">
                   {p.features.map((f, fi) => (
-                    <li key={fi} className="flex items-center gap-2.5 text-sm">
-                      <Check className={`w-4 h-4 flex-shrink-0 ${p.highlight ? "text-emerald-300" : "text-emerald-500"}`} />
-                      <span className={p.highlight ? "text-emerald-50" : "text-gray-600"}>{f}</span>
+                    <li key={fi} className="flex items-center gap-2.5 text-sm font-inter">
+                      <Check className={`w-4 h-4 flex-shrink-0 ${p.highlight ? "text-primary-foreground/70" : "text-primary"}`} />
+                      <span className={p.highlight ? "text-primary-foreground/90" : "text-muted-foreground"}>{f}</span>
                     </li>
                   ))}
                 </ul>
 
-                <button className={`w-full py-3.5 rounded-2xl font-bold text-sm transition-all ${
-                  p.highlight
-                    ? "bg-white text-emerald-700 hover:bg-emerald-50 hover:shadow-lg"
-                    : "bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:shadow-lg hover:shadow-emerald-500/25"
-                }`}>
+                <a
+                  href={WHATSAPP_LINK}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`w-full block py-3.5 rounded-2xl font-montserrat font-bold text-sm text-center transition-all ${
+                    p.highlight
+                      ? "bg-card text-primary hover:bg-card/90 hover:shadow-lg"
+                      : "text-primary-foreground hover:shadow-lg hover:shadow-primary/25"
+                  }`}
+                  style={!p.highlight ? { background: "var(--gradient-hero)" } : undefined}
+                >
                   Começar teste grátis
-                </button>
+                </a>
               </motion.div>
             ))}
           </div>
@@ -334,26 +465,26 @@ export default function Apresentacao() {
       </section>
 
       {/* ─── FAQ ─────────────────────────────────────────── */}
-      <section className="py-20 lg:py-28 bg-gray-50">
+      <section className="py-20 lg:py-28 bg-muted/50">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0} className="text-center mb-12">
-            <p className="text-emerald-600 font-semibold text-sm uppercase tracking-wider mb-3">Dúvidas frequentes</p>
-            <h2 className="text-3xl sm:text-4xl font-black tracking-tight">Perguntas & Respostas</h2>
+            <p className="text-primary font-inter font-semibold text-sm uppercase tracking-wider mb-3">Dúvidas frequentes</p>
+            <h2 className="text-3xl sm:text-4xl font-montserrat font-black tracking-tight text-foreground">Perguntas & Respostas</h2>
           </motion.div>
 
           <div className="space-y-3">
             {FAQ.map((item, i) => (
               <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={i}
-                className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                className="bg-card rounded-2xl border border-border overflow-hidden">
                 <button onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50 transition-colors">
-                  <span className="font-semibold text-sm pr-4">{item.q}</span>
-                  <ChevronDown className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${openFaq === i ? "rotate-180" : ""}`} />
+                  className="w-full flex items-center justify-between p-5 text-left hover:bg-muted/50 transition-colors">
+                  <span className="font-inter font-semibold text-sm text-foreground pr-4">{item.q}</span>
+                  <ChevronDown className={`w-5 h-5 text-muted-foreground flex-shrink-0 transition-transform ${openFaq === i ? "rotate-180" : ""}`} />
                 </button>
                 <AnimatePresence>
                   {openFaq === i && (
                     <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="overflow-hidden">
-                      <p className="px-5 pb-5 text-gray-500 text-sm leading-relaxed">{item.a}</p>
+                      <p className="px-5 pb-5 text-muted-foreground text-sm font-inter leading-relaxed">{item.a}</p>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -363,26 +494,54 @@ export default function Apresentacao() {
         </div>
       </section>
 
+      {/* ─── WHATSAPP CONTACT SECTION ───────────────────── */}
+      <section className="py-16 bg-[hsl(var(--brand-green))]/10 border-y border-border">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }}>
+            <motion.div variants={fadeUp} custom={0} className="w-16 h-16 rounded-2xl bg-[hsl(var(--brand-green))]/15 flex items-center justify-center mx-auto mb-4">
+              <MessageCircle className="w-8 h-8 text-[hsl(var(--brand-green))]" />
+            </motion.div>
+            <motion.h3 variants={fadeUp} custom={1} className="text-2xl font-montserrat font-black text-foreground mb-2">
+              Tem dúvidas? Fale conosco!
+            </motion.h3>
+            <motion.p variants={fadeUp} custom={2} className="text-muted-foreground font-inter mb-6">
+              Tire suas dúvidas sobre a plataforma diretamente pelo WhatsApp. Resposta em até 24h!
+            </motion.p>
+            <motion.a
+              variants={fadeUp}
+              custom={3}
+              href={WHATSAPP_LINK}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-[hsl(var(--brand-green))] text-white font-montserrat font-bold text-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+            >
+              <Smartphone className="w-5 h-5" />
+              Conversar no WhatsApp
+            </motion.a>
+          </motion.div>
+        </div>
+      </section>
+
       {/* ─── CTA FINAL ──────────────────────────────────── */}
-      <section className="py-20 lg:py-28 bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 relative overflow-hidden">
+      <section className="py-20 lg:py-28 relative overflow-hidden" style={{ background: "var(--gradient-hero)" }}>
         <div className="absolute inset-0">
-          <div className="absolute top-0 left-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl" />
-          <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-teal-400/20 rounded-full blur-3xl" />
+          <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary-foreground/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-primary-foreground/5 rounded-full blur-3xl" />
         </div>
         <div className="relative max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }}>
-            <motion.h2 variants={fadeUp} custom={0} className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight mb-6">
+            <motion.h2 variants={fadeUp} custom={0} className="text-3xl sm:text-4xl lg:text-5xl font-montserrat font-black text-primary-foreground tracking-tight mb-6">
               Pronto para transformar o discipulado da sua igreja?
             </motion.h2>
-            <motion.p variants={fadeUp} custom={1} className="text-emerald-100 text-lg mb-10 max-w-xl mx-auto">
+            <motion.p variants={fadeUp} custom={1} className="text-primary-foreground/60 font-inter text-lg mb-10 max-w-xl mx-auto">
               Junte-se a mais de 200 igrejas que já utilizam o Caminho para engajar, discipular e cuidar de seus membros.
             </motion.p>
             <motion.div variants={fadeUp} custom={2} className="flex flex-col sm:flex-row gap-4 justify-center">
-              <a href="#planos" className="inline-flex items-center justify-center gap-2 px-10 py-4 rounded-2xl bg-white text-emerald-700 font-bold text-lg hover:shadow-2xl hover:-translate-y-1 transition-all">
+              <a href="#planos" className="inline-flex items-center justify-center gap-2 px-10 py-4 rounded-2xl bg-card text-primary font-montserrat font-bold text-lg hover:shadow-2xl hover:-translate-y-1 transition-all">
                 Comece grátis agora <ArrowRight className="w-5 h-5" />
               </a>
-              <a href="https://wa.me/5500000000000" target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 px-10 py-4 rounded-2xl border-2 border-white/30 text-white font-semibold text-lg hover:bg-white/10 transition-all">
+              <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 px-10 py-4 rounded-2xl border-2 border-primary-foreground/30 text-primary-foreground font-inter font-semibold text-lg hover:bg-primary-foreground/10 transition-all">
                 Falar com um consultor
               </a>
             </motion.div>
@@ -391,16 +550,16 @@ export default function Apresentacao() {
       </section>
 
       {/* ─── FOOTER ─────────────────────────────────────── */}
-      <footer className="py-12 bg-gray-900 text-gray-400">
+      <footer className="py-12 bg-foreground text-muted-foreground">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                <Church className="w-4 h-4 text-white" />
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
+                <Church className="w-4 h-4 text-primary-foreground" />
               </div>
-              <span className="text-white font-bold">Caminho</span>
+              <span className="text-background font-montserrat font-bold">Caminho</span>
             </div>
-            <p className="text-sm">© {new Date().getFullYear()} Caminho — Plataforma de discipulado digital para igrejas.</p>
+            <p className="text-sm font-inter">© {new Date().getFullYear()} Caminho — Plataforma de discipulado digital para igrejas.</p>
           </div>
         </div>
       </footer>
