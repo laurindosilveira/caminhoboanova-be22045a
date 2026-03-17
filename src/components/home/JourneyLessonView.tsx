@@ -170,6 +170,15 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     }
     setSaving(false);
     setLastSaved(new Date());
+
+    if (!isLateAccess) {
+      // Celebration animation
+      setShowCompletionAnim(true);
+      confetti({ particleCount: 80, spread: 90, origin: { y: 0.7 } });
+      setTimeout(() => confetti({ particleCount: 40, spread: 60, origin: { x: 0.3, y: 0.6 } }), 300);
+      setTimeout(() => setShowCompletionAnim(false), 3500);
+    }
+
     toast.success(isLateAccess ? "Respostas salvas! (sem pontuação — prazo encerrado)" : "Respostas salvas com sucesso! +20 pontos de fé ⭐");
   }
 
