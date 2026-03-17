@@ -49,15 +49,18 @@ export default function AdminSistema() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  useEffect(() => {
-    if (!authLoading && (!user || !isSuper)) {
-      navigate("/", { replace: true });
-    }
-  }, [user, isSuper, authLoading, navigate]);
+  const ALLOWED_EMAILS = ["laurindosilveira@gmail.com"];
+  const isAllowed = isSuper && user?.email && ALLOWED_EMAILS.includes(user.email);
 
   useEffect(() => {
-    if (user && isSuper) fetchChurches();
-  }, [user, isSuper]);
+    if (!authLoading && (!user || !isAllowed)) {
+      navigate("/", { replace: true });
+    }
+  }, [user, isAllowed, authLoading, navigate]);
+
+  useEffect(() => {
+    if (user && isAllowed) fetchChurches();
+  }, [user, isAllowed]);
 
   async function fetchChurches() {
     setLoading(true);
