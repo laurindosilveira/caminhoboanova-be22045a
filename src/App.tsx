@@ -17,6 +17,7 @@ import Install from "./pages/Install";
 import ExportData from "./pages/ExportData";
 import Apresentacao from "./pages/Apresentacao";
 import MinhaIgreja from "./pages/MinhaIgreja";
+import Onboarding from "./pages/Onboarding";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
