@@ -134,7 +134,11 @@ export default function Onboarding() {
     }
   };
 
-  const recommendedPlan = recommendPlan(community, questionnaire);
+  const [searchParams] = useSearchParams();
+  const preselectedPlan = searchParams.get("plano") as "comunidade" | "crescimento" | "pastoral" | null;
+  const validPreselected = preselectedPlan && ["comunidade", "crescimento", "pastoral"].includes(preselectedPlan) ? preselectedPlan : null;
+
+  const recommendedPlan = validPreselected || recommendPlan(community, questionnaire);
   const planInfo = STRIPE_PLANS[recommendedPlan];
   const planDetail = PLAN_DETAILS[recommendedPlan];
 
