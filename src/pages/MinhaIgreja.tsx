@@ -95,7 +95,7 @@ export default function MinhaIgreja() {
     <div className="min-h-screen bg-background max-w-2xl mx-auto pb-10">
       {/* Header */}
       <div className="px-5 pt-6 pb-4 flex items-center gap-3">
-        <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors">
+        <button onClick={() => navigate(-1)} aria-label="Voltar" className="w-10 h-10 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors">
           <ArrowLeft className="w-5 h-5 text-foreground" />
         </button>
         <div>
