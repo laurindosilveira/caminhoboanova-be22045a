@@ -221,17 +221,70 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
     );
   }
 
-  // ── Waiting room ──
+  // ── Waiting room with introductory content ──
   if (!profile?.turma_id && !isLeaderOrAdmin) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
-          <Lock className="w-8 h-8 text-muted-foreground" />
+      <div className="px-5 pt-5 pb-6 space-y-4">
+        {/* Status banner */}
+        <div className="flex flex-col items-center text-center bg-card rounded-2xl border border-border p-6 shadow-sm">
+          <div className="w-14 h-14 rounded-2xl bg-secondary/10 flex items-center justify-center mb-3">
+            <Lock className="w-7 h-7 text-secondary" />
+          </div>
+          <h3 className="font-montserrat font-bold text-foreground text-lg mb-1">Aguardando aprovação</h3>
+          <p className="text-muted-foreground font-inter text-sm leading-relaxed max-w-xs">
+            Você ainda não foi atribuído(a) a uma turma. Enquanto isso, conheça o que te espera! 👇
+          </p>
         </div>
-        <h3 className="font-montserrat font-bold text-foreground text-lg mb-2">Aguardando aprovação</h3>
-        <p className="text-muted-foreground font-inter text-sm leading-relaxed max-w-xs">
-          Você ainda não foi atribuído(a) a uma turma. Assim que um administrador aprovar seu cadastro, os devocionais e lições ficarão disponíveis.
-        </p>
+
+        {/* Introductory content */}
+        <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+          <div className="px-4 py-3 border-b border-border bg-secondary/5 flex items-center gap-2">
+            <GraduationCap className="w-4 h-4 text-secondary" />
+            <p className="font-montserrat font-bold text-foreground text-sm">O que é a Profissão de Fé?</p>
+          </div>
+          <div className="p-4 space-y-3">
+            <p className="font-inter text-sm text-foreground leading-relaxed">
+              A Profissão de Fé é o momento em que você confirma publicamente sua fé em Jesus Cristo. 
+              Durante a caminhada, você vai estudar temas essenciais da fé cristã e crescer espiritualmente.
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+          <div className="px-4 py-3 border-b border-border bg-primary/5 flex items-center gap-2">
+            <Heart className="w-4 h-4 text-primary" />
+            <p className="font-montserrat font-bold text-foreground text-sm">Como funciona?</p>
+          </div>
+          <div className="p-4">
+            <div className="space-y-3">
+              {[
+                { emoji: "📖", title: "Estudos semanais", desc: "Lições com reflexões bíblicas e perguntas para o seu crescimento" },
+                { emoji: "🙏", title: "Devocionais diários", desc: "Pequenas meditações para fortalecer sua caminhada durante a semana" },
+                { emoji: "🤝", title: "Encontros presenciais", desc: "Momentos com seu líder e turma para aprender juntos" },
+                { emoji: "🏆", title: "Conquistas e pontos", desc: "Cada etapa concluída te aproxima da confirmação e gera recompensas" },
+              ].map((item, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <span className="text-xl flex-shrink-0">{item.emoji}</span>
+                  <div>
+                    <p className="font-inter text-sm font-semibold text-foreground">{item.title}</p>
+                    <p className="font-inter text-xs text-muted-foreground">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-secondary/10 rounded-2xl p-4 flex items-start gap-3">
+          <Sparkles className="w-5 h-5 text-secondary flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-montserrat font-bold text-foreground text-sm">Dica enquanto espera</p>
+            <p className="text-muted-foreground font-inter text-xs mt-0.5 leading-relaxed">
+              Leia o Evangelho de João — é o melhor ponto de partida para conhecer Jesus. 
+              Comece pelo capítulo 1 e leia um por dia. Quando sua turma for liberada, você já estará preparado(a)! 🔥
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
