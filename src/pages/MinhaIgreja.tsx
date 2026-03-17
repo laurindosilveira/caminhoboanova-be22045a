@@ -43,6 +43,7 @@ export default function MinhaIgreja() {
       setSubData(data);
     } catch (err: any) {
       console.error("Error checking subscription:", err);
+      toast({ title: "Erro", description: "Não foi possível verificar a assinatura. Tente novamente.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
