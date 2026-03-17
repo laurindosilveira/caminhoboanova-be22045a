@@ -578,7 +578,7 @@ export default function Apresentacao() {
         <div className="relative max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }}>
             <motion.h2 variants={fadeUp} custom={0} className="text-3xl sm:text-4xl lg:text-5xl font-montserrat font-black text-primary-foreground tracking-tight mb-6">
-              Pronto para transformar o discipulado da sua igreja?
+              🚀 Comece com sua comunidade
             </motion.h2>
             <motion.p variants={fadeUp} custom={1} className="text-primary-foreground/60 font-inter text-lg mb-10 max-w-xl mx-auto">
               Agende uma demonstração ou inicie um período de teste e veja, na prática, como o Caminho Boa Nova pode ajudar sua igreja a crescer em fé, comunhão e cuidado.
