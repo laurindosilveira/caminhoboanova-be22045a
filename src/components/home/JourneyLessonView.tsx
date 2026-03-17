@@ -6,6 +6,8 @@ import {
   Pen, Heart, CheckCircle2, Save, Play, Link, Volume2, Download, FileText, Share2, AlertCircle
 } from "lucide-react";
 import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
+import confetti from "canvas-confetti";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
 import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
