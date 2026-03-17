@@ -270,7 +270,7 @@ export default function Apresentacao() {
                 A plataforma completa para engajar membros, acompanhar o crescimento espiritual e simplificar a gestão pastoral — tudo em um só lugar.
               </motion.p>
               <motion.div variants={fadeUp} custom={3} className="flex flex-col sm:flex-row gap-4">
-                <a href="#planos" className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl text-primary-foreground font-montserrat font-bold text-lg hover:shadow-xl hover:-translate-y-0.5 transition-all" style={{ background: "var(--gradient-hero)" }}>
+                <a href="/onboarding" className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl text-primary-foreground font-montserrat font-bold text-lg hover:shadow-xl hover:-translate-y-0.5 transition-all" style={{ background: "var(--gradient-hero)" }}>
                   Teste grátis por 30 dias <ArrowRight className="w-5 h-5" />
                 </a>
                 <a href="#funcionalidades" className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl border-2 border-border text-foreground font-semibold text-lg hover:border-primary/40 hover:text-primary transition-all">
