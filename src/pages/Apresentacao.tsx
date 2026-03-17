@@ -196,6 +196,7 @@ export default function Apresentacao() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showVideo, setShowVideo] = useState(false);
 
   // Show toast on checkout return
   useEffect(() => {
