@@ -850,6 +850,20 @@ export default function ClassroomTab() {
             onChange={handleFileSelect}
           />
 
+          {/* Typing indicator */}
+          {typingUsers.length > 0 && (
+            <div className="border-t border-border px-3 py-1.5 bg-muted/20">
+              <p className="text-[10px] font-inter text-muted-foreground animate-pulse">
+                {typingUsers.length === 1
+                  ? `${typingUsers[0]} está digitando...`
+                  : typingUsers.length === 2
+                  ? `${typingUsers[0]} e ${typingUsers[1]} estão digitando...`
+                  : `${typingUsers[0]} e mais ${typingUsers.length - 1} estão digitando...`
+                }
+              </p>
+            </div>
+          )}
+
           {/* Input */}
           <div className={`border-t border-border p-3 flex items-center gap-2 ${replyTo || attachedFile ? "pt-2" : ""}`}>
             {/* Attachment buttons */}
@@ -882,7 +896,7 @@ export default function ClassroomTab() {
             <Input
               placeholder={threadRootId ? "Responder na thread..." : "Mensagem para a turma..."}
               value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
+              onChange={(e) => { setChatInput(e.target.value); broadcastTyping(); }}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendChat()}
               className="flex-1 h-9 text-sm border-border rounded-xl"
               maxLength={500}
