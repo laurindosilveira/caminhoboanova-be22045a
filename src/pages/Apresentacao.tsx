@@ -36,11 +36,6 @@ const STATS = [
   { value: "24/7", label: "Acesso multiplataforma", icon: Globe },
 ];
 
-const TESTIMONIALS = [
-  { name: "Pastor Ricardo M.", church: "Igreja Renascer", text: "O app transformou nosso discipulado. Antes perdíamos o contato durante a semana, agora os jovens estão engajados todos os dias com os devocionais.", avatar: "🧑‍💼" },
-  { name: "Líder Ana Paula", church: "Comunidade Vida Nova", text: "O termômetro espiritual me permitiu identificar membros em dificuldade antes que se afastassem. É uma ferramenta pastoral indispensável.", avatar: "👩‍💻" },
-  { name: "Pr. Marcos Silva", church: "Igreja Fonte da Vida", text: "A gamificação trouxe uma energia incrível. Os jovens competem de forma saudável e aprendem mais sobre a Palavra.", avatar: "👨‍🏫" },
-];
 
 const PLANS = [
   {
@@ -98,7 +93,7 @@ export default function Apresentacao() {
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
             <a href="#funcionalidades" className="hover:text-emerald-600 transition-colors">Funcionalidades</a>
             <a href="#beneficios" className="hover:text-emerald-600 transition-colors">Benefícios</a>
-            <a href="#depoimentos" className="hover:text-emerald-600 transition-colors">Depoimentos</a>
+            
             <a href="#planos" className="hover:text-emerald-600 transition-colors">Planos</a>
           </div>
           <a href="#planos" className="px-5 py-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-semibold hover:shadow-lg hover:shadow-emerald-500/25 transition-all">
@@ -252,36 +247,6 @@ export default function Apresentacao() {
               <div className="absolute inset-0 bg-gradient-to-t from-white/60 via-transparent to-transparent" />
             </div>
           </motion.div>
-        </div>
-      </section>
-
-      {/* ─── TESTIMONIALS ───────────────────────────────── */}
-      <section id="depoimentos" className="py-20 lg:py-28 bg-gradient-to-br from-emerald-50 to-teal-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0} className="text-center max-w-2xl mx-auto mb-16">
-            <p className="text-emerald-600 font-semibold text-sm uppercase tracking-wider mb-3">Depoimentos</p>
-            <h2 className="text-3xl sm:text-4xl font-black tracking-tight">O que dizem nossos parceiros</h2>
-          </motion.div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {TESTIMONIALS.map((t, i) => (
-              <motion.div key={i} initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={i}
-                className="bg-white p-8 rounded-2xl shadow-lg shadow-emerald-100/30 border border-emerald-100/50 relative">
-                <div className="absolute top-6 right-6 text-5xl text-emerald-100 font-serif">"</div>
-                <div className="flex gap-0.5 text-amber-400 mb-4">
-                  {[1, 2, 3, 4, 5].map(s => <Star key={s} className="w-4 h-4 fill-current" />)}
-                </div>
-                <p className="text-gray-600 leading-relaxed mb-6 relative z-10">"{t.text}"</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center text-2xl">{t.avatar}</div>
-                  <div>
-                    <p className="font-bold text-sm">{t.name}</p>
-                    <p className="text-gray-400 text-xs">{t.church}</p>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
         </div>
       </section>
 
