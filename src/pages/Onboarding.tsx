@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { STRIPE_PLANS } from "@/lib/stripePlans";
@@ -133,7 +134,11 @@ export default function Onboarding() {
     }
   };
 
-  const recommendedPlan = recommendPlan(community, questionnaire);
+  const [searchParams] = useSearchParams();
+  const preselectedPlan = searchParams.get("plano") as "comunidade" | "crescimento" | "pastoral" | null;
+  const validPreselected = preselectedPlan && ["comunidade", "crescimento", "pastoral"].includes(preselectedPlan) ? preselectedPlan : null;
+
+  const recommendedPlan = validPreselected || recommendPlan(community, questionnaire);
   const planInfo = STRIPE_PLANS[recommendedPlan];
   const planDetail = PLAN_DETAILS[recommendedPlan];
 

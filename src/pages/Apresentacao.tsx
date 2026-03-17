@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "@/integrations/supabase/client";
 import { STRIPE_PLANS } from "@/lib/stripePlans";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -151,6 +150,7 @@ const STATS = [
 const PLANS = [
   {
     name: "Comunidade",
+    planKey: "comunidade",
     emoji: "🟢",
     price: "R$ 79",
     period: "/mês",
@@ -162,6 +162,7 @@ const PLANS = [
   },
   {
     name: "Crescimento",
+    planKey: "crescimento",
     emoji: "🔵",
     price: "R$ 129",
     period: "/mês",
@@ -173,6 +174,7 @@ const PLANS = [
   },
   {
     name: "Pastoral",
+    planKey: "pastoral",
     emoji: "🟣",
     price: "R$ 199",
     period: "/mês",
@@ -194,7 +196,6 @@ const FAQ = [
 
 export default function Apresentacao() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
 
@@ -207,21 +208,6 @@ export default function Apresentacao() {
     } else if (params.get("checkout") === "cancel") {
       toast({ title: "Checkout cancelado", description: "Você pode assinar a qualquer momento." });
       window.history.replaceState({}, "", "/apresentacao");
-    }
-  }, []);
-
-  const handleCheckout = useCallback(async (priceId: string) => {
-    setCheckoutLoading(priceId);
-    try {
-      const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: { priceId },
-      });
-      if (error) throw error;
-      if (data?.url) window.location.href = data.url;
-    } catch (err: any) {
-      toast({ title: "Erro", description: "Não foi possível iniciar o checkout. Tente novamente.", variant: "destructive" });
-    } finally {
-      setCheckoutLoading(null);
     }
   }, []);
 
@@ -662,18 +648,17 @@ export default function Apresentacao() {
                   ))}
                 </ul>
 
-                <button
-                  onClick={() => handleCheckout(p.priceId)}
-                  disabled={checkoutLoading === p.priceId}
-                  className={`w-full block py-3.5 rounded-2xl font-montserrat font-bold text-sm text-center transition-all disabled:opacity-60 ${
+                <a
+                  href={`/onboarding?plano=${p.planKey}`}
+                  className={`w-full block py-3.5 rounded-2xl font-montserrat font-bold text-sm text-center transition-all ${
                     p.highlight
                       ? "bg-card text-primary hover:bg-card/90 hover:shadow-lg"
                       : "text-primary-foreground hover:shadow-lg hover:shadow-primary/25"
                   }`}
                   style={!p.highlight ? { background: "var(--gradient-hero)" } : undefined}
                 >
-                  {checkoutLoading === p.priceId ? "Redirecionando..." : "Começar teste grátis"}
-                </button>
+                  Começar teste grátis
+                </a>
               </motion.div>
             ))}
           </div>
