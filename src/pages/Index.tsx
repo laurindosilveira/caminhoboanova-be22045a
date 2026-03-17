@@ -26,9 +26,12 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUserStats } from "@/hooks/useUserStats";
 import { useAppNotifications } from "@/hooks/useAppNotifications";
 
+type ProfileSubTab = "meu-perfil" | "minha-jornada" | "configuracoes";
+
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>("jornada");
   const [targetLessonId, setTargetLessonId] = useState<string | null>(null);
+  const [profileSubTab, setProfileSubTab] = useState<ProfileSubTab>("meu-perfil");
   const { profile, role } = useAuth();
   const navigate = useNavigate();
   const stats = useUserStats();
