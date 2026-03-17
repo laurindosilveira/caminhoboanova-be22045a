@@ -1,11 +1,14 @@
-import { useState, useRef } from "react";
+import { useState, useRef, lazy, Suspense } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  Eye, EyeOff, Mail, Lock, User, Phone, Calendar,
-  ChevronLeft, ChevronDown, MessageCircle, Camera, Users
-} from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, User, Phone, ChevronLeft, ChevronDown, MessageCircle, Camera } from "lucide-react";
 import { z } from "zod";
+import AvatarCropper from "@/components/home/AvatarCropper";
+
+// Dynamic imports for less-used icons
+const Calendar = lazy(() => import("lucide-react").then(m => ({ default: m.Calendar })));
+const Users = lazy(() => import("lucide-react").then(m => ({ default: m.Users })));
+const Flame = lazy(() => import("lucide-react").then(m => ({ default: m.Flame })));
 
 const COMMUNITIES = [
   "Bom Pastor",
@@ -39,6 +42,8 @@ const registerSchema = z.object({
 
 const inputClass = "w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all";
 
+const IconFallback = () => <div className="w-4 h-4" />;
+
 export default function Register() {
   const navigate = useNavigate();
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -53,8 +58,10 @@ export default function Register() {
   const [motherName, setMotherName] = useState("");
   const [fatherPhone, setFatherPhone] = useState("");
   const [motherPhone, setMotherPhone] = useState("");
-  const [photo, setPhoto] = useState<File | null>(null);
+  const [croppedPhoto, setCroppedPhoto] = useState<Blob | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [rawPhotoSrc, setRawPhotoSrc] = useState<string | null>(null);
+  const [showCropper, setShowCropper] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [community, setCommunity] = useState<Community | "">("");
@@ -67,9 +74,22 @@ export default function Register() {
       setError("A foto deve ter no máximo 5MB.");
       return;
     }
-    setPhoto(file);
-    setPhotoPreview(URL.createObjectURL(file));
     setError(null);
+    const src = URL.createObjectURL(file);
+    setRawPhotoSrc(src);
+    setShowCropper(true);
+  }
+
+  function handleCropComplete(blob: Blob) {
+    setCroppedPhoto(blob);
+    setPhotoPreview(URL.createObjectURL(blob));
+    setShowCropper(false);
+    setRawPhotoSrc(null);
+  }
+
+  function handleCropCancel() {
+    setShowCropper(false);
+    setRawPhotoSrc(null);
   }
 
   function handleStep1(e: React.FormEvent) {
@@ -93,7 +113,6 @@ export default function Register() {
   function handleStep2(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    // Parent fields and photo are optional, just proceed
     setStep(3);
   }
 
@@ -138,29 +157,30 @@ export default function Register() {
     });
 
     if (authError) {
-      setError("Erro ao criar conta: " + authError.message);
+      if (authError.message?.toLowerCase().includes("already registered")) {
+        setError("Este email já está cadastrado. Faça login ou use outro email.");
+      } else {
+        setError("Erro ao criar conta: " + authError.message);
+      }
       setLoading(false);
       return;
     }
 
-    // Detect duplicate email: Supabase returns user with empty identities when email already exists
     if (authData.user && authData.user.identities && authData.user.identities.length === 0) {
       setError("Este email já está cadastrado. Faça login ou use outro email.");
       setLoading(false);
       return;
     }
 
-    // Upload photo if provided
-    if (photo && authData.user) {
-      const ext = photo.name.split(".").pop() || "jpg";
-      const path = `${authData.user.id}/avatar.${ext}`;
+    // Upload cropped photo if provided
+    if (croppedPhoto && authData.user) {
+      const path = `${authData.user.id}/avatar.jpg`;
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(path, photo, { upsert: true });
+        .upload(path, croppedPhoto, { upsert: true, contentType: "image/jpeg" });
 
       if (!uploadError) {
         const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
-        // Update profile with avatar URL
         await supabase.from("profiles").update({ avatar_url: urlData.publicUrl }).eq("user_id", authData.user.id);
       }
     }
@@ -174,27 +194,55 @@ export default function Register() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--gradient-hero)" }}>
+      {/* Avatar cropper modal */}
+      {showCropper && rawPhotoSrc && (
+        <AvatarCropper
+          imageSrc={rawPhotoSrc}
+          onCropComplete={handleCropComplete}
+          onCancel={handleCropCancel}
+        />
+      )}
+
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
         {/* Header */}
-        <div className="w-full max-w-sm mb-6 flex items-center gap-3">
-          {step > 1 ? (
-            <button onClick={() => setStep((step - 1) as 1 | 2 | 3)} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
-              <ChevronLeft className="w-5 h-5 text-primary-foreground" />
-            </button>
-          ) : (
-            <Link to="/login" className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
-              <ChevronLeft className="w-5 h-5 text-primary-foreground" />
-            </Link>
-          )}
-          <div>
-            <h1 className="font-montserrat font-black text-primary-foreground text-xl">
-              {stepTitles[step - 1]}
-            </h1>
-            <p className="text-primary-foreground/60 font-inter text-xs">Passo {step} de {totalSteps}</p>
+        <div className="w-full max-w-sm mb-6">
+          <div className="flex items-center gap-3 mb-4">
+            {step > 1 ? (
+              <button onClick={() => setStep((step - 1) as 1 | 2 | 3)} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
+                <ChevronLeft className="w-5 h-5 text-primary-foreground" />
+              </button>
+            ) : (
+              <Link to="/login" className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
+                <ChevronLeft className="w-5 h-5 text-primary-foreground" />
+              </Link>
+            )}
+            <div className="flex-1">
+              <h1 className="font-montserrat font-black text-primary-foreground text-xl">
+                {stepTitles[step - 1]}
+              </h1>
+              <p className="text-primary-foreground/60 font-inter text-xs">Passo {step} de {totalSteps}</p>
+            </div>
           </div>
-          <div className="ml-auto flex gap-1.5">
+
+          {/* Numbered progress bar */}
+          <div className="flex items-center gap-0">
             {[1, 2, 3].map((s) => (
-              <div key={s} className={`h-2 rounded-full transition-all ${step === s ? "w-6 bg-secondary" : "w-3 bg-white/30"}`} />
+              <div key={s} className="flex items-center flex-1">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-montserrat font-bold text-sm transition-all ${
+                  s < step
+                    ? "bg-secondary text-white"
+                    : s === step
+                    ? "bg-white text-secondary ring-2 ring-secondary ring-offset-2 ring-offset-transparent"
+                    : "bg-white/20 text-white/50"
+                }`}>
+                  {s < step ? "✓" : s}
+                </div>
+                {s < 3 && (
+                  <div className={`flex-1 h-1 mx-1 rounded-full transition-all ${
+                    s < step ? "bg-secondary" : "bg-white/20"
+                  }`} />
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -213,7 +261,9 @@ export default function Register() {
               <div>
                 <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Data de nascimento</label>
                 <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Suspense fallback={<IconFallback />}>
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  </Suspense>
                   <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className={inputClass} required />
                 </div>
               </div>
@@ -237,7 +287,7 @@ export default function Register() {
 
           {step === 2 && (
             <form onSubmit={handleStep2} className="space-y-4">
-              {/* Photo upload */}
+              {/* Photo upload with crop */}
               <div className="flex flex-col items-center gap-2 mb-2">
                 <button
                   type="button"
@@ -250,14 +300,18 @@ export default function Register() {
                     <Camera className="w-8 h-8 text-muted-foreground" />
                   )}
                 </button>
-                <span className="text-xs text-muted-foreground font-inter">Sua foto (opcional)</span>
+                <span className="text-xs text-muted-foreground font-inter">
+                  {photoPreview ? "Toque para trocar" : "Sua foto (opcional)"}
+                </span>
                 <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
               </div>
 
               <div>
                 <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Nome do pai</label>
                 <div className="relative">
-                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Suspense fallback={<IconFallback />}>
+                    <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  </Suspense>
                   <input type="text" value={fatherName} onChange={(e) => setFatherName(e.target.value)} placeholder="Nome completo do pai" className={inputClass} />
                 </div>
               </div>
@@ -271,7 +325,9 @@ export default function Register() {
               <div>
                 <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Nome da mãe</label>
                 <div className="relative">
-                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Suspense fallback={<IconFallback />}>
+                    <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  </Suspense>
                   <input type="text" value={motherName} onChange={(e) => setMotherName(e.target.value)} placeholder="Nome completo da mãe" className={inputClass} />
                 </div>
               </div>
@@ -378,8 +434,19 @@ export default function Register() {
           className="mt-4 flex items-center gap-2 bg-[#25D366]/15 hover:bg-[#25D366]/25 rounded-2xl px-5 py-3 backdrop-blur transition-colors"
         >
           <MessageCircle className="w-5 h-5 text-[#25D366]" />
-          <span className="text-primary-foreground font-inter text-sm font-medium">Precisa de ajuda? Fale conosco</span>
+          <span className="text-primary-foreground font-inter text-sm font-medium">
+            Precisa de ajuda? Fale conosco
+          </span>
         </a>
+
+        <div className="mt-3 flex items-center gap-2 bg-white/10 rounded-2xl px-4 py-2 backdrop-blur">
+          <Suspense fallback={<IconFallback />}>
+            <Flame className="w-5 h-5 text-secondary" />
+          </Suspense>
+          <span className="text-primary-foreground font-inter text-sm">
+            Profissão de fé - Paróquia Boa Nova
+          </span>
+        </div>
       </div>
     </div>
   );
