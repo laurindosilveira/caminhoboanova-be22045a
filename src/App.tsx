@@ -17,6 +17,7 @@ import Install from "./pages/Install";
 import ExportData from "./pages/ExportData";
 import Apresentacao from "./pages/Apresentacao";
 import MinhaIgreja from "./pages/MinhaIgreja";
+import Onboarding from "./pages/Onboarding";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -72,6 +73,7 @@ const AppRoutes = () => (
     <Route path="/apresentacao" element={<Apresentacao />} />
     <Route path="/exportar-dados" element={<ProtectedRoute><ExportData /></ProtectedRoute>} />
     <Route path="/minha-igreja" element={<ProtectedRoute><MinhaIgreja /></ProtectedRoute>} />
+    <Route path="/onboarding" element={<Onboarding />} />
 
     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
     <Route path="*" element={<NotFound />} />
