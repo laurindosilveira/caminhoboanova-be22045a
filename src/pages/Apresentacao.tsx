@@ -226,7 +226,7 @@ export default function Apresentacao() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
+    <div id="topo" className="min-h-screen bg-background text-foreground overflow-x-hidden">
       {/* JSON-LD structured data for SEO */}
       <JsonLdScript />
 
