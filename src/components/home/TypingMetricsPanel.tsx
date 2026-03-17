@@ -1,6 +1,17 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Keyboard, RotateCcw, Play, Pause, Zap, Flame, Crown } from "lucide-react";
+import { Keyboard, RotateCcw, Play, Pause, Zap, Flame, Crown, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
 type Difficulty = "facil" | "medio" | "dificil";
 
