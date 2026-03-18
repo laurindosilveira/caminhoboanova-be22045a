@@ -452,7 +452,7 @@ export default function UserAgendaTab() {
     }
   }
 
-  const pastEvents = events
+  const pastEvents = filteredEvents
     .filter(e => new Date(e.event_date) < now)
     .sort((a, b) => new Date(b.event_date).getTime() - new Date(a.event_date).getTime());
 
