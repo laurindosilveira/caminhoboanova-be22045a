@@ -168,6 +168,7 @@ export default function UserAgendaTab() {
    const [activeTab, setActiveTab] = useState<string>("agenda");
   const [viewMode, setViewMode] = useState<"list" | "calendar" | "week">("list");
   const [weekOffset, setWeekOffset] = useState(0);
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
 
   // Event form state
   const [showForm, setShowForm] = useState(false);
@@ -258,8 +259,32 @@ export default function UserAgendaTab() {
   }, [profile, currentArea]);
 
   const now = new Date();
-  const upcoming = events.filter(e => new Date(e.event_date) >= now);
-  const past = events.filter(e => new Date(e.event_date) < now);
+
+  const FILTER_GROUPS = [
+    { key: "encontros", label: "📅 Encontros", types: ["encontro", "confirmatorio"] },
+    { key: "cultos", label: "⛪ Cultos", types: ["culto", "jemiac"] },
+    { key: "especiais", label: "🎉 Especiais", types: ["retiro", "evento", "conversa"] },
+  ];
+
+  function toggleFilter(key: string) {
+    setActiveFilters(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  const allowedTypes = activeFilters.size === 0
+    ? null
+    : new Set(FILTER_GROUPS.filter(g => activeFilters.has(g.key)).flatMap(g => g.types));
+
+  const filteredEvents = allowedTypes
+    ? events.filter(e => allowedTypes.has(e.type))
+    : events;
+
+  const upcoming = filteredEvents.filter(e => new Date(e.event_date) >= now);
+  const past = filteredEvents.filter(e => new Date(e.event_date) < now);
 
   async function handleCheckIn(eventId: string, status: "pendente_presente" | "pendente_falta", justification?: string) {
     const { data: { user } } = await supabase.auth.getUser();
@@ -427,7 +452,7 @@ export default function UserAgendaTab() {
     }
   }
 
-  const pastEvents = events
+  const pastEvents = filteredEvents
     .filter(e => new Date(e.event_date) < now)
     .sort((a, b) => new Date(b.event_date).getTime() - new Date(a.event_date).getTime());
 
@@ -476,16 +501,43 @@ export default function UserAgendaTab() {
       {/* ── CONFIRMAÇÃO DE PRESENÇA EM EVENTOS ──── */}
       <WorshipConfirmation />
 
+      {/* ── FILTROS DE TIPO ──── */}
+      <div className="flex flex-wrap gap-1.5">
+        {FILTER_GROUPS.map(g => {
+          const isActive = activeFilters.has(g.key);
+          return (
+            <button
+              key={g.key}
+              onClick={() => toggleFilter(g.key)}
+              className={`px-3 py-1.5 rounded-full text-[11px] font-montserrat font-bold transition-colors ${
+                isActive
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              {g.label}
+            </button>
+          );
+        })}
+        {activeFilters.size > 0 && (
+          <button
+            onClick={() => setActiveFilters(new Set())}
+            className="px-3 py-1.5 rounded-full text-[11px] font-montserrat font-bold text-destructive bg-destructive/10 hover:bg-destructive/20 transition-colors"
+          >
+            ✕ Limpar
+          </button>
+        )}
+      </div>
       {/* ── CALENDAR VIEW ──── */}
       {viewMode === "calendar" && !loading && (
-        <CalendarView events={events} />
+        <CalendarView events={filteredEvents} />
       )}
 
       {/* ── WEEKLY VIEW ──── */}
       {viewMode === "week" && !loading && (() => {
         const weekStart = startOfWeek(addWeeks(now, weekOffset), { weekStartsOn: 0, locale: ptBR });
         const weekEnd = endOfWeek(addWeeks(now, weekOffset), { weekStartsOn: 0, locale: ptBR });
-        const weekEvents = events.filter(e => {
+        const weekEvents = filteredEvents.filter(e => {
           const d = new Date(e.event_date);
           return isWithinInterval(d, { start: weekStart, end: weekEnd });
         }).sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
