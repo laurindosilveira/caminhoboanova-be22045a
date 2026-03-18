@@ -168,6 +168,7 @@ export default function UserAgendaTab() {
    const [activeTab, setActiveTab] = useState<string>("agenda");
   const [viewMode, setViewMode] = useState<"list" | "calendar" | "week">("list");
   const [weekOffset, setWeekOffset] = useState(0);
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
 
   // Event form state
   const [showForm, setShowForm] = useState(false);
