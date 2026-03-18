@@ -259,8 +259,32 @@ export default function UserAgendaTab() {
   }, [profile, currentArea]);
 
   const now = new Date();
-  const upcoming = events.filter(e => new Date(e.event_date) >= now);
-  const past = events.filter(e => new Date(e.event_date) < now);
+
+  const FILTER_GROUPS = [
+    { key: "encontros", label: "📅 Encontros", types: ["encontro", "confirmatorio"] },
+    { key: "cultos", label: "⛪ Cultos", types: ["culto", "jemiac"] },
+    { key: "especiais", label: "🎉 Especiais", types: ["retiro", "evento", "conversa"] },
+  ];
+
+  function toggleFilter(key: string) {
+    setActiveFilters(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  const allowedTypes = activeFilters.size === 0
+    ? null
+    : new Set(FILTER_GROUPS.filter(g => activeFilters.has(g.key)).flatMap(g => g.types));
+
+  const filteredEvents = allowedTypes
+    ? events.filter(e => allowedTypes.has(e.type))
+    : events;
+
+  const upcoming = filteredEvents.filter(e => new Date(e.event_date) >= now);
+  const past = filteredEvents.filter(e => new Date(e.event_date) < now);
 
   async function handleCheckIn(eventId: string, status: "pendente_presente" | "pendente_falta", justification?: string) {
     const { data: { user } } = await supabase.auth.getUser();
