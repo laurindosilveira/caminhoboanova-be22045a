@@ -537,7 +537,7 @@ export default function UserAgendaTab() {
       {viewMode === "week" && !loading && (() => {
         const weekStart = startOfWeek(addWeeks(now, weekOffset), { weekStartsOn: 0, locale: ptBR });
         const weekEnd = endOfWeek(addWeeks(now, weekOffset), { weekStartsOn: 0, locale: ptBR });
-        const weekEvents = events.filter(e => {
+        const weekEvents = filteredEvents.filter(e => {
           const d = new Date(e.event_date);
           return isWithinInterval(d, { start: weekStart, end: weekEnd });
         }).sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
