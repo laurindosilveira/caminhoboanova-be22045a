@@ -501,6 +501,33 @@ export default function UserAgendaTab() {
       {/* ── CONFIRMAÇÃO DE PRESENÇA EM EVENTOS ──── */}
       <WorshipConfirmation />
 
+      {/* ── FILTROS DE TIPO ──── */}
+      <div className="flex flex-wrap gap-1.5">
+        {FILTER_GROUPS.map(g => {
+          const isActive = activeFilters.has(g.key);
+          return (
+            <button
+              key={g.key}
+              onClick={() => toggleFilter(g.key)}
+              className={`px-3 py-1.5 rounded-full text-[11px] font-montserrat font-bold transition-colors ${
+                isActive
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              {g.label}
+            </button>
+          );
+        })}
+        {activeFilters.size > 0 && (
+          <button
+            onClick={() => setActiveFilters(new Set())}
+            className="px-3 py-1.5 rounded-full text-[11px] font-montserrat font-bold text-destructive bg-destructive/10 hover:bg-destructive/20 transition-colors"
+          >
+            ✕ Limpar
+          </button>
+        )}
+      </div>
       {/* ── CALENDAR VIEW ──── */}
       {viewMode === "calendar" && !loading && (
         <CalendarView events={events} />
