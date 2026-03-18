@@ -530,7 +530,7 @@ export default function UserAgendaTab() {
       </div>
       {/* ── CALENDAR VIEW ──── */}
       {viewMode === "calendar" && !loading && (
-        <CalendarView events={events} />
+        <CalendarView events={filteredEvents} />
       )}
 
       {/* ── WEEKLY VIEW ──── */}
