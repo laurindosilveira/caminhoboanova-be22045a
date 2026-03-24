@@ -147,7 +147,7 @@ export default function AdminDiscipleshipTab({ participants, activities, initial
           <div className="flex items-start gap-2 p-2.5 rounded-xl bg-secondary/5 border border-secondary/20 mb-3">
             <Info className="w-4 h-4 text-secondary flex-shrink-0 mt-0.5" />
             <p className="font-inter text-[10px] text-secondary leading-relaxed">
-              <strong>Como funciona:</strong> Liberar um curso é o <strong>primeiro passo</strong>. Cada lição só ficará disponível para o aluno quando houver um <strong>evento na Agenda</strong> vinculado a ela (dentro da janela de 10 dias úteis antes do encontro). Sem evento agendado, a lição permanece com "Aguardando programação".
+              <strong>Como funciona:</strong> Vincular uma lição a um <strong>evento na Agenda</strong> já libera automaticamente essa lição para a turma dentro da janela de 10 dias úteis antes do encontro. A liberação manual do curso continua opcional como apoio de organização, mas não é mais obrigatória para abrir a lição.
             </p>
           </div>
           <div className="space-y-2">

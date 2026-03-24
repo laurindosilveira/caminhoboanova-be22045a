@@ -61,7 +61,8 @@ export default function CourseTrailSection({
       {/* Course accordion */}
       {courses.map((course) => {
         const isOpen = expandedCourse === course.id;
-        const isCourseUnlocked = isLeaderOrAdmin || unlockedCourseIds.has(course.id);
+        const hasScheduledLesson = course.lessons.some(lesson => agendaSchedule.scheduledLessonIds.has(lesson.id));
+        const isCourseUnlocked = isLeaderOrAdmin || unlockedCourseIds.has(course.id) || hasScheduledLesson;
         const doneLessons = course.lessons.filter(l => fullyCompletedLessonIds.has(l.id)).length;
         const totalLessons = course.lessons.length;
         const coursePct = totalLessons > 0 ? Math.round((doneLessons / totalLessons) * 100) : 0;
@@ -70,7 +71,7 @@ export default function CourseTrailSection({
             isCourseUnlocked ? "border-border" : "border-border opacity-75"
           }`}>
             <button
-              onClick={() => isCourseUnlocked ? onExpandCourse(isOpen ? null : course.id) : toast.info("🔒 Este curso ainda não foi liberado pelo seu líder.")}
+              onClick={() => isCourseUnlocked ? onExpandCourse(isOpen ? null : course.id) : toast.info("🔒 Aguarde a programação das lições deste curso.")}
               className={`w-full flex items-center gap-3 p-4 text-left ${!isCourseUnlocked ? "cursor-default" : ""}`}
             >
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
@@ -102,7 +103,7 @@ export default function CourseTrailSection({
                     </div>
                   </>
                 ) : (
-                  <p className="text-muted-foreground font-inter text-xs mt-0.5">🔒 Curso ainda não liberado pelo líder</p>
+                  <p className="text-muted-foreground font-inter text-xs mt-0.5">🔒 Aguarde a programação das lições deste curso</p>
                 )}
               </div>
               {isCourseUnlocked && (

@@ -54,7 +54,7 @@ type Props = {
 /**
  * Compute devotional statuses based on scheduled dates from the agenda.
  */
-function computeDevotionalStatuses(
+export function computeDevotionalStatuses(
   devList: DevotionalItem[],
   completedMap: Map<string, string>,
   scheduledDates?: Date[],

@@ -117,9 +117,7 @@ Deno.serve(async (req) => {
         if (pendingCount > 0) {
           notifications.push({
             title: "📖 Hora do Devocional!",
-            body: pendingCount === 1
-              ? "Você tem 1 devocional esperando. Não perca sua caminhada!"
-              : `Você tem ${pendingCount} devocionais pendentes. Cada dia conta!`,
+            body: "Separe um momento com Deus hoje e siga firme na sua caminhada. Um passo de cada vez!",
             tag: "daily-devotional",
           });
         }

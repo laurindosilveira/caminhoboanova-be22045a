@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2, Lock, BookOpen, ChevronDown, ChevronRight, CalendarDays, Heart, GraduationCap } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAgendaSchedule } from "@/hooks/useAgendaSchedule";
 
 type Lesson = {
   id: string;
@@ -44,6 +45,7 @@ function ProgressRing({ pct, color, size = 56 }: { pct: number; color: string; s
 
 export default function JourneyPath() {
   const { profile } = useAuth();
+  const agendaSchedule = useAgendaSchedule();
   const [courses, setCourses] = useState<Course[]>([]);
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
   const [fullyCompletedLessonIds, setFullyCompletedLessonIds] = useState<Set<string>>(new Set());
@@ -184,8 +186,10 @@ export default function JourneyPath() {
 
         {/* Fase atual */}
         {(() => {
-          // Only consider unlocked courses
-          const unlockedCourses = courses.filter(c => unlockedCourseIds.has(c.id));
+          // Consider manually unlocked courses and courses with scheduled lessons
+          const unlockedCourses = courses.filter(c =>
+            unlockedCourseIds.has(c.id) || c.lessons.some(l => agendaSchedule.scheduledLessonIds.has(l.id))
+          );
           if (unlockedCourses.length === 0) return null;
 
           // Find the highest-order unlocked course that still has pending lessons
@@ -277,7 +281,8 @@ export default function JourneyPath() {
 
           {courses.map((course) => {
             const isOpen = expandedCourse === course.id;
-            const isCourseUnlocked = unlockedCourseIds.has(course.id);
+            const hasScheduledLesson = course.lessons.some(lesson => agendaSchedule.scheduledLessonIds.has(lesson.id));
+            const isCourseUnlocked = unlockedCourseIds.has(course.id) || hasScheduledLesson;
             const doneLessons = course.lessons.filter(l => fullyCompletedLessonIds.has(l.id)).length;
             const totalLessons = course.lessons.length;
             const coursePct = totalLessons > 0 ? Math.round((doneLessons / totalLessons) * 100) : 0;
@@ -320,7 +325,7 @@ export default function JourneyPath() {
                         </div>
                       </>
                     ) : (
-                      <p className="text-muted-foreground font-inter text-xs mt-0.5">🔒 Curso ainda não liberado pelo líder</p>
+                      <p className="text-muted-foreground font-inter text-xs mt-0.5">🔒 Aguarde a programação das lições deste curso</p>
                     )}
                   </div>
                   {isCourseUnlocked && (

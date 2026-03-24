@@ -29,40 +29,68 @@ export default function DevotionalReminder({ onNavigateToDiscipulado }: Props) {
       const { data: profileData } = await supabase.from("profiles").select("area").eq("user_id", user.id).maybeSingle();
       const userArea = profileData?.area;
 
-      const [{ data: lessons }, { data: devs }, { data: prog }, { data: unlocks }] = await Promise.all([
+      const [{ data: lessons }, { data: devs }, { data: prog }, { data: events }] = await Promise.all([
         supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
-        supabase.from("devotional_content").select("id, lesson_id"),
+        supabase.from("devotional_content").select("id, lesson_id, day_number"),
         supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
-        supabase.from("course_unlocks").select("course_id").eq("area", userArea ?? ""),
+        supabase.from("events").select("event_date, linked_lesson_id, area").not("linked_lesson_id", "is", null).order("event_date"),
       ]);
 
-      const unlockedCourseIds = new Set((unlocks ?? []).map(u => u.course_id));
       const completedSet = new Set((prog ?? []).map((p: any) => p.devotional_id));
       const totalCompleted = completedSet.size;
+      const lessonMap = new Map((lessons ?? []).map((lesson: any) => [lesson.id, lesson]));
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-      // Only consider lessons from unlocked courses
-      const accessibleLessons = (lessons ?? []).filter((l: any) => unlockedCourseIds.has(l.course_id));
+      const scheduleByLesson = new Map<string, Date[]>();
+      for (const event of events ?? []) {
+        if (!event.linked_lesson_id) continue;
+        if (event.area && userArea && event.area !== userArea) continue;
+        if (!lessonMap.has(event.linked_lesson_id)) continue;
+
+        const eventDate = new Date(event.event_date);
+        const devotionalDates: Date[] = [];
+        const current = new Date(eventDate);
+        current.setHours(0, 0, 0, 0);
+        current.setDate(current.getDate() - 1);
+
+        while (devotionalDates.length < 5) {
+          if (current.getDay() !== 0 && current.getDay() !== 6) {
+            devotionalDates.unshift(new Date(current));
+          }
+          current.setDate(current.getDate() - 1);
+        }
+
+        scheduleByLesson.set(event.linked_lesson_id, devotionalDates);
+      }
+
+      // Only consider lessons that are actually scheduled
+      const accessibleLessons = (lessons ?? []).filter((lesson: any) => scheduleByLesson.has(lesson.id));
 
       // Group devotionals by lesson
-      const lessonDevMap: Record<string, { total: number; completed: number }> = {};
+      const lessonDevMap: Record<string, { total: number; completed: number; available: number }> = {};
       (devs ?? []).forEach((d: any) => {
         if (!d.lesson_id) return;
-        if (!lessonDevMap[d.lesson_id]) lessonDevMap[d.lesson_id] = { total: 0, completed: 0 };
+        const schedule = scheduleByLesson.get(d.lesson_id);
+        if (!schedule) return;
+        if (!lessonDevMap[d.lesson_id]) lessonDevMap[d.lesson_id] = { total: 0, completed: 0, available: 0 };
         lessonDevMap[d.lesson_id].total++;
         if (completedSet.has(d.id)) lessonDevMap[d.lesson_id].completed++;
+        const scheduledDate = schedule[d.day_number - 1];
+        if (scheduledDate && scheduledDate <= today) lessonDevMap[d.lesson_id].available++;
       });
 
       // Find the FIRST accessible lesson with pending devotionals
       let currentLesson: DevotionalStats | null = null;
       for (const l of accessibleLessons as any[]) {
         const info = lessonDevMap[l.id];
-        if (info && info.completed < info.total) {
+        if (info && info.available > info.completed) {
           currentLesson = {
             totalCompleted,
             currentLessonTitle: l.title,
             currentLessonOrder: l.order_num,
             currentLessonCompleted: info.completed,
-            currentLessonTotal: info.total,
+            currentLessonTotal: info.available,
             hasAnyPending: true,
           };
           break;
