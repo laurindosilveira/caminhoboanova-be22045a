@@ -15,6 +15,7 @@ const AdminPushTab = lazy(() => import("@/components/admin/tabs/AdminPushTab"));
 const AdminOverviewTab = lazy(() => import("@/components/admin/tabs/AdminOverviewTab"));
 const AdminAlertsTab = lazy(() => import("@/components/admin/tabs/AdminAlertsTab"));
 const AdminLeadersTab = lazy(() => import("@/components/admin/tabs/AdminLeadersTab"));
+const AdminReportsTab = lazy(() => import("@/components/admin/tabs/AdminReportsTab"));
 
 const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
 const AREA_2_COMMUNITIES = ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"];
@@ -227,6 +228,7 @@ export default function AdminDashboard() {
             {activeTab === "leaders" && <AdminLeadersTab turmas={turmas} />}
             {activeTab === "push" && <AdminPushTab turmas={turmas} />}
             {activeTab === "users" && <UsersTab onSelectTurma={handleSelectTurmaFromUsers} />}
+            {activeTab === "reports" && <AdminReportsTab />}
           </Suspense>
         )}
       </main>

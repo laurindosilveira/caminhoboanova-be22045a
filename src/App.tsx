@@ -22,6 +22,7 @@ import AdminSistema from "./pages/AdminSistema";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+const ADMIN_PANEL_ROLES = ["admin", "lider"] as const;
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -46,7 +47,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, role, loading } = useAuth();
   if (loading) return null;
-  if (user) return <Navigate to={(role === "admin" || role === "lider") ? "/admin" : "/"} replace />;
+  if (user) return <Navigate to={ADMIN_PANEL_ROLES.includes(role as (typeof ADMIN_PANEL_ROLES)[number]) ? "/admin" : "/"} replace />;
   return <>{children}</>;
 }
 
@@ -54,7 +55,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, role, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
-  if (role !== "admin") return <Navigate to="/" replace />;
+  if (!ADMIN_PANEL_ROLES.includes(role as (typeof ADMIN_PANEL_ROLES)[number])) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 

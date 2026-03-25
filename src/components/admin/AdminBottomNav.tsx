@@ -1,20 +1,21 @@
-import { BarChart3, BookOpen, Shield, Megaphone, Settings, AlertTriangle, Crown } from "lucide-react";
+import { BarChart3, BookOpen, Shield, Megaphone, Settings, AlertTriangle, Crown, FileCode2 } from "lucide-react";
 
-export type AdminTab = "overview" | "alerts" | "courses" | "leaders" | "push" | "users" | "settings";
+export type AdminTab = "overview" | "alerts" | "courses" | "leaders" | "push" | "users" | "reports" | "settings";
 
 type TabDef = { id: AdminTab; label: string; icon: typeof BarChart3 };
 
 const ALL_TABS: TabDef[] = [
-  { id: "overview", label: "Visão", icon: BarChart3 },
+  { id: "overview", label: "Visao", icon: BarChart3 },
   { id: "alerts", label: "Alertas", icon: AlertTriangle },
   { id: "courses", label: "Cursos", icon: BookOpen },
-  { id: "leaders", label: "Líderes", icon: Crown },
+  { id: "leaders", label: "Lideres", icon: Crown },
   { id: "push", label: "Push", icon: Megaphone },
-  { id: "users", label: "Usuários", icon: Shield },
+  { id: "users", label: "Usuarios", icon: Shield },
+  { id: "reports", label: "Relatorios", icon: FileCode2 },
   { id: "settings", label: "Config", icon: Settings },
 ];
 
-const LIDER_TABS: AdminTab[] = ["courses", "push", "users"];
+const LIDER_TABS: AdminTab[] = ["courses", "push", "users", "reports"];
 
 type Props = { active: AdminTab; onChange: (tab: AdminTab) => void; userRole?: "admin" | "lider" | null };
 
@@ -24,7 +25,7 @@ export default function AdminBottomNav({ active, onChange, userRole }: Props) {
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border"
-      aria-label="Navegação do painel administrativo"
+      aria-label="Navegacao do painel administrativo"
       role="tablist"
     >
       <div className="max-w-2xl mx-auto flex overflow-x-auto">
