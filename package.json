@@ -4,12 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "generate:update-reports": "powershell -ExecutionPolicy Bypass -File scripts/generate-app-update-reports.ps1",
-    "predev": "npm run generate:update-reports",
     "dev": "vite",
-    "prebuild": "npm run generate:update-reports",
     "build": "vite build",
-    "prebuild:dev": "npm run generate:update-reports",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
