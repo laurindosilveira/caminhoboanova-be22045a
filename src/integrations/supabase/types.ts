@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      achievement_definitions: {
+        Row: {
+          bonus_points: number
+          created_at: string
+          description: string
+          icon: string
+          id: string
+          is_active: boolean
+          is_secret: boolean
+          key: string
+          metric: string
+          sort_order: number
+          target: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          bonus_points?: number
+          created_at?: string
+          description?: string
+          icon?: string
+          id?: string
+          is_active?: boolean
+          is_secret?: boolean
+          key: string
+          metric: string
+          sort_order?: number
+          target?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          bonus_points?: number
+          created_at?: string
+          description?: string
+          icon?: string
+          id?: string
+          is_active?: boolean
+          is_secret?: boolean
+          key?: string
+          metric?: string
+          sort_order?: number
+          target?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       achievement_unlocks: {
         Row: {
           achievement_key: string
@@ -521,21 +569,30 @@ export type Database = {
       }
       devotional_progress: {
         Row: {
+          awarded_points: number | null
           completed_at: string
           devotional_id: string
           id: string
+          is_recovery: boolean
+          override_release_id: string | null
           user_id: string
         }
         Insert: {
+          awarded_points?: number | null
           completed_at?: string
           devotional_id: string
           id?: string
+          is_recovery?: boolean
+          override_release_id?: string | null
           user_id: string
         }
         Update: {
+          awarded_points?: number | null
           completed_at?: string
           devotional_id?: string
           id?: string
+          is_recovery?: boolean
+          override_release_id?: string | null
           user_id?: string
         }
         Relationships: [
@@ -545,6 +602,51 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "devotional_content"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "devotional_progress_override_release_id_fkey"
+            columns: ["override_release_id"]
+            isOneToOne: false
+            referencedRelation: "user_devotional_overrides"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      devotional_responses: {
+        Row: {
+          created_at: string
+          devotional_id: string
+          id: string
+          question_index: number
+          response: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          devotional_id: string
+          id?: string
+          question_index: number
+          response?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          devotional_id?: string
+          id?: string
+          question_index?: number
+          response?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "devotional_responses_progress_fkey"
+            columns: ["user_id", "devotional_id"]
+            isOneToOne: false
+            referencedRelation: "devotional_progress"
+            referencedColumns: ["user_id", "devotional_id"]
           },
         ]
       }
@@ -651,6 +753,7 @@ export type Database = {
           id: string
           linked_lesson_id: string | null
           location: string | null
+          released_devotional_days: number[] | null
           target_user_id: string | null
           title: string
           type: string
@@ -665,6 +768,7 @@ export type Database = {
           id?: string
           linked_lesson_id?: string | null
           location?: string | null
+          released_devotional_days?: number[] | null
           target_user_id?: string | null
           title: string
           type?: string
@@ -679,6 +783,7 @@ export type Database = {
           id?: string
           linked_lesson_id?: string | null
           location?: string | null
+          released_devotional_days?: number[] | null
           target_user_id?: string | null
           title?: string
           type?: string
@@ -692,6 +797,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      game_config: {
+        Row: {
+          key: string
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: number
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: number
+        }
+        Relationships: []
       }
       leader_guide: {
         Row: {
@@ -843,38 +966,53 @@ export type Database = {
       }
       lesson_responses: {
         Row: {
+          awarded_points: number | null
           created_at: string
           id: string
           lesson_id: string
+          override_release_id: string | null
           question_key: string
           response: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          awarded_points?: number | null
           created_at?: string
           id?: string
           lesson_id: string
+          override_release_id?: string | null
           question_key: string
           response?: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          awarded_points?: number | null
           created_at?: string
           id?: string
           lesson_id?: string
+          override_release_id?: string | null
           question_key?: string
           response?: string
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "lesson_responses_override_release_id_fkey"
+            columns: ["override_release_id"]
+            isOneToOne: false
+            referencedRelation: "user_lesson_overrides"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       lessons: {
         Row: {
           course_id: string
           created_at: string
+          devotional_mode: string
           id: string
           objective: string | null
           order_num: number
@@ -884,6 +1022,7 @@ export type Database = {
         Insert: {
           course_id: string
           created_at?: string
+          devotional_mode?: string
           id?: string
           objective?: string | null
           order_num: number
@@ -893,6 +1032,7 @@ export type Database = {
         Update: {
           course_id?: string
           created_at?: string
+          devotional_mode?: string
           id?: string
           objective?: string | null
           order_num?: number
@@ -1377,6 +1517,33 @@ export type Database = {
         }
         Relationships: []
       }
+      push_automation_config: {
+        Row: {
+          body: string
+          description: string | null
+          enabled: boolean
+          key: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          description?: string | null
+          enabled?: boolean
+          key: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          description?: string | null
+          enabled?: boolean
+          key?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       push_notification_log: {
         Row: {
           body: string
@@ -1413,6 +1580,48 @@ export type Database = {
           target_value?: string | null
           title?: string
           type?: string
+        }
+        Relationships: []
+      }
+      push_scheduled: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          id: string
+          scheduled_at: string
+          sent: boolean
+          sent_at: string | null
+          sent_count: number | null
+          target: string
+          target_value: string | null
+          title: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          scheduled_at: string
+          sent?: boolean
+          sent_at?: string | null
+          sent_count?: number | null
+          target?: string
+          target_value?: string | null
+          title: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          scheduled_at?: string
+          sent?: boolean
+          sent_at?: string | null
+          sent_count?: number | null
+          target?: string
+          target_value?: string | null
+          title?: string
         }
         Relationships: []
       }
@@ -1589,6 +1798,134 @@ export type Database = {
         }
         Relationships: []
       }
+      user_devotional_overrides: {
+        Row: {
+          available_from: string | null
+          available_until: string | null
+          created_at: string
+          custom_points: number | null
+          devotional_id: string
+          granted_by: string | null
+          id: string
+          is_unlocked: boolean
+          notes: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          available_from?: string | null
+          available_until?: string | null
+          created_at?: string
+          custom_points?: number | null
+          devotional_id: string
+          granted_by?: string | null
+          id?: string
+          is_unlocked?: boolean
+          notes?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          available_from?: string | null
+          available_until?: string | null
+          created_at?: string
+          custom_points?: number | null
+          devotional_id?: string
+          granted_by?: string | null
+          id?: string
+          is_unlocked?: boolean
+          notes?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_devotional_overrides_devotional_id_fkey"
+            columns: ["devotional_id"]
+            isOneToOne: false
+            referencedRelation: "devotional_content"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_devotional_overrides_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "user_devotional_overrides_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      user_lesson_overrides: {
+        Row: {
+          available_from: string | null
+          available_until: string | null
+          created_at: string
+          custom_points: number | null
+          granted_by: string | null
+          id: string
+          is_unlocked: boolean
+          lesson_id: string
+          notes: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          available_from?: string | null
+          available_until?: string | null
+          created_at?: string
+          custom_points?: number | null
+          granted_by?: string | null
+          id?: string
+          is_unlocked?: boolean
+          lesson_id: string
+          notes?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          available_from?: string | null
+          available_until?: string | null
+          created_at?: string
+          custom_points?: number | null
+          granted_by?: string | null
+          id?: string
+          is_unlocked?: boolean
+          lesson_id?: string
+          notes?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_lesson_overrides_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "user_lesson_overrides_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_lesson_overrides_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       user_progress: {
         Row: {
           activity_id: string
@@ -1730,6 +2067,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_push_scheduled: { Args: { _id: string }; Returns: undefined }
       get_community_area: {
         Args: { _community: Database["public"]["Enums"]["community_name"] }
         Returns: Database["public"]["Enums"]["area_name"]
@@ -1743,6 +2081,13 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_game_config: {
+        Args: never
+        Returns: {
+          key: string
+          value: number
+        }[]
+      }
       get_my_area: {
         Args: never
         Returns: Database["public"]["Enums"]["area_name"]
@@ -1751,6 +2096,28 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["community_name"]
       }
+      get_push_automation_config: {
+        Args: never
+        Returns: {
+          body: string
+          description: string
+          enabled: boolean
+          key: string
+          title: string
+        }[]
+      }
+      get_push_scheduled_pending: {
+        Args: never
+        Returns: {
+          body: string
+          created_at: string
+          id: string
+          scheduled_at: string
+          target: string
+          target_value: string
+          title: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1758,7 +2125,26 @@ export type Database = {
         }
         Returns: boolean
       }
+      insert_push_scheduled: {
+        Args: {
+          _body: string
+          _created_by: string
+          _scheduled_at: string
+          _target: string
+          _target_value: string
+          _title: string
+        }
+        Returns: string
+      }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      update_push_automation_config: {
+        Args: { _body: string; _enabled: boolean; _key: string; _title: string }
+        Returns: undefined
+      }
+      upsert_game_config_item: {
+        Args: { _key: string; _value: number }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "user" | "admin" | "lider"
