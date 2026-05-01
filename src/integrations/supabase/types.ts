@@ -179,6 +179,30 @@ export type Database = {
         }
         Relationships: []
       }
+      areas: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       attendance: {
         Row: {
           created_at: string
@@ -213,6 +237,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      authorized_system_admins: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          email: string
+          id: string
+          is_active: boolean
+          notes: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          email: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          email?: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+        }
+        Relationships: []
       }
       challenge_participants: {
         Row: {
@@ -329,6 +380,38 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      communities: {
+        Row: {
+          area_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          area_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          area_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "communities_area_id_fkey"
+            columns: ["area_id"]
+            isOneToOne: false
+            referencedRelation: "areas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       community_challenges: {
         Row: {
@@ -508,6 +591,72 @@ export type Database = {
           order_num?: number
           subtitle?: string | null
           title?: string
+        }
+        Relationships: []
+      }
+      custom_event_types: {
+        Row: {
+          area: string | null
+          created_at: string
+          created_by: string | null
+          emoji: string
+          gives_points: boolean
+          id: string
+          label: string
+          points: number
+          value: string
+        }
+        Insert: {
+          area?: string | null
+          created_at?: string
+          created_by?: string | null
+          emoji?: string
+          gives_points?: boolean
+          id?: string
+          label: string
+          points?: number
+          value: string
+        }
+        Update: {
+          area?: string | null
+          created_at?: string
+          created_by?: string | null
+          emoji?: string
+          gives_points?: boolean
+          id?: string
+          label?: string
+          points?: number
+          value?: string
+        }
+        Relationships: []
+      }
+      data_export_audit: {
+        Row: {
+          created_at: string
+          export_type: string
+          id: string
+          metadata: Json
+          scope: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          export_type: string
+          id?: string
+          metadata?: Json
+          scope: string
+          status: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          export_type?: string
+          id?: string
+          metadata?: Json
+          scope?: string
+          status?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -1422,6 +1571,45 @@ export type Database = {
         }
         Relationships: []
       }
+      privacy_requests: {
+        Row: {
+          admin_notes: string | null
+          created_at: string
+          details: string | null
+          id: string
+          request_type: string
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          created_at?: string
+          details?: string | null
+          id?: string
+          request_type: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          created_at?: string
+          details?: string | null
+          id?: string
+          request_type?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           address: string | null
@@ -2068,6 +2256,26 @@ export type Database = {
     }
     Functions: {
       delete_push_scheduled: { Args: { _id: string }; Returns: undefined }
+      get_all_areas: {
+        Args: never
+        Returns: {
+          created_at: string
+          created_by: string
+          description: string
+          id: string
+          name: string
+        }[]
+      }
+      get_all_communities: {
+        Args: never
+        Returns: {
+          area_id: string
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+        }[]
+      }
       get_community_area: {
         Args: { _community: Database["public"]["Enums"]["community_name"] }
         Returns: Database["public"]["Enums"]["area_name"]
@@ -2136,6 +2344,7 @@ export type Database = {
         }
         Returns: string
       }
+      is_authorized_system_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
       update_push_automation_config: {
         Args: { _body: string; _enabled: boolean; _key: string; _title: string }
@@ -2148,7 +2357,7 @@ export type Database = {
     }
     Enums: {
       app_role: "user" | "admin" | "lider"
-      area_name: "Área 1" | "Área 2"
+      area_name: "Área 1" | "Área 2" | "DISCIPULADO JEMIAC"
       community_name:
         | "Martim Lutero"
         | "Bom Pastor"
@@ -2157,6 +2366,7 @@ export type Database = {
         | "Linha Brasil"
         | "Iriá Pira 1"
         | "Iriá Pira 2"
+        | "JEMIAC"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2285,7 +2495,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["user", "admin", "lider"],
-      area_name: ["Área 1", "Área 2"],
+      area_name: ["Área 1", "Área 2", "DISCIPULADO JEMIAC"],
       community_name: [
         "Martim Lutero",
         "Bom Pastor",
@@ -2294,6 +2504,7 @@ export const Constants = {
         "Linha Brasil",
         "Iriá Pira 1",
         "Iriá Pira 2",
+        "JEMIAC",
       ],
     },
   },
