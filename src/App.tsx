@@ -62,27 +62,40 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 }
 
 const AppRoutes = () => (
-  <Routes>
-    {/* Protected routes */}
-    <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-    <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+  <Suspense
+    fallback={
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-pulse flex flex-col items-center">
+          <div className="w-12 h-12 rounded-2xl bg-primary/10 mb-4 flex items-center justify-center">
+            <span className="text-2xl">✝️</span>
+          </div>
+          <p className="text-muted-foreground font-inter text-sm">Carregando aplicativo...</p>
+        </div>
+      </div>
+    }
+  >
+    <Routes>
+      {/* Protected routes */}
+      <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+      <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
 
-    {/* Public auth routes */}
-    <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-    <Route path="/cadastro" element={<PublicRoute><Register /></PublicRoute>} />
-    <Route path="/recuperar-senha" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
-    <Route path="/verificar-email" element={<VerifyEmail />} />
-    <Route path="/redefinir-senha" element={<ResetPassword />} />
-    <Route path="/instalar" element={<Install />} />
-    <Route path="/apresentacao" element={<Apresentacao />} />
-    <Route path="/exportar-dados" element={<ProtectedRoute><ExportData /></ProtectedRoute>} />
-    <Route path="/minha-igreja" element={<ProtectedRoute><MinhaIgreja /></ProtectedRoute>} />
-    <Route path="/onboarding" element={<Onboarding />} />
-    <Route path="/admin-sistema" element={<ProtectedRoute><AdminSistema /></ProtectedRoute>} />
+      {/* Public auth routes */}
+      <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+      <Route path="/cadastro" element={<PublicRoute><Register /></PublicRoute>} />
+      <Route path="/recuperar-senha" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+      <Route path="/verificar-email" element={<VerifyEmail />} />
+      <Route path="/redefinir-senha" element={<ResetPassword />} />
+      <Route path="/instalar" element={<Install />} />
+      <Route path="/apresentacao" element={<Apresentacao />} />
+      <Route path="/exportar-dados" element={<ProtectedRoute><ExportData /></ProtectedRoute>} />
+      <Route path="/minha-igreja" element={<ProtectedRoute><MinhaIgreja /></ProtectedRoute>} />
+      <Route path="/onboarding" element={<Onboarding />} />
+      <Route path="/admin-sistema" element={<ProtectedRoute><AdminSistema /></ProtectedRoute>} />
 
-    {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-    <Route path="*" element={<NotFound />} />
-  </Routes>
+      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  </Suspense>
 );
 
 const App = () => (
