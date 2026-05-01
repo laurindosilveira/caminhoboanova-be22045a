@@ -4,23 +4,25 @@ import { ArrowRight, CalendarDays, Heart, ShieldCheck, Sparkles } from "lucide-r
 import { motion } from "framer-motion";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { lazy, Suspense } from "react";
 import HeroHeader from "@/components/home/HeroHeader";
 import AnnouncementsSection from "@/components/home/AnnouncementsSection";
 import NextCourseActivityCard from "@/components/home/NextCourseActivityCard";
 import JourneyPath from "@/components/home/JourneyPath";
-import AchievementsGrid from "@/components/home/AchievementsGrid";
 import DiscipleProfile from "@/components/home/DiscipleProfile";
-import EditProfileForm from "@/components/home/EditProfileForm";
-import CommunityTab from "@/components/home/CommunityTab";
-import DiscipleshipTab from "@/components/home/DiscipleshipTab";
 import NextMeetingCard from "@/components/home/NextMeetingCard";
-import UserAgendaTab from "@/components/home/UserAgendaTab";
 import NotificationSettings from "@/components/home/NotificationSettings";
 import InstallAppCard from "@/components/home/InstallAppCard";
-import TypingMetricsPanel from "@/components/home/TypingMetricsPanel";
 import PushActivationBanner from "@/components/home/PushActivationBanner";
 import RemindersSection from "@/components/home/RemindersSection";
 import BottomNav, { type Tab } from "@/components/home/BottomNav";
+
+const AchievementsGrid = lazy(() => import("@/components/home/AchievementsGrid"));
+const EditProfileForm = lazy(() => import("@/components/home/EditProfileForm"));
+const CommunityTab = lazy(() => import("@/components/home/CommunityTab"));
+const DiscipleshipTab = lazy(() => import("@/components/home/DiscipleshipTab"));
+const UserAgendaTab = lazy(() => import("@/components/home/UserAgendaTab"));
+const TypingMetricsPanel = lazy(() => import("@/components/home/TypingMetricsPanel"));
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUserStats } from "@/hooks/useUserStats";
 import { useAppNotifications } from "@/hooks/useAppNotifications";
@@ -246,105 +248,114 @@ export default function Index() {
           </>
         )}
 
-        {activeTab === "conquistas" && (
-          <div className="pt-4">
-            <AchievementsGrid
-              faithPoints={stats.faithPoints}
-              streakDays={stats.streakDays}
-              completedCount={stats.completedCount}
+        <Suspense fallback={
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
+              <span className="text-2xl">✝️</span>
+            </div>
+            <p className="text-muted-foreground font-inter text-sm">Carregando...</p>
+          </div>
+        }>
+          {activeTab === "conquistas" && (
+            <div className="pt-4">
+              <AchievementsGrid
+                faithPoints={stats.faithPoints}
+                streakDays={stats.streakDays}
+                completedCount={stats.completedCount}
+              />
+              <TypingMetricsPanel />
+            </div>
+          )}
+
+          {activeTab === "agenda" && <UserAgendaTab />}
+
+          {activeTab === "comunidade" && <CommunityTab />}
+
+          {activeTab === "discipulado" && (
+            <DiscipleshipTab
+              targetLessonId={targetLessonId}
+              onTargetLessonConsumed={() => setTargetLessonId(null)}
             />
-            <TypingMetricsPanel />
-          </div>
-        )}
+          )}
 
-        {activeTab === "agenda" && <UserAgendaTab />}
+          {activeTab === "perfil" && (
+            <div className="space-y-4 pb-4 pt-5">
+              <div className="px-5">
+                <h2 className="font-montserrat text-xl font-black text-foreground">Perfil</h2>
+              </div>
 
-        {activeTab === "comunidade" && <CommunityTab />}
+              <div className="px-5">
+                <Tabs value={profileSubTab} onValueChange={(value) => setProfileSubTab(value as ProfileSubTab)}>
+                  <TabsList className="grid h-11 w-full grid-cols-3">
+                    <TabsTrigger value="meu-perfil" className="text-[11px] sm:text-xs">
+                      Meu Perfil
+                    </TabsTrigger>
+                    <TabsTrigger value="minha-jornada" className="text-[11px] sm:text-xs">
+                      Minha Jornada
+                    </TabsTrigger>
+                    <TabsTrigger value="configuracoes" className="text-[11px] sm:text-xs">
+                      Configuracoes
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
 
-        {activeTab === "discipulado" && (
-          <DiscipleshipTab
-            targetLessonId={targetLessonId}
-            onTargetLessonConsumed={() => setTargetLessonId(null)}
-          />
-        )}
+              {profileSubTab === "meu-perfil" && (
+                <>
+                  <DiscipleProfile
+                    faithPoints={stats.faithPoints}
+                    faithLevel={stats.faithLevel}
+                    streakDays={stats.streakDays}
+                    completedCount={stats.completedCount}
+                    community={profile?.community}
+                    area={profile?.area}
+                  />
 
-        {activeTab === "perfil" && (
-          <div className="space-y-4 pb-4 pt-5">
-            <div className="px-5">
-              <h2 className="font-montserrat text-xl font-black text-foreground">Perfil</h2>
-            </div>
+                  <InstallAppCard />
 
-            <div className="px-5">
-              <Tabs value={profileSubTab} onValueChange={(value) => setProfileSubTab(value as ProfileSubTab)}>
-                <TabsList className="grid h-11 w-full grid-cols-3">
-                  <TabsTrigger value="meu-perfil" className="text-[11px] sm:text-xs">
-                    Meu Perfil
-                  </TabsTrigger>
-                  <TabsTrigger value="minha-jornada" className="text-[11px] sm:text-xs">
-                    Minha Jornada
-                  </TabsTrigger>
-                  <TabsTrigger value="configuracoes" className="text-[11px] sm:text-xs">
-                    Configuracoes
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
-
-            {profileSubTab === "meu-perfil" && (
-              <>
-                <DiscipleProfile
-                  faithPoints={stats.faithPoints}
-                  faithLevel={stats.faithLevel}
-                  streakDays={stats.streakDays}
-                  completedCount={stats.completedCount}
-                  community={profile?.community}
-                  area={profile?.area}
-                />
-
-                <InstallAppCard />
-
-                {(role === "admin" || role === "lider") && (
-                  <div className="mt-3 px-5">
-                    <button
-                      onClick={() => navigate("/admin")}
-                      className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm transition-colors hover:bg-muted/50"
-                    >
-                      <div
-                        className="flex h-10 w-10 items-center justify-center rounded-xl"
-                        style={{ background: "var(--gradient-hero)" }}
+                  {(role === "admin" || role === "lider") && (
+                    <div className="mt-3 px-5">
+                      <button
+                        onClick={() => navigate("/admin")}
+                        className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm transition-colors hover:bg-muted/50"
                       >
-                        <ShieldCheck className="h-5 w-5 text-primary-foreground" />
-                      </div>
-                      <div className="text-left">
-                        <p className="font-montserrat text-sm font-bold text-foreground">
-                          {role === "admin" ? "Area do Administrador" : "Area do Lider"}
-                        </p>
-                        <p className="text-xs font-inter text-muted-foreground">
-                          {role === "admin" ? "Gerenciar participantes e conteudo" : "Gerenciar cursos e usuarios"}
-                        </p>
-                      </div>
-                      <span className="ml-auto text-xs text-muted-foreground">-&gt;</span>
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
+                        <div
+                          className="flex h-10 w-10 items-center justify-center rounded-xl"
+                          style={{ background: "var(--gradient-hero)" }}
+                        >
+                          <ShieldCheck className="h-5 w-5 text-primary-foreground" />
+                        </div>
+                        <div className="text-left">
+                          <p className="font-montserrat text-sm font-bold text-foreground">
+                            {role === "admin" ? "Area do Administrador" : "Area do Lider"}
+                          </p>
+                          <p className="text-xs font-inter text-muted-foreground">
+                            {role === "admin" ? "Gerenciar participantes e conteudo" : "Gerenciar cursos e usuarios"}
+                          </p>
+                        </div>
+                        <span className="ml-auto text-xs text-muted-foreground">-&gt;</span>
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
 
-            {profileSubTab === "minha-jornada" && (
-              <>
-                <NextCourseActivityCard onNavigateToDiscipulado={() => setActiveTab("discipulado")} />
-                <JourneyPath />
-              </>
-            )}
+              {profileSubTab === "minha-jornada" && (
+                <>
+                  <NextCourseActivityCard onNavigateToDiscipulado={() => setActiveTab("discipulado")} />
+                  <JourneyPath />
+                </>
+              )}
 
-            {profileSubTab === "configuracoes" && (
-              <>
-                <EditProfileForm />
-                <NotificationSettings />
-              </>
-            )}
-          </div>
-        )}
+              {profileSubTab === "configuracoes" && (
+                <>
+                  <EditProfileForm />
+                  <NotificationSettings />
+                </>
+              )}
+            </div>
+          )}
+        </Suspense>
       </main>
 
       <BottomNav activeTab={activeTab} onChange={setActiveTab} />
