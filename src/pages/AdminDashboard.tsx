@@ -105,12 +105,19 @@ export default function AdminDashboard() {
     const profilesList = (profilesData ?? []).filter(p => p.user_id !== myId);
     const { data: progressData } = await supabase.from("user_progress").select("user_id, activity_id");
 
+    // Optimize progress lookup using a map O(N+M)
+    const progressMap: Record<string, string[]> = {};
+    (progressData ?? []).forEach(pr => {
+      if (!progressMap[pr.user_id]) progressMap[pr.user_id] = [];
+      progressMap[pr.user_id].push(pr.activity_id);
+    });
+
     const participantList: Participant[] = profilesList.map((p) => {
-      const userProgress = (progressData ?? []).filter((pr) => pr.user_id === p.user_id);
+      const userCompletedIds = progressMap[p.user_id] || [];
       return {
         ...p,
-        completed_count: userProgress.length,
-        completed_activity_ids: userProgress.map((pr) => pr.activity_id),
+        completed_count: userCompletedIds.length,
+        completed_activity_ids: userCompletedIds,
         turma_id: p.turma_id,
       } as any;
     });
