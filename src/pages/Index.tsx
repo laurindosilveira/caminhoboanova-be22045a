@@ -4,23 +4,25 @@ import { ArrowRight, CalendarDays, Heart, ShieldCheck, Sparkles } from "lucide-r
 import { motion } from "framer-motion";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { lazy, Suspense } from "react";
 import HeroHeader from "@/components/home/HeroHeader";
 import AnnouncementsSection from "@/components/home/AnnouncementsSection";
 import NextCourseActivityCard from "@/components/home/NextCourseActivityCard";
 import JourneyPath from "@/components/home/JourneyPath";
-import AchievementsGrid from "@/components/home/AchievementsGrid";
 import DiscipleProfile from "@/components/home/DiscipleProfile";
-import EditProfileForm from "@/components/home/EditProfileForm";
-import CommunityTab from "@/components/home/CommunityTab";
-import DiscipleshipTab from "@/components/home/DiscipleshipTab";
 import NextMeetingCard from "@/components/home/NextMeetingCard";
-import UserAgendaTab from "@/components/home/UserAgendaTab";
 import NotificationSettings from "@/components/home/NotificationSettings";
 import InstallAppCard from "@/components/home/InstallAppCard";
-import TypingMetricsPanel from "@/components/home/TypingMetricsPanel";
 import PushActivationBanner from "@/components/home/PushActivationBanner";
 import RemindersSection from "@/components/home/RemindersSection";
 import BottomNav, { type Tab } from "@/components/home/BottomNav";
+
+const AchievementsGrid = lazy(() => import("@/components/home/AchievementsGrid"));
+const EditProfileForm = lazy(() => import("@/components/home/EditProfileForm"));
+const CommunityTab = lazy(() => import("@/components/home/CommunityTab"));
+const DiscipleshipTab = lazy(() => import("@/components/home/DiscipleshipTab"));
+const UserAgendaTab = lazy(() => import("@/components/home/UserAgendaTab"));
+const TypingMetricsPanel = lazy(() => import("@/components/home/TypingMetricsPanel"));
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUserStats } from "@/hooks/useUserStats";
 import { useAppNotifications } from "@/hooks/useAppNotifications";
