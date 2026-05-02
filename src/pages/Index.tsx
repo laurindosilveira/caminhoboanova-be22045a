@@ -65,7 +65,7 @@ export default function Index() {
   }, []);
 
   return (
-    <div id="main-content" className="relative mx-auto flex min-h-screen max-w-md flex-col bg-background">
+    <div id="main-content" className="relative mx-auto flex min-h-screen max-w-md flex-col bg-background safe-bottom">
       <HeroHeader
         streakDays={stats.streakDays}
         faithPoints={stats.faithPoints}
@@ -73,7 +73,8 @@ export default function Index() {
         faithEnergy={stats.faithEnergy}
       />
 
-      <main className="flex-1 overflow-y-auto pb-24">
+      <main className="flex-1 overflow-y-auto pb-32 pt-2" role="main">
+
         {activeTab === "jornada" && (
           <>
             <PushActivationBanner />
