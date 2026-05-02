@@ -46,7 +46,7 @@ All colors MUST be HSL.
     --input: 220 20% 88%;
     --ring: 29 100% 50%;
 
-    --radius: 1rem;
+    --radius: 1.25rem;
 
     /* Brand specific */
     --brand-orange: 29 100% 50%;
