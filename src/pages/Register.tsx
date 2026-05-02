@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Eye, EyeOff, Mail, Lock, User, Phone, ChevronLeft, ChevronDown, MessageCircle, Camera } from "lucide-react";
 import { z } from "zod";
 import AvatarCropper from "@/components/home/AvatarCropper";
+import { getErrorMessage } from "@/lib/error-handler";
+
 
 // Dynamic imports for less-used icons
 const Calendar = lazy(() => import("lucide-react").then(m => ({ default: m.Calendar })));
