@@ -25,7 +25,30 @@ const Onboarding = lazy(() => import("./pages/Onboarding"));
 const AdminSistema = lazy(() => import("./pages/AdminSistema"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error) => {
+      // Somente mostra toast para erros globais que não foram tratados localmente
+      // ou se forem erros críticos de conexão/autenticação
+      const message = getErrorMessage(error);
+      if (message.includes("sessão expirou") || message.includes("conexão")) {
+        toast.error(message);
+      }
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (error) => {
+      toast.error(getErrorMessage(error));
+    },
+  }),
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
 const ADMIN_PANEL_ROLES = ["admin", "lider"] as const;
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
