@@ -159,30 +159,51 @@ export default function JourneyPath() {
   const devPct = integrated.totalDevotionals > 0 ? Math.round((integrated.devotionalsCompleted / integrated.totalDevotionals) * 100) : 0;
 
   return (
-    <div className="px-5 pt-6">
+    <section className="px-5 pt-6" aria-labelledby="jornada-titulo">
       {/* Header + overall progress */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="font-montserrat font-black text-foreground text-xl">🛤️ Minha Jornada</h2>
-          <span className="text-muted-foreground text-xs font-inter bg-muted rounded-full px-3 py-1">
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 id="jornada-titulo" className="font-montserrat font-black text-foreground text-xl">🛤️ Minha Jornada</h2>
+          <span className="text-primary font-bold text-[10px] font-inter uppercase tracking-wider bg-primary/10 rounded-full px-3 py-1.5 border border-primary/20">
             {overallPct}% completo
           </span>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
+        
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground font-inter text-[10px] font-bold uppercase tracking-widest">
+              Progresso Geral
+            </span>
+            <span className="text-xs font-montserrat font-extrabold text-foreground tabular-nums">
+              {doneItems} <span className="text-muted-foreground/60 font-medium">/ {totalItems}</span>
+            </span>
+          </div>
+          
+          <div className="relative h-4 bg-muted/50 rounded-full overflow-hidden border border-border/50 shadow-inner p-0.5">
             <div
-              className="h-full rounded-full transition-all duration-700"
+              className="h-full rounded-full transition-all duration-1000 ease-out shadow-sm"
+              role="progressbar"
+              aria-valuenow={overallPct}
+              aria-valuemin={0}
+              aria-valuemax={100}
               style={{
                 width: `${overallPct}%`,
                 background: overallPct >= 70 ? "var(--gradient-green)" : overallPct >= 34 ? "var(--gradient-orange)" : "hsl(var(--destructive))",
               }}
-            />
+            >
+              {overallPct > 15 && (
+                <div className="absolute inset-0 flex items-center justify-end px-2">
+                  <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
+                </div>
+              )}
+            </div>
           </div>
-          <span className="text-xs font-montserrat font-bold text-secondary flex-shrink-0">{doneItems}/{totalItems}</span>
+          
+          <p className="text-muted-foreground font-inter text-[10px] font-medium leading-relaxed">
+            Soma de lições estudadas e devocionais concluídos
+          </p>
         </div>
-        <p className="text-muted-foreground font-inter text-[11px] mt-1.5">
-          Progresso geral: lições estudadas e devocionais concluídos
-        </p>
+
 
         {/* Fase atual */}
         {(() => {
@@ -393,6 +414,7 @@ export default function JourneyPath() {
           })}
         </div>
       )}
-    </div>
+    </section>
   );
 }
+
