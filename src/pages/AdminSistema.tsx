@@ -92,7 +92,12 @@ export default function AdminSistema() {
       .eq("id", id);
 
     if (error) {
-      toast({ title: "Erro ao atualizar status", variant: "destructive" });
+      toast({ 
+        title: "Erro ao atualizar status", 
+        description: getErrorMessage(error),
+        variant: "destructive" 
+      });
+
     } else {
       toast({ title: `Status atualizado para "${STATUS_MAP[newStatus]?.label ?? newStatus}"` });
       fetchChurches();
