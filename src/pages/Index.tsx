@@ -210,22 +210,22 @@ export default function Index() {
 
 
             <motion.div
-              initial={{ opacity: 0, y: 12 }}
+              initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: 0.2, ease: "easeOut" }}
-              className="mt-6"
+              transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }}
+              className="mt-4"
             >
               <NextMeetingCard onNavigateToAgenda={() => setActiveTab("agenda")} />
             </motion.div>
 
             <motion.div
-              initial={{ opacity: 0, y: 14 }}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.25, ease: "easeOut" }}
-              className="mt-3"
+              transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
+              className="mt-2"
             >
-              <div className="mb-2 px-5">
-                <p className="text-[11px] font-inter font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              <div className="mb-3 px-6">
+                <p className="text-[10px] font-bold font-inter uppercase tracking-widest text-muted-foreground/70">
                   Progresso detalhado
                 </p>
               </div>
@@ -233,22 +233,23 @@ export default function Index() {
             </motion.div>
 
             <motion.div
-              initial={{ opacity: 0, y: 14 }}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.3, ease: "easeOut" }}
-              className="mt-3"
+              transition={{ duration: 0.6, delay: 0.25, ease: "easeOut" }}
+              className="mt-4"
             >
               <NextCourseActivityCard onNavigateToDiscipulado={() => setActiveTab("discipulado")} />
             </motion.div>
 
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: 0.32, ease: "easeOut" }}
+              transition={{ duration: 0.5, delay: 0.3, ease: "easeOut" }}
               className="mt-6"
             >
               <AnnouncementsSection />
             </motion.div>
+
 
             <RemindersSection
               onNavigateToDiscipulado={() => setActiveTab("discipulado")}
