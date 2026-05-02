@@ -139,7 +139,12 @@ export default function EditProfileForm() {
       toast({ title: "Foto atualizada!" });
     } catch (err) {
       console.error("Erro ao enviar foto:", err);
-      toast({ title: "Erro ao enviar foto", description: "Tente novamente.", variant: "destructive" });
+      toast({ 
+        title: "Erro ao enviar foto", 
+        description: getErrorMessage(err), 
+        variant: "destructive" 
+      });
+
     } finally {
       setUploadingPhoto(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
