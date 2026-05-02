@@ -194,8 +194,9 @@ export default function StudentListSection() {
       .eq("user_id", selectedStudent.user_id);
 
     if (error) {
-      toast.error("Erro ao salvar alterações");
+      toast.error("Erro ao salvar alterações: " + getErrorMessage(error));
       console.error(error);
+
     } else {
       const updated = {
         ...selectedStudent,
