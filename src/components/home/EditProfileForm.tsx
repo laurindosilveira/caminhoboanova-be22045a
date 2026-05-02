@@ -185,7 +185,12 @@ export default function EditProfileForm() {
       setIsEditing(false);
     } catch (err: unknown) {
       console.error("Erro ao salvar perfil:", err);
-      toast({ title: "Erro ao salvar", description: "Tente novamente.", variant: "destructive" });
+      toast({ 
+        title: "Erro ao salvar", 
+        description: getErrorMessage(err), 
+        variant: "destructive" 
+      });
+
     } finally {
       setSaving(false);
     }
