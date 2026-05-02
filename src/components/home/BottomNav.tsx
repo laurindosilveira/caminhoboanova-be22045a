@@ -19,7 +19,7 @@ const tabs = [
 export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
   return (
     <nav
-      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-card border-t border-border shadow-xl"
+      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] max-w-[calc(448px-1rem)] bg-card/80 backdrop-blur-xl border border-border/50 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.15)] rounded-[2rem] mb-3 z-50 transition-all duration-300"
       aria-label="Navegação principal"
       role="tablist"
     >

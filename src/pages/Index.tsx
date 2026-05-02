@@ -103,9 +103,10 @@ export default function Index() {
                       <p className="text-sm font-inter text-primary-foreground/78">
                         {greetingPeriod}, {firstName}
                       </p>
-                      <h2 className="mt-1 font-montserrat text-[1.4rem] font-black leading-tight">
+                      <h2 className="mt-1 font-montserrat text-[1.4rem] font-black leading-tight text-balance">
                         Mantenha sua jornada em movimento
                       </h2>
+
                       <p className="mt-2 max-w-[28ch] text-sm font-inter leading-relaxed text-primary-foreground/78">
                         {greetingMessage}
                       </p>
