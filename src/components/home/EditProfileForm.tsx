@@ -6,6 +6,8 @@ import { Pencil, Save, X, User, Phone, Calendar, MapPin, ChevronDown, Home, User
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/error-handler";
+
 
 const COMMUNITIES = [
   "Martim Lutero",
