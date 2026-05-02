@@ -73,7 +73,12 @@ export default function AdminSistema() {
 
     if (error) {
       console.error(error);
-      toast({ title: "Erro ao carregar igrejas", variant: "destructive" });
+      toast({ 
+        title: "Erro ao carregar igrejas", 
+        description: getErrorMessage(error),
+        variant: "destructive" 
+      });
+
     } else {
       setChurches((data as any) ?? []);
     }
