@@ -260,6 +260,7 @@ export default function AnnouncementsSection() {
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }
+
