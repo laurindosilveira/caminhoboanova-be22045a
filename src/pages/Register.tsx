@@ -159,14 +159,11 @@ export default function Register() {
     });
 
     if (authError) {
-      if (authError.message?.toLowerCase().includes("already registered")) {
-        setError("Este email já está cadastrado. Faça login ou use outro email.");
-      } else {
-        setError("Erro ao criar conta: " + authError.message);
-      }
+      setError(getErrorMessage(authError));
       setLoading(false);
       return;
     }
+
 
     if (authData.user && authData.user.identities && authData.user.identities.length === 0) {
       setError("Este email já está cadastrado. Faça login ou use outro email.");
