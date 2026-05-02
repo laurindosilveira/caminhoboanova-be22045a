@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Eye, EyeOff, Mail, Lock, User, Phone, ChevronLeft, ChevronDown, MessageCircle, Camera } from "lucide-react";
 import { z } from "zod";
 import AvatarCropper from "@/components/home/AvatarCropper";
+import { getErrorMessage } from "@/lib/error-handler";
+
 
 // Dynamic imports for less-used icons
 const Calendar = lazy(() => import("lucide-react").then(m => ({ default: m.Calendar })));
@@ -157,14 +159,11 @@ export default function Register() {
     });
 
     if (authError) {
-      if (authError.message?.toLowerCase().includes("already registered")) {
-        setError("Este email já está cadastrado. Faça login ou use outro email.");
-      } else {
-        setError("Erro ao criar conta: " + authError.message);
-      }
+      setError(getErrorMessage(authError));
       setLoading(false);
       return;
     }
+
 
     if (authData.user && authData.user.identities && authData.user.identities.length === 0) {
       setError("Este email já está cadastrado. Faça login ou use outro email.");

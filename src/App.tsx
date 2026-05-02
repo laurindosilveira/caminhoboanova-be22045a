@@ -2,11 +2,13 @@ import { Toaster } from "@/components/ui/toaster";
 import OfflineBanner from "@/components/home/OfflineBanner";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AreaSwitchProvider } from "@/contexts/AreaSwitchContext";
 import { lazy, Suspense } from "react";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/error-handler";
 
 const Index = lazy(() => import("./pages/Index"));
 const Login = lazy(() => import("./pages/Login"));
@@ -23,7 +25,30 @@ const Onboarding = lazy(() => import("./pages/Onboarding"));
 const AdminSistema = lazy(() => import("./pages/AdminSistema"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error) => {
+      // Somente mostra toast para erros globais que não foram tratados localmente
+      // ou se forem erros críticos de conexão/autenticação
+      const message = getErrorMessage(error);
+      if (message.includes("sessão expirou") || message.includes("conexão")) {
+        toast.error(message);
+      }
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (error) => {
+      toast.error(getErrorMessage(error));
+    },
+  }),
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
 const ADMIN_PANEL_ROLES = ["admin", "lider"] as const;
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {

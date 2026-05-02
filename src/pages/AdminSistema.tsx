@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/error-handler";
+
 
 interface ChurchSubscription {
   id: string;
@@ -71,7 +73,12 @@ export default function AdminSistema() {
 
     if (error) {
       console.error(error);
-      toast({ title: "Erro ao carregar igrejas", variant: "destructive" });
+      toast({ 
+        title: "Erro ao carregar igrejas", 
+        description: getErrorMessage(error),
+        variant: "destructive" 
+      });
+
     } else {
       setChurches((data as any) ?? []);
     }
@@ -85,7 +92,12 @@ export default function AdminSistema() {
       .eq("id", id);
 
     if (error) {
-      toast({ title: "Erro ao atualizar status", variant: "destructive" });
+      toast({ 
+        title: "Erro ao atualizar status", 
+        description: getErrorMessage(error),
+        variant: "destructive" 
+      });
+
     } else {
       toast({ title: `Status atualizado para "${STATUS_MAP[newStatus]?.label ?? newStatus}"` });
       fetchChurches();

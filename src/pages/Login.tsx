@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Eye, EyeOff, Mail, Lock, Flame, MessageCircle } from "lucide-react";
+import { getErrorMessage } from "@/lib/error-handler";
+
 import { z } from "zod";
 
 const loginSchema = z.object({
@@ -38,22 +40,11 @@ export default function Login() {
     });
 
     if (authError) {
-      // Differentiate error types
-      const msg = authError.message?.toLowerCase() || "";
-      if (msg.includes("invalid login credentials")) {
-        // Check if user exists by attempting password reset (won't send if no user)
-        // Supabase doesn't differentiate natively, but we can provide better UX
-        setError("Email ou senha incorretos. Verifique seus dados e tente novamente.");
-      } else if (msg.includes("email not confirmed")) {
-        setError("Seu email ainda não foi confirmado. Verifique sua caixa de entrada.");
-      } else if (msg.includes("too many requests") || msg.includes("rate limit")) {
-        setError("Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.");
-      } else {
-        setError("Erro ao entrar: " + authError.message);
-      }
+      setError(getErrorMessage(authError));
       setLoading(false);
       return;
     }
+
 
     // Auto-redirect based on role
     if (authData.user) {

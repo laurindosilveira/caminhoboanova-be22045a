@@ -6,6 +6,8 @@ import { Pencil, Save, X, User, Phone, Calendar, MapPin, ChevronDown, Home, User
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/error-handler";
+
 
 const COMMUNITIES = [
   "Martim Lutero",
@@ -137,7 +139,12 @@ export default function EditProfileForm() {
       toast({ title: "Foto atualizada!" });
     } catch (err) {
       console.error("Erro ao enviar foto:", err);
-      toast({ title: "Erro ao enviar foto", description: "Tente novamente.", variant: "destructive" });
+      toast({ 
+        title: "Erro ao enviar foto", 
+        description: getErrorMessage(err), 
+        variant: "destructive" 
+      });
+
     } finally {
       setUploadingPhoto(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -178,7 +185,12 @@ export default function EditProfileForm() {
       setIsEditing(false);
     } catch (err: unknown) {
       console.error("Erro ao salvar perfil:", err);
-      toast({ title: "Erro ao salvar", description: "Tente novamente.", variant: "destructive" });
+      toast({ 
+        title: "Erro ao salvar", 
+        description: getErrorMessage(err), 
+        variant: "destructive" 
+      });
+
     } finally {
       setSaving(false);
     }
