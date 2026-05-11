@@ -136,10 +136,10 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
       .select("*")
       .eq("is_active", true)
       .order("sort_order");
-    if (error || !data || (data as AchievementDef[]).length === 0) {
-      setAchievementDefs(DEFAULT_ACHIEVEMENT_DEFS);
+    if (error || !data || ((data as any) as AchievementDef[]).length === 0) {
+      setAchievementDefs(DEFAULT_ACHIEVEMENT_DEFS as any);
     } else {
-      setAchievementDefs(data as AchievementDef[]);
+      setAchievementDefs((data as any) as AchievementDef[]);
     }
   }, []);
 
