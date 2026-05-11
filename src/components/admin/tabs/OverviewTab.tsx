@@ -82,7 +82,7 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
         );
       }
 
-      const results = await Promise.all(queries);
+      const results = await Promise.all(queries.map(q => q));
       const lastEvData = results[0]?.data;
       const nextEvData = results[1]?.data;
       const devData = results[2]?.data ?? [];

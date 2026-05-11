@@ -102,7 +102,7 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
     // Load turma override if exists
     if (profile?.turma_id) {
       const { data: ov } = await supabase
-        .from("turma_lesson_content")
+        .from("turma_lesson_content" as any)
         .select("*")
         .eq("turma_id", profile.turma_id)
         .eq("lesson_id", lesson.id)
