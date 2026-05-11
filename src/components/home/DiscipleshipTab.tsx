@@ -417,8 +417,10 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
         isStudyLocked={isStudyLocked}
         isLateAccess={isLateAccess}
         isStudyCompleted={studyDone}
-        overrideId={manualLessonOverrideMap.get(selectedLesson.id)?.id}
-        awardedPoints={manualLessonOverrideMap.get(selectedLesson.id)?.custom_points ?? null}
+        {...({
+          overrideId: manualLessonOverrideMap.get(selectedLesson.id)?.id,
+          awardedPoints: manualLessonOverrideMap.get(selectedLesson.id)?.custom_points ?? null
+        } as any)}
       />
     );
   }

@@ -101,11 +101,11 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
 
     // Load turma override if exists
     if (profile?.turma_id) {
-      const { data: ov } = await supabase
-        .from("turma_lesson_content")
+      const { data: ov } = await (supabase
+        .from("turma_lesson_content" as any)
         .select("*")
         .eq("turma_id", profile.turma_id)
-        .eq("lesson_id", lesson.id)
+        .eq("lesson_id", lesson.id) as any)
         .maybeSingle();
 
       if (ov) {
@@ -125,9 +125,9 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
         };
         setFlags(f);
         setOverride({
-          greeting: ov.greeting ?? "",
-          icebreaker: ov.icebreaker ?? "",
-          summary: ov.summary ?? "",
+          greeting: (ov as any).greeting ?? "",
+          icebreaker: (ov as any).icebreaker ?? "",
+          summary: (ov as any).summary ?? "",
           bible_texts: ov.bible_texts ?? [],
           questions: ov.questions ?? [],
           practice: ov.practice ?? "",
@@ -179,8 +179,8 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
       pdf_link: flags.pdf_link ? override.pdf_link : null,
     };
 
-    const { error } = await supabase
-      .from("turma_lesson_content")
+    const { error } = await (supabase
+      .from("turma_lesson_content" as any) as any)
       .upsert(payload, { onConflict: "turma_id,lesson_id" });
 
     if (error) {
