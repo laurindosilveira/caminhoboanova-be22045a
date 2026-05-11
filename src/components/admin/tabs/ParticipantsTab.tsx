@@ -9,6 +9,16 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import ParticipantSheet from "./ParticipantSheet";
 
 type Activity = { id: string; type: string; title: string; points: number; order_num: number; subtitle: string | null };
@@ -16,6 +26,10 @@ type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
   confirmation_year?: number | null;
+  completed_lesson_count?: number;
+  completed_devotional_count?: number;
+  completed_event_count?: number;
+  faith_points?: number;
   avatar_url?: string | null;
   father_name?: string | null;
   mother_name?: string | null;
@@ -30,6 +44,12 @@ type StatusReason = {
   severity: "high" | "medium" | "low";
 };
 
+function normalizeAttendanceStatus(status: string) {
+  if (status === "falta") return "faltou";
+  if (status === "justificado") return "justificou";
+  return status;
+}
+
 // ─── Real completion data types ───────────────────────────
 type RealLessonCompletion = {
   lesson_id: string;
@@ -37,6 +57,7 @@ type RealLessonCompletion = {
   course_title: string;
   responses: { question: string; response: string }[];
   completed_at: string | null;
+  awarded_points: number;
 };
 
 type RealDevotionalCompletion = {
@@ -48,6 +69,7 @@ type RealDevotionalCompletion = {
   questions: string[];
   completed_at: string;
   is_weekend: boolean;
+  awarded_points: number;
 };
 
 type RealAttendanceRecord = {
@@ -67,18 +89,18 @@ type RealWorshipRecord = {
 
 const ACTIVITY_TYPES = [
   { value: "todos", label: "Todos os tipos" },
-  { value: "devocional", label: "📖 Devocionais" },
-  { value: "estudo", label: "🎓 Estudos de lição" },
-  { value: "presenca", label: "📅 Presenças" },
-  { value: "culto", label: "⛪ Cultos" },
+  { value: "devocional", label: "Devocionais" },
+  { value: "estudo", label: "Estudos de licao" },
+  { value: "presenca", label: "Presencas" },
+  { value: "culto", label: "Cultos" },
 ];
 
 function getStatusInfo(completed: number, total: number) {
   const pct = total > 0 ? (completed / total) * 100 : 0;
-  if (pct === 0) return { label: "Não iniciou", color: "text-muted-foreground", bg: "bg-muted", dot: "bg-muted-foreground" };
+  if (pct === 0) return { label: "Nao iniciou", color: "text-muted-foreground", bg: "bg-muted", dot: "bg-muted-foreground" };
   if (pct < 34) return { label: "Iniciando", color: "text-destructive", bg: "bg-destructive/10", dot: "bg-destructive" };
   if (pct < 70) return { label: "Em andamento", color: "text-accent-foreground", bg: "bg-accent/30", dot: "bg-accent" };
-  return { label: "Avançado", color: "text-brand-green", bg: "bg-brand-green/10", dot: "bg-brand-green" };
+  return { label: "Avancado", color: "text-brand-green", bg: "bg-brand-green/10", dot: "bg-brand-green" };
 }
 
 function calcAge(birthDate: string) {
@@ -95,22 +117,33 @@ function AuditLogSection({ targetUserId, userName }: { targetUserId: string; use
   const [logs, setLogs] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     async function fetch() {
       setLoading(true);
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("activity_removal_log" as any)
         .select("*")
         .eq("target_user_id", targetUserId)
         .order("removed_at", { ascending: false }) as any;
+      if (error) {
+        setLogs([]);
+        setProfiles({});
+        setLoading(false);
+        toast({ title: "Erro ao carregar log", description: error.message, variant: "destructive" });
+        return;
+      }
       const items = data ?? [];
       setLogs(items);
 
       // Fetch admin names
       const adminIds = [...new Set(items.map((l: any) => l.removed_by))] as string[];
       if (adminIds.length > 0) {
-        const { data: profs } = await supabase.from("profiles").select("user_id, full_name").in("user_id", adminIds);
+        const { data: profs, error: profilesError } = await supabase.from("profiles").select("user_id, full_name").in("user_id", adminIds);
+        if (profilesError) {
+          toast({ title: "Erro ao carregar responsaveis", description: profilesError.message, variant: "destructive" });
+        }
         const map: Record<string, string> = {};
         (profs ?? []).forEach((p: any) => { map[p.user_id] = p.full_name; });
         setProfiles(map);
@@ -120,20 +153,20 @@ function AuditLogSection({ targetUserId, userName }: { targetUserId: string; use
     fetch();
   }, [targetUserId]);
 
-  const typeEmoji: Record<string, string> = { estudo: "🎓", devocional: "📖", presenca: "📅" };
+  const typeEmoji: Record<string, string> = { estudo: "L", devocional: "D", presenca: "P" };
 
   if (loading) return <p className="text-center text-muted-foreground font-inter text-xs py-4 animate-pulse">Carregando log...</p>;
 
   if (logs.length === 0) return (
     <div className="text-center py-6 mt-3">
       <History className="w-6 h-6 text-muted-foreground mx-auto mb-2 opacity-40" />
-      <p className="font-inter text-xs text-muted-foreground">Nenhuma remoção registrada para {userName}.</p>
+      <p className="font-inter text-xs text-muted-foreground">Nenhuma remocao registrada para {userName}.</p>
     </div>
   );
 
   return (
     <div className="mt-3 bg-card rounded-2xl border border-border p-4 space-y-2">
-      <p className="font-montserrat font-bold text-foreground text-sm mb-2">📋 Log de remoções</p>
+      <p className="font-montserrat font-bold text-foreground text-sm mb-2">Log de remocoes</p>
       {logs.map((log: any) => (
         <div key={log.id} className="bg-muted/30 rounded-xl p-3 border border-border">
           <div className="flex items-start gap-2">
@@ -143,7 +176,7 @@ function AuditLogSection({ targetUserId, userName }: { targetUserId: string; use
                 {log.activity_title || log.activity_type}
               </p>
               <p className="font-inter text-[10px] text-muted-foreground">
-                Removido por <strong>{profiles[log.removed_by] ?? "Admin"}</strong> · -{log.points_removed}pts
+                Removido por <strong>{profiles[log.removed_by] ?? "Admin"}</strong> - {log.points_removed}pts
               </p>
               <p className="font-inter text-[10px] text-muted-foreground">
                 {new Date(log.removed_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
@@ -205,18 +238,18 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     setLoading(true);
 
     const [
-      { data: lessonResps },
-      { data: devProgress },
-      { data: attData },
-      { data: worshipData },
-      { data: lessonsData },
-      { data: coursesData },
-      { data: lessonContentData },
-      { data: devContentData },
-      { data: eventsData },
+      { data: lessonResps, error: lessonRespsError },
+      { data: devProgress, error: devProgressError },
+      { data: attData, error: attDataError },
+      { data: worshipData, error: worshipDataError },
+      { data: lessonsData, error: lessonsDataError },
+      { data: coursesData, error: coursesDataError },
+      { data: lessonContentData, error: lessonContentError },
+      { data: devContentData, error: devContentError },
+      { data: eventsData, error: eventsDataError },
     ] = await Promise.all([
-      supabase.from("lesson_responses").select("lesson_id, question_key, response, created_at").eq("user_id", p.user_id).order("created_at"),
-      supabase.from("devotional_progress").select("devotional_id, completed_at").eq("user_id", p.user_id).order("completed_at"),
+      supabase.from("lesson_responses").select("lesson_id, question_key, response, created_at, awarded_points").eq("user_id", p.user_id).order("created_at"),
+      supabase.from("devotional_progress").select("devotional_id, completed_at, awarded_points").eq("user_id", p.user_id).order("completed_at"),
       supabase.from("attendance").select("event_id, status, created_at").eq("user_id", p.user_id).order("created_at", { ascending: false }),
       supabase.from("worship_attendance").select("id, event_type, worship_date, status").eq("user_id", p.user_id).eq("status", "aprovado").order("worship_date"),
       supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
@@ -226,13 +259,41 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false }),
     ]);
 
+    const loadError = lessonRespsError
+      ?? devProgressError
+      ?? attDataError
+      ?? worshipDataError
+      ?? lessonsDataError
+      ?? coursesDataError
+      ?? lessonContentError
+      ?? devContentError
+      ?? eventsDataError;
+
+    if (loadError) {
+      setLessonCompletions([]);
+      setDevotionalCompletions([]);
+      setAttendanceRecords([]);
+      setWorshipRecords([]);
+      setLoading(false);
+      toast({
+        title: "Erro ao carregar participante",
+        description: loadError.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Build lesson completions
     const courseMap = new Map((coursesData ?? []).map(c => [c.id, c.title]));
     const lessonContentMap = new Map((lessonContentData ?? []).map(lc => [lc.lesson_id, lc.questions as string[]]));
-    const respsByLesson = new Map<string, Map<string, { response: string; created_at: string }>>();
+    const respsByLesson = new Map<string, Map<string, { response: string; created_at: string; awarded_points: number | null }>>();
     (lessonResps ?? []).forEach(r => {
       if (!respsByLesson.has(r.lesson_id)) respsByLesson.set(r.lesson_id, new Map());
-      respsByLesson.get(r.lesson_id)!.set(r.question_key, { response: r.response, created_at: r.created_at });
+      respsByLesson.get(r.lesson_id)!.set(r.question_key, {
+        response: r.response,
+        created_at: r.created_at,
+        awarded_points: typeof r.awarded_points === "number" ? r.awarded_points : null,
+      });
     });
 
     const lCompletions: RealLessonCompletion[] = [];
@@ -251,12 +312,14 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
         }
       });
       const firstResp = Array.from(respMap.values())[0];
+      const awardedPoints = Array.from(respMap.values()).find((value) => typeof value.awarded_points === "number")?.awarded_points ?? 20;
       lCompletions.push({
         lesson_id: lesson.id,
         lesson_title: lesson.title,
         course_title: courseMap.get(lesson.course_id) ?? "",
         responses: responses.filter(r => r.response),
         completed_at: firstResp?.created_at ?? null,
+        awarded_points: awardedPoints,
       });
     });
     setLessonCompletions(lCompletions);
@@ -279,6 +342,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
         questions: content.questions ?? [],
         completed_at: dp.completed_at,
         is_weekend: dow === 0 || dow === 6,
+        awarded_points: typeof dp.awarded_points === "number" ? dp.awarded_points : (dow === 0 || dow === 6 ? 2 : 5),
       });
     });
     setDevotionalCompletions(dCompletions);
@@ -305,10 +369,17 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
   }
 
   async function fetchExtendedProfile() {
-    const [{ data: profileData }, { data: turmasData }] = await Promise.all([
+    const [{ data: profileData, error: profileError }, { data: turmasData, error: turmasError }] = await Promise.all([
       supabase.from("profiles").select("address, father_name, mother_name, father_phone, mother_phone, turma_id").eq("user_id", p.user_id).maybeSingle(),
       supabase.from("turmas").select("id, name, area").eq("is_active", true).order("name"),
     ]);
+    if (profileError || turmasError) {
+      toast({
+        title: "Erro ao carregar dados complementares",
+        description: profileError?.message ?? turmasError?.message,
+        variant: "destructive",
+      });
+    }
     setExtProfile(profileData ?? {});
     setTurmas(turmasData ?? []);
   }
@@ -337,9 +408,10 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       mother_phone: editForm.mother_phone?.trim() ?? "",
       confirmation_year: editForm.confirmation_year ?? null,
       turma_id: editForm.turma_id ?? null,
+      enrollment_status: editForm.turma_id ? "approved" : "pending",
     } as any).eq("user_id", p.user_id);
     if (error) {
-      toast({ title: "Erro ao salvar", variant: "destructive" });
+      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Dados atualizados!" });
       setLocalOverrides(prev => ({
@@ -362,7 +434,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
   // ── Delete handlers ──
   async function logRemoval(activityType: string, activityId: string, activityTitle: string, pointsRemoved: number) {
     if (!user) return;
-    await supabase.from("activity_removal_log" as any).insert({
+    const { error } = await supabase.from("activity_removal_log" as any).insert({
       removed_by: user.id,
       target_user_id: p.user_id,
       activity_type: activityType,
@@ -370,16 +442,28 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       activity_title: activityTitle,
       points_removed: pointsRemoved,
     } as any);
+    if (error) throw error;
   }
 
   async function handleDeleteLesson(lessonId: string) {
     setDeletingType("estudo");
     setDeletingId(lessonId);
     const lesson = lessonCompletions.find(l => l.lesson_id === lessonId);
-    await supabase.from("lesson_responses").delete().eq("user_id", p.user_id).eq("lesson_id", lessonId);
-    await logRemoval("estudo", lessonId, lesson?.lesson_title ?? "", 20);
+    const pointsRemoved = lesson?.awarded_points ?? 20;
+    const { error } = await supabase.from("lesson_responses").delete().eq("user_id", p.user_id).eq("lesson_id", lessonId);
+    if (error) {
+      toast({ title: "Erro ao remover estudo", description: error.message, variant: "destructive" });
+      setDeletingType(null);
+      setDeletingId(null);
+      return;
+    }
+    try {
+      await logRemoval("estudo", lessonId, lesson?.lesson_title ?? "", pointsRemoved);
+    } catch (logError: any) {
+      toast({ title: "Estudo removido com alerta", description: `As respostas foram removidas, mas o log falhou: ${logError.message}`, variant: "destructive" });
+    }
     setLessonCompletions(prev => prev.filter(l => l.lesson_id !== lessonId));
-    toast({ title: "Estudo removido", description: "Respostas e pontuação foram removidas. Registro salvo no log." });
+    toast({ title: "Estudo removido", description: "Respostas e pontuacao foram removidas. Registro salvo no log." });
     setDeletingType(null);
     setDeletingId(null);
     setConfirmDeleteKey(null);
@@ -390,11 +474,21 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     setDeletingType("devocional");
     setDeletingId(devotionalId);
     const dev = devotionalCompletions.find(d => d.devotional_id === devotionalId);
-    const pts = dev?.is_weekend ? 2 : 5;
-    await supabase.from("devotional_progress").delete().eq("user_id", p.user_id).eq("devotional_id", devotionalId);
-    await logRemoval("devocional", devotionalId, dev?.title ?? "", pts);
+    const pts = dev?.awarded_points ?? (dev?.is_weekend ? 2 : 5);
+    const { error } = await supabase.from("devotional_progress").delete().eq("user_id", p.user_id).eq("devotional_id", devotionalId);
+    if (error) {
+      toast({ title: "Erro ao remover devocional", description: error.message, variant: "destructive" });
+      setDeletingType(null);
+      setDeletingId(null);
+      return;
+    }
+    try {
+      await logRemoval("devocional", devotionalId, dev?.title ?? "", pts);
+    } catch (logError: any) {
+      toast({ title: "Devocional removido com alerta", description: `A conclusao foi removida, mas o log falhou: ${logError.message}`, variant: "destructive" });
+    }
     setDevotionalCompletions(prev => prev.filter(d => d.devotional_id !== devotionalId));
-    toast({ title: "Devocional removido", description: "Conclusão e pontuação foram removidas. Registro salvo no log." });
+    toast({ title: "Devocional removido", description: "Conclusao e pontuacao foram removidas. Registro salvo no log." });
     setDeletingType(null);
     setDeletingId(null);
     setConfirmDeleteKey(null);
@@ -405,18 +499,28 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     setDeletingType("presenca");
     setDeletingId(eventId);
     const att = attendanceRecords.find(a => a.event_id === eventId);
-    await supabase.from("attendance").delete().eq("user_id", p.user_id).eq("event_id", eventId);
-    await logRemoval("presenca", eventId, att?.event_title ?? "", 10);
+    const { error } = await supabase.from("attendance").delete().eq("user_id", p.user_id).eq("event_id", eventId);
+    if (error) {
+      toast({ title: "Erro ao remover presenca", description: error.message, variant: "destructive" });
+      setDeletingType(null);
+      setDeletingId(null);
+      return;
+    }
+    try {
+      await logRemoval("presenca", eventId, att?.event_title ?? "", 10);
+    } catch (logError: any) {
+      toast({ title: "Presenca removida com alerta", description: `O registro foi removido, mas o log falhou: ${logError.message}`, variant: "destructive" });
+    }
     setAttendanceRecords(prev => prev.filter(a => a.event_id !== eventId));
-    toast({ title: "Presença removida", description: "Registro de presença foi removido. Registro salvo no log." });
+    toast({ title: "Presenca removida", description: "Registro de presenca foi removido. Registro salvo no log." });
     setDeletingType(null);
     setDeletingId(null);
     setConfirmDeleteKey(null);
   }
 
   // ── Points calculation (real data) ──
-  const lessonPts = lessonCompletions.length * 20;
-  const devPts = devotionalCompletions.reduce((s, d) => s + (d.is_weekend ? 2 : 5), 0);
+  const lessonPts = lessonCompletions.reduce((sum, lesson) => sum + lesson.awarded_points, 0);
+  const devPts = devotionalCompletions.reduce((sum, devotional) => sum + devotional.awarded_points, 0);
   const attendancePts = attendanceRecords.filter(a => a.status === "presente").length * 10;
   const worshipPts = worshipRecords.length * 5;
   const totalPts = lessonPts + devPts + attendancePts + worshipPts;
@@ -430,7 +534,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     return (
       <div>
         <button onClick={() => { setViewingLesson(null); }} className="flex items-center gap-2 text-muted-foreground font-inter text-sm mb-4 hover:text-foreground transition-colors">
-          <ChevronLeft className="w-4 h-4" /> Voltar às atividades
+          <ChevronLeft className="w-4 h-4" /> Voltar as atividades
         </button>
 
         <div className="bg-card rounded-2xl border border-border p-5 mb-4 shadow-sm">
@@ -441,16 +545,16 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
             <div className="flex-1">
               <h3 className="font-montserrat font-bold text-foreground text-sm">{viewingLesson.lesson_title}</h3>
               <p className="font-inter text-[10px] text-muted-foreground">
-                🎓 Estudo de lição · {viewingLesson.course_title} · +20 pts
+                Estudo de licao - {viewingLesson.course_title} - +20 pts
               </p>
             </div>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-green/10 text-brand-green">✅ Concluída</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-green/10 text-brand-green">Concluida</span>
           </div>
 
           {viewingLesson.completed_at && (
             <div className="bg-brand-green/5 rounded-xl p-3 border border-brand-green/20 mb-3">
               <p className="font-inter text-xs text-brand-green">
-                ✅ Respondido em {new Date(viewingLesson.completed_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                Respondido em {new Date(viewingLesson.completed_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
               </p>
             </div>
           )}
@@ -460,7 +564,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
               <p className="font-montserrat font-bold text-foreground text-xs">Respostas do aluno:</p>
               {viewingLesson.responses.map((r, i) => (
                 <div key={i} className="bg-muted/30 rounded-xl p-3 border border-border space-y-1.5">
-                  <p className="font-inter text-xs text-muted-foreground font-medium">📝 {r.question}</p>
+                  <p className="font-inter text-xs text-muted-foreground font-medium">{r.question}</p>
                   <p className="font-inter text-sm text-foreground leading-relaxed whitespace-pre-wrap">{r.response}</p>
                 </div>
               ))}
@@ -468,7 +572,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
           ) : (
             <div className="text-center py-6">
               <Eye className="w-8 h-8 text-muted-foreground mx-auto mb-2 opacity-40" />
-              <p className="font-inter text-sm text-muted-foreground">Nenhuma resposta encontrada para esta lição.</p>
+              <p className="font-inter text-sm text-muted-foreground">Nenhuma resposta encontrada para esta licao.</p>
             </div>
           )}
         </div>
@@ -477,13 +581,13 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
         <div className="bg-destructive/5 border border-destructive/20 rounded-2xl p-4">
           {confirmDeleteKey === `lesson-${viewingLesson.lesson_id}` ? (
             <div className="space-y-3">
-              <p className="font-inter text-sm text-destructive font-medium">⚠️ Tem certeza que deseja remover este estudo?</p>
-              <p className="font-inter text-xs text-muted-foreground">Isso irá remover as respostas e -20pts de <strong>{p.full_name}</strong>.</p>
+              <p className="font-inter text-sm text-destructive font-medium">Tem certeza que deseja remover este estudo?</p>
+              <p className="font-inter text-xs text-muted-foreground">Isso ira remover as respostas e -20pts de <strong>{p.full_name}</strong>.</p>
               <div className="flex gap-2">
                 <button onClick={() => handleDeleteLesson(viewingLesson.lesson_id)}
                   disabled={deletingId === viewingLesson.lesson_id}
                   className="flex-1 py-2.5 rounded-xl bg-destructive text-destructive-foreground font-inter text-sm font-medium disabled:opacity-50">
-                  {deletingId === viewingLesson.lesson_id ? "Removendo..." : "🗑️ Confirmar remoção"}
+                  {deletingId === viewingLesson.lesson_id ? "Removendo..." : "Confirmar remocao"}
                 </button>
                 <button onClick={() => setConfirmDeleteKey(null)} className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm">Cancelar</button>
               </div>
@@ -491,7 +595,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
           ) : (
             <button onClick={() => setConfirmDeleteKey(`lesson-${viewingLesson.lesson_id}`)}
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-destructive/30 text-destructive font-inter text-sm font-medium hover:bg-destructive/10 transition-colors">
-              <Trash2 className="w-4 h-4" /> Remover estudo e pontuação
+              <Trash2 className="w-4 h-4" /> Remover estudo e pontuacao
             </button>
           )}
         </div>
@@ -504,7 +608,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     return (
       <div>
         <button onClick={() => setViewingDevotional(null)} className="flex items-center gap-2 text-muted-foreground font-inter text-sm mb-4 hover:text-foreground transition-colors">
-          <ChevronLeft className="w-4 h-4" /> Voltar às atividades
+          <ChevronLeft className="w-4 h-4" /> Voltar as atividades
         </button>
 
         <div className="bg-card rounded-2xl border border-border p-5 mb-4 shadow-sm">
@@ -515,22 +619,22 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
             <div className="flex-1">
               <h3 className="font-montserrat font-bold text-foreground text-sm">{viewingDevotional.title}</h3>
               <p className="font-inter text-[10px] text-muted-foreground">
-                📖 Devocional · {viewingDevotional.lesson_title} · +{viewingDevotional.is_weekend ? 2 : 5} pts
+                Devocional - {viewingDevotional.lesson_title} - +{viewingDevotional.is_weekend ? 2 : 5} pts
                 {viewingDevotional.is_weekend && <span className="text-accent-foreground ml-1">(fim de semana)</span>}
               </p>
             </div>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-green/10 text-brand-green">✅ Concluído</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-green/10 text-brand-green">Concluido</span>
           </div>
 
           <div className="space-y-3">
             <div className="bg-muted/50 rounded-xl p-3">
-              <p className="font-inter text-xs text-muted-foreground mb-1">📖 Referência bíblica</p>
-              <p className="font-inter text-sm text-foreground">{viewingDevotional.bible_reference || "Não informada"}</p>
+              <p className="font-inter text-xs text-muted-foreground mb-1">Referencia biblica</p>
+              <p className="font-inter text-sm text-foreground">{viewingDevotional.bible_reference || "Nao informada"}</p>
             </div>
             <div className="bg-brand-green/5 rounded-xl p-3 border border-brand-green/20">
               <p className="font-inter text-xs text-brand-green">
-                ✅ Concluído em {new Date(viewingDevotional.completed_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                {viewingDevotional.is_weekend && " (recuperação de fim de semana)"}
+                Concluido em {new Date(viewingDevotional.completed_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                {viewingDevotional.is_weekend && " (recuperacao de fim de semana)"}
               </p>
             </div>
             {viewingDevotional.questions.length > 0 && (
@@ -540,7 +644,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
                   <div key={i} className="bg-muted/30 rounded-xl p-3 border border-border">
                     <p className="font-inter text-xs text-muted-foreground mb-1">Pergunta {i + 1}:</p>
                     <p className="font-inter text-sm text-foreground">{q}</p>
-                    <p className="font-inter text-[10px] text-muted-foreground mt-1 italic">⚠️ Respostas de devocionais não são salvas no banco</p>
+                    <p className="font-inter text-[10px] text-muted-foreground mt-1 italic">Respostas de devocionais nao sao salvas no banco</p>
                   </div>
                 ))}
               </div>
@@ -552,13 +656,13 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
         <div className="bg-destructive/5 border border-destructive/20 rounded-2xl p-4">
           {confirmDeleteKey === `dev-${viewingDevotional.devotional_id}` ? (
             <div className="space-y-3">
-              <p className="font-inter text-sm text-destructive font-medium">⚠️ Tem certeza que deseja remover este devocional?</p>
-              <p className="font-inter text-xs text-muted-foreground">Isso irá remover a conclusão e -{viewingDevotional.is_weekend ? 2 : 5}pts de <strong>{p.full_name}</strong>.</p>
+              <p className="font-inter text-sm text-destructive font-medium">Tem certeza que deseja remover este devocional?</p>
+              <p className="font-inter text-xs text-muted-foreground">Isso ira remover a conclusao e -{viewingDevotional.is_weekend ? 2 : 5}pts de <strong>{p.full_name}</strong>.</p>
               <div className="flex gap-2">
                 <button onClick={() => handleDeleteDevotional(viewingDevotional.devotional_id)}
                   disabled={deletingId === viewingDevotional.devotional_id}
                   className="flex-1 py-2.5 rounded-xl bg-destructive text-destructive-foreground font-inter text-sm font-medium disabled:opacity-50">
-                  {deletingId === viewingDevotional.devotional_id ? "Removendo..." : "🗑️ Confirmar remoção"}
+                  {deletingId === viewingDevotional.devotional_id ? "Removendo..." : "Confirmar remocao"}
                 </button>
                 <button onClick={() => setConfirmDeleteKey(null)} className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm">Cancelar</button>
               </div>
@@ -679,7 +783,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
   const typeLabel = (type: string) => {
     if (type === "devocional") return "devocional";
     if (type === "estudo") return "estudo";
-    if (type === "presenca") return "presença";
+    if (type === "presenca") return "presenca";
     if (type === "culto") return "culto";
     return type;
   };
@@ -692,12 +796,12 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     ((attendanceRecords.filter(a => a.status === "presente").length / Math.max(1, 1)) * 30)
   ));
   const status = totalRealActivities === 0
-    ? { label: "Não iniciou", color: "text-muted-foreground", bg: "bg-muted" }
+    ? { label: "Nao iniciou", color: "text-muted-foreground", bg: "bg-muted" }
     : totalRealActivities < 5
     ? { label: "Iniciando", color: "text-destructive", bg: "bg-destructive/10" }
     : totalRealActivities < 15
     ? { label: "Em andamento", color: "text-accent-foreground", bg: "bg-accent/30" }
-    : { label: "Avançado", color: "text-brand-green", bg: "bg-brand-green/10" };
+    : { label: "Avancado", color: "text-brand-green", bg: "bg-brand-green/10" };
 
   return (
     <div>
@@ -764,12 +868,12 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
               </div>
             </div>
             <div>
-              <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Endereço</label>
+              <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Endereco</label>
               <Input value={editForm.address ?? ""} onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))} className="text-sm" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Ano confirmação</label>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Ano confirmacao</label>
                 <Input type="number" min={1} max={3} value={editForm.confirmation_year ?? ""} onChange={e => setEditForm(f => ({ ...f, confirmation_year: e.target.value ? Number(e.target.value) : null }))} className="text-sm" placeholder="1 ou 2" />
               </div>
               <div>
@@ -793,11 +897,11 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Nome da mãe</label>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Nome da mae</label>
                 <Input value={editForm.mother_name ?? ""} onChange={e => setEditForm(f => ({ ...f, mother_name: e.target.value }))} className="text-sm" />
               </div>
               <div>
-                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Tel. mãe</label>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Tel. mae</label>
                 <Input value={editForm.mother_phone ?? ""} onChange={e => setEditForm(f => ({ ...f, mother_phone: e.target.value }))} className="text-sm" />
               </div>
             </div>
@@ -831,7 +935,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
               )}
               <div className="flex items-center gap-2 text-muted-foreground font-inter">
                 <GraduationCap className="w-4 h-4 flex-shrink-0" />
-                <span>{p.confirmation_year ? `${p.confirmation_year}º Ano` : <span className="text-destructive">Ano não definido</span>}</span>
+                <span>{p.confirmation_year ? `${p.confirmation_year}º Ano` : <span className="text-destructive">Ano nao definido</span>}</span>
               </div>
               <div className="flex items-center gap-2 text-accent font-montserrat font-bold">
                 <Star className="w-4 h-4 flex-shrink-0" />
@@ -858,7 +962,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
                 )}
                 {extProfile.mother_name && (
                   <div className="text-xs font-inter text-muted-foreground">
-                    <span className="font-semibold">Mãe:</span> {extProfile.mother_name}
+                    <span className="font-semibold">Mae:</span> {extProfile.mother_name}
                     {extProfile.mother_phone && (
                       <a href={`tel:${extProfile.mother_phone}`} className="ml-1.5 text-primary hover:underline">{extProfile.mother_phone}</a>
                     )}
@@ -875,7 +979,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
         {[
           { label: "Devocionais", icon: "📖", done: devotionalCompletions.length },
           { label: "Estudos", icon: "🎓", done: lessonCompletions.length },
-          { label: "Presenças", icon: "📅", done: attendanceRecords.filter(a => a.status === "presente").length },
+          { label: "Presencas", icon: "📅", done: attendanceRecords.filter(a => a.status === "presente").length },
           { label: "Cultos", icon: "⛪", done: worshipRecords.length },
         ].map(({ label, icon, done }) => (
           <div key={label} className="bg-card rounded-xl border border-border p-3">
@@ -888,23 +992,20 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
         ))}
       </div>
 
-      {/* Pontuação detalhada */}
+      {/* Pontuacao detalhada */}
       <div className="bg-card rounded-2xl border border-border p-4 mb-4">
         <p className="font-montserrat font-bold text-foreground text-sm mb-2">📊 Detalhamento de pontos</p>
         <div className="space-y-1.5">
           <div className="flex justify-between font-inter text-xs">
-            <span className="text-muted-foreground">Estudos ({lessonCompletions.length} × 20pts)</span>
+            <span className="text-muted-foreground">Estudos ({lessonCompletions.length} concluidos)</span>
             <span className="text-brand-green font-bold">+{lessonPts}</span>
           </div>
           <div className="flex justify-between font-inter text-xs">
-            <span className="text-muted-foreground">
-              Devocionais ({devotionalCompletions.filter(d => !d.is_weekend).length} × 5pts
-              {devotionalCompletions.filter(d => d.is_weekend).length > 0 && ` + ${devotionalCompletions.filter(d => d.is_weekend).length} × 2pts fim de sem.`})
-            </span>
+            <span className="text-muted-foreground">Devocionais ({devotionalCompletions.length} concluidos)</span>
             <span className="text-brand-green font-bold">+{devPts}</span>
           </div>
           <div className="flex justify-between font-inter text-xs">
-            <span className="text-muted-foreground">Presenças ({attendanceRecords.filter(a => a.status === "presente").length} × 10pts)</span>
+            <span className="text-muted-foreground">Presencas ({attendanceRecords.filter(a => a.status === "presente").length} confirmadas)</span>
             <span className="text-brand-green font-bold">+{attendancePts}</span>
           </div>
           <div className="flex justify-between font-inter text-xs">
@@ -1021,11 +1122,15 @@ type StatusFilter = "todos" | "iniciando" | "andamento" | "avancado";
 
 export default function ParticipantsTab({ participants, activities, communities }: Props) {
   const { profile } = useAuth();
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [communityFilter, setCommunityFilter] = useState("todas");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("todos");
   const [yearFilter, setYearFilter] = useState<string>("todos");
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
+  const [deletingParticipant, setDeletingParticipant] = useState<Participant | null>(null);
+  const [isDeletingParticipant, setIsDeletingParticipant] = useState(false);
+  const [deletedParticipantIds, setDeletedParticipantIds] = useState<Set<string>>(new Set());
 
   // Course unlock management
   const myArea = profile?.area ?? "";
@@ -1053,13 +1158,52 @@ export default function ParticipantsTab({ participants, activities, communities 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setUnlockLoading(null); return; }
     if (unlockedCourseIds.has(courseId)) {
-      await supabase.from("course_unlocks").delete().eq("course_id", courseId).eq("area", myArea);
-      setUnlockedCourseIds(prev => { const n = new Set(prev); n.delete(courseId); return n; });
+      const { error } = await supabase.from("course_unlocks").delete().eq("course_id", courseId).eq("area", myArea);
+      if (error) {
+        toast({ title: "Erro ao bloquear curso", description: error.message, variant: "destructive" });
+      } else {
+        setUnlockedCourseIds(prev => { const n = new Set(prev); n.delete(courseId); return n; });
+      }
     } else {
-      await supabase.from("course_unlocks").insert({ course_id: courseId, area: myArea, unlocked_by: user.id } as any);
-      setUnlockedCourseIds(prev => new Set(prev).add(courseId));
+      const { error } = await supabase.from("course_unlocks").insert({ course_id: courseId, area: myArea, unlocked_by: user.id } as any);
+      if (error) {
+        toast({ title: "Erro ao liberar curso", description: error.message, variant: "destructive" });
+      } else {
+        setUnlockedCourseIds(prev => new Set(prev).add(courseId));
+      }
     }
     setUnlockLoading(null);
+  }
+
+  async function deleteParticipant() {
+    if (!deletingParticipant) return;
+    setIsDeletingParticipant(true);
+    try {
+      const res = await supabase.rpc("delete_user_from_discipleship" as any, {
+        _target_user_id: deletingParticipant.user_id,
+      });
+
+      if (res.error || res.data?.error) {
+        toast({
+          title: "Erro ao deletar usuario",
+          description: res.data?.error || res.error?.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setDeletedParticipantIds(prev => new Set(prev).add(deletingParticipant.user_id));
+      if (selectedParticipant?.user_id === deletingParticipant.user_id) setSelectedParticipant(null);
+      toast({
+        title: "Usuario deletado",
+        description: `${deletingParticipant.full_name} foi removido do banco de dados.`,
+      });
+      setDeletingParticipant(null);
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    } finally {
+      setIsDeletingParticipant(false);
+    }
   }
 
   // Fetch objective status reasons from DB
@@ -1109,8 +1253,13 @@ export default function ParticipantsTab({ participants, activities, communities 
         const statuses = userAtt[p.user_id] ?? [];
         let consecutive = 0;
         for (const s of statuses) {
-          if (s !== "presente") consecutive++;
-          else break;
+          const normalizedStatus = normalizeAttendanceStatus(s);
+          if (normalizedStatus === "presente") break;
+          if (normalizedStatus === "faltou") {
+            consecutive++;
+            continue;
+          }
+          continue;
         }
         if (consecutive >= 3) r.push({ icon: "📅", label: `${consecutive} faltas seguidas`, severity: "high" });
         else if (consecutive === 2) r.push({ icon: "📅", label: "2 faltas seguidas", severity: "medium" });
@@ -1121,10 +1270,10 @@ export default function ParticipantsTab({ participants, activities, communities 
           r.push({ icon: "📖", label: "Nunca fez devocional", severity: "high" });
         } else if (last < fourteenDaysAgo) {
           const days = Math.floor((now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
-          r.push({ icon: "📖", label: `Sem devocional há ${days} dias`, severity: "high" });
+          r.push({ icon: "📖", label: `Sem devocional ha ${days} dias`, severity: "high" });
         } else if (last < tenDaysAgo) {
           const days = Math.floor((now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
-          r.push({ icon: "📖", label: `Sem devocional há ${days} dias`, severity: "medium" });
+          r.push({ icon: "📖", label: `Sem devocional ha ${days} dias`, severity: "medium" });
         }
 
         // Needs pastor
@@ -1135,7 +1284,7 @@ export default function ParticipantsTab({ participants, activities, communities 
         // Health status
         const plan = planMap[p.user_id];
         if (plan?.health_status === "critico") {
-          r.push({ icon: "🚨", label: "Status crítico", severity: "high" });
+          r.push({ icon: "🚨", label: "Status critico", severity: "high" });
         } else if (plan?.is_priority) {
           r.push({ icon: "⚠️", label: "Prioridade pastoral", severity: "medium" });
         }
@@ -1157,7 +1306,9 @@ export default function ParticipantsTab({ participants, activities, communities 
     return <ParticipantSheet participant={selectedParticipant} activities={activities} onBack={() => setSelectedParticipant(null)} />;
   }
 
-  const filtered = participants.filter((p) => {
+  const visibleParticipants = participants.filter((p) => !deletedParticipantIds.has(p.user_id));
+
+  const filtered = visibleParticipants.filter((p) => {
     if (search && !p.full_name.toLowerCase().includes(search.toLowerCase()) && !p.community.toLowerCase().includes(search.toLowerCase())) return false;
     if (communityFilter !== "todas" && p.community !== communityFilter) return false;
     if (yearFilter !== "todos" && p.confirmation_year !== Number(yearFilter)) return false;
@@ -1166,10 +1317,65 @@ export default function ParticipantsTab({ participants, activities, communities 
     if (statusFilter === "andamento" && (pct < 34 || pct >= 70)) return false;
     if (statusFilter === "avancado" && pct < 70) return false;
     return true;
-  });
+  }).sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? "", "pt-BR", { sensitivity: "base" }));
+
+  // ── Group summary metrics ──
+  const visibleParticipantIds = new Set(visibleParticipants.map(p => p.user_id));
+  const totalDevotionals = visibleParticipants.reduce((s, p) => s + (p.completed_devotional_count ?? 0), 0);
+  const totalLessons = visibleParticipants.reduce((s, p) => s + (p.completed_lesson_count ?? 0), 0);
+  const totalPresences = visibleParticipants.reduce((s, p) => s + (p.completed_event_count ?? 0), 0);
+  const alertCount = Object.keys(statusReasons).filter(id => visibleParticipantIds.has(id) && statusReasons[id]?.some(r => r.severity === "high")).length;
+  const attentionCount = Object.keys(statusReasons).filter(id => visibleParticipantIds.has(id) && !statusReasons[id]?.some(r => r.severity === "high") && statusReasons[id]?.length > 0).length;
+  const healthyCount = visibleParticipants.length - alertCount - attentionCount;
 
   return (
     <div className="space-y-4">
+
+      {/* Group health summary */}
+      <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-primary" />
+            <p className="font-montserrat font-bold text-foreground text-sm">Resumo da Turma</p>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="font-montserrat font-black text-foreground text-2xl">{visibleParticipants.length}</span>
+            <span className="font-inter text-xs text-muted-foreground">discípulos</span>
+          </div>
+        </div>
+
+        {/* Health distribution */}
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          <div className="bg-brand-green/8 border border-brand-green/20 rounded-xl p-2.5 text-center">
+            <p className="font-montserrat font-black text-brand-green text-xl leading-none">{healthyCount}</p>
+            <p className="text-[10px] font-inter text-muted-foreground mt-0.5">saudáveis</p>
+          </div>
+          <div className="bg-amber-500/8 border border-amber-500/20 rounded-xl p-2.5 text-center">
+            <p className="font-montserrat font-black text-amber-600 dark:text-amber-400 text-xl leading-none">{attentionCount}</p>
+            <p className="text-[10px] font-inter text-muted-foreground mt-0.5">atenção</p>
+          </div>
+          <div className="bg-destructive/8 border border-destructive/20 rounded-xl p-2.5 text-center">
+            <p className="font-montserrat font-black text-destructive text-xl leading-none">{alertCount}</p>
+            <p className="text-[10px] font-inter text-muted-foreground mt-0.5">alertas</p>
+          </div>
+        </div>
+
+        {/* Activity totals */}
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { icon: "📖", label: "Devocionais", value: totalDevotionals },
+            { icon: "🎓", label: "Estudos", value: totalLessons },
+            { icon: "📅", label: "Presenças", value: totalPresences },
+          ].map(({ icon, label, value }) => (
+            <div key={label} className="bg-muted/40 rounded-xl p-2 text-center">
+              <p className="text-sm">{icon}</p>
+              <p className="font-montserrat font-black text-foreground text-base leading-none">{value}</p>
+              <p className="text-[10px] font-inter text-muted-foreground mt-0.5">{label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Course Unlock Management */}
       {courses.length > 0 && (
         <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
@@ -1280,17 +1486,32 @@ export default function ParticipantsTab({ participants, activities, communities 
       ) : (
         <div className="space-y-3">
           {filtered.map((p) => {
-            const pct = activities.length > 0 ? Math.round((p.completed_count / activities.length) * 100) : 0;
             const status = getStatusInfo(p.completed_count, activities.length);
-            const totalPts = activities.filter(a => p.completed_activity_ids.includes(a.id)).reduce((s, a) => s + a.points, 0);
+            const totalPts = p.faith_points ?? activities.filter(a => p.completed_activity_ids.includes(a.id)).reduce((s, a) => s + a.points, 0);
             const age = calcAge(p.birth_date);
+            const reasons = statusReasons[p.user_id] ?? [];
+            const hasHighAlert = reasons.some(r => r.severity === "high");
+            const hasAlert = reasons.length > 0;
+            const borderAccent = hasHighAlert
+              ? "border-l-4 border-l-destructive"
+              : hasAlert
+              ? "border-l-4 border-l-amber-400"
+              : "";
             return (
-              <button
+              <div
                 key={p.user_id}
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedParticipant(p)}
-                className="w-full text-left bg-card rounded-2xl border border-border shadow-sm overflow-hidden hover:border-primary/30 transition-colors"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedParticipant(p);
+                  }
+                }}
+                className={`w-full text-left bg-card rounded-2xl border border-border shadow-sm overflow-hidden hover:border-primary/30 transition-colors ${borderAccent}`}
               >
-                <div className="p-4">
+                <div className="p-4 pb-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       {p.avatar_url ? (
@@ -1313,20 +1534,35 @@ export default function ParticipantsTab({ participants, activities, communities 
                         </div>
                       </div>
                     </div>
-                    <span className={`px-2.5 py-1 rounded-lg text-xs font-inter font-medium flex-shrink-0 ${status.bg} ${status.color}`}>
-                      {status.label}
-                    </span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`px-2.5 py-1 rounded-lg text-xs font-inter font-medium ${status.bg} ${status.color}`}>
+                        {status.label}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setDeletingParticipant(p);
+                        }}
+                        className="w-8 h-8 rounded-lg border border-destructive/20 bg-destructive/10 text-destructive hover:bg-destructive/20 flex items-center justify-center transition-colors"
+                        title={`Deletar ${p.full_name}`}
+                        aria-label={`Deletar ${p.full_name}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                  {/* Status reasons */}
-                  {statusReasons[p.user_id] && statusReasons[p.user_id].length > 0 && (
+
+                  {/* Alert reasons */}
+                  {reasons.length > 0 && (
                     <div className="mt-2.5 flex flex-wrap gap-1.5">
-                      {statusReasons[p.user_id].map((reason, idx) => (
+                      {reasons.map((reason, idx) => (
                         <span
                           key={idx}
                           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-inter font-medium ${
                             reason.severity === "high"
                               ? "bg-destructive/10 text-destructive"
-                              : "bg-accent/20 text-accent-foreground"
+                              : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
                           }`}
                         >
                           {reason.icon} {reason.label}
@@ -1335,11 +1571,41 @@ export default function ParticipantsTab({ participants, activities, communities 
                     </div>
                   )}
                 </div>
-              </button>
+
+                {/* Quick stats bar */}
+                <div className="px-4 py-2 border-t border-border/60 bg-muted/20 flex items-center gap-4">
+                  <span className="text-[11px] font-inter text-muted-foreground">📖 <strong className="text-foreground">{p.completed_devotional_count ?? 0}</strong></span>
+                  <span className="text-[11px] font-inter text-muted-foreground">🎓 <strong className="text-foreground">{p.completed_lesson_count ?? 0}</strong></span>
+                  <span className="text-[11px] font-inter text-muted-foreground">📅 <strong className="text-foreground">{p.completed_event_count ?? 0}</strong></span>
+                  <span className="ml-auto font-montserrat font-black text-primary text-xs">⭐ {totalPts} pts</span>
+                </div>
+              </div>
             );
           })}
         </div>
       )}
+
+      <AlertDialog open={!!deletingParticipant} onOpenChange={(open) => { if (!open) setDeletingParticipant(null); }}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-montserrat font-bold">Deletar usuario?</AlertDialogTitle>
+            <AlertDialogDescription className="font-inter text-sm">
+              Tem certeza que deseja deletar <span className="font-bold text-foreground">{deletingParticipant?.full_name}</span>?
+              Esta acao e irreversivel e removera o perfil, permissoes e login deste usuario do banco de dados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl font-montserrat font-bold" disabled={isDeletingParticipant}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={deleteParticipant}
+              disabled={isDeletingParticipant}
+              className="rounded-xl font-montserrat font-bold bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingParticipant ? "Deletando..." : "Sim, deletar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

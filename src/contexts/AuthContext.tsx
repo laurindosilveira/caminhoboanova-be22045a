@@ -18,6 +18,7 @@ interface Profile {
   address?: string;
   avatar_url?: string;
   confirmation_year?: number | null;
+  enrollment_status?: "pending" | "approved" | "rejected";
 }
 
 interface AuthContextType {
@@ -25,6 +26,7 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   role: "user" | "admin" | "lider" | null;
+  adminArea: string | null;
   isSuper: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
@@ -36,6 +38,7 @@ const AuthContext = createContext<AuthContextType>({
   session: null,
   profile: null,
   role: null,
+  adminArea: null,
   isSuper: false,
   loading: true,
   signOut: async () => {},
@@ -47,18 +50,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [role, setRole] = useState<"user" | "admin" | "lider" | null>(null);
+  const [adminArea, setAdminArea] = useState<string | null>(null);
   const [isSuper, setIsSuper] = useState(false);
   const [loading, setLoading] = useState(true);
 
   async function fetchProfileAndRole(userId: string) {
-    const [profileRes, isAdminRes, isLiderRes, isSuperRes] = await Promise.all([
+    const [profileRes, isAdminRes, isLiderRes, isSuperRes, roleRowsRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
       supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
       supabase.rpc("has_role", { _user_id: userId, _role: "lider" }),
       supabase.rpc("is_super_admin", { _user_id: userId }),
+      supabase.from("user_roles").select("role, admin_area").eq("user_id", userId).in("role", ["admin", "lider"]),
     ]);
     setProfile(profileRes.data ?? null);
     setIsSuper(isSuperRes.data === true);
+    const roleRows = roleRowsRes.data ?? [];
+    const selectedRoleRow = roleRows.find((row) => row.role === "admin") ?? roleRows[0] ?? null;
+    setAdminArea(selectedRoleRow?.admin_area ?? null);
     if (!isAdminRes.error && !isLiderRes.error) {
       if (isAdminRes.data === true) setRole("admin");
       else if (isLiderRes.data === true) setRole("lider");
@@ -67,30 +75,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    // Set up auth state listener BEFORE getSession
+    // Track whether the initial profile fetch has been started to avoid
+    // running it twice (once from INITIAL_SESSION, once from getSession).
+    let initialFetchDone = false;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, currentSession) => {
+      (event, currentSession) => {
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
-        if (currentSession?.user) {
-          // Use setTimeout to avoid deadlock with Supabase auth callbacks
+
+        if (!currentSession?.user) {
+          // Signed out
+          setProfile(null);
+          setRole(null);
+          setAdminArea(null);
+          setLoading(false);
+          return;
+        }
+
+        // TOKEN_REFRESHED only updates the session token — profile/role data
+        // hasn't changed, so skip the 5-query re-fetch to avoid UI re-renders.
+        if (event === "TOKEN_REFRESHED") {
+          return;
+        }
+
+        // SIGNED_IN / INITIAL_SESSION / USER_UPDATED → fetch profile
+        // Use setTimeout to avoid Supabase auth callback deadlock.
+        if (!initialFetchDone || event === "SIGNED_IN") {
+          initialFetchDone = true;
           setTimeout(() => {
             fetchProfileAndRole(currentSession.user.id).finally(() => setLoading(false));
           }, 0);
-        } else {
-          setProfile(null);
-          setRole(null);
-          setLoading(false);
         }
       }
     );
 
+    // getSession covers the case where INITIAL_SESSION never fires (some browsers).
+    // The initialFetchDone flag prevents a double fetch when both paths run.
     supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      if (currentSession?.user) {
+      if (currentSession?.user && !initialFetchDone) {
+        initialFetchDone = true;
         setSession(currentSession);
         setUser(currentSession.user);
         fetchProfileAndRole(currentSession.user.id).finally(() => setLoading(false));
-      } else {
+      } else if (!currentSession?.user) {
         setLoading(false);
       }
     });
@@ -102,6 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     setProfile(null);
     setRole(null);
+    setAdminArea(null);
     setIsSuper(false);
   }
 
@@ -113,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, role, isSuper, loading, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, session, profile, role, adminArea, isSuper, loading, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
+import { AREAS } from "@/config/areas";
+import { EVENT_TYPES as EVENT_TYPES_LIST, getEventEmoji, getEventColor, getEventLabel } from "@/config/eventTypes";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { CalendarDays, MapPin, Users, BookOpen, ChevronDown, ChevronUp, Plus, Pencil, Trash2, Save, X, Clock, Timer, ExternalLink, CalendarIcon, Check, LayoutList, CalendarRange, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { useCustomEventTypes } from "@/hooks/useCustomEventTypes";
+import { CalendarDays, MapPin, Users, BookOpen, ChevronDown, ChevronUp, Plus, Pencil, Trash2, Save, X, Clock, Timer, ExternalLink, CalendarIcon, Check, LayoutList, CalendarRange, Download, ChevronLeft, ChevronRight, Sparkles, CheckCircle2, XCircle, ClipboardList } from "lucide-react";
 import { differenceInDays, differenceInHours, startOfWeek, endOfWeek, addWeeks, subWeeks, isSameDay, isWithinInterval, format } from "date-fns";
 import WorshipConfirmation from "./WorshipConfirmation";
 import { ptBR } from "date-fns/locale";
@@ -33,17 +36,13 @@ type LessonContentInfo = { lesson_id: string; summary: string; bible_texts: stri
 type AttendanceRecord = { event_id: string; status: string };
 type LessonInfo = { id: string; title: string; order_num: number; course_title: string; course_order: number };
 
-const EVENT_TYPES: Record<string, { label: string; color: string; emoji: string }> = {
-  encontro:      { label: "Encontro",          color: "bg-primary/10 text-primary",              emoji: "📅" },
-  culto:         { label: "Culto",             color: "bg-brand-green/10 text-brand-green",      emoji: "⛪" },
-  jemiac:        { label: "JEMIAC",            color: "bg-secondary/10 text-secondary",          emoji: "✝️" },
-  retiro:        { label: "Retiro",            color: "bg-secondary/10 text-secondary",          emoji: "🏕️" },
-  confirmatorio: { label: "Ens. Confirmatório", color: "bg-primary/10 text-primary",             emoji: "📖" },
-  evento:        { label: "Evento",            color: "bg-accent/20 text-accent-foreground",     emoji: "🎉" },
-  conversa:      { label: "Conversa Pastoral", color: "bg-secondary/10 text-secondary",          emoji: "💬" },
+// Static fallback map for rendering (includes pastoral type)
+const STATIC_EVENT_TYPES: Record<string, { label: string; color: string; emoji: string }> = {
+  ...Object.fromEntries(EVENT_TYPES_LIST.map(t => [t.value, { label: t.label, color: t.color, emoji: t.emoji }])),
+  conversa: { label: "Conversa Pastoral", color: "bg-secondary/10 text-secondary", emoji: "💬" },
 };
 
-const EVENT_TYPE_OPTIONS = Object.entries(EVENT_TYPES).map(([key, val]) => ({ value: key, label: `${val.emoji} ${val.label}` }));
+const EMOJI_OPTIONS = ["📅","⛪","✝️","🏕️","📖","🎉","💬","🙏","🎶","🌿","🤝","⭐","🔔","🎯","🏠","🌟"];
 
 interface EventFormData {
   title: string;
@@ -159,13 +158,17 @@ export default function UserAgendaTab() {
   const { effectiveArea } = useAreaSwitch();
   const canManage = role === "admin" || role === "lider";
   const currentArea = effectiveArea || profile?.area || "";
+
+  // Custom event types (merged static + DB)
+  const { allTypes, customTypes, getLabel, getEmoji, getColor, refetch: refetchTypes } = useCustomEventTypes(currentArea);
+
   const [events, setEvents] = useState<Event[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [lessonInfoMap, setLessonInfoMap] = useState<Map<string, LessonInfo>>(new Map());
   const [lessonContentMap, setLessonContentMap] = useState<Map<string, LessonContentInfo>>(new Map());
   const [lessonOptions, setLessonOptions] = useState<LessonOption[]>([]);
   const [loading, setLoading] = useState(true);
-   const [activeTab, setActiveTab] = useState<string>("agenda");
+  const [activeTab, setActiveTab] = useState<string>("agenda");
   const [viewMode, setViewMode] = useState<"list" | "calendar" | "week">("list");
   const [weekOffset, setWeekOffset] = useState(0);
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
@@ -177,6 +180,21 @@ export default function UserAgendaTab() {
   const [saving, setSaving] = useState(false);
   const [showCascadeDialog, setShowCascadeDialog] = useState(false);
   const [cascadePending, setCascadePending] = useState<{ eventId: string; oldLessonId: string | null; newLessonId: string } | null>(null);
+
+  // Create custom type modal state
+  const [showCreateTypeModal, setShowCreateTypeModal] = useState(false);
+  const [newTypeForm, setNewTypeForm] = useState({ label: "", emoji: "📅", gives_points: false, points: 10 });
+  const [savingType, setSavingType] = useState(false);
+
+  // Pending attendance approval (leaders only)
+  type PendingAttendance = {
+    id: string; event_id: string; user_id: string; status: string;
+    justification: string | null; created_at: string;
+    full_name?: string; community?: string; event_title?: string; event_date?: string;
+  };
+  const [showPendingModal, setShowPendingModal] = useState(false);
+  const [pendingAttendance, setPendingAttendance] = useState<PendingAttendance[]>([]);
+  const [savingApproval, setSavingApproval] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetch() {
@@ -197,10 +215,11 @@ export default function UserAgendaTab() {
       const filtered = all.filter(e => {
         // Personal events: only show to target user
         if ((e as any).target_user_id && (e as any).target_user_id !== user?.id) return false;
-        // If area is set, only show to that area
+        // Filter all events by area
         if (e.area && e.area !== currentArea) return false;
-        // If community is set: admins/leaders managing a different area bypass this filter
-        if (e.community && !isManager && e.community !== profile?.community) return false;
+        // Community filter: skip for confirmatorio (area-wide) and for managers
+        const isConfirmatorio = e.type === "confirmatorio";
+        if (e.community && !isManager && !isConfirmatorio && e.community !== profile?.community) return false;
         return true;
       });
       setEvents(filtered);
@@ -229,6 +248,11 @@ export default function UserAgendaTab() {
     if (profile) fetch();
   }, [profile, currentArea]);
 
+  // Fetch pending attendance whenever events list changes (leaders only)
+  useEffect(() => {
+    if (canManage && events.length > 0) fetchPendingAttendance();
+  }, [events, canManage]);
+
   // Realtime
   useEffect(() => {
     const channel = supabase
@@ -245,7 +269,8 @@ export default function UserAgendaTab() {
             const filtered = all.filter(e => {
               if ((e as any).target_user_id && (e as any).target_user_id !== currentUser?.id) return false;
               if (e.area && e.area !== currentArea) return false;
-              if (e.community && !isManager && e.community !== profile?.community) return false;
+              const isConfirmatorio = e.type === "confirmatorio";
+              if (e.community && !isManager && !isConfirmatorio && e.community !== profile?.community) return false;
               return true;
             });
             setEvents(filtered);
@@ -292,10 +317,24 @@ export default function UserAgendaTab() {
     const payload: any = { status };
     if (justification) payload.justification = justification;
     const existing = attendanceRecords.find(a => a.event_id === eventId);
+    let error = null;
     if (existing) {
-      await supabase.from("attendance").update(payload).eq("event_id", eventId).eq("user_id", user.id);
+      const result = await supabase
+        .from("attendance")
+        .update(payload)
+        .eq("event_id", eventId)
+        .eq("user_id", user.id);
+      error = result.error;
     } else {
-      await supabase.from("attendance").insert({ event_id: eventId, user_id: user.id, ...payload });
+      const result = await supabase
+        .from("attendance")
+        .insert({ event_id: eventId, user_id: user.id, ...payload });
+      error = result.error;
+    }
+    if (error) {
+      toast.error("Não foi possível enviar sua solicitação.");
+      console.error(error);
+      return;
     }
     setAttendanceRecords(prev => {
       const filtered = prev.filter(a => a.event_id !== eventId);
@@ -335,11 +374,16 @@ export default function UserAgendaTab() {
       return;
     }
     setSaving(true);
-    const eventDateWithTz = form.event_date ? form.event_date + ":00-03:00" : form.event_date;
+    const normalizedEventDate = form.event_date ? new Date(form.event_date) : null;
+    if (!normalizedEventDate || Number.isNaN(normalizedEventDate.getTime())) {
+      toast.error("Data do evento inválida.");
+      setSaving(false);
+      return;
+    }
     const payload = {
       title: form.title.trim(),
       description: form.description.trim() || null,
-      event_date: eventDateWithTz,
+      event_date: normalizedEventDate.toISOString(),
       location: form.location.trim() || null,
       area: form.area || null,
       community: form.community || null,
@@ -354,11 +398,20 @@ export default function UserAgendaTab() {
       // Check cascade for lesson change
       if (oldLessonId !== newLessonId && newLessonId) {
         const subsequentWithLessons = events.filter(
-          e => e.id !== editingEvent.id && e.event_date > editingEvent.event_date && e.linked_lesson_id
+          e => e.id !== editingEvent.id && new Date(e.event_date).getTime() > new Date(editingEvent.event_date).getTime() && e.linked_lesson_id
         );
         if (subsequentWithLessons.length > 0) {
           // Save other fields first (without lesson change), then handle cascade
-          await supabase.from("events").update({ ...payload, linked_lesson_id: oldLessonId }).eq("id", editingEvent.id);
+          const { error: prepareCascadeError } = await supabase
+            .from("events")
+            .update({ ...payload, linked_lesson_id: oldLessonId })
+            .eq("id", editingEvent.id);
+          if (prepareCascadeError) {
+            toast.error("Erro ao preparar atualizacao em cascata");
+            console.error(prepareCascadeError);
+            setSaving(false);
+            return;
+          }
           setCascadePending({ eventId: editingEvent.id, oldLessonId, newLessonId });
           setShowCascadeDialog(true);
           setShowForm(false);
@@ -395,12 +448,22 @@ export default function UserAgendaTab() {
     const event = events.find(e => e.id === eventId);
     if (!event) return;
 
-    await supabase.from("events").update({ linked_lesson_id: newLessonId }).eq("id", eventId);
+    const { error: updateError } = await supabase
+      .from("events")
+      .update({ linked_lesson_id: newLessonId })
+      .eq("id", eventId);
+    if (updateError) {
+      toast.error("Erro ao atualizar a licao do evento");
+      console.error(updateError);
+      setShowCascadeDialog(false);
+      setCascadePending(null);
+      return;
+    }
 
     if (doCascade) {
       const subsequent = events
-        .filter(e => e.id !== eventId && e.event_date > event.event_date && e.linked_lesson_id)
-        .sort((a, b) => a.event_date.localeCompare(b.event_date));
+        .filter(e => e.id !== eventId && new Date(e.event_date).getTime() > new Date(event.event_date).getTime() && e.linked_lesson_id)
+        .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
 
       if (subsequent.length > 0) {
         const newLesson = lessonOptions.find(l => l.id === newLessonId);
@@ -417,9 +480,16 @@ export default function UserAgendaTab() {
             for (let i = 0; i < subsequent.length; i++) {
               const nextLessonIdx = newIdx + 1 + i;
               if (nextLessonIdx < allLessonsOrdered.length) {
-                await supabase.from("events")
+                const { error: cascadeError } = await supabase.from("events")
                   .update({ linked_lesson_id: allLessonsOrdered[nextLessonIdx].id })
                   .eq("id", subsequent[i].id);
+                if (cascadeError) {
+                  toast.error("Erro ao aplicar cascata de licoes");
+                  console.error(cascadeError);
+                  setShowCascadeDialog(false);
+                  setCascadePending(null);
+                  return;
+                }
                 updated++;
               } else {
                 overflow++;
@@ -450,6 +520,86 @@ export default function UserAgendaTab() {
       toast.success("Evento excluído!");
       setEvents(prev => prev.filter(e => e.id !== eventId));
     }
+  }
+
+  async function fetchPendingAttendance() {
+    if (!canManage) return;
+    // Filter by events in this area
+    const areaEventIds = events.filter(e => !e.area || e.area === currentArea).map(e => e.id);
+    if (areaEventIds.length === 0) { setPendingAttendance([]); return; }
+    const { data, error } = await supabase
+      .from("attendance")
+      .select("id, event_id, user_id, status, justification, created_at")
+      .in("event_id", areaEventIds)
+      .in("status", ["pendente_presente", "pendente_falta"])
+      .order("created_at", { ascending: false });
+    if (error) {
+      toast.error("Não foi possível carregar as solicitações pendentes.");
+      console.error(error);
+      return;
+    }
+    if (!data || data.length === 0) { setPendingAttendance([]); return; }
+    const userIds = [...new Set(data.map(a => a.user_id))];
+    const eventIds = [...new Set(data.map(a => a.event_id))];
+    const [{ data: profilesData }, { data: eventsData }] = await Promise.all([
+      supabase.from("profiles").select("user_id, full_name, community").in("user_id", userIds),
+      supabase.from("events").select("id, title, event_date").in("id", eventIds),
+    ]);
+    const profileMap = new Map((profilesData ?? []).map((p: any) => [p.user_id, p]));
+    const evMap = new Map((eventsData ?? []).map((e: any) => [e.id, e]));
+    setPendingAttendance(data.map(a => ({
+      ...a,
+      full_name: profileMap.get(a.user_id)?.full_name ?? "Desconhecido",
+      community: profileMap.get(a.user_id)?.community ?? "",
+      event_title: evMap.get(a.event_id)?.title ?? "Evento",
+      event_date: evMap.get(a.event_id)?.event_date ?? a.created_at,
+    })));
+  }
+
+  async function handleAttendanceApproval(id: string, action: "presente" | "justificou" | "rejeitado") {
+    setSavingApproval(id);
+    let error = null;
+    if (action === "rejeitado") {
+      const result = await supabase.from("attendance").delete().eq("id", id);
+      error = result.error;
+    } else {
+      const result = await supabase.from("attendance").update({ status: action }).eq("id", id);
+      error = result.error;
+    }
+    if (error) {
+      toast.error("Não foi possível atualizar a solicitação.");
+      console.error(error);
+      setSavingApproval(null);
+      return;
+    }
+    setPendingAttendance(prev => prev.filter(a => a.id !== id));
+    toast.success(action === "presente" ? "Presença aprovada ✅" : action === "justificou" ? "Falta justificada ✓" : "Solicitação rejeitada");
+    setSavingApproval(null);
+  }
+
+  async function handleCreateType() {
+    if (!newTypeForm.label.trim()) { toast.error("Digite um nome para o tipo"); return; }
+    setSavingType(true);
+    const slug = newTypeForm.label.trim().toLowerCase().replace(/[^a-z0-9]/g, "_") + "_" + Date.now();
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from("custom_event_types").insert({
+      value: slug,
+      label: newTypeForm.label.trim(),
+      emoji: newTypeForm.emoji,
+      gives_points: newTypeForm.gives_points,
+      points: newTypeForm.gives_points ? newTypeForm.points : 0,
+      area: currentArea || null,
+      created_by: user?.id ?? null,
+    } as any);
+    if (error) { toast.error("Erro ao criar tipo"); console.error(error); }
+    else {
+      toast.success(`Tipo "${newTypeForm.label}" criado!`);
+      await refetchTypes();
+      setForm(f => ({ ...f, type: slug }));
+      setShowCreateTypeModal(false);
+      setNewTypeForm({ label: "", emoji: "📅", gives_points: false, points: 10 });
+    }
+    setSavingType(false);
   }
 
   const pastEvents = filteredEvents
@@ -485,6 +635,18 @@ export default function UserAgendaTab() {
               <CalendarRange className="w-3.5 h-3.5" />
             </button>
           </div>
+          {canManage && pendingAttendance.length > 0 && (
+            <button
+              onClick={() => { setShowPendingModal(true); }}
+              className="relative h-8 px-2.5 rounded-xl text-xs gap-1.5 border border-accent/40 text-accent-foreground bg-accent/10 hover:bg-accent/20 transition-colors flex items-center gap-1.5"
+            >
+              <ClipboardList className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Presenças</span>
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full bg-destructive text-white text-[10px] font-bold flex items-center justify-center px-1">
+                {pendingAttendance.length}
+              </span>
+            </button>
+          )}
           {canManage && (
             <Button size="sm" variant="outline" className="h-8 rounded-xl text-xs gap-1.5 border-primary/40 text-primary" onClick={openCreateForm}>
               <Plus className="w-3.5 h-3.5" /> Novo Evento
@@ -499,7 +661,12 @@ export default function UserAgendaTab() {
       </div>
 
       {/* ── CONFIRMAÇÃO DE PRESENÇA EM EVENTOS ──── */}
-      <WorshipConfirmation />
+      {/* Pass all area events (not filtered by type) so the modal always shows every event */}
+      <WorshipConfirmation
+        events={events}
+        attendanceRecords={attendanceRecords}
+        onCheckIn={handleCheckIn}
+      />
 
       {/* ── FILTROS DE TIPO ──── */}
       <div className="flex flex-wrap gap-1.5">
@@ -584,7 +751,7 @@ export default function UserAgendaTab() {
                     ) : (
                       <div className="space-y-1.5">
                         {dayEvents.map(evt => {
-                          const typeInfo = EVENT_TYPES[evt.type] ?? EVENT_TYPES.evento;
+                          const typeInfo = STATIC_EVENT_TYPES[evt.type] ?? { emoji: getEmoji(evt.type), label: getLabel(evt.type), color: getColor(evt.type) };
                           const time = format(new Date(evt.event_date), "HH:mm");
                           return (
                             <div key={evt.id} className="flex items-center gap-2 ml-1">
@@ -635,11 +802,13 @@ export default function UserAgendaTab() {
                     linkedLesson={linkedLesson}
                     lessonContent={lessonContent}
                     attendanceRecords={attendanceRecords}
-                    onCheckIn={handleCheckIn}
                     onNavigateToLesson={setActiveTab}
                     canManage={canManage}
                     onEdit={openEditForm}
                     onDelete={handleDeleteEvent}
+                    typeEmoji={getEmoji(event.type)}
+                    typeLabel={getLabel(event.type)}
+                    typeColor={getColor(event.type)}
                   />
                 );
               })}
@@ -657,10 +826,12 @@ export default function UserAgendaTab() {
                     past
                     linkedLesson={linkedLesson}
                     attendanceRecords={attendanceRecords}
-                    onCheckIn={handleCheckIn}
                     canManage={canManage}
                     onEdit={openEditForm}
                     onDelete={handleDeleteEvent}
+                    typeEmoji={getEmoji(event.type)}
+                    typeLabel={getLabel(event.type)}
+                    typeColor={getColor(event.type)}
                   />
                 );
               })}
@@ -753,6 +924,167 @@ export default function UserAgendaTab() {
         </div>
       )}
 
+      {/* ── MODAL DE APROVAÇÃO DE PRESENÇAS ────────── */}
+      <Dialog open={showPendingModal} onOpenChange={(open) => { if (!open) setShowPendingModal(false); }}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-montserrat font-bold text-foreground flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-primary" />
+              Aprovação de Presenças
+              {pendingAttendance.length > 0 && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-inter font-bold bg-primary/10 text-primary">
+                  {pendingAttendance.length} pendente{pendingAttendance.length !== 1 ? "s" : ""}
+                </span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            {pendingAttendance.length === 0 ? (
+              <div className="text-center py-8">
+                <CheckCircle2 className="w-10 h-10 text-brand-green mx-auto mb-2 opacity-60" />
+                <p className="font-inter text-sm text-muted-foreground">Nenhuma solicitação pendente</p>
+              </div>
+            ) : (
+              pendingAttendance.map(a => {
+                const isSaving = savingApproval === a.id;
+                const isPresence = a.status === "pendente_presente";
+                const eventDate = a.event_date ? new Date(a.event_date) : null;
+                return (
+                  <div key={a.id} className="bg-muted/30 rounded-2xl border border-border p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isPresence ? "bg-brand-green/10" : "bg-accent/20"}`}>
+                        {isPresence
+                          ? <CheckCircle2 className="w-5 h-5 text-brand-green" />
+                          : <Clock className="w-5 h-5 text-accent-foreground" />
+                        }
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-inter font-semibold text-sm text-foreground">{a.full_name}</p>
+                        {a.community && <p className="font-inter text-[10px] text-muted-foreground">{a.community}</p>}
+                        <p className="font-inter text-xs text-foreground mt-0.5">📅 {a.event_title}</p>
+                        {eventDate && (
+                          <p className="font-inter text-[10px] text-muted-foreground">
+                            {format(eventDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          </p>
+                        )}
+                        <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-inter font-semibold ${isPresence ? "bg-brand-green/10 text-brand-green" : "bg-accent/20 text-accent-foreground"}`}>
+                          {isPresence ? "Solicitando presença" : "Solicitando justificativa"}
+                        </span>
+                      </div>
+                    </div>
+                    {a.justification && (
+                      <div className="px-3 py-2 rounded-xl bg-muted text-xs font-inter text-muted-foreground italic">
+                        "{a.justification}"
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleAttendanceApproval(a.id, isPresence ? "presente" : "justificou")}
+                        disabled={!!isSaving}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-green/10 hover:bg-brand-green/20 text-brand-green font-inter text-xs font-semibold transition-colors disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        {isSaving ? "Salvando..." : "Aprovar"}
+                      </button>
+                      <button
+                        onClick={() => handleAttendanceApproval(a.id, "rejeitado")}
+                        disabled={!!isSaving}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-destructive/10 hover:bg-destructive/20 text-destructive font-inter text-xs font-semibold transition-colors disabled:opacity-50"
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        Rejeitar
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── MODAL DE CRIAR TIPO DE EVENTO ────────── */}
+      <Dialog open={showCreateTypeModal} onOpenChange={(open) => { if (!open) setShowCreateTypeModal(false); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-montserrat font-bold text-foreground flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-primary" /> Novo Tipo de Evento
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Nome do tipo *</label>
+              <Input
+                value={newTypeForm.label}
+                onChange={e => setNewTypeForm(f => ({ ...f, label: e.target.value }))}
+                className="text-sm"
+                placeholder="Ex: Retiro Jovens"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Emoji</label>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {EMOJI_OPTIONS.map(em => (
+                  <button
+                    key={em}
+                    type="button"
+                    onClick={() => setNewTypeForm(f => ({ ...f, emoji: em }))}
+                    className={`w-8 h-8 rounded-lg text-base flex items-center justify-center transition-colors ${newTypeForm.emoji === em ? "bg-primary/20 ring-2 ring-primary" : "bg-muted hover:bg-muted/80"}`}
+                  >
+                    {em}
+                  </button>
+                ))}
+              </div>
+              <Input
+                value={newTypeForm.emoji}
+                onChange={e => setNewTypeForm(f => ({ ...f, emoji: e.target.value }))}
+                className="text-sm w-20"
+                maxLength={2}
+                placeholder="✏️"
+              />
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40">
+              <input
+                type="checkbox"
+                id="gives_points_user"
+                checked={newTypeForm.gives_points}
+                onChange={e => setNewTypeForm(f => ({ ...f, gives_points: e.target.checked }))}
+                className="w-4 h-4 accent-primary"
+              />
+              <label htmlFor="gives_points_user" className="text-sm font-inter text-foreground cursor-pointer flex-1">
+                Dá pontuação
+              </label>
+              {newTypeForm.gives_points && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-inter text-muted-foreground">Pts:</span>
+                  <Input
+                    type="number"
+                    value={newTypeForm.points}
+                    onChange={e => setNewTypeForm(f => ({ ...f, points: Number(e.target.value) }))}
+                    className="text-sm w-16 h-7 px-2"
+                    min={1}
+                  />
+                </div>
+              )}
+            </div>
+            {currentArea && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 text-primary text-xs font-inter">
+                <Users className="w-3.5 h-3.5" />
+                <span>Será criado para a área <strong>{currentArea}</strong></span>
+              </div>
+            )}
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" size="sm" className="flex-1" onClick={() => setShowCreateTypeModal(false)} disabled={savingType}>
+                Cancelar
+              </Button>
+              <Button size="sm" className="flex-1 gap-1.5" onClick={handleCreateType} disabled={savingType}>
+                <Sparkles className="w-3.5 h-3.5" /> {savingType ? "Criando..." : "Criar Tipo"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* ── MODAL DE CRIAR/EDITAR EVENTO ────────── */}
       <Dialog open={showForm} onOpenChange={(open) => { if (!open) setShowForm(false); }}>
         <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
@@ -772,15 +1104,29 @@ export default function UserAgendaTab() {
             />
             <div>
               <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Tipo</label>
-              <select
-                value={form.type}
-                onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                {EVENT_TYPE_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+              <div className="flex gap-2 items-center">
+                <select
+                  value={form.type}
+                  onChange={e => {
+                    if (e.target.value === "__create__") { setShowCreateTypeModal(true); }
+                    else { setForm(f => ({ ...f, type: e.target.value })); }
+                  }}
+                  className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {allTypes.map(o => (
+                    <option key={o.value} value={o.value}>{o.emoji} {o.label}</option>
+                  ))}
+                  <option value="__create__">➕ Criar novo tipo...</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateTypeModal(true)}
+                  className="p-2 rounded-md border border-input bg-background hover:bg-accent/20 transition-colors text-muted-foreground"
+                  title="Criar novo tipo de evento"
+                >
+                  <Sparkles className="w-4 h-4" />
+                </button>
+              </div>
             </div>
             <div>
               <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Local</label>
@@ -795,8 +1141,7 @@ export default function UserAgendaTab() {
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="">Todas</option>
-                  <option value="Área 1">Área 1</option>
-                  <option value="Área 2">Área 2</option>
+                  {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
               <div>
@@ -838,16 +1183,16 @@ export default function UserAgendaTab() {
   );
 }
 
-function EventCard({ event, past = false, linkedLesson, lessonContent, attendanceRecords = [], onCheckIn, onNavigateToLesson, canManage, onEdit, onDelete }: { 
+function EventCard({ event, past = false, linkedLesson, lessonContent, attendanceRecords = [], onNavigateToLesson, canManage, onEdit, onDelete, typeEmoji, typeLabel, typeColor }: {
   event: Event; past?: boolean; linkedLesson?: LessonInfo; lessonContent?: LessonContentInfo;
-  attendanceRecords?: AttendanceRecord[]; onCheckIn?: (eventId: string, status: "pendente_presente" | "pendente_falta", justification?: string) => void;
+  attendanceRecords?: AttendanceRecord[];
   onNavigateToLesson?: (tab: string) => void;
   canManage?: boolean; onEdit?: (event: Event) => void; onDelete?: (eventId: string) => void;
+  typeEmoji?: string; typeLabel?: string; typeColor?: string;
 }) {
-  const [showJustification, setShowJustification] = useState(false);
-  const [justificationText, setJustificationText] = useState("");
   const [showPrep, setShowPrep] = useState(false);
-  const typeInfo = EVENT_TYPES[event.type] ?? EVENT_TYPES.evento;
+  const fallback = STATIC_EVENT_TYPES[event.type] ?? STATIC_EVENT_TYPES.evento;
+  const typeInfo = { emoji: typeEmoji ?? fallback.emoji, label: typeLabel ?? fallback.label, color: typeColor ?? fallback.color };
   const dateObj = new Date(event.event_date);
   
   const now = new Date();
@@ -1095,58 +1440,15 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
             <p className="text-muted-foreground font-inter text-xs mt-1.5 leading-relaxed">{event.description}</p>
           )}
 
-          {/* Attendance buttons */}
-          {isCheckInWindow && onCheckIn && (
+          {/* Attendance status badge (read-only — check-in is done via the "Confirmar Presença" section) */}
+          {isCheckInWindow && existingRecord && (
             <div className="mt-2.5">
-              {existingRecord ? (
-                <div className={`flex items-center gap-2 px-3 py-2 rounded-xl ${getStatusDisplay(existingRecord.status).cls}`}>
-                  <span className="text-sm">{getStatusDisplay(existingRecord.status).icon}</span>
-                  <p className={`font-inter text-xs font-semibold`}>
-                    {getStatusDisplay(existingRecord.status).label}
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => onCheckIn(event.id, "pendente_presente")}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors"
-                    >
-                      <span className="text-sm">✅</span>
-                      <span className="font-inter text-xs font-semibold">Confirmar Presença</span>
-                    </button>
-                    <button
-                      onClick={() => setShowJustification(prev => !prev)}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl transition-colors ${showJustification ? "bg-accent/30 text-accent-foreground" : "bg-accent/10 text-accent-foreground hover:bg-accent/20"}`}
-                    >
-                      <span className="text-sm">📝</span>
-                      <span className="font-inter text-xs font-semibold">Justificar Falta</span>
-                    </button>
-                  </div>
-                  {showJustification && (
-                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                      <textarea
-                        value={justificationText}
-                        onChange={e => setJustificationText(e.target.value)}
-                        placeholder="Motivo da ausência..."
-                        className="w-full rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs font-inter text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                        rows={2}
-                        maxLength={300}
-                      />
-                      <button
-                        onClick={() => {
-                          onCheckIn(event.id, "pendente_falta", justificationText || undefined);
-                          setShowJustification(false);
-                        }}
-                        disabled={!justificationText.trim()}
-                        className="w-full py-2 rounded-xl bg-accent/15 text-accent-foreground hover:bg-accent/25 transition-colors font-inter text-xs font-semibold disabled:opacity-50"
-                      >
-                        Enviar justificativa
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-xl ${getStatusDisplay(existingRecord.status).cls}`}>
+                <span className="text-sm">{getStatusDisplay(existingRecord.status).icon}</span>
+                <p className="font-inter text-xs font-semibold">
+                  {getStatusDisplay(existingRecord.status).label}
+                </p>
+              </div>
             </div>
           )}
         </div>

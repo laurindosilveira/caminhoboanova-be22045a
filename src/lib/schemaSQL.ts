@@ -206,6 +206,22 @@ CREATE TABLE public.devotional_progress (
   UNIQUE(user_id, devotional_id)
 );
 
+-- devotional_responses
+CREATE TABLE public.devotional_responses (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL,
+  devotional_id UUID NOT NULL,
+  question_index INTEGER NOT NULL,
+  response TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+  UNIQUE (user_id, devotional_id, question_index),
+  CONSTRAINT devotional_responses_progress_fkey
+    FOREIGN KEY (user_id, devotional_id)
+    REFERENCES public.devotional_progress(user_id, devotional_id)
+    ON DELETE CASCADE
+);
+
 -- spiritual_assessments
 CREATE TABLE public.spiritual_assessments (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -462,6 +478,7 @@ ALTER TABLE public.lesson_responses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lesson_content ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.devotional_content ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.devotional_progress ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.devotional_responses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.spiritual_assessments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.discipleship_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pastoral_notes ENABLE ROW LEVEL SECURITY;
@@ -531,52 +548,141 @@ $$;
 CREATE OR REPLACE FUNCTION public.get_community_ranking(_community community_name)
 RETURNS TABLE(user_id uuid, full_name text, completed_count bigint, faith_points bigint)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  _lesson_pts integer;
+  _dev_pts integer;
+  _dev_wk_pts integer;
+  _dev_recovery_pts integer;
+  _att_pts integer;
+  _worship_pts integer;
+  _course_bonus integer;
+  _challenge_pts integer;
 BEGIN
+  SELECT
+    COALESCE(MAX(CASE WHEN key = 'lesson_points'              THEN value END), 20),
+    COALESCE(MAX(CASE WHEN key = 'devotional_points'          THEN value END), 5),
+    COALESCE(MAX(CASE WHEN key = 'devotional_weekend_points'  THEN value END), 2),
+    COALESCE(MAX(CASE WHEN key = 'devotional_recovery_points' THEN value END), 2),
+    COALESCE(MAX(CASE WHEN key = 'attendance_points'          THEN value END), 10),
+    COALESCE(MAX(CASE WHEN key = 'worship_points'             THEN value END), 5),
+    COALESCE(MAX(CASE WHEN key = 'course_completion_bonus'    THEN value END), 100),
+    COALESCE(MAX(CASE WHEN key = 'challenge_points'           THEN value END), 15)
+  INTO _lesson_pts, _dev_pts, _dev_wk_pts, _dev_recovery_pts, _att_pts, _worship_pts, _course_bonus, _challenge_pts
+  FROM public.game_config;
+
   RETURN QUERY
-  WITH lesson_points AS (
-    SELECT lr.user_id, COUNT(DISTINCT lr.lesson_id) * 20 AS pts
-    FROM lesson_responses lr JOIN profiles p ON p.user_id = lr.user_id AND p.community = _community GROUP BY lr.user_id
+  WITH scoped_profiles AS (
+    SELECT p.user_id, p.full_name, p.area
+    FROM public.profiles p
+    WHERE p.community = _community
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.user_roles ur
+        WHERE ur.user_id = p.user_id
+          AND ur.role IN ('admin', 'lider')
+      )
+  ),
+  lesson_points AS (
+    SELECT lr.user_id, COUNT(DISTINCT lr.lesson_id) * _lesson_pts AS pts
+    FROM public.lesson_responses lr
+    JOIN scoped_profiles sp ON sp.user_id = lr.user_id
+    GROUP BY lr.user_id
   ),
   devotional_pts AS (
-    SELECT dp.user_id, COUNT(*) * 5 AS pts
-    FROM devotional_progress dp JOIN profiles p ON p.user_id = dp.user_id AND p.community = _community GROUP BY dp.user_id
+    SELECT
+      dp.user_id,
+      SUM(
+        COALESCE(
+          dp.awarded_points,
+          CASE
+            WHEN COALESCE(dp.is_recovery, false) THEN _dev_recovery_pts
+            WHEN EXTRACT(DOW FROM dp.completed_at AT TIME ZONE 'America/Sao_Paulo') IN (0, 6) THEN _dev_wk_pts
+            ELSE _dev_pts
+          END
+        )
+      ) AS pts
+    FROM public.devotional_progress dp
+    JOIN scoped_profiles sp ON sp.user_id = dp.user_id
+    GROUP BY dp.user_id
   ),
   attendance_pts AS (
-    SELECT a.user_id, COUNT(*) * 10 AS pts
-    FROM attendance a JOIN profiles p ON p.user_id = a.user_id AND p.community = _community WHERE a.status = 'presente' GROUP BY a.user_id
+    SELECT
+      a.user_id,
+      SUM(
+        CASE
+          WHEN COALESCE(cet.gives_points, false) THEN COALESCE(cet.points, _att_pts)
+          ELSE _att_pts
+        END
+      ) AS pts
+    FROM public.attendance a
+    JOIN scoped_profiles sp ON sp.user_id = a.user_id
+    JOIN public.events e ON e.id = a.event_id
+    LEFT JOIN LATERAL (
+      SELECT cet.gives_points, cet.points
+      FROM public.custom_event_types cet
+      WHERE cet.value = e.type
+        AND (cet.area IS NULL OR cet.area = sp.area)
+      ORDER BY CASE WHEN cet.area = sp.area THEN 0 ELSE 1 END
+      LIMIT 1
+    ) cet ON true
+    WHERE a.status = 'presente'
+    GROUP BY a.user_id
   ),
   worship_pts AS (
-    SELECT wa.user_id, COUNT(*) * 5 AS pts
-    FROM worship_attendance wa JOIN profiles p ON p.user_id = wa.user_id AND p.community = _community WHERE wa.status = 'aprovado' GROUP BY wa.user_id
+    SELECT wa.user_id, COUNT(*) * _worship_pts AS pts
+    FROM public.worship_attendance wa
+    JOIN scoped_profiles sp ON sp.user_id = wa.user_id
+    WHERE wa.status = 'aprovado'
+    GROUP BY wa.user_id
   ),
   activity_pts AS (
     SELECT up.user_id, COALESCE(SUM(act.points), 0) AS pts, COUNT(up.id) AS cnt
-    FROM user_progress up JOIN activities act ON act.id = up.activity_id JOIN profiles p ON p.user_id = up.user_id AND p.community = _community GROUP BY up.user_id
+    FROM public.user_progress up
+    JOIN public.activities act ON act.id = up.activity_id
+    JOIN scoped_profiles sp ON sp.user_id = up.user_id
+    GROUP BY up.user_id
+  ),
+  challenge_pts AS (
+    SELECT cp.user_id, COUNT(*) * _challenge_pts AS pts
+    FROM public.challenge_participants cp
+    JOIN scoped_profiles sp ON sp.user_id = cp.user_id
+    WHERE cp.completed = true
+    GROUP BY cp.user_id
   ),
   course_bonus AS (
-    SELECT p.user_id, COUNT(DISTINCT c.id) * 100 AS pts
-    FROM profiles p JOIN courses c ON true JOIN lessons l ON l.course_id = c.id LEFT JOIN lesson_responses lr ON lr.lesson_id = l.id AND lr.user_id = p.user_id
-    WHERE p.community = _community GROUP BY p.user_id, c.id, (SELECT COUNT(*) FROM lessons WHERE course_id = c.id)
-    HAVING COUNT(DISTINCT lr.lesson_id) = (SELECT COUNT(*) FROM lessons WHERE course_id = c.id)
+    SELECT sp.user_id, COUNT(DISTINCT c.id) * _course_bonus AS pts
+    FROM scoped_profiles sp
+    JOIN public.courses c ON true
+    JOIN public.lessons l ON l.course_id = c.id
+    LEFT JOIN public.lesson_responses lr ON lr.lesson_id = l.id AND lr.user_id = sp.user_id
+    GROUP BY sp.user_id, c.id, (SELECT COUNT(*) FROM public.lessons WHERE course_id = c.id)
+    HAVING COUNT(DISTINCT lr.lesson_id) = (SELECT COUNT(*) FROM public.lessons WHERE course_id = c.id)
   ),
-  course_bonus_agg AS (SELECT cb.user_id, SUM(cb.pts) AS pts FROM course_bonus cb GROUP BY cb.user_id),
+  course_bonus_agg AS (
+    SELECT cb.user_id, SUM(cb.pts) AS pts
+    FROM course_bonus cb
+    GROUP BY cb.user_id
+  ),
   achievement_pts AS (
     SELECT au.user_id, COALESCE(SUM(au.bonus_points), 0) AS pts
-    FROM achievement_unlocks au JOIN profiles p ON p.user_id = au.user_id AND p.community = _community GROUP BY au.user_id
+    FROM public.achievement_unlocks au
+    JOIN scoped_profiles sp ON sp.user_id = au.user_id
+    GROUP BY au.user_id
   )
-  SELECT p.user_id, p.full_name,
+  SELECT sp.user_id, sp.full_name,
     COALESCE(ap.cnt, 0)::bigint AS completed_count,
-    (COALESCE(lp.pts, 0) + COALESCE(dp.pts, 0) + COALESCE(atp.pts, 0) + COALESCE(ap.pts, 0) + COALESCE(cb.pts, 0) + COALESCE(wp.pts, 0) + COALESCE(achp.pts, 0))::bigint AS faith_points
-  FROM profiles p
-  LEFT JOIN lesson_points lp ON lp.user_id = p.user_id
-  LEFT JOIN devotional_pts dp ON dp.user_id = p.user_id
-  LEFT JOIN attendance_pts atp ON atp.user_id = p.user_id
-  LEFT JOIN activity_pts ap ON ap.user_id = p.user_id
-  LEFT JOIN course_bonus_agg cb ON cb.user_id = p.user_id
-  LEFT JOIN worship_pts wp ON wp.user_id = p.user_id
-  LEFT JOIN achievement_pts achp ON achp.user_id = p.user_id
-  WHERE p.community = _community
-    AND NOT EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = p.user_id AND ur.role IN ('admin', 'lider'))
+    (COALESCE(lp.pts, 0) + COALESCE(dp.pts, 0) + COALESCE(atp.pts, 0) +
+     COALESCE(ap.pts, 0) + COALESCE(cb.pts, 0) + COALESCE(wp.pts, 0) +
+     COALESCE(achp.pts, 0) + COALESCE(chp.pts, 0))::bigint AS faith_points
+  FROM scoped_profiles sp
+  LEFT JOIN lesson_points lp ON lp.user_id = sp.user_id
+  LEFT JOIN devotional_pts dp ON dp.user_id = sp.user_id
+  LEFT JOIN attendance_pts atp ON atp.user_id = sp.user_id
+  LEFT JOIN activity_pts ap ON ap.user_id = sp.user_id
+  LEFT JOIN course_bonus_agg cb ON cb.user_id = sp.user_id
+  LEFT JOIN worship_pts wp ON wp.user_id = sp.user_id
+  LEFT JOIN achievement_pts achp ON achp.user_id = sp.user_id
+  LEFT JOIN challenge_pts chp ON chp.user_id = sp.user_id
   ORDER BY faith_points DESC, completed_count DESC;
 END;
 $$;
@@ -609,6 +715,9 @@ CREATE TRIGGER update_lesson_content_timestamp BEFORE UPDATE ON public.lesson_co
   FOR EACH ROW EXECUTE FUNCTION public.update_lesson_content_updated_at();
 
 CREATE TRIGGER update_devotional_content_updated_at BEFORE UPDATE ON public.devotional_content
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TRIGGER update_devotional_responses_updated_at BEFORE UPDATE ON public.devotional_responses
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 CREATE TRIGGER update_meeting_evaluations_updated_at BEFORE UPDATE ON public.meeting_evaluations
@@ -682,6 +791,7 @@ CREATE POLICY "Activities viewable by authenticated users" ON public.activities 
 CREATE POLICY "Users can view own progress" ON public.user_progress FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own progress" ON public.user_progress FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Admins can view area participants progress" ON public.user_progress FOR SELECT USING (has_role(auth.uid(), 'admin') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = user_progress.user_id AND p.area = get_my_area())));
+CREATE POLICY "Liders can view area participants progress" ON public.user_progress FOR SELECT USING (has_role(auth.uid(), 'lider') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = user_progress.user_id AND p.area = get_my_area())));
 
 -- courses
 CREATE POLICY "Courses viewable by authenticated users" ON public.courses FOR SELECT TO authenticated USING (true);
@@ -707,6 +817,7 @@ CREATE POLICY "Users can remove their own reactions" ON public.message_reactions
 -- lesson_responses
 CREATE POLICY "Users can manage their own lesson responses" ON public.lesson_responses FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Admins can view lesson responses in their area" ON public.lesson_responses FOR SELECT USING (has_role(auth.uid(), 'admin') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = lesson_responses.user_id AND p.area = get_my_area())));
+CREATE POLICY "Liders can view lesson responses in their area" ON public.lesson_responses FOR SELECT USING (has_role(auth.uid(), 'lider') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = lesson_responses.user_id AND p.area = get_my_area())));
 
 -- lesson_content
 CREATE POLICY "Admins can manage lesson content" ON public.lesson_content FOR ALL USING (has_role(auth.uid(), 'admin')) WITH CHECK (has_role(auth.uid(), 'admin'));
@@ -721,26 +832,37 @@ CREATE POLICY "Users can view their own devotional progress" ON public.devotiona
 CREATE POLICY "Users can insert their own devotional progress" ON public.devotional_progress FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can delete their own devotional progress" ON public.devotional_progress FOR DELETE USING (auth.uid() = user_id);
 CREATE POLICY "Admins can view all devotional progress" ON public.devotional_progress FOR SELECT USING (has_role(auth.uid(), 'admin') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = devotional_progress.user_id AND p.area = get_my_area())));
+CREATE POLICY "Liders can view all devotional progress" ON public.devotional_progress FOR SELECT USING (has_role(auth.uid(), 'lider') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = devotional_progress.user_id AND p.area = get_my_area())));
+
+-- devotional_responses
+CREATE POLICY "Users can manage their own devotional responses" ON public.devotional_responses FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Admins can view devotional responses in their area" ON public.devotional_responses FOR SELECT USING (has_role(auth.uid(), 'admin') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = devotional_responses.user_id AND p.area = get_my_area())));
+CREATE POLICY "Liders can view devotional responses in their area" ON public.devotional_responses FOR SELECT USING (has_role(auth.uid(), 'lider') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = devotional_responses.user_id AND p.area = get_my_area())));
 
 -- spiritual_assessments
 CREATE POLICY "Users can manage their own assessments" ON public.spiritual_assessments FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Admins can view assessments in their area" ON public.spiritual_assessments FOR SELECT USING (has_role(auth.uid(), 'admin') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = spiritual_assessments.user_id AND p.area = get_my_area())));
+CREATE POLICY "Liders can view assessments in their area" ON public.spiritual_assessments FOR SELECT USING (has_role(auth.uid(), 'lider') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = spiritual_assessments.user_id AND p.area = get_my_area())));
 
 -- discipleship_plans
 CREATE POLICY "Users can view their own plan" ON public.discipleship_plans FOR SELECT TO authenticated USING (auth.uid() = user_id);
 CREATE POLICY "Admins can manage plans in their area" ON public.discipleship_plans FOR ALL USING (has_role(auth.uid(), 'admin') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = discipleship_plans.user_id AND p.area = get_my_area()))) WITH CHECK (has_role(auth.uid(), 'admin') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = discipleship_plans.user_id AND p.area = get_my_area())));
+CREATE POLICY "Liders can manage plans in their area" ON public.discipleship_plans FOR ALL USING (has_role(auth.uid(), 'lider') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = discipleship_plans.user_id AND p.area = get_my_area()))) WITH CHECK (has_role(auth.uid(), 'lider') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = discipleship_plans.user_id AND p.area = get_my_area())));
 
 -- pastoral_notes
 CREATE POLICY "Admins can manage pastoral notes in their area" ON public.pastoral_notes FOR ALL USING (has_role(auth.uid(), 'admin') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = pastoral_notes.user_id AND p.area = get_my_area()))) WITH CHECK (has_role(auth.uid(), 'admin') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = pastoral_notes.user_id AND p.area = get_my_area())));
+CREATE POLICY "Liders can manage pastoral notes in their area" ON public.pastoral_notes FOR ALL USING (has_role(auth.uid(), 'lider') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = pastoral_notes.user_id AND p.area = get_my_area()))) WITH CHECK (has_role(auth.uid(), 'lider') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = pastoral_notes.user_id AND p.area = get_my_area())));
 
 -- attendance
 CREATE POLICY "Users can view their own attendance" ON public.attendance FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert their own attendance" ON public.attendance FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update their own attendance" ON public.attendance FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Admins can manage attendance in their area" ON public.attendance FOR ALL USING (has_role(auth.uid(), 'admin') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = attendance.user_id AND p.area = get_my_area()))) WITH CHECK (has_role(auth.uid(), 'admin'));
+CREATE POLICY "Liders can manage attendance in their area" ON public.attendance FOR ALL USING (has_role(auth.uid(), 'lider') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = attendance.user_id AND p.area = get_my_area()))) WITH CHECK (has_role(auth.uid(), 'lider'));
 
 -- meeting_evaluations
 CREATE POLICY "Admins can manage evaluations in their area" ON public.meeting_evaluations FOR ALL USING (has_role(auth.uid(), 'admin') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = meeting_evaluations.user_id AND p.area = get_my_area()))) WITH CHECK (has_role(auth.uid(), 'admin') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = meeting_evaluations.user_id AND p.area = get_my_area())));
+CREATE POLICY "Liders can manage evaluations in their area" ON public.meeting_evaluations FOR ALL USING (has_role(auth.uid(), 'lider') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = meeting_evaluations.user_id AND p.area = get_my_area()))) WITH CHECK (has_role(auth.uid(), 'lider') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = meeting_evaluations.user_id AND p.area = get_my_area())));
 
 -- community_chat
 CREATE POLICY "Users can view chat from their community" ON public.community_chat FOR SELECT USING (community = (get_my_community())::text);
@@ -767,6 +889,9 @@ CREATE POLICY "Users can view own worship attendance" ON public.worship_attendan
 CREATE POLICY "Admins can view worship attendance in area" ON public.worship_attendance FOR SELECT USING (has_role(auth.uid(), 'admin') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = worship_attendance.user_id AND p.area = get_my_area())));
 CREATE POLICY "Admins can update worship attendance in area" ON public.worship_attendance FOR UPDATE USING (has_role(auth.uid(), 'admin') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = worship_attendance.user_id AND p.area = get_my_area())));
 CREATE POLICY "Admins can delete worship attendance in area" ON public.worship_attendance FOR DELETE USING (has_role(auth.uid(), 'admin') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = worship_attendance.user_id AND p.area = get_my_area())));
+CREATE POLICY "Liders can view worship attendance in area" ON public.worship_attendance FOR SELECT USING (has_role(auth.uid(), 'lider') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = worship_attendance.user_id AND p.area = get_my_area())));
+CREATE POLICY "Liders can update worship attendance in area" ON public.worship_attendance FOR UPDATE USING (has_role(auth.uid(), 'lider') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = worship_attendance.user_id AND p.area = get_my_area())));
+CREATE POLICY "Liders can delete worship attendance in area" ON public.worship_attendance FOR DELETE USING (has_role(auth.uid(), 'lider') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = worship_attendance.user_id AND p.area = get_my_area())));
 
 -- ranking_seasons
 CREATE POLICY "Admins can manage ranking seasons" ON public.ranking_seasons FOR ALL USING (has_role(auth.uid(), 'admin')) WITH CHECK (has_role(auth.uid(), 'admin'));
@@ -797,6 +922,7 @@ CREATE POLICY "Authenticated users can view course unlocks" ON public.course_unl
 CREATE POLICY "Users can view own achievement unlocks" ON public.achievement_unlocks FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own achievement unlocks" ON public.achievement_unlocks FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Admins can view all achievement unlocks" ON public.achievement_unlocks FOR SELECT USING (has_role(auth.uid(), 'admin'));
+CREATE POLICY "Liders can view achievement unlocks in their area" ON public.achievement_unlocks FOR SELECT USING (has_role(auth.uid(), 'lider') AND EXISTS (SELECT 1 FROM public.profiles p WHERE p.user_id = achievement_unlocks.user_id AND p.area = get_my_area()));
 
 -- notification_preferences
 CREATE POLICY "Users can view their own notification preferences" ON public.notification_preferences FOR SELECT USING (auth.uid() = user_id);

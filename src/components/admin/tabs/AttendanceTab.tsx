@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { EVENT_TYPES, getEventEmoji } from "@/config/eventTypes";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -53,17 +54,7 @@ const STATUS_CFG: Record<AttendanceStatus, { label: string; icon: React.ReactNod
   },
 };
 
-const TYPE_EMOJI: Record<string, string> = {
-  encontro: "📅", culto: "⛪", jemiac: "✝️", retiro: "🏕️", confirmatorio: "📖", evento: "🎉",
-};
-const AGENDA_EVENT_TYPES = [
-  { value: "encontro", label: "Encontro" },
-  { value: "culto", label: "Culto" },
-  { value: "jemiac", label: "JEMIAC" },
-  { value: "retiro", label: "Retiro" },
-  { value: "confirmatorio", label: "Ens. Confirmatório" },
-  { value: "evento", label: "Evento" },
-];
+const AGENDA_EVENT_TYPES = EVENT_TYPES;
 const SCORE_LABELS = ["", "Fraco", "Regular", "Bom", "Muito bom", "Excelente"];
 
 type WorshipRequest = {
@@ -218,13 +209,20 @@ export default function AttendanceTab({ participants, activities, communities, i
 
   async function handleAttendanceApproval(id: string, action: "presente" | "justificou" | "rejeitado") {
     setSavingAttendanceApproval(id);
+    let error = null;
     if (action === "rejeitado") {
-      await supabase.from("attendance").delete().eq("id", id);
-      setPendingAttendance(prev => prev.filter(a => a.id !== id));
+      const result = await supabase.from("attendance").delete().eq("id", id);
+      error = result.error;
     } else {
-      await supabase.from("attendance").update({ status: action }).eq("id", id);
-      setPendingAttendance(prev => prev.filter(a => a.id !== id));
+      const result = await supabase.from("attendance").update({ status: action }).eq("id", id);
+      error = result.error;
     }
+    if (error) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+      setSavingAttendanceApproval(null);
+      return;
+    }
+    setPendingAttendance(prev => prev.filter(a => a.id !== id));
     toast({ title: action === "presente" ? "Presença aprovada ✅" : action === "justificou" ? "Falta justificada ✓" : "Solicitação rejeitada" });
     setSavingAttendanceApproval(null);
   }
@@ -234,7 +232,14 @@ export default function AttendanceTab({ participants, activities, communities, i
     const userIds = eventParticipants.map(p => p.user_id);
 
     // Always load attendance
-    const { data: attData } = await supabase.from("attendance").select("user_id, status").eq("event_id", eventId);
+    const { data: attData, error: attendanceError } = await supabase
+      .from("attendance")
+      .select("user_id, status")
+      .eq("event_id", eventId);
+    if (attendanceError) {
+      toast({ title: "Erro ao carregar presenças", description: attendanceError.message, variant: "destructive" });
+      return;
+    }
 
     const attMap: Record<string, AttendanceStatus> = {};
     (attData ?? []).forEach((r: any) => { attMap[r.user_id] = r.status as AttendanceStatus; });
@@ -242,10 +247,18 @@ export default function AttendanceTab({ participants, activities, communities, i
 
     // For encontros, also load evaluations + progress
     if (isEncontro && userIds.length > 0) {
-      const [{ data: evalData }, { data: progressData }] = await Promise.all([
+      const [{ data: evalData, error: evaluationError }, { data: progressData, error: progressError }] = await Promise.all([
         supabase.from("meeting_evaluations").select("*").eq("event_id", eventId),
         supabase.from("user_progress").select("user_id, activity_id, completed_at").in("user_id", userIds),
       ]);
+      if (evaluationError || progressError) {
+        toast({
+          title: "Erro ao carregar dados do encontro",
+          description: evaluationError?.message ?? progressError?.message ?? "Falha desconhecida.",
+          variant: "destructive",
+        });
+        return;
+      }
 
       const evalMap: Record<string, Evaluation> = {};
       (evalData ?? []).forEach((e: any) => {
@@ -272,10 +285,16 @@ export default function AttendanceTab({ participants, activities, communities, i
   async function handleSaveEvent() {
     if (!eventForm.title || !eventForm.event_date) return;
     setSavingEvent(true);
+    const normalizedEventDate = eventForm.event_date ? new Date(eventForm.event_date) : null;
+    if (!normalizedEventDate || Number.isNaN(normalizedEventDate.getTime())) {
+      toast({ title: "Data inválida", description: "Não foi possível interpretar a data do evento.", variant: "destructive" });
+      setSavingEvent(false);
+      return;
+    }
     const payload = {
       title: eventForm.title,
       description: eventForm.description || null,
-      event_date: eventForm.event_date,
+      event_date: normalizedEventDate.toISOString(),
       location: eventForm.location || null,
       type: eventForm.type,
       area: adminArea || eventForm.area || null,
@@ -300,7 +319,10 @@ export default function AttendanceTab({ participants, activities, communities, i
 
         const allEvents = freshEvents ?? events;
         const subsequentWithLessons = allEvents.filter(
-          e => e.id !== editingEventId && e.event_date > oldEvent.event_date && e.linked_lesson_id
+          e =>
+            e.id !== editingEventId &&
+            new Date(e.event_date).getTime() > new Date(oldEvent.event_date).getTime() &&
+            e.linked_lesson_id
         );
         console.log("[CASCADE CHECK] subsequent events with lessons:", subsequentWithLessons.length);
 
@@ -315,10 +337,20 @@ export default function AttendanceTab({ participants, activities, communities, i
         }
       }
 
-      await supabase.from("events").update(payload).eq("id", editingEventId);
+      const { error } = await supabase.from("events").update(payload).eq("id", editingEventId);
+      if (error) {
+        toast({ title: "Erro ao atualizar evento", description: error.message, variant: "destructive" });
+        setSavingEvent(false);
+        return;
+      }
     } else {
       const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from("events").insert({ ...payload, created_by: user?.id });
+      const { error } = await supabase.from("events").insert({ ...payload, created_by: user?.id });
+      if (error) {
+        toast({ title: "Erro ao criar evento", description: error.message, variant: "destructive" });
+        setSavingEvent(false);
+        return;
+      }
     }
     setEventForm({ title: "", description: "", event_date: "", location: "", type: "encontro", area: adminArea ?? "", community: "", linked_lesson_id: "" });
     setShowEventForm(false);
@@ -334,12 +366,18 @@ export default function AttendanceTab({ participants, activities, communities, i
     if (!event) return;
 
     // Update the edited event with all fields
-    await supabase.from("events").update(payload).eq("id", eventId);
+    const { error: eventUpdateError } = await supabase.from("events").update(payload).eq("id", eventId);
+    if (eventUpdateError) {
+      toast({ title: "Erro ao atualizar evento", description: eventUpdateError.message, variant: "destructive" });
+      setShowCascadeDialog(false);
+      setCascadePending(null);
+      return;
+    }
 
     if (doCascade) {
       const subsequent = events
-        .filter(e => e.id !== eventId && e.event_date > event.event_date && e.linked_lesson_id)
-        .sort((a, b) => a.event_date.localeCompare(b.event_date));
+        .filter(e => e.id !== eventId && new Date(e.event_date).getTime() > new Date(event.event_date).getTime() && e.linked_lesson_id)
+        .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
 
       if (subsequent.length > 0) {
         const allLessonsOrdered = [...lessonOptions].sort((a, b) => {
@@ -352,9 +390,15 @@ export default function AttendanceTab({ participants, activities, communities, i
           for (let i = 0; i < subsequent.length; i++) {
             const nextLessonIdx = newIdx + 1 + i;
             if (nextLessonIdx < allLessonsOrdered.length) {
-              await supabase.from("events")
+              const { error: cascadeError } = await supabase.from("events")
                 .update({ linked_lesson_id: allLessonsOrdered[nextLessonIdx].id })
                 .eq("id", subsequent[i].id);
+              if (cascadeError) {
+                toast({ title: "Erro ao aplicar cascata", description: cascadeError.message, variant: "destructive" });
+                setShowCascadeDialog(false);
+                setCascadePending(null);
+                return;
+              }
             }
           }
           toast({ title: `Lições atualizadas em ${subsequent.length + 1} eventos!` });
@@ -387,7 +431,12 @@ export default function AttendanceTab({ participants, activities, communities, i
   }
 
   async function handleDeleteEvent(id: string) {
-    await supabase.from("events").delete().eq("id", id);
+    const { error } = await supabase.from("events").delete().eq("id", id);
+    if (error) {
+      toast({ title: "Erro ao excluir evento", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Evento excluído!" });
     fetchEvents();
   }
 
@@ -407,16 +456,30 @@ export default function AttendanceTab({ participants, activities, communities, i
     setSavingAtt(`${eventId}-${userId}`);
     const current = attendance[eventId]?.[userId];
     if (current === status) {
-      await supabase.from("attendance").delete().eq("event_id", eventId).eq("user_id", userId);
+      const { error } = await supabase
+        .from("attendance")
+        .delete()
+        .eq("event_id", eventId)
+        .eq("user_id", userId);
+      if (error) {
+        toast({ title: "Erro ao remover presença", description: error.message, variant: "destructive" });
+        setSavingAtt(null);
+        return;
+      }
       setAttendance(prev => {
         const updated = { ...prev[eventId] };
         delete updated[userId];
         return { ...prev, [eventId]: updated };
       });
     } else {
-      await supabase.from("attendance").upsert({
+      const { error } = await supabase.from("attendance").upsert({
         event_id: eventId, user_id: userId, status,
       }, { onConflict: "event_id,user_id" });
+      if (error) {
+        toast({ title: "Erro ao salvar presença", description: error.message, variant: "destructive" });
+        setSavingAtt(null);
+        return;
+      }
       setAttendance(prev => ({
         ...prev,
         [eventId]: { ...(prev[eventId] ?? {}), [userId]: status },
@@ -635,12 +698,7 @@ export default function AttendanceTab({ participants, activities, communities, i
 
   const EVENT_TYPES_FILTER = [
     { value: null, label: "Todos" },
-    { value: "encontro", label: "📅 Encontros" },
-    { value: "culto", label: "⛪ Cultos" },
-    { value: "jemiac", label: "✝️ JEMIAC" },
-    { value: "retiro", label: "🏕️ Retiros" },
-    { value: "confirmatorio", label: "📖 Ens. Confirmatório" },
-    { value: "evento", label: "🎉 Eventos" },
+    ...EVENT_TYPES.map(t => ({ value: t.value, label: `${t.emoji} ${t.label}` })),
   ];
 
   // Filter events by admin area and selected type
@@ -771,12 +829,6 @@ export default function AttendanceTab({ participants, activities, communities, i
 
       {/* Event attendance requests - filtered by event type */}
       {(() => {
-        const TYPE_EMOJI_LOCAL: Record<string, string> = {
-          encontro: "📅", culto: "⛪", jemiac: "✝️", retiro: "🏕️", confirmatorio: "📖", evento: "🎉",
-        };
-        const TYPE_LABEL: Record<string, string> = {
-          encontro: "Encontros", culto: "Cultos", jemiac: "JEMIAC", retiro: "Retiros", confirmatorio: "Ens. Confirmatório", evento: "Eventos",
-        };
         const filtered = filterType
           ? worshipRequests.filter(w => w.event_type === filterType)
           : worshipRequests;
@@ -787,8 +839,8 @@ export default function AttendanceTab({ participants, activities, communities, i
 
         const renderWorshipCard = (w: WorshipRequest, isPending: boolean) => {
           const isSaving = savingWorship === w.id;
-          const emoji = TYPE_EMOJI_LOCAL[w.event_type] ?? "📅";
-          const typeLabel = TYPE_LABEL[w.event_type] ?? w.event_type;
+          const emoji = getEventEmoji(w.event_type);
+          const typeLabel = EVENT_TYPES.find(t => t.value === w.event_type)?.label ?? w.event_type;
           return (
             <div key={w.id} className={`bg-card rounded-2xl border ${isPending ? "border-accent/50" : "border-border"} p-4 shadow-sm space-y-2`}>
               <div className="flex items-center gap-3">
@@ -897,7 +949,7 @@ export default function AttendanceTab({ participants, activities, communities, i
                 className="w-full flex items-center gap-3 p-4 text-left hover:bg-muted/30 transition-colors"
               >
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex flex-col items-center justify-center flex-shrink-0">
-                  <span className="text-lg leading-none">{TYPE_EMOJI[event.type] ?? "📅"}</span>
+                  <span className="text-lg leading-none">{getEventEmoji(event.type)}</span>
                   <span className="font-montserrat font-black text-primary text-xs">
                     {format(dateObj, "d", { locale: ptBR })}
                   </span>
@@ -1352,11 +1404,16 @@ export default function AttendanceTab({ participants, activities, communities, i
   );
 
   async function fetchPromotionRequests() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("year_promotion_requests")
       .select("*")
       .order("requested_at", { ascending: false })
       .limit(50);
+    if (error) {
+      toast({ title: "Erro ao carregar promocoes", description: error.message, variant: "destructive" });
+      setPromotionRequests([]);
+      return;
+    }
     const enriched = (data ?? []).map((r: any) => {
       const p = participants.find(p => p.user_id === r.user_id);
       return { ...r, full_name: p?.full_name, community: p?.community };
@@ -1373,13 +1430,13 @@ export default function AttendanceTab({ participants, activities, communities, i
     const firstYearParticipants = participants.filter(p => (p as any).confirmation_year === 1);
     
     if (firstYearParticipants.length === 0) {
-      toast({ title: "Nenhum aluno elegível", description: "Não há alunos do 1º ano nesta turma." });
+      toast({ title: "Nenhum aluno elegivel", description: "Nao ha alunos do 1º ano nesta turma." });
       setGeneratingPromotions(false);
       return;
     }
 
     if (!isEndOfYear) {
-      toast({ title: "Fora do período", description: "As promoções são geradas no final do ano (novembro/dezembro). Deseja continuar mesmo assim?" });
+      toast({ title: "Fora do periodo", description: "As promocoes sao geradas no final do ano (novembro/dezembro)." });
     }
 
     // Check for existing pending requests
@@ -1387,49 +1444,75 @@ export default function AttendanceTab({ participants, activities, communities, i
     const newParticipants = firstYearParticipants.filter(p => !existingUserIds.includes(p.user_id));
 
     if (newParticipants.length === 0) {
-      toast({ title: "Já existem promoções pendentes", description: "Todos os alunos do 1º ano já têm solicitações pendentes." });
+      toast({ title: "Ja existem promocoes pendentes", description: "Todos os alunos do 1º ano ja tem solicitacoes pendentes." });
       setGeneratingPromotions(false);
       return;
     }
 
-    const { data: user } = await supabase.auth.getUser();
+    const { data: userResult, error: authError } = await supabase.auth.getUser();
+    if (authError || !userResult.user) {
+      toast({ title: "Erro de autenticacao", description: authError?.message ?? "Usuario nao encontrado.", variant: "destructive" });
+      setGeneratingPromotions(false);
+      return;
+    }
     const inserts = newParticipants.map(p => ({
       user_id: p.user_id,
       from_year: 1,
       to_year: 2,
       turma_id: (p as any).turma_id ?? null,
       status: "pendente",
+      requested_by: userResult.user.id,
     }));
 
     const { error } = await supabase.from("year_promotion_requests").insert(inserts as any);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: `📋 ${newParticipants.length} promoção(ões) gerada(s)`, description: "Revise e aprove cada uma." });
+      toast({ title: `${newParticipants.length} promocao(oes) gerada(s)`, description: "Revise e aprove cada uma." });
       await fetchPromotionRequests();
     }
     setGeneratingPromotions(false);
   }
 
   async function handlePromotionAction(requestId: string, userId: string, action: "aprovado" | "rejeitado") {
-    const { data: user } = await supabase.auth.getUser();
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) {
+      toast({ title: "Erro", description: "Nao foi possivel identificar o lider responsavel.", variant: "destructive" });
+      return;
+    }
+
+    if (action === "aprovado") {
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ confirmation_year: 2 } as any)
+        .eq("user_id", userId);
+      if (profileError) {
+        toast({ title: "Erro", description: profileError.message, variant: "destructive" });
+        return;
+      }
+    }
+
     const { error } = await supabase.from("year_promotion_requests").update({
       status: action,
-      reviewed_by: user.user?.id,
+      reviewed_by: authData.user.id,
       reviewed_at: new Date().toISOString(),
     } as any).eq("id", requestId);
 
     if (error) {
+      if (action === "aprovado") {
+        await supabase
+          .from("profiles")
+          .update({ confirmation_year: 1 } as any)
+          .eq("user_id", userId);
+      }
       toast({ title: "Erro", description: error.message, variant: "destructive" });
       return;
     }
 
     if (action === "aprovado") {
-      // Update the user's confirmation_year to 2
-      await supabase.from("profiles").update({ confirmation_year: 2 } as any).eq("user_id", userId);
-      toast({ title: "✅ Promoção aprovada", description: "Aluno promovido para o 2º ano." });
+      toast({ title: "Promocao aprovada", description: "Aluno promovido para o 2o ano." });
     } else {
-      toast({ title: "Promoção rejeitada" });
+      toast({ title: "Promocao rejeitada" });
     }
 
     setPromotionRequests(prev =>
@@ -1448,7 +1531,7 @@ export default function AttendanceTab({ participants, activities, communities, i
       return;
     }
 
-    await Promise.all([
+    const resetOperations = await Promise.all([
       supabase.from("user_progress").delete().in("user_id", userIds),
       supabase.from("lesson_responses").delete().in("user_id", userIds),
       supabase.from("devotional_progress").delete().in("user_id", userIds),
@@ -1456,6 +1539,17 @@ export default function AttendanceTab({ participants, activities, communities, i
       supabase.from("attendance").delete().in("user_id", userIds),
       supabase.from("worship_attendance").delete().in("user_id", userIds),
     ]);
+
+    const resetError = resetOperations.find(result => result.error)?.error;
+    if (resetError) {
+      toast({
+        title: "Erro ao reiniciar jornada",
+        description: resetError.message,
+        variant: "destructive",
+      });
+      setResettingJourney(false);
+      return;
+    }
 
     toast({ 
       title: "🔄 Jornada reiniciada!", 

@@ -1,31 +1,37 @@
-import { BarChart3, BookOpen, Shield, Megaphone, Settings, AlertTriangle, Crown, FileCode2 } from "lucide-react";
+import { BarChart3, BookOpen, Shield, Megaphone, Settings, AlertTriangle, Crown, GraduationCap, MessageSquare, CalendarDays, Phone, MessageCircle } from "lucide-react";
 
-export type AdminTab = "overview" | "alerts" | "courses" | "leaders" | "push" | "users" | "reports" | "settings";
+export type AdminTab = "overview" | "alerts" | "courses" | "leaders" | "push" | "users" | "settings" | "turma" | "avisos" | "agenda" | "contatos" | "whatsapp";
 
 type TabDef = { id: AdminTab; label: string; icon: typeof BarChart3 };
 
 const ALL_TABS: TabDef[] = [
-  { id: "overview", label: "Visao", icon: BarChart3 },
+  { id: "overview", label: "Visão", icon: BarChart3 },
   { id: "alerts", label: "Alertas", icon: AlertTriangle },
   { id: "courses", label: "Cursos", icon: BookOpen },
-  { id: "leaders", label: "Lideres", icon: Crown },
+  { id: "leaders", label: "Líderes", icon: Crown },
   { id: "push", label: "Push", icon: Megaphone },
-  { id: "users", label: "Usuarios", icon: Shield },
-  { id: "reports", label: "Relatorios", icon: FileCode2 },
+  { id: "users", label: "Usuários", icon: Shield },
+  { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
   { id: "settings", label: "Config", icon: Settings },
 ];
 
-const LIDER_TABS: AdminTab[] = ["courses", "push", "users", "reports"];
+const LIDER_TAB_DEFS: TabDef[] = [
+  { id: "turma", label: "Turma", icon: GraduationCap },
+  { id: "avisos", label: "Avisos", icon: MessageSquare },
+  { id: "agenda", label: "Agenda", icon: CalendarDays },
+  { id: "contatos", label: "Contatos", icon: Phone },
+  { id: "courses", label: "Cursos", icon: BookOpen },
+];
 
 type Props = { active: AdminTab; onChange: (tab: AdminTab) => void; userRole?: "admin" | "lider" | null };
 
 export default function AdminBottomNav({ active, onChange, userRole }: Props) {
-  const tabs = userRole === "lider" ? ALL_TABS.filter(t => LIDER_TABS.includes(t.id)) : ALL_TABS;
+  const tabs = userRole === "lider" ? LIDER_TAB_DEFS : ALL_TABS;
 
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border"
-      aria-label="Navegacao do painel administrativo"
+      aria-label="Navegação do painel administrativo"
       role="tablist"
     >
       <div className="max-w-2xl mx-auto flex overflow-x-auto">

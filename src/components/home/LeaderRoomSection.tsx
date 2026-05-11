@@ -17,9 +17,7 @@ const LeaderGuideContent = lazy(() => import("@/components/home/LeaderGuideConte
 import LeaderWaitingRoom from "@/components/home/LeaderWaitingRoom";
 
 
-const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
-const AREA_2_COMMUNITIES = ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"];
-const ALL_COMMUNITIES = [...AREA_1_COMMUNITIES, ...AREA_2_COMMUNITIES];
+import { AREA_COMMUNITIES, ALL_COMMUNITIES, getCommunitiesForArea } from "@/config/areas";
 
 type Activity = {
   id: string; type: string; title: string; subtitle: string | null; order_num: number; points: number;
@@ -28,6 +26,10 @@ type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
   confirmation_year?: number | null;
+  completed_lesson_count?: number;
+  completed_devotional_count?: number;
+  completed_event_count?: number;
+  faith_points?: number;
 };
 type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
 type Turma = { id: string; name: string; area: string | null };
@@ -167,8 +169,9 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
     async function fetchWaitingCount() {
       const { data, error } = await supabase
         .from("profiles")
-        .select("user_id, area")
-        .is("turma_id", null);
+        .select("user_id, area, enrollment_status")
+        .is("turma_id", null)
+        .eq("enrollment_status", "pending");
       if (!error && data) {
         const myId = (await supabase.auth.getUser()).data.user?.id;
         const filtered = data.filter(p => p.user_id !== myId && p.area === turmaArea);
@@ -214,7 +217,12 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
       profilesQuery = profilesQuery.eq("turma_id", profile!.turma_id!);
     }
 
-    const [{ data: activitiesData }, { data: profilesData }, userResult, { data: turmasData }] = await Promise.all([
+    const [
+      { data: activitiesData },
+      { data: profilesData },
+      userResult,
+      { data: turmasData },
+    ] = await Promise.all([
       supabase.from("activities").select("*").order("order_num"),
       profilesQuery,
       supabase.auth.getUser(),
@@ -223,14 +231,64 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
 
     const myId = userResult.data.user?.id ?? "";
     const profilesList = (profilesData ?? []).filter(p => p.user_id !== myId);
-    const { data: progressData } = await supabase.from("user_progress").select("user_id, activity_id");
+
+    const userIds = profilesList.map(p => p.user_id);
+    const communitiesInScope = [...new Set(profilesList.map(p => p.community).filter(Boolean))];
+    const [
+      { data: progressData },
+      { data: lessonResponsesData },
+      { data: devotionalProgressData },
+      { data: attendanceData },
+      rankingResponses,
+    ] = userIds.length > 0
+      ? await Promise.all([
+          supabase.from("user_progress").select("user_id, activity_id").in("user_id", userIds),
+          supabase.from("lesson_responses").select("user_id, lesson_id").in("user_id", userIds),
+          supabase.from("devotional_progress").select("user_id, devotional_id, completed_at").in("user_id", userIds),
+          supabase.from("attendance").select("user_id, status").in("user_id", userIds).eq("status", "presente"),
+          Promise.all(
+            communitiesInScope.map((community) =>
+              supabase.rpc("get_community_ranking" as any, { _community: community as any })
+            )
+          ),
+        ])
+      : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, [] as any];
+
+    const rankingMap = new Map<string, number>();
+    const rankingFailedCommunities = new Set<string>();
+    (rankingResponses ?? []).forEach((response: any, index: number) => {
+      const community = communitiesInScope[index];
+      if (response?.error) {
+        if (community) rankingFailedCommunities.add(community);
+        return;
+      }
+      (response.data ?? []).forEach((item: any) => {
+        rankingMap.set(item.user_id, Number(item.faith_points ?? 0));
+      });
+    });
 
     const participantList: Participant[] = profilesList.map((p) => {
       const userProgress = (progressData ?? []).filter((pr) => pr.user_id === p.user_id);
+      const lessonCount = new Set(
+        (lessonResponsesData ?? [])
+          .filter((response) => response.user_id === p.user_id)
+          .map((response) => response.lesson_id)
+      ).size;
+      const devotionals = (devotionalProgressData ?? []).filter((progress) => progress.user_id === p.user_id);
+      const devotionalCount = devotionals.length;
+      const completedActivityIds = userProgress.map((pr) => pr.activity_id);
+      const completedEventCount = (attendanceData ?? []).filter(a => a.user_id === p.user_id).length;
+
       return {
         ...p,
-        completed_count: userProgress.length,
-        completed_activity_ids: userProgress.map((pr) => pr.activity_id),
+        completed_count: userProgress.length + lessonCount + devotionalCount,
+        completed_activity_ids: completedActivityIds,
+        completed_lesson_count: lessonCount,
+        completed_devotional_count: devotionalCount,
+        completed_event_count: completedEventCount,
+        faith_points: rankingFailedCommunities.has(p.community)
+          ? undefined
+          : rankingMap.get(p.user_id),
         turma_id: p.turma_id,
       } as any;
     });
@@ -259,9 +317,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
 
   if (!canView) return null;
 
-  const communities = turmaArea === "Área 1" ? AREA_1_COMMUNITIES
-    : turmaArea === "Área 2" ? AREA_2_COMMUNITIES
-    : ALL_COMMUNITIES;
+  const communities = getCommunitiesForArea(turmaArea ?? "");
 
   return (
     <div className={asTab ? "px-5" : "mx-5"}>

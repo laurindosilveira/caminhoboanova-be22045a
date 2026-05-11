@@ -53,11 +53,21 @@ type TimelineItem = {
   severity?: "positive" | "neutral" | "warning" | "critical";
 };
 
+function normalizeAttendanceStatus(status: string) {
+  if (status === "falta") return "faltou";
+  if (status === "justificado") return "justificou";
+  return status;
+}
+
 export type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
   turma_id?: string | null;
   confirmation_year?: number | null;
+  completed_lesson_count?: number;
+  completed_devotional_count?: number;
+  completed_event_count?: number;
+  faith_points?: number;
   avatar_url?: string | null;
   father_name?: string | null;
   mother_name?: string | null;
@@ -97,11 +107,33 @@ function calcAge(birthDate: string) {
 }
 
 type Lesson = { id: string; title: string; order_num: number; objective: string | null; topics: string[] | null; course_id: string };
+type Course = { id: string; title: string; order_num: number };
+type LessonCompletion = { lesson_id: string; completed_at: string | null };
+type DevotionalCompletion = { devotional_id: string; lesson_id: string | null; completed_at: string };
+type DevotionalCatalogItem = {
+  id: string;
+  lesson_id: string | null;
+  title: string;
+  day_number: number;
+  lesson_title: string;
+  course_title: string;
+};
+type ManualReleaseDraft = {
+  id: string;
+  user_id?: string;
+  content_kind: "lesson" | "devotional";
+  lesson_id: string | null;
+  devotional_id: string | null;
+  custom_points: number;
+  available_from: string;
+  available_until: string;
+  notes: string;
+  is_unlocked: boolean;
+  created_at: string;
+  granted_by?: string;
+};
 
-const COMMUNITIES_LIST = ["Martim Lutero","Bom Pastor","Rincão Fundo","Rincão Frente","Linha Brasil","Iriá Pira 1","Iriá Pira 2"] as const;
-function getArea(community: string) {
-  return ["Rincão Frente","Rincão Fundo","Bom Pastor","Iriá Pira 1"].includes(community) ? "Área 1" : "Área 2";
-}
+import { ALL_COMMUNITIES as COMMUNITIES_LIST, getAreaForCommunity as getArea } from "@/config/areas";
 
 export default function ParticipantSheet({ participant: p, activities, onBack }: {
   participant: Participant; activities: Activity[]; onBack: () => void;
@@ -118,7 +150,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [noteForm, setNoteForm] = useState({ note_type: "acompanhamento", content: "" });
   const [savingNote, setSavingNote] = useState(false);
-  const [activeSection, setActiveSection] = useState<"overview"|"plan"|"notes"|"jornada"|"presenca"|"timeline"|"relatorio"|"parecer">("overview");
+  const [activeSection, setActiveSection] = useState<"overview"|"plan"|"notes"|"jornada"|"liberacoes"|"presenca"|"timeline"|"relatorio"|"parecer">("overview");
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("14:00");
@@ -136,13 +168,34 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const [newConfYear, setNewConfYear] = useState<number | null>(p.confirmation_year ?? null);
   const [savingConfYear, setSavingConfYear] = useState(false);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [devotionalCatalog, setDevotionalCatalog] = useState<DevotionalCatalogItem[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  const [lessonCompletions, setLessonCompletions] = useState<LessonCompletion[]>([]);
+  const [devotionalCompletions, setDevotionalCompletions] = useState<DevotionalCompletion[]>([]);
+  const [manualReleaseDrafts, setManualReleaseDrafts] = useState<ManualReleaseDraft[]>([]);
+  const [manualReleaseSelection, setManualReleaseSelection] = useState({
+    course_id: "",
+    lesson_id: "",
+    content_kind: "devotional" as "lesson" | "devotional",
+  });
+  const [manualReleaseForm, setManualReleaseForm] = useState({
+    devotional_ids: [] as string[],
+    custom_points: 5,
+    available_from: "",
+    available_until: "",
+    notes: "",
+    is_unlocked: true,
+  });
+  const [loadingManualReleases, setLoadingManualReleases] = useState(false);
+  const [savingManualRelease, setSavingManualRelease] = useState(false);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
   const [meetingEvals, setMeetingEvals] = useState<MeetingEval[]>([]);
   const [worshipRecords, setWorshipRecords] = useState<WorshipRecord[]>([]);
   const [timelineFilter, setTimelineFilter] = useState<TimelineCategory | "todos">("todos");
   const [showAvatarZoom, setShowAvatarZoom] = useState(false);
+  const [aptidaoThresholds, setAptidaoThresholds] = useState({ apto: 3.5, acompanhamento: 2.5 });
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
@@ -151,23 +204,105 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
     async function load() {
-      const [{ data: ass }, { data: planData }, { data: notesData }, { data: lessonsData }, { data: attendanceData }, { data: progressData }, { data: allAssessments }, { data: evalData }, { data: worshipData }, { data: challengeParticipations }] = await Promise.all([
+      const [
+        { data: ass },
+        { data: planData },
+        { data: notesData },
+        { data: lessonsData },
+        { data: lessonResponsesData },
+        { data: devotionalProgressData },
+        { data: devotionalContentData },
+        { data: attendanceData },
+        { data: progressData },
+        { data: allAssessments },
+        { data: evalData },
+        { data: worshipData },
+        { data: challengeParticipations },
+        { data: coursesData },
+        { data: unlocksData },
+        { data: gameConfig },
+      ] = await Promise.all([
         supabase.from("spiritual_assessments").select("*").eq("user_id", p.user_id).eq("month", month).eq("year", year).maybeSingle(),
         supabase.from("discipleship_plans").select("*").eq("user_id", p.user_id).maybeSingle(),
         supabase.from("pastoral_notes").select("*").eq("user_id", p.user_id).order("created_at", { ascending: false }),
         supabase.from("lessons").select("id, title, order_num, objective, topics, course_id").order("order_num"),
+        supabase.from("lesson_responses").select("lesson_id, created_at").eq("user_id", p.user_id).order("created_at"),
+        supabase.from("devotional_progress").select("devotional_id, completed_at").eq("user_id", p.user_id).order("completed_at"),
+        supabase.from("devotional_content").select("id, lesson_id, title, day_number"),
         supabase.from("attendance").select("id, event_id, status, created_at").eq("user_id", p.user_id),
         supabase.from("user_progress").select("activity_id, completed_at").eq("user_id", p.user_id),
         supabase.from("spiritual_assessments").select("month, year, prayer_score, presence_score, created_at").eq("user_id", p.user_id),
         supabase.from("meeting_evaluations").select("event_id, participation_score, understanding_score, engagement_score, notes, created_at").eq("user_id", p.user_id),
         supabase.from("worship_attendance").select("id, worship_date, worship_time, preacher_name, status, event_type, created_at").eq("user_id", p.user_id).order("worship_date", { ascending: false }),
         supabase.from("challenge_participants").select("challenge_id, completed, completed_at, joined_at, response_text, file_url").eq("user_id", p.user_id),
+        supabase.from("courses").select("id, title, order_num").order("order_num"),
+        supabase.from("course_unlocks").select("course_id").eq("area", p.area),
+        supabase.rpc("get_game_config" as any),
       ]);
+
+      const cfgMap = new Map<string, number>((gameConfig ?? []).map((r: any) => [r.key, Number(r.value)]));
+      setAptidaoThresholds({
+        apto:           cfgMap.get("aptidao_apto_threshold")           ?? 3.5,
+        acompanhamento: cfgMap.get("aptidao_acompanhamento_threshold") ?? 2.5,
+      });
 
       setAssessment(ass ?? null);
       if (planData) setPlan(prev => ({ ...prev, ...planData }));
       setNotes(notesData ?? []);
-      setLessons(lessonsData ?? []);
+      const unlockedCourseIds = new Set((unlocksData ?? []).map((unlock: any) => unlock.course_id));
+      const visibleCourses = (coursesData ?? []).filter((course) => unlockedCourseIds.has(course.id));
+      setCourses(visibleCourses as Course[]);
+      const visibleLessons = (lessonsData ?? []).filter((lesson) => unlockedCourseIds.has(lesson.course_id));
+      setLessons(visibleLessons);
+      const visibleLessonIds = new Set(visibleLessons.map((lesson) => lesson.id));
+      const lessonMap = new Map(visibleLessons.map((lesson) => [lesson.id, lesson]));
+      const courseTitleMap = new Map((visibleCourses as Course[]).map((course) => [course.id, course.title]));
+
+      const lessonCompletionMap = new Map<string, string | null>();
+      (lessonResponsesData ?? []).forEach((response) => {
+        if (!visibleLessonIds.has(response.lesson_id)) return;
+        const existing = lessonCompletionMap.get(response.lesson_id);
+        if (!existing || new Date(response.created_at).getTime() < new Date(existing).getTime()) {
+          lessonCompletionMap.set(response.lesson_id, response.created_at);
+        }
+      });
+      setLessonCompletions(
+        Array.from(lessonCompletionMap.entries()).map(([lesson_id, completed_at]) => ({
+          lesson_id,
+          completed_at,
+        }))
+      );
+
+      const devotionalLessonMap = new Map((devotionalContentData ?? []).map((devotional: any) => [devotional.id, devotional.lesson_id]));
+      const catalog = (devotionalContentData ?? [])
+        .filter((devotional: any) => devotional.lesson_id && visibleLessonIds.has(devotional.lesson_id))
+        .map((devotional: any) => {
+          const lesson = lessonMap.get(devotional.lesson_id);
+          return {
+            id: devotional.id,
+            lesson_id: devotional.lesson_id,
+            title: devotional.title || `Devocional ${devotional.day_number}`,
+            day_number: devotional.day_number ?? 0,
+            lesson_title: lesson?.title ?? "Lição",
+            course_title: lesson ? courseTitleMap.get(lesson.course_id) ?? "Curso" : "Curso",
+          };
+        })
+        .sort((a, b) => {
+          if (a.course_title !== b.course_title) return a.course_title.localeCompare(b.course_title);
+          if (a.lesson_title !== b.lesson_title) return a.lesson_title.localeCompare(b.lesson_title);
+          return a.day_number - b.day_number;
+        });
+      setDevotionalCatalog(catalog);
+
+      setDevotionalCompletions(
+        (devotionalProgressData ?? [])
+          .map((progress: any) => ({
+            devotional_id: progress.devotional_id,
+            lesson_id: devotionalLessonMap.get(progress.devotional_id) ?? null,
+            completed_at: progress.completed_at,
+          }))
+          .filter((completion) => !completion.lesson_id || visibleLessonIds.has(completion.lesson_id))
+      );
 
       // Fetch turmas
       const { data: turmasData } = await supabase.from("turmas").select("id, name, area").eq("is_active", true).order("area").order("name");
@@ -254,10 +389,11 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         let consecutiveMisses = 0;
         sortedAtt.forEach(a => {
           const ev = eventsMap.get(a.event_id);
-          const statusEmoji = a.status === "presente" ? "🟢" : a.status === "faltou" ? "🔴" : "🟡";
-          const severity = a.status === "presente" ? "positive" as const : a.status === "faltou" ? "warning" as const : "neutral" as const;
+          const normalizedStatus = normalizeAttendanceStatus(a.status);
+          const statusEmoji = normalizedStatus === "presente" ? "🟢" : normalizedStatus === "faltou" ? "🔴" : "🟡";
+          const severity = normalizedStatus === "presente" ? "positive" as const : normalizedStatus === "faltou" ? "warning" as const : "neutral" as const;
           
-          if (a.status !== "presente") {
+          if (normalizedStatus !== "presente") {
             consecutiveMisses++;
           } else {
             if (consecutiveMisses >= 3) {
@@ -271,7 +407,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
             tl.push({ date: ev?.event_date ?? a.created_at, type: "crisis", category: "crise", title: `🚨 3 faltas consecutivas`, detail: "Alerta pastoral — possível afastamento", icon: "🚨", severity: "critical" });
           }
 
-          tl.push({ date: ev?.event_date ?? a.created_at, type: "attendance", category: "encontro", title: `${statusEmoji} ${ev?.title ?? "Evento"}`, detail: a.status === "presente" ? "Presente" : a.status === "faltou" ? "Faltou" : "Justificou", icon: statusEmoji, severity });
+          tl.push({ date: ev?.event_date ?? a.created_at, type: "attendance", category: "encontro", title: `${statusEmoji} ${ev?.title ?? "Evento"}`, detail: normalizedStatus === "presente" ? "Presente" : normalizedStatus === "faltou" ? "Faltou" : "Justificou", icon: statusEmoji, severity });
         });
       }
 
@@ -361,6 +497,61 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
     load();
   }, [p.user_id]);
 
+  async function fetchManualReleaseDrafts() {
+    const storageKey = `manual-content-release-drafts:${p.user_id}`;
+    setLoadingManualReleases(true);
+
+    const { data: devotionalData, error: devotionalError } = await supabase
+      .from("user_devotional_overrides" as any)
+      .select("id, user_id, devotional_id, custom_points, available_from, available_until, notes, is_unlocked, created_at, granted_by")
+      .eq("user_id", p.user_id)
+      .order("created_at", { ascending: false });
+
+    const { data: lessonData, error: lessonError } = await supabase
+      .from("user_lesson_overrides" as any)
+      .select("id, user_id, lesson_id, custom_points, available_from, available_until, notes, is_unlocked, created_at, granted_by")
+      .eq("user_id", p.user_id)
+      .order("created_at", { ascending: false });
+
+    const merged = [
+      ...(!devotionalError ? (devotionalData ?? []).map((item: any) => ({
+        ...item,
+        content_kind: "devotional" as const,
+        lesson_id: null,
+      })) : []),
+      ...(!lessonError ? (lessonData ?? []).map((item: any) => ({
+        ...item,
+        content_kind: "lesson" as const,
+        devotional_id: null,
+      })) : []),
+    ].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    if (merged.length > 0 || (!devotionalError && !lessonError)) {
+      setManualReleaseDrafts(merged as ManualReleaseDraft[]);
+      window.localStorage.removeItem(storageKey);
+      setLoadingManualReleases(false);
+      return;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) {
+        setManualReleaseDrafts([]);
+      } else {
+        const parsed = JSON.parse(raw) as ManualReleaseDraft[];
+        setManualReleaseDrafts(Array.isArray(parsed) ? parsed : []);
+      }
+    } catch {
+      setManualReleaseDrafts([]);
+    }
+
+    setLoadingManualReleases(false);
+  }
+
+  useEffect(() => {
+    fetchManualReleaseDrafts();
+  }, [p.user_id]);
+
   async function handleSavePlan() {
     setSaving(true);
     await supabase.from("discipleship_plans").upsert({
@@ -398,19 +589,233 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
     setNotes(data ?? []);
   }
 
+  function resetManualReleaseForm() {
+    setManualReleaseSelection({
+      course_id: "",
+      lesson_id: "",
+      content_kind: "devotional",
+    });
+    setManualReleaseForm({
+      devotional_ids: [],
+      custom_points: 5,
+      available_from: "",
+      available_until: "",
+      notes: "",
+      is_unlocked: true,
+    });
+  }
+
+  function isMissingManualReleaseStorage(error: { message?: string; code?: string } | null) {
+    if (!error) return false;
+    const message = `${error.code ?? ""} ${error.message ?? ""}`.toLowerCase();
+    return (
+      message.includes("does not exist") ||
+      message.includes("not found") ||
+      message.includes("schema cache") ||
+      message.includes("user_devotional_overrides") ||
+      message.includes("user_lesson_overrides") ||
+      message.includes("awarded_points") ||
+      message.includes("override_release_id")
+    );
+  }
+
+  async function handleAddManualReleaseDraft() {
+    if (manualReleaseSelection.content_kind === "devotional" && manualReleaseForm.devotional_ids.length === 0) return;
+    if (manualReleaseSelection.content_kind === "lesson" && !manualReleaseSelection.lesson_id) return;
+    if (
+      manualReleaseForm.available_from &&
+      manualReleaseForm.available_until &&
+      new Date(manualReleaseForm.available_until).getTime() < new Date(manualReleaseForm.available_from).getTime()
+    ) {
+      toast({
+        title: "Janela invalida",
+        description: "A data de expiração precisa ser igual ou posterior ao inicio da liberação.",
+      });
+      return;
+    }
+
+    const customPoints = Number.isFinite(manualReleaseForm.custom_points)
+      ? Math.max(0, Number(manualReleaseForm.custom_points))
+      : 0;
+
+    setSavingManualRelease(true);
+    const { data: authData } = await supabase.auth.getUser();
+    const leaderId = authData.user?.id ?? null;
+    const isLessonRelease = manualReleaseSelection.content_kind === "lesson";
+
+    if (isLessonRelease) {
+      const draft: ManualReleaseDraft = {
+        id: crypto.randomUUID(),
+        content_kind: "lesson",
+        lesson_id: manualReleaseSelection.lesson_id,
+        devotional_id: null,
+        custom_points: customPoints,
+        available_from: manualReleaseForm.available_from,
+        available_until: manualReleaseForm.available_until,
+        notes: manualReleaseForm.notes.trim(),
+        is_unlocked: manualReleaseForm.is_unlocked,
+        created_at: new Date().toISOString(),
+      };
+      const payload = {
+        user_id: p.user_id,
+        lesson_id: manualReleaseSelection.lesson_id,
+        custom_points: customPoints,
+        available_from: manualReleaseForm.available_from || null,
+        available_until: manualReleaseForm.available_until || null,
+        notes: manualReleaseForm.notes.trim() || null,
+        is_unlocked: manualReleaseForm.is_unlocked,
+        granted_by: leaderId,
+      };
+      const { error } = await supabase
+        .from("user_lesson_overrides" as any)
+        .upsert(payload, { onConflict: "user_id,lesson_id" })
+        .select("id, user_id, lesson_id, custom_points, available_from, available_until, notes, is_unlocked, created_at, granted_by");
+
+      if (error && isMissingManualReleaseStorage(error)) {
+        const storageKey = `manual-content-release-drafts:${p.user_id}`;
+        const next = [draft, ...manualReleaseDrafts.filter((item) => !(item.content_kind === "lesson" && item.lesson_id === draft.lesson_id))];
+        setManualReleaseDrafts(next);
+        window.localStorage.setItem(storageKey, JSON.stringify(next));
+        toast({ title: "Rascunho salvo localmente", description: "A tabela ainda nao existe no Supabase. Rode o SQL da parte 2 para persistir de verdade." });
+        resetManualReleaseForm();
+        setSavingManualRelease(false);
+        setActiveSection("liberacoes");
+        return;
+      }
+      if (error) {
+        toast({ title: "Falha ao salvar liberacao", description: error.message });
+        setSavingManualRelease(false);
+        return;
+      }
+      await fetchManualReleaseDrafts();
+      toast({ title: "Liberacao manual salva", description: "O override desta licao ja esta registrado no banco." });
+    } else {
+      // devotional — one upsert per selected devotional
+      const devIds = manualReleaseForm.devotional_ids;
+      const drafts: ManualReleaseDraft[] = devIds.map((devId) => ({
+        id: crypto.randomUUID(),
+        content_kind: "devotional" as const,
+        lesson_id: null,
+        devotional_id: devId,
+        custom_points: customPoints,
+        available_from: manualReleaseForm.available_from,
+        available_until: manualReleaseForm.available_until,
+        notes: manualReleaseForm.notes.trim(),
+        is_unlocked: manualReleaseForm.is_unlocked,
+        created_at: new Date().toISOString(),
+      }));
+
+      const payloads = devIds.map((devId) => ({
+        user_id: p.user_id,
+        devotional_id: devId,
+        custom_points: customPoints,
+        available_from: manualReleaseForm.available_from || null,
+        available_until: manualReleaseForm.available_until || null,
+        notes: manualReleaseForm.notes.trim() || null,
+        is_unlocked: manualReleaseForm.is_unlocked,
+        granted_by: leaderId,
+      }));
+
+      const { error } = await supabase
+        .from("user_devotional_overrides" as any)
+        .upsert(payloads, { onConflict: "user_id,devotional_id" })
+        .select("id, user_id, devotional_id, custom_points, available_from, available_until, notes, is_unlocked, created_at, granted_by");
+
+      if (error && isMissingManualReleaseStorage(error)) {
+        const storageKey = `manual-content-release-drafts:${p.user_id}`;
+        const existingIds = new Set(drafts.map((d) => d.devotional_id));
+        const next = [...drafts, ...manualReleaseDrafts.filter((item) => !(item.content_kind === "devotional" && existingIds.has(item.devotional_id)))];
+        setManualReleaseDrafts(next);
+        window.localStorage.setItem(storageKey, JSON.stringify(next));
+        toast({ title: "Rascunhos salvos localmente", description: `${devIds.length} devocional(is) preparado(s). A tabela ainda nao existe no Supabase.` });
+        resetManualReleaseForm();
+        setSavingManualRelease(false);
+        setActiveSection("liberacoes");
+        return;
+      }
+      if (error) {
+        toast({ title: "Falha ao salvar liberacao", description: error.message });
+        setSavingManualRelease(false);
+        return;
+      }
+      await fetchManualReleaseDrafts();
+      toast({
+        title: "Liberacoes salvas",
+        description: devIds.length === 1
+          ? "O override deste devocional ja esta registrado no banco."
+          : `${devIds.length} devocionais liberados e registrados no banco.`,
+      });
+    }
+
+    resetManualReleaseForm();
+    setSavingManualRelease(false);
+    setActiveSection("liberacoes");
+  }
+
+  async function handleRemoveManualReleaseDraft(draftId: string) {
+    const draft = manualReleaseDrafts.find((item) => item.id === draftId);
+    if (!draft) return;
+
+    const tableName = draft.content_kind === "lesson" ? "user_lesson_overrides" : "user_devotional_overrides";
+    const { error } = await supabase
+      .from(tableName as any)
+      .delete()
+      .eq("id", draftId);
+
+    if (!error) {
+      setManualReleaseDrafts((prev) => prev.filter((item) => item.id !== draftId));
+      toast({
+        title: "Liberacao removida",
+        description: draft.content_kind === "lesson"
+          ? "O override da licao foi apagado do banco."
+          : "O override do devocional foi apagado do banco.",
+      });
+      return;
+    }
+
+    if (!isMissingManualReleaseStorage(error)) {
+      toast({
+        title: "Falha ao remover liberacao",
+        description: error.message,
+      });
+      return;
+    }
+
+    const storageKey = `manual-content-release-drafts:${p.user_id}`;
+    setManualReleaseDrafts((prev) => {
+      const next = prev.filter((item) => item.id !== draftId);
+      window.localStorage.setItem(storageKey, JSON.stringify(next));
+      return next;
+    });
+  }
   const completedIds = new Set(p.completed_activity_ids);
-  const pct = activities.length > 0 ? Math.round((p.completed_count / activities.length) * 100) : 0;
   const formacoes = activities.filter(a => a.type === "formacao");
   const devocionais = activities.filter(a => a.type === "devocional");
   const encontros = activities.filter(a => a.type === "encontro");
-  const doneForm = formacoes.filter(a => completedIds.has(a.id)).length;
-  const doneDev = devocionais.filter(a => completedIds.has(a.id)).length;
-  const doneEnc = encontros.filter(a => completedIds.has(a.id)).length;
+  const legacyDoneForm = formacoes.filter(a => completedIds.has(a.id)).length;
+  const legacyDoneDev = devocionais.filter(a => completedIds.has(a.id)).length;
+  const legacyDoneEnc = encontros.filter(a => completedIds.has(a.id)).length;
+  const doneForm = Math.max(lessonCompletions.length, p.completed_lesson_count ?? 0, legacyDoneForm);
+  const doneDev = Math.max(devotionalCompletions.length, p.completed_devotional_count ?? 0, legacyDoneDev);
+  const doneEnc = Math.max(p.completed_event_count ?? 0, legacyDoneEnc);
+  const otherDone = activities.filter(a => !["formacao", "devocional", "encontro"].includes(a.type) && completedIds.has(a.id)).length;
+  const realCompletedCount = doneForm + doneDev + doneEnc + otherDone;
+  const pct = activities.length > 0 ? Math.round((realCompletedCount / activities.length) * 100) : 0;
   const age = calcAge(p.birth_date);
+  const manualReleaseCourses = courses.filter((course) => lessons.some((lesson) => lesson.course_id === course.id));
+  const manualReleaseLessons = lessons.filter((lesson) => (
+    !manualReleaseSelection.course_id || lesson.course_id === manualReleaseSelection.course_id
+  ));
+  const manualReleaseLessonDevotionals = devotionalCatalog.filter((devotional) => (
+    manualReleaseSelection.lesson_id ? devotional.lesson_id === manualReleaseSelection.lesson_id : false
+  ));
+  const selectedManualLesson = lessons.find((lesson) => lesson.id === manualReleaseSelection.lesson_id) ?? null;
+  const completedDevotionalIds = new Set(devotionalCompletions.map((completion) => completion.devotional_id));
+  const selectedManualDevotionals = devotionalCatalog.filter((d) => manualReleaseForm.devotional_ids.includes(d.id));
 
   // Attendance stats
   const totalEvents = attendanceRecords.length;
-  const presentCount = attendanceRecords.filter(a => a.status === "presente").length;
+  const presentCount = attendanceRecords.filter(a => normalizeAttendanceStatus(a.status) === "presente").length;
   const attendancePct = totalEvents > 0 ? Math.round((presentCount / totalEvents) * 100) : 0;
 
   if (loading) return <div className="py-20 text-center text-muted-foreground font-inter text-sm">Carregando ficha...</div>;
@@ -458,12 +863,12 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       return scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
     }).filter(s => s > 0);
     const testemunhoAvg = evalScores.length > 0 ? evalScores.reduce((a, b) => a + b, 0) / evalScores.length : 0;
-    const testemunhoScore = Math.round(testemunhoAvg) || (p.completed_count > 0 ? 2 : 1);
+    const testemunhoScore = Math.round(testemunhoAvg) || (realCompletedCount > 0 ? 2 : 1);
     const testemunhoLabel = testemunhoScore >= 4 ? "Exemplar" : testemunhoScore >= 3 ? "Bom" : testemunhoScore >= 2 ? "Em crescimento" : "Precisa atenção";
 
     // Overall
     const overall = (conhecimentoScore + vidaScore + comunhaoScore + testemunhoScore) / 4;
-    const aptidao = overall >= 3.5 ? "apto" : overall >= 2.5 ? "acompanhamento" : "nao_apto";
+    const aptidao = overall >= aptidaoThresholds.apto ? "apto" : overall >= aptidaoThresholds.acompanhamento ? "acompanhamento" : "nao_apto";
     const aptidaoLabel = aptidao === "apto" ? "✅ Apto para Profissão de Fé" : aptidao === "acompanhamento" ? "🟡 Em acompanhamento" : "🔴 Não apto no momento";
 
     return {
@@ -481,6 +886,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
 
   const SECTIONS = [
     { id: "overview" as const, label: "Visão Geral" },
+    { id: "liberacoes" as const, label: `Liberações (${manualReleaseDrafts.length})` },
     { id: "plan" as const, label: "Plano" },
     { id: "notes" as const, label: `Notas (${notes.length})` },
     { id: "presenca" as const, label: "Presença" },
@@ -648,6 +1054,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                 setSavingTurma(true);
                 const { error } = await supabase.from("profiles").update({
                   turma_id: newTurmaId || null,
+                  enrollment_status: newTurmaId ? "approved" : "pending",
                 }).eq("user_id", p.user_id);
                 setSavingTurma(false);
                 if (!error) {
@@ -711,6 +1118,30 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           </div>
         </div>
       )}
+
+      {/* Quick action buttons — release lesson or devotional */}
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={() => {
+            setManualReleaseSelection((prev) => ({ ...prev, content_kind: "lesson" }));
+            setActiveSection("liberacoes");
+          }}
+          className="flex items-center justify-center gap-2 p-3 rounded-2xl border border-primary/20 bg-primary/10 hover:bg-primary/15 transition-colors text-primary"
+        >
+          <BookOpen className="w-4 h-4 flex-shrink-0" />
+          <span className="font-inter text-sm font-bold">Liberar lição</span>
+        </button>
+        <button
+          onClick={() => {
+            setManualReleaseSelection((prev) => ({ ...prev, content_kind: "devotional" }));
+            setActiveSection("liberacoes");
+          }}
+          className="flex items-center justify-center gap-2 p-3 rounded-2xl border border-secondary/20 bg-secondary/10 hover:bg-secondary/15 transition-colors text-secondary-foreground"
+        >
+          <BookOpen className="w-4 h-4 flex-shrink-0" />
+          <span className="font-inter text-sm font-bold">Liberar devocional</span>
+        </button>
+      </div>
 
       {/* Quick action buttons */}
       <div className="grid grid-cols-2 gap-2">
@@ -851,7 +1282,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
             </div>
             <div className="p-4 space-y-3">
               {[
-                { label: "📊 Progresso geral", done: p.completed_count, total: activities.length, color: pct >= 70 ? "var(--gradient-green)" : pct >= 34 ? "var(--gradient-orange)" : "hsl(var(--destructive))" },
+                { label: "📊 Progresso geral", done: realCompletedCount, total: activities.length, color: pct >= 70 ? "var(--gradient-green)" : pct >= 34 ? "var(--gradient-orange)" : "hsl(var(--destructive))" },
                 { label: "📖 Devocionais", done: doneDev, total: devocionais.length, color: "var(--gradient-green)" },
                 { label: "🎓 Formação", done: doneForm, total: formacoes.length, color: "hsl(var(--secondary))" },
                 { label: "📅 Encontros", done: doneEnc, total: encontros.length, color: "hsl(var(--primary))" },
@@ -923,18 +1354,16 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
               <p className="font-montserrat font-bold text-foreground text-sm">Formação nos Cursos</p>
             </div>
             <div className="p-4 space-y-3">
-              {[
-                { label: "Curso 1 — Começando a Vida Cristã", total: 16 },
-                { label: "Curso 2 — Crescimento Cristão", total: 16 },
-              ].map((course, i) => {
-                const courseActs = formacoes.slice(i * course.total, (i + 1) * course.total);
-                const done = courseActs.filter(a => completedIds.has(a.id)).length;
-                const cp = course.total > 0 ? Math.round((done / course.total) * 100) : 0;
+              {courses.map((course) => {
+                const courseLessons = lessons.filter((lesson) => lesson.course_id === course.id);
+                const done = courseLessons.filter((lesson) => lessonCompletions.some((completion) => completion.lesson_id === lesson.id)).length;
+                const total = courseLessons.length;
+                const cp = total > 0 ? Math.round((done / total) * 100) : 0;
                 return (
-                  <div key={i}>
+                  <div key={course.id}>
                     <div className="flex justify-between mb-1">
-                      <span className="font-inter text-xs text-foreground">{course.label}</span>
-                      <span className="font-inter text-xs text-muted-foreground">{done}/{course.total} · <strong className="text-foreground">{cp}%</strong></span>
+                      <span className="font-inter text-xs text-foreground">Curso {course.order_num} — {course.title}</span>
+                      <span className="font-inter text-xs text-muted-foreground">{done}/{total} · <strong className="text-foreground">{cp}%</strong></span>
                     </div>
                     <div className="h-2 bg-muted rounded-full overflow-hidden">
                       <div className="h-full bg-secondary rounded-full" style={{ width: `${cp}%` }} />
@@ -942,6 +1371,9 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   </div>
                 );
               })}
+              {courses.length === 0 && (
+                <p className="text-center text-muted-foreground font-inter text-sm py-2">Nenhum curso liberado para este confirmando.</p>
+              )}
             </div>
           </div>
         </div>
@@ -1062,8 +1494,8 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
             <div className="grid grid-cols-3 gap-2 mb-3">
               {[
                 { label: "Presente", count: presentCount, emoji: "🟢", color: "text-brand-green", bg: "bg-brand-green/10" },
-                { label: "Faltou", count: attendanceRecords.filter(a => a.status === "faltou").length, emoji: "🔴", color: "text-destructive", bg: "bg-destructive/10" },
-                { label: "Justificou", count: attendanceRecords.filter(a => a.status === "justificou").length, emoji: "🟡", color: "text-accent-foreground", bg: "bg-accent/20" },
+                { label: "Faltou", count: attendanceRecords.filter(a => normalizeAttendanceStatus(a.status) === "faltou").length, emoji: "🔴", color: "text-destructive", bg: "bg-destructive/10" },
+                { label: "Justificou", count: attendanceRecords.filter(a => normalizeAttendanceStatus(a.status) === "justificou").length, emoji: "🟡", color: "text-accent-foreground", bg: "bg-accent/20" },
               ].map(s => (
                 <div key={s.label} className={`rounded-xl p-2.5 text-center ${s.bg}`}>
                   <p className={`font-montserrat font-black text-xl ${s.color}`}>{s.count}</p>
@@ -1091,8 +1523,9 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           ) : (
             <div className="space-y-2">
               {attendanceRecords.map(a => {
-                const statusEmoji = a.status === "presente" ? "🟢" : a.status === "faltou" ? "🔴" : "🟡";
-                const statusLabel = a.status === "presente" ? "Presente" : a.status === "faltou" ? "Faltou" : "Justificou";
+                const normalizedStatus = normalizeAttendanceStatus(a.status);
+                const statusEmoji = normalizedStatus === "presente" ? "🟢" : normalizedStatus === "faltou" ? "🔴" : "🟡";
+                const statusLabel = normalizedStatus === "presente" ? "Presente" : normalizedStatus === "faltou" ? "Faltou" : "Justificou";
                 return (
                   <div key={a.id} className="bg-card rounded-xl border border-border p-3 flex items-center gap-3">
                     <span className="text-lg">{statusEmoji}</span>
@@ -1103,8 +1536,8 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                       </p>
                     </div>
                     <span className={`text-xs font-inter font-medium px-2 py-0.5 rounded-full ${
-                      a.status === "presente" ? "bg-brand-green/10 text-brand-green" :
-                      a.status === "faltou" ? "bg-destructive/10 text-destructive" :
+                      normalizedStatus === "presente" ? "bg-brand-green/10 text-brand-green" :
+                      normalizedStatus === "faltou" ? "bg-destructive/10 text-destructive" :
                       "bg-accent/20 text-accent-foreground"
                     }`}>{statusLabel}</span>
                   </div>
@@ -1330,6 +1763,364 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         </div>
       )}
 
+      {activeSection === "liberacoes" && (
+        <div className="space-y-4">
+          <div className="bg-accent/10 border border-accent/20 rounded-2xl p-4 space-y-2">
+            <div className="flex items-start gap-2">
+              <BookOpen className="w-4 h-4 text-accent-foreground flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-montserrat font-bold text-foreground text-sm">Liberacao manual de conteudo</p>
+                <p className="font-inter text-xs text-muted-foreground mt-1">
+                  O lider pode liberar uma licao inteira ou um devocional especifico para este usuario, definir a pontuacao e o periodo de acesso.
+                  Se a migration ainda nao tiver sido aplicada, o app cai em fallback local neste navegador.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-card rounded-2xl border border-border shadow-sm p-4 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-montserrat font-bold text-foreground text-sm">Novo rascunho para {p.full_name}</p>
+                <p className="font-inter text-[11px] text-muted-foreground">
+                  Escolha primeiro o curso, depois a licao e por fim o tipo de conteudo que deseja liberar.
+                </p>
+              </div>
+              <span className="px-2 py-1 rounded-lg bg-muted text-muted-foreground text-[10px] font-inter font-semibold">
+                Etapa 1
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="block text-[11px] font-inter font-bold text-foreground">Curso</label>
+                <select
+                  value={manualReleaseSelection.course_id}
+                  onChange={(e) => {
+                    const nextCourseId = e.target.value;
+                    setManualReleaseSelection((prev) => ({
+                      ...prev,
+                      course_id: nextCourseId,
+                      lesson_id: "",
+                    }));
+                    setManualReleaseForm((prev) => ({ ...prev, devotional_ids: [] }));
+                  }}
+                  className="w-full h-11 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">Selecione um curso</option>
+                  {manualReleaseCourses.map((course) => (
+                    <option key={course.id} value={course.id}>
+                      Curso {course.order_num} - {course.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[11px] font-inter font-bold text-foreground">Licao</label>
+                <select
+                  value={manualReleaseSelection.lesson_id}
+                  onChange={(e) => {
+                    const nextLessonId = e.target.value;
+                    setManualReleaseSelection((prev) => ({
+                      ...prev,
+                      lesson_id: nextLessonId,
+                    }));
+                    setManualReleaseForm((prev) => ({ ...prev, devotional_ids: [] }));
+                  }}
+                  disabled={!manualReleaseSelection.course_id}
+                  className="w-full h-11 rounded-xl border border-input bg-background px-3 text-sm text-foreground disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">{manualReleaseSelection.course_id ? "Selecione uma licao" : "Escolha primeiro o curso"}</option>
+                  {manualReleaseLessons.map((lesson) => (
+                    <option key={lesson.id} value={lesson.id}>
+                      Licao {lesson.order_num} - {lesson.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-[11px] font-inter font-bold text-foreground">Tipo de conteudo</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManualReleaseSelection((prev) => ({ ...prev, content_kind: "lesson" }));
+                    setManualReleaseForm((prev) => ({ ...prev, devotional_ids: [] }));
+                  }}
+                  disabled={!manualReleaseSelection.lesson_id}
+                  className={`rounded-xl border px-3 py-3 text-left transition-colors ${
+                    manualReleaseSelection.content_kind === "lesson"
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-background"
+                  } disabled:opacity-60`}
+                >
+                  <p className="font-inter text-sm font-semibold text-foreground">Conteudo da licao</p>
+                  <p className="font-inter text-[11px] text-muted-foreground mt-1">
+                    Libera o estudo principal desta licao para este usuario especifico.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setManualReleaseSelection((prev) => ({ ...prev, content_kind: "devotional" }))}
+                  disabled={!manualReleaseSelection.lesson_id}
+                  className={`rounded-xl border px-3 py-3 text-left transition-colors ${
+                    manualReleaseSelection.content_kind === "devotional"
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-background"
+                  } disabled:opacity-60`}
+                >
+                  <p className="font-inter text-sm font-semibold text-foreground">Devocionais</p>
+                  <p className="font-inter text-[11px] text-muted-foreground mt-1">
+                    Libera um devocional especifico da licao com pontuacao personalizada.
+                  </p>
+                </button>
+              </div>
+            </div>
+
+            {manualReleaseSelection.content_kind === "lesson" && selectedManualLesson && (
+              <div className="rounded-xl border border-accent/20 bg-accent/10 p-3">
+                <p className="font-inter text-sm font-semibold text-foreground">{selectedManualLesson.title}</p>
+                <p className="font-inter text-[11px] text-muted-foreground mt-1">
+                  Este override vai liberar o conteudo principal da licao para este usuario, mesmo fora da agenda normal.
+                </p>
+              </div>
+            )}
+
+            {manualReleaseSelection.content_kind === "devotional" && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] font-inter font-bold text-foreground">Devocionais</label>
+                  {manualReleaseLessonDevotionals.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allIds = manualReleaseLessonDevotionals.map((d) => d.id);
+                        const allSelected = allIds.every((id) => manualReleaseForm.devotional_ids.includes(id));
+                        setManualReleaseForm((prev) => ({ ...prev, devotional_ids: allSelected ? [] : allIds }));
+                      }}
+                      className="text-[10px] font-inter text-primary underline underline-offset-2"
+                    >
+                      {manualReleaseLessonDevotionals.every((d) => manualReleaseForm.devotional_ids.includes(d.id))
+                        ? "Desmarcar todos"
+                        : "Selecionar todos"}
+                    </button>
+                  )}
+                </div>
+                {!manualReleaseSelection.lesson_id ? (
+                  <p className="text-[11px] font-inter text-muted-foreground px-1">Escolha primeiro o curso e a licao.</p>
+                ) : (
+                  <div className="rounded-xl border border-input bg-background divide-y divide-border max-h-56 overflow-y-auto">
+                    {manualReleaseLessonDevotionals.map((devotional) => {
+                      const isChecked = manualReleaseForm.devotional_ids.includes(devotional.id);
+                      const isDone = completedDevotionalIds.has(devotional.id);
+                      return (
+                        <label
+                          key={devotional.id}
+                          className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${isChecked ? "bg-primary/5" : "hover:bg-muted/40"}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              setManualReleaseForm((prev) => ({
+                                ...prev,
+                                devotional_ids: e.target.checked
+                                  ? [...prev.devotional_ids, devotional.id]
+                                  : prev.devotional_ids.filter((id) => id !== devotional.id),
+                              }));
+                            }}
+                            className="w-4 h-4 accent-primary flex-shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-inter text-sm text-foreground">
+                              Dia {devotional.day_number} — {devotional.title}
+                            </p>
+                          </div>
+                          {isDone && (
+                            <span className="text-[10px] font-inter text-brand-green font-semibold flex-shrink-0">✓ Feito</span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                {selectedManualDevotionals.length > 0 && (
+                  <p className="font-inter text-[11px] text-secondary font-semibold px-1">
+                    {selectedManualDevotionals.length} devocional(is) selecionado(s)
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-inter font-bold text-foreground mb-1">Pontuação</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={manualReleaseForm.custom_points}
+                  onChange={(e) => setManualReleaseForm((prev) => ({ ...prev, custom_points: Number(e.target.value) }))}
+                  className="w-full h-11 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-inter font-bold text-foreground mb-1">Liberar em</label>
+                <input
+                  type="datetime-local"
+                  value={manualReleaseForm.available_from}
+                  onChange={(e) => setManualReleaseForm((prev) => ({ ...prev, available_from: e.target.value }))}
+                  className="w-full h-11 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-inter font-bold text-foreground mb-1">Expira em</label>
+                <input
+                  type="datetime-local"
+                  value={manualReleaseForm.available_until}
+                  onChange={(e) => setManualReleaseForm((prev) => ({ ...prev, available_until: e.target.value }))}
+                  className="w-full h-11 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-[11px] font-inter font-bold text-foreground">Observacao do lider</label>
+              <textarea
+                value={manualReleaseForm.notes}
+                onChange={(e) => setManualReleaseForm((prev) => ({ ...prev, notes: e.target.value }))}
+                rows={3}
+                placeholder="Ex.: recuperacao autorizada por ausencia justificada no encontro."
+                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              />
+            </div>
+
+            <label className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 px-3 py-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={manualReleaseForm.is_unlocked}
+                onChange={(e) => setManualReleaseForm((prev) => ({ ...prev, is_unlocked: e.target.checked }))}
+                className="w-4 h-4 accent-primary"
+              />
+              <div>
+                <p className="font-inter text-sm font-medium text-foreground">Marcar como liberado manualmente</p>
+                <p className="font-inter text-[11px] text-muted-foreground">
+                  Desative apenas se quiser deixar o override preparado, mas nao ativo.
+                </p>
+              </div>
+            </label>
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleAddManualReleaseDraft}
+                disabled={savingManualRelease || (manualReleaseSelection.content_kind === "devotional" && manualReleaseForm.devotional_ids.length === 0) || (manualReleaseSelection.content_kind === "lesson" && !manualReleaseSelection.lesson_id)}
+                className="flex-1 h-11 rounded-xl font-inter text-sm font-bold text-primary-foreground disabled:opacity-60"
+                style={{ background: "var(--gradient-hero)" }}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Plus className="w-4 h-4" />
+                  {savingManualRelease ? "Salvando..." : "Salvar liberacao"}
+                </span>
+              </button>
+              <button
+                onClick={resetManualReleaseForm}
+                className="px-4 h-11 rounded-xl border border-border text-sm font-inter text-muted-foreground hover:text-foreground"
+              >
+                Limpar
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-card rounded-2xl border border-border shadow-sm p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-montserrat font-bold text-foreground text-sm">Rascunhos preparados</p>
+                <p className="font-inter text-[11px] text-muted-foreground">
+                  Quando a migration ja existe no Supabase, esta lista reflete os overrides reais salvos no banco.
+                </p>
+              </div>
+              <span className="px-2 py-1 rounded-lg bg-muted text-muted-foreground text-[10px] font-inter font-semibold">
+                {manualReleaseDrafts.length} item(ns)
+              </span>
+            </div>
+
+            {loadingManualReleases ? (
+              <div className="text-center py-8 text-muted-foreground font-inter text-sm">
+                <Clock className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                <p>Carregando liberacoes...</p>
+              </div>
+            ) : manualReleaseDrafts.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground font-inter text-sm">
+                <BookOpen className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                <p>Nenhum rascunho manual criado ainda.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {manualReleaseDrafts.map((draft) => {
+                  const lessonDraft = draft.lesson_id ? lessons.find((item) => item.id === draft.lesson_id) : null;
+                  const devotional = draft.devotional_id ? devotionalCatalog.find((item) => item.id === draft.devotional_id) : null;
+                  return (
+                    <div key={draft.id} className="rounded-xl border border-border bg-muted/20 p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-inter text-sm font-semibold text-foreground">
+                            {draft.content_kind === "lesson"
+                              ? lessonDraft?.title ?? "Licao removida"
+                              : devotional?.title ?? "Devocional removido"}
+                          </p>
+                          <p className="font-inter text-[11px] text-muted-foreground">
+                            {draft.content_kind === "lesson"
+                              ? lessonDraft
+                                ? `Licao ${lessonDraft.order_num} - Conteudo da licao`
+                                : "Licao nao encontrada na lista atual"
+                              : devotional
+                                ? `${devotional.lesson_title} - Dia ${devotional.day_number}`
+                                : "Devocional nao encontrado na lista atual"}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveManualReleaseDraft(draft.id)}
+                          className="text-destructive text-[11px] font-inter font-semibold hover:underline"
+                        >
+                          Remover
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <span className="px-2 py-1 rounded-lg bg-background border border-border text-[10px] font-inter text-muted-foreground">
+                          {draft.content_kind === "lesson" ? "Conteudo da licao" : "Devocional"}
+                        </span>
+                        <span className="px-2 py-1 rounded-lg bg-background border border-border text-[10px] font-inter text-foreground">
+                          {draft.custom_points} pts
+                        </span>
+                        <span className={`px-2 py-1 rounded-lg text-[10px] font-inter font-semibold ${draft.is_unlocked ? "bg-brand-green/10 text-brand-green" : "bg-muted text-muted-foreground"}`}>
+                          {draft.is_unlocked ? "Liberado" : "Preparado, mas inativo"}
+                        </span>
+                        {draft.available_from && (
+                          <span className="px-2 py-1 rounded-lg bg-background border border-border text-[10px] font-inter text-muted-foreground">
+                            Inicio: {new Date(draft.available_from).toLocaleString("pt-BR")}
+                          </span>
+                        )}
+                        {draft.available_until && (
+                          <span className="px-2 py-1 rounded-lg bg-background border border-border text-[10px] font-inter text-muted-foreground">
+                            Fim: {new Date(draft.available_until).toLocaleString("pt-BR")}
+                          </span>
+                        )}
+                      </div>
+                      {draft.notes && (
+                        <p className="font-inter text-[11px] text-muted-foreground bg-background rounded-lg border border-border px-2.5 py-2">
+                          {draft.notes}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* PARECER PASTORAL */}
       {activeSection === "parecer" && (() => {
         const parecer = generateParecer();
@@ -1410,3 +2201,5 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
     </div>
   );
 }
+
+

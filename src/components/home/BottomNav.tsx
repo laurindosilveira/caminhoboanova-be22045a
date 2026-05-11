@@ -19,7 +19,7 @@ const tabs = [
 export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
   return (
     <nav
-      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] max-w-[calc(448px-1rem)] bg-card/80 backdrop-blur-xl border border-border/50 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.15)] rounded-[2rem] mb-3 z-50 transition-all duration-300"
+      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-card border-t border-border shadow-xl"
       aria-label="Navegação principal"
       role="tablist"
     >
@@ -32,14 +32,12 @@ export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
               key={tab}
               role="tab"
               aria-selected={isActive}
-              aria-controls={`panel-${tab}`}
               aria-label={badge ? `${label} (novo)` : label}
               onClick={() => onChange(tab)}
-              className={`flex flex-col items-center gap-1.5 py-2 px-1 rounded-2xl transition-all active:scale-95 group min-h-[56px] min-w-[56px] focus-visible:ring-2 focus-visible:ring-secondary/50 focus-visible:outline-none ${
-                isActive ? (isDiscipulado ? "text-primary" : "text-secondary") : "text-muted-foreground hover:text-foreground/80"
+              className={`flex flex-col items-center gap-0.5 py-1.5 px-0.5 rounded-xl transition-all active:scale-95 ${
+                isActive ? (isDiscipulado ? "text-primary" : "text-secondary") : "text-muted-foreground"
               }`}
             >
-
               <div className={`relative w-7 h-7 flex items-center justify-center rounded-xl transition-all ${
                 isActive ? (isDiscipulado ? "bg-primary/10" : "bg-secondary/10") : ""
               }`}>

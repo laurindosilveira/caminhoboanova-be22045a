@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Bell, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,7 +8,7 @@ import { subscribeToWebPush, isWebPushSubscribed } from "@/lib/webPush";
 /**
  * Banner shown on the Jornada tab when an admin/leader
  * has sent a push activation reminder to this user.
- * Includes a one-tap "Ativar notificações" button.
+ * Includes a one-tap "Ativar notificacoes" button.
  */
 export default function PushActivationBanner() {
   const { user } = useAuth();
@@ -22,11 +22,12 @@ export default function PushActivationBanner() {
   }, [user]);
 
   async function checkReminder() {
-    // If already subscribed to push, no need to show
     const alreadySubscribed = await isWebPushSubscribed();
-    if (alreadySubscribed) return;
+    if (alreadySubscribed) {
+      setVisible(false);
+      return;
+    }
 
-    // Check for undismissed reminders
     const { data } = await supabase
       .from("push_activation_reminders" as any)
       .select("id")
@@ -37,26 +38,25 @@ export default function PushActivationBanner() {
     if (data && data.length > 0) {
       setReminderId((data[0] as any).id);
       setVisible(true);
+    } else {
+      setVisible(false);
     }
   }
 
   async function handleActivate() {
     setActivating(true);
     try {
-      // Request notification permission
       const granted = await requestNotificationPermission();
       if (!granted) {
         setActivating(false);
         return;
       }
 
-      // Get VAPID key and subscribe
       const { data: vapidData } = await supabase.functions.invoke("get-vapid-key");
       if (vapidData?.publicKey) {
         await subscribeToWebPush(vapidData.publicKey);
       }
 
-      // Enable master notifications in preferences
       await supabase.from("notification_preferences").upsert({
         user_id: user!.id,
         master_enabled: true,
@@ -67,7 +67,6 @@ export default function PushActivationBanner() {
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo",
       }, { onConflict: "user_id" });
 
-      // Dismiss the reminder
       if (reminderId) {
         await supabase
           .from("push_activation_reminders" as any)
@@ -96,38 +95,37 @@ export default function PushActivationBanner() {
   if (!visible) return null;
 
   return (
-    <section className="mx-5 mt-4 rounded-3xl border border-primary/20 bg-primary/5 p-5 animate-tab-slide shadow-sm" aria-labelledby="push-banner-titulo">
-      <div className="flex items-start gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0 shadow-inner">
-          <Bell className="w-6 h-6 text-primary animate-pulse" />
+    <div className="mx-5 mt-2 rounded-2xl border border-primary/30 bg-primary/5 p-4 animate-in fade-in slide-in-from-top-2 duration-300">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0">
+          <Bell className="w-5 h-5 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 id="push-banner-titulo" className="font-montserrat font-bold text-foreground text-sm leading-tight">
-            Ative suas notificações! 🔔
-          </h3>
-          <p className="text-muted-foreground font-inter text-xs mt-1.5 leading-relaxed font-medium">
-            Seu líder pediu para você ativar as notificações. Assim você ficará por dentro de tudo que acontece na sua caminhada!
+          <p className="font-montserrat font-bold text-foreground text-sm">
+            Ative suas notificacoes!
           </p>
-          <div className="flex gap-3 mt-4">
+          <p className="text-muted-foreground font-inter text-xs mt-1 leading-relaxed">
+            Seu lider pediu para voce ativar as notificacoes. Assim voce ficara por dentro de tudo que acontece na sua caminhada.
+          </p>
+          <div className="flex gap-2 mt-3">
             <button
               onClick={handleActivate}
               disabled={activating}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-xs font-bold font-inter uppercase tracking-wider text-primary-foreground disabled:opacity-50 transition-all hover:shadow-lg active:scale-95 min-h-[44px]"
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-inter font-bold text-primary-foreground disabled:opacity-50 transition-all"
               style={{ background: "var(--gradient-hero)" }}
             >
-              <Bell className="w-4 h-4" />
-              {activating ? "Ativando..." : "Ativar"}
+              <Bell className="w-3.5 h-3.5" />
+              {activating ? "Ativando..." : "Ativar notificacoes"}
             </button>
             <button
               onClick={handleDismiss}
-              aria-label="Dispensar aviso"
-              className="px-4 py-3 rounded-2xl border border-border text-muted-foreground text-xs font-inter hover:bg-muted/50 transition-all active:scale-95 min-h-[44px]"
+              className="px-3 py-2.5 rounded-xl border border-border text-muted-foreground text-xs font-inter hover:bg-muted/50 transition-colors"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }

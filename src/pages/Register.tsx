@@ -1,33 +1,18 @@
-import { useState, useRef, lazy, Suspense } from "react";
+import { useState, useRef, lazy, Suspense, useEffect, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Eye, EyeOff, Mail, Lock, User, Phone, ChevronLeft, ChevronDown, MessageCircle, Camera } from "lucide-react";
 import { z } from "zod";
 import AvatarCropper from "@/components/home/AvatarCropper";
-import { getErrorMessage } from "@/lib/error-handler";
-
+import WhatsAppPhoneInput from "@/components/ui/WhatsAppPhoneInput";
+import { type PhoneValidation, validateBRPhone } from "@/lib/phoneValidation";
 
 // Dynamic imports for less-used icons
 const Calendar = lazy(() => import("lucide-react").then(m => ({ default: m.Calendar })));
 const Users = lazy(() => import("lucide-react").then(m => ({ default: m.Users })));
 const Flame = lazy(() => import("lucide-react").then(m => ({ default: m.Flame })));
 
-const COMMUNITIES = [
-  "Bom Pastor",
-  "Martim Lutero",
-  "Rincão Fundo",
-  "Rincão Frente",
-  "Linha Brasil",
-  "Iriá Pira 1",
-  "Iriá Pira 2",
-] as const;
-
-type Community = typeof COMMUNITIES[number];
-
-function getCommunityArea(community: Community): "Área 1" | "Área 2" {
-  const area1 = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
-  return area1.includes(community) ? "Área 1" : "Área 2";
-}
+import { AREAS, AREA_COMMUNITIES, fetchAreasConfig } from "@/config/areas";
 
 const registerSchema = z.object({
   fullName: z.string().trim().min(3, "Nome deve ter pelo menos 3 caracteres").max(100),
@@ -39,12 +24,19 @@ const registerSchema = z.object({
   motherPhone: z.string().trim().max(20).optional(),
   email: z.string().trim().email("Email inválido").max(255),
   password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres").max(128),
-  community: z.enum(COMMUNITIES, { required_error: "Selecione sua comunidade" }),
+  area: z.string().trim().min(1, "Selecione sua área"),
+  community: z.string().trim().min(1, "Selecione sua comunidade"),
 });
 
 const inputClass = "w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all";
 
 const IconFallback = () => <div className="w-4 h-4" />;
+
+type RegisterArea = {
+  id: string;
+  name: string;
+  description: string | null;
+};
 
 export default function Register() {
   const navigate = useNavigate();
@@ -52,10 +44,14 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingAreas, setLoadingAreas] = useState(true);
+  const [areaOptions, setAreaOptions] = useState<RegisterArea[]>([]);
+  const [communityOptionsByArea, setCommunityOptionsByArea] = useState<Record<string, string[]>>({});
 
   const [fullName, setFullName] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [phone, setPhone] = useState("");
+  const [phoneValidation, setPhoneValidation] = useState<PhoneValidation>(() => validateBRPhone(""));
   const [fatherName, setFatherName] = useState("");
   const [motherName, setMotherName] = useState("");
   const [fatherPhone, setFatherPhone] = useState("");
@@ -66,8 +62,45 @@ export default function Register() {
   const [showCropper, setShowCropper] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [community, setCommunity] = useState<Community | "">("");
+  const [area, setArea] = useState("");
+  const [community, setCommunity] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadAreaOptions() {
+      setLoadingAreas(true);
+      try {
+        const { areas, areaCommunities } = await fetchAreasConfig();
+        if (!isMounted) return;
+
+        if (areas.length > 0) {
+          setAreaOptions(areas);
+          setCommunityOptionsByArea(areaCommunities);
+        } else {
+          setAreaOptions(AREAS.map((name) => ({ id: name, name, description: null })));
+          setCommunityOptionsByArea(AREA_COMMUNITIES);
+        }
+      } catch {
+        if (!isMounted) return;
+        setAreaOptions(AREAS.map((name) => ({ id: name, name, description: null })));
+        setCommunityOptionsByArea(AREA_COMMUNITIES);
+      } finally {
+        if (isMounted) setLoadingAreas(false);
+      }
+    }
+
+    loadAreaOptions();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const communitiesForSelectedArea = useMemo(
+    () => (area ? (communityOptionsByArea[area] ?? []) : []),
+    [area, communityOptionsByArea]
+  );
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -105,8 +138,8 @@ export default function Register() {
       setError("Informe sua data de nascimento.");
       return;
     }
-    if (!phone.trim() || phone.trim().length < 8) {
-      setError("Telefone inválido.");
+    if (!phoneValidation.valid) {
+      setError(phoneValidation.hint || "Telefone inválido. Inclua o DDD e o número completo.");
       return;
     }
     setStep(2);
@@ -122,6 +155,11 @@ export default function Register() {
     e.preventDefault();
     setError(null);
 
+    if (!area) {
+      setError("Selecione sua área.");
+      return;
+    }
+
     if (!community) {
       setError("Selecione sua comunidade.");
       return;
@@ -129,15 +167,19 @@ export default function Register() {
 
     const parsed = registerSchema.safeParse({
       fullName, birthDate, phone, fatherName, motherName,
-      fatherPhone, motherPhone, email, password, community,
+      fatherPhone, motherPhone, email, password, area, community,
     });
     if (!parsed.success) {
       setError(parsed.error.errors[0].message);
       return;
     }
 
+    if (!communitiesForSelectedArea.includes(parsed.data.community)) {
+      setError("A comunidade selecionada não pertence à área informada.");
+      return;
+    }
+
     setLoading(true);
-    const area = getCommunityArea(community as Community);
 
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: parsed.data.email,
@@ -149,7 +191,7 @@ export default function Register() {
           birth_date: parsed.data.birthDate,
           phone: parsed.data.phone,
           community: parsed.data.community,
-          area: area,
+          area: parsed.data.area,
           father_name: parsed.data.fatherName || "",
           mother_name: parsed.data.motherName || "",
           father_phone: parsed.data.fatherPhone || "",
@@ -159,11 +201,14 @@ export default function Register() {
     });
 
     if (authError) {
-      setError(getErrorMessage(authError));
+      if (authError.message?.toLowerCase().includes("already registered")) {
+        setError("Este email já está cadastrado. Faça login ou use outro email.");
+      } else {
+        setError("Erro ao criar conta: " + authError.message);
+      }
       setLoading(false);
       return;
     }
-
 
     if (authData.user && authData.user.identities && authData.user.identities.length === 0) {
       setError("Este email já está cadastrado. Faça login ou use outro email.");
@@ -171,7 +216,6 @@ export default function Register() {
       return;
     }
 
-    // Upload cropped photo if provided
     if (croppedPhoto && authData.user) {
       const path = `${authData.user.id}/avatar.jpg`;
       const { error: uploadError } = await supabase.storage
@@ -193,7 +237,6 @@ export default function Register() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--gradient-hero)" }}>
-      {/* Avatar cropper modal */}
       {showCropper && rawPhotoSrc && (
         <AvatarCropper
           imageSrc={rawPhotoSrc}
@@ -203,7 +246,6 @@ export default function Register() {
       )}
 
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
-        {/* Header */}
         <div className="w-full max-w-sm mb-6">
           <div className="flex items-center gap-3 mb-4">
             {step > 1 ? (
@@ -223,7 +265,6 @@ export default function Register() {
             </div>
           </div>
 
-          {/* Numbered progress bar */}
           <div className="flex items-center gap-0">
             {[1, 2, 3].map((s) => (
               <div key={s} className="flex items-center flex-1">
@@ -246,7 +287,6 @@ export default function Register() {
           </div>
         </div>
 
-        {/* Card */}
         <div className="w-full max-w-sm bg-card rounded-3xl shadow-2xl p-7">
           {step === 1 && (
             <form onSubmit={handleStep1} className="space-y-4">
@@ -268,10 +308,14 @@ export default function Register() {
               </div>
               <div>
                 <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Telefone / WhatsApp</label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(51) 9 9999-9999" className={inputClass} required />
-                </div>
+                <WhatsAppPhoneInput
+                  value={phone}
+                  onChange={(formatted, validation) => {
+                    setPhone(formatted);
+                    setPhoneValidation(validation);
+                  }}
+                  showValidationAlways={phone.length > 0}
+                />
               </div>
               {error && (
                 <div className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3">
@@ -286,7 +330,6 @@ export default function Register() {
 
           {step === 2 && (
             <form onSubmit={handleStep2} className="space-y-4">
-              {/* Photo upload with crop */}
               <div className="flex flex-col items-center gap-2 mb-2">
                 <button
                   type="button"
@@ -377,26 +420,50 @@ export default function Register() {
                 </div>
               </div>
               <div>
+                <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Sua área</label>
+                <div className="relative">
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <select
+                    value={area}
+                    onChange={(e) => {
+                      setArea(e.target.value);
+                      setCommunity("");
+                    }}
+                    className="w-full pl-4 pr-10 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none"
+                    required
+                    disabled={loadingAreas}
+                  >
+                    <option value="">{loadingAreas ? "Carregando áreas..." : "Selecione sua área..."}</option>
+                    {areaOptions.map((item) => (
+                      <option key={item.id} value={item.name}>{item.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div>
                 <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Sua comunidade</label>
                 <div className="relative">
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                   <select
                     value={community}
-                    onChange={(e) => setCommunity(e.target.value as Community)}
+                    onChange={(e) => setCommunity(e.target.value)}
                     className="w-full pl-4 pr-10 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none"
                     required
+                    disabled={!area || loadingAreas}
                   >
-                    <option value="">Selecione sua comunidade...</option>
-                    {COMMUNITIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
+                    <option value="">
+                      {!area ? "Selecione primeiro a área..." : "Selecione sua comunidade..."}
+                    </option>
+                    {communitiesForSelectedArea.map((item) => (
+                      <option key={item} value={item}>{item}</option>
                     ))}
                   </select>
                 </div>
-                {community && (
+                {area && community && (
                   <div className="mt-2 flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${getCommunityArea(community as Community) === "Área 1" ? "bg-brand-green" : "bg-primary"}`} />
+                    <div className="w-2 h-2 rounded-full bg-primary" />
                     <span className="text-muted-foreground font-inter text-xs">
-                      Atribuído automaticamente à <strong className="text-foreground">{getCommunityArea(community as Community)}</strong>
+                      Cadastro vinculado à <strong className="text-foreground">{area}</strong>
                     </span>
                   </div>
                 )}
@@ -408,7 +475,7 @@ export default function Register() {
               )}
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || loadingAreas}
                 className="w-full py-3.5 rounded-xl font-montserrat font-bold text-primary-foreground text-base transition-all active:scale-95 disabled:opacity-60 shadow-md"
                 style={{ background: "var(--gradient-orange)" }}
               >
@@ -425,7 +492,6 @@ export default function Register() {
           </div>
         </div>
 
-        {/* WhatsApp help */}
         <a
           href="https://wa.me/5555984395290?text=Oi!%20Estou%20tentando%20usar%20o%20app%20do%20Ensino%20Confirmat%C3%B3rio%20e%20estou%20tendo%20dificuldade.%20Pode%20me%20ajudar%3F"
           target="_blank"

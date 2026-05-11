@@ -6,8 +6,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { getErrorMessage } from "@/lib/error-handler";
-
 
 interface StudentProfile {
   user_id: string;
@@ -194,9 +192,8 @@ export default function StudentListSection() {
       .eq("user_id", selectedStudent.user_id);
 
     if (error) {
-      toast.error("Erro ao salvar alterações: " + getErrorMessage(error));
+      toast.error("Erro ao salvar alterações");
       console.error(error);
-
     } else {
       const updated = {
         ...selectedStudent,

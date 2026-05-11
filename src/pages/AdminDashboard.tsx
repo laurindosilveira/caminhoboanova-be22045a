@@ -15,11 +15,14 @@ const AdminPushTab = lazy(() => import("@/components/admin/tabs/AdminPushTab"));
 const AdminOverviewTab = lazy(() => import("@/components/admin/tabs/AdminOverviewTab"));
 const AdminAlertsTab = lazy(() => import("@/components/admin/tabs/AdminAlertsTab"));
 const AdminLeadersTab = lazy(() => import("@/components/admin/tabs/AdminLeadersTab"));
-const AdminReportsTab = lazy(() => import("@/components/admin/tabs/AdminReportsTab"));
+const LeaderTurmaManagement = lazy(() => import("@/components/admin/tabs/leader/LeaderTurmaManagement"));
+const MessagesTab = lazy(() => import("@/components/admin/tabs/MessagesTab"));
+const AgendaTab = lazy(() => import("@/components/admin/tabs/AgendaTab"));
+const LeaderContactsTab = lazy(() => import("@/components/admin/tabs/leader/LeaderContactsTab"));
+const AdminAreasTab = lazy(() => import("@/components/admin/tabs/AdminAreasTab"));
+const WhatsAppAuditTab = lazy(() => import("@/components/admin/tabs/WhatsAppAuditTab"));
 
-const AREA_1_COMMUNITIES = ["Rincão Frente", "Rincão Fundo", "Bom Pastor", "Iriá Pira 1"];
-const AREA_2_COMMUNITIES = ["Martim Lutero", "Linha Brasil", "Iriá Pira 2"];
-const ALL_COMMUNITIES = [...AREA_1_COMMUNITIES, ...AREA_2_COMMUNITIES];
+import { AREAS, AREA_COMMUNITIES, ALL_COMMUNITIES, getCommunitiesForArea } from "@/config/areas";
 
 type Activity = {
   id: string; type: string; title: string; subtitle: string | null; order_num: number; points: number;
@@ -64,13 +67,26 @@ export default function AdminDashboard() {
     fetchData();
   }, [role]);
 
-  // For leaders, auto-select their turma
+  // For leaders, auto-select their turma (or use a placeholder if they have none yet)
   useEffect(() => {
-    if (role === "lider" && profile?.turma_id && turmas.length > 0 && !selectedTurma) {
-      const myTurma = turmas.find(t => t.id === profile.turma_id);
-      if (myTurma) setSelectedTurma(myTurma);
+    if (role !== "lider") return;
+    if (!loading && !selectedTurma) {
+      if (profile?.turma_id && turmas.length > 0) {
+        const myTurma = turmas.find(t => t.id === profile.turma_id);
+        if (myTurma) {
+          setSelectedTurma(myTurma);
+        } else {
+          // turma_id set but not found in active list — use placeholder so they can manage it
+          setSelectedTurma({ id: "", name: "Minha Área", area: profile.area ?? null, year: new Date().getFullYear(), is_active: true, description: null });
+          setActiveTab("turma");
+        }
+      } else if (!profile?.turma_id) {
+        // No turma yet — skip selector, go straight to turma management tab
+        setSelectedTurma({ id: "", name: "Minha Área", area: profile?.area ?? null, year: new Date().getFullYear(), is_active: true, description: null });
+        setActiveTab("turma");
+      }
     }
-  }, [role, profile, turmas, selectedTurma]);
+  }, [role, profile, turmas, selectedTurma, loading]);
 
   const fetchPlans = useCallback(async (ids: string[]) => {
     if (ids.length === 0) return;
@@ -103,33 +119,56 @@ export default function AdminDashboard() {
 
     const myId = userResult.data.user?.id ?? "";
     const profilesList = (profilesData ?? []).filter(p => p.user_id !== myId);
-    const { data: progressData } = await supabase.from("user_progress").select("user_id, activity_id");
 
-    // Optimize progress lookup using a map O(N+M)
-    const progressMap: Record<string, string[]> = {};
-    (progressData ?? []).forEach(pr => {
-      if (!progressMap[pr.user_id]) progressMap[pr.user_id] = [];
-      progressMap[pr.user_id].push(pr.activity_id);
+    const [{ data: progressData }, { data: lessonRespsData }, { data: devProgressData }, { data: attendanceData }] = await Promise.all([
+      supabase.from("user_progress").select("user_id, activity_id"),
+      supabase.from("lesson_responses").select("user_id, lesson_id"),
+      supabase.from("devotional_progress").select("user_id"),
+      supabase.from("attendance").select("user_id, status").eq("status", "presente"),
+    ]);
+
+    // lesson count = unique lessons per user
+    const lessonCountMap: Record<string, number> = {};
+    (lessonRespsData ?? []).forEach((r: any) => {
+      if (!lessonCountMap[r.user_id]) lessonCountMap[r.user_id] = new Set<string>() as any;
+    });
+    const lessonSets: Record<string, Set<string>> = {};
+    (lessonRespsData ?? []).forEach((r: any) => {
+      if (!lessonSets[r.user_id]) lessonSets[r.user_id] = new Set();
+      lessonSets[r.user_id].add(r.lesson_id);
+    });
+
+    const devCountMap: Record<string, number> = {};
+    (devProgressData ?? []).forEach((r: any) => {
+      devCountMap[r.user_id] = (devCountMap[r.user_id] ?? 0) + 1;
+    });
+
+    const attCountMap: Record<string, number> = {};
+    (attendanceData ?? []).forEach((r: any) => {
+      attCountMap[r.user_id] = (attCountMap[r.user_id] ?? 0) + 1;
     });
 
     const participantList: Participant[] = profilesList.map((p) => {
-      const userCompletedIds = progressMap[p.user_id] || [];
+      const userProgress = (progressData ?? []).filter((pr) => pr.user_id === p.user_id);
       return {
         ...p,
-        completed_count: userCompletedIds.length,
-        completed_activity_ids: userCompletedIds,
+        completed_count: userProgress.length,
+        completed_activity_ids: userProgress.map((pr) => pr.activity_id),
         turma_id: p.turma_id,
+        completed_lesson_count: lessonSets[p.user_id]?.size ?? 0,
+        completed_devotional_count: devCountMap[p.user_id] ?? 0,
+        completed_event_count: attCountMap[p.user_id] ?? 0,
       } as any;
     });
 
     setActivities(activitiesData ?? []);
-    setParticipants(participantList);
+    setParticipants(participantList.sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? "", "pt-BR", { sensitivity: "base" })));
     setTurmas(turmasData ?? []);
     await fetchPlans(participantList.map(p => p.user_id));
     setLoading(false);
   }, [fetchPlans]);
 
-  // Memoized filtered participants
+  // Memoized filtered participants (by turma — used for overview, scores, etc.)
   const filteredParticipants = useMemo(() =>
     selectedTurma
       ? participants.filter(p => (p as any).turma_id === selectedTurma.id)
@@ -137,10 +176,17 @@ export default function AdminDashboard() {
     [selectedTurma, participants]
   );
 
-  const communities = useMemo(() =>
+  // Participants filtered only by area — used for attendance so no student is
+  // excluded just because their turma_id is unset or from a different turma.
+  const areaParticipants = useMemo(() =>
     selectedTurma?.area
-      ? (selectedTurma.area === "Área 1" ? AREA_1_COMMUNITIES : AREA_2_COMMUNITIES)
-      : ALL_COMMUNITIES,
+      ? participants.filter(p => (p as any).area === selectedTurma.area)
+      : participants,
+    [selectedTurma, participants]
+  );
+
+  const communities = useMemo(() =>
+    selectedTurma?.area ? getCommunitiesForArea(selectedTurma.area) : ALL_COMMUNITIES,
     [selectedTurma]
   );
 
@@ -224,23 +270,71 @@ export default function AdminDashboard() {
               <AdminAlertsTab participants={filteredParticipants} />
             )}
             {activeTab === "settings" && (
-              <AttendanceTab
-                participants={filteredParticipants}
+              <AdminSettingsPanel
+                areaParticipants={areaParticipants}
                 activities={activities}
                 communities={communities}
                 adminArea={selectedTurma.area ?? profile?.area ?? ""}
               />
             )}
+            {activeTab === "turma" && <LeaderTurmaManagement />}
+            {activeTab === "avisos" && <MessagesTab leaderMode={role === "lider"} />}
+            {activeTab === "agenda" && <AgendaTab leaderMode={role === "lider"} />}
+            {activeTab === "contatos" && <LeaderContactsTab />}
             {activeTab === "courses" && <CoursesTab />}
             {activeTab === "leaders" && <AdminLeadersTab turmas={turmas} />}
             {activeTab === "push" && <AdminPushTab turmas={turmas} />}
             {activeTab === "users" && <UsersTab onSelectTurma={handleSelectTurmaFromUsers} />}
-            {activeTab === "reports" && <AdminReportsTab />}
+            {activeTab === "whatsapp" && <WhatsAppAuditTab />}
           </Suspense>
         )}
       </main>
 
       <AdminBottomNav active={activeTab} onChange={setActiveTab} userRole={role as "admin" | "lider" | null} />
+    </div>
+  );
+}
+
+// ===== Admin Settings Panel (areas + attendance toggle) =====
+function AdminSettingsPanel({
+  areaParticipants, activities, communities, adminArea,
+}: {
+  areaParticipants: Participant[];
+  activities: Activity[];
+  communities: string[];
+  adminArea: string;
+}) {
+  const [view, setView] = useState<"areas" | "attendance">("areas");
+
+  return (
+    <div className="space-y-4">
+      <div className="flex bg-muted rounded-xl p-1 gap-1">
+        <button
+          onClick={() => setView("areas")}
+          className={`flex-1 h-8 rounded-lg font-inter text-xs font-medium transition-colors ${
+            view === "areas" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+          }`}
+        >
+          Áreas e Comunidades
+        </button>
+        <button
+          onClick={() => setView("attendance")}
+          className={`flex-1 h-8 rounded-lg font-inter text-xs font-medium transition-colors ${
+            view === "attendance" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+          }`}
+        >
+          Frequência
+        </button>
+      </div>
+      {view === "areas" && <AdminAreasTab />}
+      {view === "attendance" && (
+        <AttendanceTab
+          participants={areaParticipants}
+          activities={activities}
+          communities={communities}
+          adminArea={adminArea}
+        />
+      )}
     </div>
   );
 }
@@ -263,15 +357,16 @@ function TurmaSelector({
   onSelectTurma: (t: Turma) => void;
   onBack: () => void;
 }) {
-  const area1Turmas = turmas.filter(t => t.area === "Área 1");
-  const area2Turmas = turmas.filter(t => t.area === "Área 2");
-
+  const areaIcons: Record<string, string> = { "Área 1": "⛪", "Área 2": "✝️" };
+  const allAreasToShow = AREAS.map(a => ({
+    name: a,
+    turmas: turmas.filter(t => t.area === a),
+    communities: getCommunitiesForArea(a),
+    icon: areaIcons[a] ?? "📍",
+  }));
   const areasToShow = isSuper
-    ? [{ name: "Área 1", turmas: area1Turmas, communities: AREA_1_COMMUNITIES, icon: "⛪" },
-       { name: "Área 2", turmas: area2Turmas, communities: AREA_2_COMMUNITIES, icon: "✝️" }]
-    : adminArea === "Área 1"
-      ? [{ name: "Área 1", turmas: area1Turmas, communities: AREA_1_COMMUNITIES, icon: "⛪" }]
-      : [{ name: "Área 2", turmas: area2Turmas, communities: AREA_2_COMMUNITIES, icon: "✝️" }];
+    ? allAreasToShow
+    : allAreasToShow.filter(a => a.name === adminArea);
 
   // Filter turmas by search
   const searchLower = turmaSearch.toLowerCase().trim();
