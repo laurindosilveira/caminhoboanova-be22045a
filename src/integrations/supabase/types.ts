@@ -1360,6 +1360,10 @@ export type Database = {
           timezone: string
           updated_at: string
           user_id: string
+          whatsapp_checkin: boolean
+          whatsapp_desafio: boolean
+          whatsapp_devocional: boolean
+          whatsapp_enabled: boolean
         }
         Insert: {
           created_at?: string
@@ -1373,6 +1377,10 @@ export type Database = {
           timezone?: string
           updated_at?: string
           user_id: string
+          whatsapp_checkin?: boolean
+          whatsapp_desafio?: boolean
+          whatsapp_devocional?: boolean
+          whatsapp_enabled?: boolean
         }
         Update: {
           created_at?: string
@@ -1386,6 +1394,10 @@ export type Database = {
           timezone?: string
           updated_at?: string
           user_id?: string
+          whatsapp_checkin?: boolean
+          whatsapp_desafio?: boolean
+          whatsapp_devocional?: boolean
+          whatsapp_enabled?: boolean
         }
         Relationships: []
       }
@@ -1630,6 +1642,10 @@ export type Database = {
           turma_id: string | null
           updated_at: string
           user_id: string
+          whatsapp_last_blocked_at: string | null
+          whatsapp_last_blocked_reason: string | null
+          whatsapp_number: string | null
+          whatsapp_validation_status: string | null
         }
         Insert: {
           address?: string | null
@@ -1650,6 +1666,10 @@ export type Database = {
           turma_id?: string | null
           updated_at?: string
           user_id: string
+          whatsapp_last_blocked_at?: string | null
+          whatsapp_last_blocked_reason?: string | null
+          whatsapp_number?: string | null
+          whatsapp_validation_status?: string | null
         }
         Update: {
           address?: string | null
@@ -1670,6 +1690,10 @@ export type Database = {
           turma_id?: string | null
           updated_at?: string
           user_id?: string
+          whatsapp_last_blocked_at?: string | null
+          whatsapp_last_blocked_reason?: string | null
+          whatsapp_number?: string | null
+          whatsapp_validation_status?: string | null
         }
         Relationships: [
           {
@@ -2167,6 +2191,81 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_reminder_config: {
+        Row: {
+          description: string | null
+          enabled: boolean
+          key: string
+          message_template: string
+          threshold: number
+          updated_at: string
+        }
+        Insert: {
+          description?: string | null
+          enabled?: boolean
+          key: string
+          message_template: string
+          threshold?: number
+          updated_at?: string
+        }
+        Update: {
+          description?: string | null
+          enabled?: boolean
+          key?: string
+          message_template?: string
+          threshold?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      whatsapp_reminder_log: {
+        Row: {
+          blocked_reason_code: string | null
+          error_detail: string | null
+          id: string
+          is_resent: boolean
+          message: string
+          phone: string
+          reference_id: string | null
+          reminder_type: string
+          resent_at: string | null
+          resent_by: string | null
+          sent_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          blocked_reason_code?: string | null
+          error_detail?: string | null
+          id?: string
+          is_resent?: boolean
+          message: string
+          phone: string
+          reference_id?: string | null
+          reminder_type: string
+          resent_at?: string | null
+          resent_by?: string | null
+          sent_at?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          blocked_reason_code?: string | null
+          error_detail?: string | null
+          id?: string
+          is_resent?: boolean
+          message?: string
+          phone?: string
+          reference_id?: string | null
+          reminder_type?: string
+          resent_at?: string | null
+          resent_by?: string | null
+          sent_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       worship_attendance: {
         Row: {
           created_at: string
@@ -2256,6 +2355,10 @@ export type Database = {
     }
     Functions: {
       delete_push_scheduled: { Args: { _id: string }; Returns: undefined }
+      delete_user_from_discipleship: {
+        Args: { _target_user_id: string }
+        Returns: Json
+      }
       get_all_areas: {
         Args: never
         Returns: {
@@ -2274,6 +2377,16 @@ export type Database = {
           created_by: string
           id: string
           name: string
+        }[]
+      }
+      get_area_birthdays: {
+        Args: { _area: string; _month?: number }
+        Returns: {
+          area: string
+          birth_date: string
+          community: string
+          full_name: string
+          user_id: string
         }[]
       }
       get_community_area: {
