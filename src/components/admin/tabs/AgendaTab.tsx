@@ -81,7 +81,7 @@ export default function AgendaTab({ leaderMode = false }: Props) {
     if (error) {
       toast.error("Erro ao carregar eventos", { description: error.message });
     }
-    setEvents((data ?? []).map(e => ({ ...e, turma_id: e.turma_id || null })) as Event[]);
+    setEvents((data ?? []).map((e: any) => ({ ...e, turma_id: e.turma_id || null })) as Event[]);
     setLoading(false);
   }
 
