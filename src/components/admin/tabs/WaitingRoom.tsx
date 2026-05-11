@@ -35,9 +35,9 @@ export default function WaitingRoom() {
   async function fetchData() {
     setLoading(true);
     const [{ data: profiles }, { data: turmasData }, userResult] = await Promise.all([
-      (supabase
+      supabase
         .from("profiles")
-        .select("user_id, full_name, community, area, phone, birth_date, turma_id, enrollment_status") as any)
+        .select("user_id, full_name, community, area, phone, birth_date, turma_id, enrollment_status")
         .eq("enrollment_status", "pending"),
       supabase.from("turmas").select("id, name, year, area").eq("is_active", true).order("year", { ascending: false }),
       supabase.auth.getUser(),
@@ -45,7 +45,7 @@ export default function WaitingRoom() {
 
     const myId = userResult.data.user?.id;
     // Waiting room = users without turma_id (excluding current admin)
-    const waiting = ((profiles as any) ?? []).filter((p: any) => !p.turma_id && p.user_id !== myId);
+    const waiting = (profiles ?? []).filter(p => !p.turma_id && p.user_id !== myId);
     setUsers(waiting);
     setTurmas(turmasData ?? []);
     setLoading(false);

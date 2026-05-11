@@ -114,25 +114,25 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
           .maybeSingle();
 
         if (profileData?.turma_id) {
-          const { data: override } = await (supabase
-            .from("turma_lesson_content" as any)
+          const { data: override } = await supabase
+            .from("turma_lesson_content")
             .select("*")
             .eq("turma_id", profileData.turma_id)
-            .eq("lesson_id", lesson.id) as any)
+            .eq("lesson_id", lesson.id)
             .maybeSingle();
 
           if (override) {
             // Merge: override fields take priority over global when set
             setContent({
-              greeting: (override as any).greeting || global.greeting,
-              icebreaker: (override as any).icebreaker || global.icebreaker,
-              summary: (override as any).summary || global.summary,
-              bible_texts: (override as any).bible_texts?.length ? (override as any).bible_texts : global.bible_texts,
-              questions: (override as any).questions?.length ? (override as any).questions : global.questions,
-              practice: (override as any).practice || global.practice,
-              prayer_prompt: (override as any).prayer_prompt || global.prayer_prompt,
-              video_link: (override as any).video_link ?? global.video_link,
-              audio_link: (override as any).audio_link ?? global.audio_link,
+              greeting: override.greeting || global.greeting,
+              icebreaker: override.icebreaker || global.icebreaker,
+              summary: override.summary || global.summary,
+              bible_texts: override.bible_texts?.length ? override.bible_texts : global.bible_texts,
+              questions: override.questions?.length ? override.questions : global.questions,
+              practice: override.practice || global.practice,
+              prayer_prompt: override.prayer_prompt || global.prayer_prompt,
+              video_link: override.video_link ?? global.video_link,
+              audio_link: override.audio_link ?? global.audio_link,
               pdf_link: (override as any).pdf_link ?? global.pdf_link,
             });
             setContentLoaded(true);

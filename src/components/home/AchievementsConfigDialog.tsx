@@ -71,7 +71,7 @@ export default function AchievementsConfigDialog({ onSaved }: Props) {
       .select("*")
       .order("sort_order");
 
-    const rows = ((data as any) as AchievementDef[]) ?? [];
+    const rows = (data as AchievementDef[]) ?? [];
 
     if ((error || rows.length === 0) && !error) {
       // Table exists but is empty — seed with defaults so the user can edit them
@@ -80,7 +80,7 @@ export default function AchievementsConfigDialog({ onSaved }: Props) {
         .from("achievement_definitions" as any)
         .insert(seedRows)
         .select("*");
-      setDefs(((seeded as any) as AchievementDef[]) ?? DEFAULT_ACHIEVEMENT_DEFS);
+      setDefs((seeded as AchievementDef[]) ?? DEFAULT_ACHIEVEMENT_DEFS);
     } else if (error) {
       // Table may not exist yet — show defaults as read-only preview
       setDefs(DEFAULT_ACHIEVEMENT_DEFS);

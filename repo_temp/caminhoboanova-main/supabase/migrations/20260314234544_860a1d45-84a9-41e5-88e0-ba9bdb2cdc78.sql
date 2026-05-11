@@ -1,1 +1,0 @@
-UPDATE events SET community = 'Bom Pastor' WHERE id = 'f68f0b7a-e2ac-4217-8cbc-fc24dfd84399' AND community = 'Bom pastor';

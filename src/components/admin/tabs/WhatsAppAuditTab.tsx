@@ -141,11 +141,11 @@ export default function WhatsAppAuditTab() {
     setSending(row.id);
 
     // 1. Prepara (valida número no banco e cria log pendente)
-    const { data, error } = await supabase.rpc("prepare_whatsapp_resend" as any, {
+    const { data, error } = await supabase.rpc("prepare_whatsapp_resend", {
       _target_user_id: row.user_id,
       _reminder_type:  row.reminder_type,
       _reference_id:   row.reference_id ?? null,
-    }) as { data: any, error: any };
+    });
 
     if (error || !data) {
       toast({ title: "Erro ao preparar reenvio", description: error?.message, variant: "destructive" });
@@ -181,7 +181,7 @@ export default function WhatsAppAuditTab() {
     const resendOk = !fnErr && resendResult?.ok !== false;
 
     // 3. Confirma o resultado no log
-    await supabase.rpc("confirm_whatsapp_resend" as any, {
+    await supabase.rpc("confirm_whatsapp_resend", {
       _log_id:  data.log_id,
       _success: resendOk,
       _error:   fnErr?.message ?? resendResult?.error ?? null,

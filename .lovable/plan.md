@@ -1,21 +1,32 @@
-A sincronização automática e completa entre o Lovable e um repositório GitHub externo é feita através da aba **GitHub** no menu lateral do projeto no Lovable. Como sou um agente de IA, não tenho permissão para alterar as configurações de integração de conta ou mudar a branch ativa do sistema Lovable por você, pois isso requer acesso administrativo à sua conta.
 
-Aqui estão os passos exatos para você realizar essa configuração agora:
+## Liberar Acesso do E-mail laurindosilveira@gmail.com
 
-1.  No painel do Lovable, clique no ícone do **GitHub** no menu lateral esquerdo.
-2.  Lá você verá a opção para **Connect a GitHub repository**.
-3.  Selecione o repositório `laurindosilveira/caminhoboanova`.
-4.  Após conectar, verifique se a **Active branch** está definida como `main`.
+### Diagnóstico
 
-**O que eu já fiz:**
-Eu já importei manualmente todos os arquivos do seu repositório GitHub para o projeto atual, então o seu preview já está rodando a versão mais recente do código (`main`). 
+O log do backend confirma:
+- O cadastro foi feito com sucesso (status 200 no /signup)
+- O link de confirmação enviado por e-mail **expirou ou não foi clicado** (erro "One-time token not found")
+- Ao tentar fazer login, o sistema rejeita com `"400: Email not confirmed"`
 
-**Próximo Passo:**
-Existem alguns erros de código (TypeScript) que surgiram após a importação manual (provavelmente por diferenças de tipos ou dependências). Vou começar a corrigir esses erros agora para que o projeto compile perfeitamente.
+### Solução
 
-### Detalhes Técnicos das Correções
-- Corrigir incompatibilidade de tipos no componente `AgendaTab.tsx` (falta de `turma_id`).
-- Corrigir chamadas do Supabase em `OverviewTab.tsx` que não estão sendo aguardadas corretamente.
-- Adicionar importações de `toast` ausentes em `ParticipantSheet.tsx`.
-- Ajustar chamadas de RPC em `UsersTab.tsx` e `WhatsAppAuditTab.tsx`.
-- Resolver o erro de recursão infinita em `LeaderLessonEditor.tsx`.
+Executar uma migração SQL que confirma manualmente o e-mail do usuário direto no banco de dados, desbloqueando o acesso imediatamente.
+
+### Alteração Técnica
+
+**Migration SQL:**
+```sql
+UPDATE auth.users
+SET email_confirmed_at = now(),
+    updated_at = now()
+WHERE email = 'laurindosilveira@gmail.com'
+  AND email_confirmed_at IS NULL;
+```
+
+Isso marca o e-mail como confirmado sem precisar reenviar o link, permitindo o login imediatamente.
+
+### Considerações
+
+- Esta ação afeta **apenas** o usuário `laurindosilveira@gmail.com`
+- O perfil já foi criado no banco (via trigger), então após a confirmação o login funcionará normalmente
+- Nenhuma alteração de código é necessária, apenas a execução da query no banco

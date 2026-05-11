@@ -1,1 +1,0 @@
-ALTER TABLE public.lesson_content ADD COLUMN pdf_link text NOT NULL DEFAULT '';

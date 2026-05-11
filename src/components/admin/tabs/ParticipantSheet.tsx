@@ -4,7 +4,6 @@ import {
   Heart, ChevronLeft, Save, AlertCircle, CheckCircle2, Flame, GraduationCap,
   Star, MessageSquare, Calendar, FileText, AlertTriangle, Plus, BookOpen, Eye, Clock
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import PastoralReportPDF from "@/components/admin/PastoralReportPDF";
 import JourneyLessonView from "@/components/home/JourneyLessonView";
 
@@ -201,8 +200,6 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
   const MONTH_NAMES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-
-  const { toast } = useToast();
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
