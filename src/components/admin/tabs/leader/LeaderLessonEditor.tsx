@@ -179,8 +179,8 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
       pdf_link: flags.pdf_link ? override.pdf_link : null,
     };
 
-    const { error } = await supabase
-      .from("turma_lesson_content")
+    const { error } = await (supabase
+      .from("turma_lesson_content" as any) as any)
       .upsert(payload, { onConflict: "turma_id,lesson_id" });
 
     if (error) {
