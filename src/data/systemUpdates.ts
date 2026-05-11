@@ -88,4 +88,4 @@ export const AUTOMATED_SYSTEM_UPDATES: AutomatedSystemUpdate[] = ([
       },
     ],
   },
-].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+] as any[]).sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
