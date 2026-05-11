@@ -16,7 +16,7 @@ export interface AutomatedSystemUpdate {
 const BUILD_VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "0.0.0";
 const BUILD_DATE = typeof __APP_BUILD_DATE__ === "string" ? __APP_BUILD_DATE__ : new Date().toISOString();
 
-export const AUTOMATED_SYSTEM_UPDATES: AutomatedSystemUpdate[] = [
+export const AUTOMATED_SYSTEM_UPDATES: AutomatedSystemUpdate[] = ([
   {
     id: "build-current",
     title: "Build atual publicado automaticamente",

@@ -113,10 +113,11 @@ export function useAgendaSchedule() {
       .order("order_num");
 
     if (lessonsResult.error && /devotional_mode/i.test(lessonsResult.error.message)) {
-      lessonsResult = await supabase
+      const fallback = await (supabase
         .from("lessons")
-        .select("id, title, order_num, course_id")
+        .select("id, title, order_num, course_id") as any)
         .order("order_num");
+      lessonsResult = fallback;
     }
 
     const { data: courses } = await supabase
