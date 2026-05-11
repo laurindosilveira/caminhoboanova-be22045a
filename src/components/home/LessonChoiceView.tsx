@@ -29,7 +29,16 @@ type DevotionalItem = {
   questions: string[];
 };
 
-type DevotionalStatus = "available" | "completed" | "locked" | "future";
+type DevotionalOverride = {
+  id: string;
+  devotional_id: string;
+  custom_points: number | null;
+  available_from: string | null;
+  available_until: string | null;
+  is_unlocked: boolean;
+};
+
+type DevotionalStatus = "available" | "completed" | "locked" | "future" | "recovery";
 
 type Props = {
   lesson: Lesson;
@@ -39,8 +48,16 @@ type Props = {
   onOpenEdit?: () => void;
   /** Callback to open the devotional editor (leaders/admins only) */
   onOpenEditDevotionals?: () => void;
-  /** Schedule-based devotional dates (from agenda). If provided, overrides default anchoring. */
+  /** Schedule-based devotional dates (from agenda, 10 entries). [0..4] = primary week, [5..9] = recovery week. */
   scheduledDevotionalDates?: Date[];
+  /** Day numbers the leader chose to release. null = all. */
+  releasedDayNumbers?: number[] | null;
+  /** '5_days' = 5+recovery; '10_days' = full 10-day window (default). */
+  devotionalMode?: "5_days" | "10_days";
+  /** Auto-open the currently available devotional when this view mounts. */
+  autoOpenAvailableDevotional?: boolean;
+  /** Called after the auto-open request is handled. */
+  onAutoOpenAvailableDevotionalConsumed?: () => void;
   /** Event date for display */
   eventDate?: Date;
   /** Whether the study is locked (event day or past deadline) */
@@ -51,118 +68,207 @@ type Props = {
   isStudyCompleted?: boolean;
 };
 
+function normalizeDate(date: Date) {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+}
+
+function getWeekendRecoveryWindow(today: Date) {
+  const day = today.getDay();
+  if (day !== 0 && day !== 6) return null;
+
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - (day === 0 ? 6 : 5));
+  monday.setHours(0, 0, 0, 0);
+
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  friday.setHours(0, 0, 0, 0);
+
+  return { monday, friday };
+}
+
+function isRecoverableOnWeekend(scheduledDate: Date, today: Date) {
+  const recoveryWindow = getWeekendRecoveryWindow(today);
+  if (!recoveryWindow) return false;
+  return scheduledDate >= recoveryWindow.monday && scheduledDate <= recoveryWindow.friday;
+}
+
+function isOverrideActive(override: DevotionalOverride | undefined, now: Date) {
+  if (!override || !override.is_unlocked) return false;
+  if (override.available_from && new Date(override.available_from) > now) return false;
+  if (override.available_until && new Date(override.available_until) < now) return false;
+  return true;
+}
+
 /**
  * Compute devotional statuses based on scheduled dates from the agenda.
+ *
+ * 10_days mode (default):
+ *   - dates[0..N-1] are the business-day release dates; one per day_number.
+ *   - Past + missed = "locked"; future = "future"; today = "available".
+ *
+ * 5_days mode:
+ *   - devotionals 1–5 are mapped to dates[0..4] (primary week).
+ *   - devotionals 1–5 that were MISSED in primary get a recovery date = dates[5..9]
+ *     (one per missed devotional, in order). Recovery is strict: miss the recovery
+ *     date and it becomes permanently "locked".
  */
-export function computeDevotionalStatuses(
+function computeDevotionalStatuses(
   devList: DevotionalItem[],
   completedMap: Map<string, string>,
-  scheduledDates?: Date[],
-): { statuses: Map<string, DevotionalStatus>; lockedSet: Set<string> } {
+  completedRecoveryIds: Set<string>,
+  scheduledDates: Date[],
+  devotionalMode: "5_days" | "10_days",
+  releasedDayNumbers: number[] | null,
+  overrideMap: Map<string, DevotionalOverride>,
+): { statuses: Map<string, DevotionalStatus>; lockedSet: Set<string>; recoverySet: Set<string> } {
   const statuses = new Map<string, DevotionalStatus>();
   const lockedSet = new Set<string>();
+  const recoverySet = new Set<string>();
 
-  if (devList.length === 0) return { statuses, lockedSet };
+  if (devList.length === 0) return { statuses, lockedSet, recoverySet };
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dayOfWeek = today.getDay();
-  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  const today = normalizeDate(new Date());
+  const now = new Date();
+  const released = releasedDayNumbers ? new Set(releasedDayNumbers) : null;
+  const scheduledDayLimit = devotionalMode === "5_days" ? 5 : Number.POSITIVE_INFINITY;
 
-  // Check if user already completed a devotional today
-  const completedToday = Array.from(completedMap.values()).some(dateStr => {
-    const d = new Date(dateStr);
-    d.setHours(0, 0, 0, 0);
-    return d.getTime() === today.getTime();
-  });
-
-  // Get Monday of current week
-  function getMondayOfWeek(d: Date): Date {
-    const mon = new Date(d);
-    const dow = mon.getDay();
-    const diff = dow === 0 ? -6 : 1 - dow;
-    mon.setDate(mon.getDate() + diff);
-    mon.setHours(0, 0, 0, 0);
-    return mon;
+  function isToday(date: Date) {
+    return normalizeDate(date).getTime() === today.getTime();
   }
 
-  const thisMonday = getMondayOfWeek(today);
-  const thisFriday = new Date(thisMonday);
-  thisFriday.setDate(thisFriday.getDate() + 4);
+  const devListIds = new Set(devList.map((dev) => dev.id));
+  const completedToday = Array.from(completedMap.entries()).some(([devId, dateStr]) => {
+    if (!devListIds.has(devId)) return false;
+    const completedDate = new Date(dateStr);
+    completedDate.setHours(0, 0, 0, 0);
+    return completedDate.getTime() === today.getTime();
+  });
 
-  // === SCHEDULE-BASED MODE (from agenda) ===
-  if (scheduledDates && scheduledDates.length > 0) {
-    for (const dev of devList) {
+  for (const dev of devList) {
+    if (dev.day_number > scheduledDayLimit) {
+      statuses.set(dev.id, "future");
+      lockedSet.add(dev.id);
+    }
+  }
+
+  const activeDevs = devList
+    .filter((dev) => dev.day_number <= scheduledDayLimit)
+    .sort((a, b) => a.day_number - b.day_number);
+
+  if (scheduledDates.length > 0) {
+    for (const dev of activeDevs) {
+      const activeOverride = overrideMap.get(dev.id);
+
+      if (released && !released.has(dev.day_number) && !isOverrideActive(activeOverride, now)) {
+        statuses.set(dev.id, "future");
+        lockedSet.add(dev.id);
+        continue;
+      }
+
       if (completedMap.has(dev.id)) {
         statuses.set(dev.id, "completed");
         continue;
       }
 
-      const idx = dev.day_number - 1;
-      const scheduledDate = idx < scheduledDates.length ? new Date(scheduledDates[idx]) : null;
+      if (isOverrideActive(activeOverride, now)) {
+        statuses.set(dev.id, "available");
+        continue;
+      }
+
+      const rawScheduledDate = scheduledDates[dev.day_number - 1];
+      const scheduledDate = rawScheduledDate ? normalizeDate(new Date(rawScheduledDate)) : null;
+
       if (!scheduledDate) {
         statuses.set(dev.id, "future");
         lockedSet.add(dev.id);
         continue;
       }
-      scheduledDate.setHours(0, 0, 0, 0);
 
       if (scheduledDate > today) {
         statuses.set(dev.id, "future");
         lockedSet.add(dev.id);
-      } else if (scheduledDate.getTime() === today.getTime()) {
+        continue;
+      }
+
+      if (isToday(scheduledDate)) {
         if (completedToday) {
           statuses.set(dev.id, "future");
           lockedSet.add(dev.id);
         } else {
           statuses.set(dev.id, "available");
         }
-      } else {
-        // Past — check weekend recovery
-        if (isWeekend && scheduledDate >= thisMonday && scheduledDate <= thisFriday) {
-          statuses.set(dev.id, "available");
-        } else {
-          statuses.set(dev.id, "locked");
-          lockedSet.add(dev.id);
-        }
+        continue;
       }
+
+      if (completedRecoveryIds.has(dev.id) || isRecoverableOnWeekend(scheduledDate, today)) {
+        statuses.set(dev.id, "recovery");
+        recoverySet.add(dev.id);
+        continue;
+      }
+
+      statuses.set(dev.id, "locked");
+      lockedSet.add(dev.id);
     }
-    return { statuses, lockedSet };
+
+    return { statuses, lockedSet, recoverySet };
   }
 
-  // === FALLBACK: anchor from day1 completion ===
-  const day1Dev = devList.find(d => d.day_number === 1);
+  const day1Dev = activeDevs.find((dev) => dev.day_number === 1);
   const day1CompletedAt = day1Dev ? completedMap.get(day1Dev.id) : null;
 
   if (!day1CompletedAt) {
-    devList.forEach((dev, i) => {
-      if (i === 0) {
+    activeDevs.forEach((dev, index) => {
+      const activeOverride = overrideMap.get(dev.id);
+
+      if (released && !released.has(dev.day_number) && !isOverrideActive(activeOverride, now)) {
+        statuses.set(dev.id, "future");
+        lockedSet.add(dev.id);
+      } else if (isOverrideActive(activeOverride, now) || index === 0) {
         statuses.set(dev.id, "available");
       } else {
         statuses.set(dev.id, "future");
         lockedSet.add(dev.id);
       }
     });
-    return { statuses, lockedSet };
+
+    return { statuses, lockedSet, recoverySet };
   }
 
   const startDate = new Date(day1CompletedAt);
   startDate.setHours(0, 0, 0, 0);
 
-  function getScheduledDate(dayNumber: number): Date {
+  function getScheduledDate(dayNumber: number) {
     const date = new Date(startDate);
     let assigned = 1;
+
     while (assigned < dayNumber) {
       date.setDate(date.getDate() + 1);
-      const dow = date.getDay();
-      if (dow !== 0 && dow !== 6) assigned++;
+      const dayOfWeek = date.getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) assigned++;
     }
+
     return date;
   }
 
-  for (const dev of devList) {
+  for (const dev of activeDevs) {
+    const activeOverride = overrideMap.get(dev.id);
+
+    if (released && !released.has(dev.day_number) && !isOverrideActive(activeOverride, now)) {
+      statuses.set(dev.id, "future");
+      lockedSet.add(dev.id);
+      continue;
+    }
+
     if (completedMap.has(dev.id)) {
       statuses.set(dev.id, "completed");
+      continue;
+    }
+
+    if (isOverrideActive(activeOverride, now)) {
+      statuses.set(dev.id, "available");
       continue;
     }
 
@@ -172,35 +278,38 @@ export function computeDevotionalStatuses(
     if (scheduledDate > today) {
       statuses.set(dev.id, "future");
       lockedSet.add(dev.id);
-    } else if (isWeekend) {
-      if (scheduledDate >= thisMonday && scheduledDate <= thisFriday) {
-        statuses.set(dev.id, "available");
-      } else if (scheduledDate < thisMonday) {
-        statuses.set(dev.id, "locked");
-        lockedSet.add(dev.id);
-      } else {
+    } else if (isToday(scheduledDate)) {
+      if (completedToday) {
         statuses.set(dev.id, "future");
         lockedSet.add(dev.id);
+      } else {
+        statuses.set(dev.id, "available");
       }
     } else {
-      if (scheduledDate.getTime() === today.getTime()) {
-        if (completedToday) {
-          statuses.set(dev.id, "future");
-          lockedSet.add(dev.id);
-        } else {
-          statuses.set(dev.id, "available");
-        }
-      } else if (scheduledDate < today) {
-        statuses.set(dev.id, "locked");
-        lockedSet.add(dev.id);
-      }
+      statuses.set(dev.id, "locked");
+      lockedSet.add(dev.id);
     }
   }
 
-  return { statuses, lockedSet };
+  return { statuses, lockedSet, recoverySet };
 }
 
-export default function LessonChoiceView({ lesson, onBack, onOpenStudy, onOpenEdit, onOpenEditDevotionals, scheduledDevotionalDates, eventDate, isStudyLocked, isLateAccess, isStudyCompleted = true }: Props) {
+export default function LessonChoiceView({
+  lesson,
+  onBack,
+  onOpenStudy,
+  onOpenEdit,
+  onOpenEditDevotionals,
+  scheduledDevotionalDates,
+  releasedDayNumbers = null,
+  devotionalMode = "10_days",
+  autoOpenAvailableDevotional = false,
+  onAutoOpenAvailableDevotionalConsumed,
+  eventDate,
+  isStudyLocked,
+  isLateAccess,
+  isStudyCompleted = true,
+}: Props) {
   const { role } = useAuth();
   const isLeaderOrAdmin = role === "admin" || role === "lider";
   const [devotionals, setDevotionals] = useState<DevotionalItem[]>([]);
@@ -209,99 +318,153 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, onOpenEd
   const [viewingDevotional, setViewingDevotional] = useState<DevotionalItem | null>(null);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [completedDates, setCompletedDates] = useState<Map<string, string>>(new Map());
-  const [lockedIds, setLockedIds] = useState<Set<string>>(new Set());
+  const [completedRecoveryIds, setCompletedRecoveryIds] = useState<Set<string>>(new Set());
   const [devStatuses, setDevStatuses] = useState<Map<string, DevotionalStatus>>(new Map());
+  const [devRecoverySet, setDevRecoverySet] = useState<Set<string>>(new Set());
+  const [devOverrideMap, setDevOverrideMap] = useState<Map<string, DevotionalOverride>>(new Map());
+  const [devPts, setDevPts] = useState(5);
+  const [devRecoveryPts, setDevRecoveryPts] = useState(2);
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
-      const [{ data: devs }, { data: prog }] = await Promise.all([
+      const [{ data: devs }, { data: prog }, { data: gameConfig }] = await Promise.all([
         supabase.from("devotional_content").select("*").eq("lesson_id", lesson.id).order("day_number"),
         user
-          ? supabase.from("devotional_progress").select("devotional_id, completed_at").eq("user_id", user.id)
+          ? supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery").eq("user_id", user.id)
           : Promise.resolve({ data: [] }),
+        supabase.rpc("get_game_config" as any),
       ]);
+      const cfgMap = new Map<string, number>((gameConfig ?? []).map((r: any) => [r.key, Number(r.value)]));
+      setDevPts(cfgMap.get("devotional_points") ?? 5);
+
+      setDevRecoveryPts(cfgMap.get("devotional_recovery_points") ?? 2);
+
       const devList = (devs ?? []) as DevotionalItem[];
+      const overrideMap = new Map<string, DevotionalOverride>();
+      if (user && devList.length > 0) {
+        const { data: overrides } = await supabase
+          .from("user_devotional_overrides" as any)
+          .select("id, devotional_id, custom_points, available_from, available_until, is_unlocked")
+          .eq("user_id", user.id)
+          .in("devotional_id", devList.map((dev) => dev.id));
+        (overrides ?? []).forEach((item: any) => {
+          overrideMap.set(item.devotional_id, item as DevotionalOverride);
+        });
+      }
+      setDevOverrideMap(overrideMap);
       const progList = prog ?? [];
       const completedMap = new Map<string, string>();
-      progList.forEach((p: any) => completedMap.set(p.devotional_id, p.completed_at));
+      const recoveryIds = new Set<string>();
+      progList.forEach((p: any) => {
+        completedMap.set(p.devotional_id, p.completed_at);
+        if (p.is_recovery) recoveryIds.add(p.devotional_id);
+      });
       setCompletedIds(new Set(progList.map((p: any) => p.devotional_id)));
       setCompletedDates(completedMap);
+      setCompletedRecoveryIds(recoveryIds);
 
       if (isLeaderOrAdmin) {
         const allAvailable = new Map<string, DevotionalStatus>();
         devList.forEach(d => allAvailable.set(d.id, completedMap.has(d.id) ? "completed" : "available"));
         setDevStatuses(allAvailable);
-        setLockedIds(new Set());
+        setDevRecoverySet(new Set());
       } else if (isLateAccess) {
-        // Late access: only already-completed devotionals stay, rest are locked
         const lateStatuses = new Map<string, DevotionalStatus>();
-        const lateLockedSet = new Set<string>();
         devList.forEach(d => {
           if (completedMap.has(d.id)) {
             lateStatuses.set(d.id, "completed");
-          } else {
-            lateStatuses.set(d.id, "locked");
-            lateLockedSet.add(d.id);
+            return;
           }
+          const activeOverride = overrideMap.get(d.id);
+          lateStatuses.set(d.id, isOverrideActive(activeOverride, new Date()) ? "available" : "locked");
         });
         setDevStatuses(lateStatuses);
-        setLockedIds(lateLockedSet);
+        setDevRecoverySet(new Set());
       } else {
-        const { statuses, lockedSet } = computeDevotionalStatuses(devList, completedMap, scheduledDevotionalDates);
+        const { statuses, recoverySet } = computeDevotionalStatuses(
+          devList, completedMap, recoveryIds,
+          scheduledDevotionalDates ?? [], devotionalMode, releasedDayNumbers, overrideMap
+        );
         setDevStatuses(statuses);
-        setLockedIds(lockedSet);
+        setDevRecoverySet(recoverySet);
       }
       setDevotionals(devList);
       setLoading(false);
     }
     load();
-  }, [lesson.id, scheduledDevotionalDates, isLateAccess, isStudyCompleted]);
+  }, [lesson.id, scheduledDevotionalDates, releasedDayNumbers, devotionalMode, isLateAccess, isStudyCompleted]);
 
-  async function handleCompleteDevotional(devotionalId: string) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const now = new Date();
-    const isWeekend = now.getDay() === 0 || now.getDay() === 6;
-    // Late access = 0 points; weekend recovery = 2 pts; normal = 5 pts
-    const pts = isLateAccess ? 0 : isWeekend ? 2 : 5;
-    await supabase.from("devotional_progress").insert({
-      user_id: user.id,
-      devotional_id: devotionalId,
+  useEffect(() => {
+    if (!autoOpenAvailableDevotional || loading || devotionals.length === 0) return;
+
+    const availableDevotional = devotionals.find((dev) => {
+      const s = devStatuses.get(dev.id) ?? "future";
+      return s === "available" || s === "recovery";
     });
+
+    if (availableDevotional) {
+      setShowDevotionals(false);
+      setViewingDevotional(availableDevotional);
+    } else {
+      setShowDevotionals(true);
+    }
+
+    onAutoOpenAvailableDevotionalConsumed?.();
+  }, [
+    autoOpenAvailableDevotional,
+    loading,
+    devotionals,
+    devStatuses,
+    onAutoOpenAvailableDevotionalConsumed,
+  ]);
+
+  async function handleCompleteDevotional(devotionalId: string, isRecovery = false) {
+    const now = new Date();
+    const overridePoints = devOverrideMap.get(devotionalId)?.custom_points ?? null;
+    const pts = isLateAccess ? 0 : overridePoints ?? (isRecovery ? devRecoveryPts : devPts);
     const newCompletedMap = new Map(completedDates);
     newCompletedMap.set(devotionalId, now.toISOString());
+    const newRecoveryIds = new Set(completedRecoveryIds);
+    if (isRecovery) newRecoveryIds.add(devotionalId);
     setCompletedDates(newCompletedMap);
     setCompletedIds(prev => new Set([...prev, devotionalId]));
+    setCompletedRecoveryIds(newRecoveryIds);
     if (isLeaderOrAdmin) {
       const allAvailable = new Map<string, DevotionalStatus>();
       devotionals.forEach(d => allAvailable.set(d.id, newCompletedMap.has(d.id) ? "completed" : "available"));
       setDevStatuses(allAvailable);
-      setLockedIds(new Set());
+      setDevRecoverySet(new Set());
     } else if (isLateAccess) {
-      // Late access: don't unlock anything new (shouldn't reach here since locked devs can't be completed)
       const lateStatuses = new Map<string, DevotionalStatus>();
-      const lateLockedSet = new Set<string>();
       devotionals.forEach(d => {
         if (newCompletedMap.has(d.id)) {
           lateStatuses.set(d.id, "completed");
-        } else {
-          lateStatuses.set(d.id, "locked");
-          lateLockedSet.add(d.id);
+          return;
         }
+        const activeOverride = devOverrideMap.get(d.id);
+        lateStatuses.set(d.id, isOverrideActive(activeOverride, now) ? "available" : "locked");
       });
       setDevStatuses(lateStatuses);
-      setLockedIds(lateLockedSet);
+      setDevRecoverySet(new Set());
     } else {
-      const { statuses, lockedSet } = computeDevotionalStatuses(devotionals, newCompletedMap, scheduledDevotionalDates);
+      const { statuses, recoverySet } = computeDevotionalStatuses(
+        devotionals, newCompletedMap, newRecoveryIds,
+        scheduledDevotionalDates ?? [], devotionalMode, releasedDayNumbers, devOverrideMap
+      );
       setDevStatuses(statuses);
-      setLockedIds(lockedSet);
+      setDevRecoverySet(recoverySet);
     }
     if (isLateAccess) {
       toast.info("Devocional concluído! (sem pontuação — prazo encerrado)", { duration: 3000 });
+    } else if (isRecovery) {
+      toast.success(`Devocional recuperado! +${pts} pontos de fé ⭐`, {
+        description: `Recuperação (${devRecoveryPts} pts — valor reduzido)`,
+        duration: 3000,
+      });
     } else {
       toast.success(`Devocional concluído! +${pts} pontos de fé ⭐`, {
-        description: isWeekend ? "Recuperação de fim de semana (2 pts)" : "Continue firme na sua caminhada!",
+        description: "Continue firme na sua caminhada!",
         duration: 3000,
       });
     }
@@ -348,13 +511,16 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, onOpenEd
 
   if (viewingDevotional) {
     const isCompleted = completedIds.has(viewingDevotional.id);
+    const isViewingRecovery = devRecoverySet.has(viewingDevotional.id);
+    const activeOverride = devOverrideMap.get(viewingDevotional.id);
+    const pts = isLateAccess ? 0 : activeOverride?.custom_points ?? (isViewingRecovery ? devRecoveryPts : devPts);
     return (
       <DevotionalView
         activity={{
           id: viewingDevotional.id,
           title: viewingDevotional.title || `Dia ${viewingDevotional.day_number}`,
-          subtitle: `${lesson.title} · Dia ${viewingDevotional.day_number}`,
-          points: 5,
+          subtitle: `${lesson.title} · Dia ${viewingDevotional.day_number}${isViewingRecovery ? " · Recuperação" : ""}`,
+          points: pts,
         }}
         devotionalData={{
           bible_text: viewingDevotional.bible_text,
@@ -366,10 +532,13 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, onOpenEd
         }}
         onBack={() => setViewingDevotional(null)}
         onComplete={async (id) => {
-          await handleCompleteDevotional(id);
+          await handleCompleteDevotional(id, isViewingRecovery);
           setViewingDevotional(null);
         }}
         isCompleted={isCompleted}
+        isRecovery={isViewingRecovery}
+        awardedPoints={pts}
+        overrideId={activeOverride?.id}
       />
     );
   }
@@ -626,3 +795,4 @@ export default function LessonChoiceView({ lesson, onBack, onOpenStudy, onOpenEd
     </div>
   );
 }
+

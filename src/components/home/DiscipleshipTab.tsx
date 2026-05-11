@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Heart, GraduationCap, Sparkles, Lock } from "lucide-react";
+import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
+import { Heart, GraduationCap, Sparkles, Lock, ClipboardList, BookOpen, ArrowLeft, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import JourneyLessonView from "@/components/home/JourneyLessonView";
 import LessonContentEditor from "@/components/admin/tabs/LessonContentEditor";
 import LessonDevotionalEditor from "@/components/admin/tabs/LessonDevotionalEditor";
 import LessonChoiceView from "@/components/home/LessonChoiceView";
 import ResourceLibrary from "@/components/home/ResourceLibrary";
+import LeaderRoomSection from "@/components/home/LeaderRoomSection";
 import { useAgendaSchedule } from "@/hooks/useAgendaSchedule";
 import { toast } from "sonner";
 
@@ -25,7 +27,8 @@ import CourseTrailSection from "./discipleship/CourseTrailSection";
 const SUB_TABS = [
   { key: "trilha" as const, label: "Trilha", icon: GraduationCap, activeIconClass: "text-secondary" },
   { key: "saude" as const, label: "Saúde", icon: Heart, activeIconClass: "text-brand-green" },
-  { key: "crescimento" as const, label: "Crescimento", icon: Sparkles, activeIconClass: "text-primary" },
+  { key: "avaliacao" as const, label: "Avaliação", icon: ClipboardList, activeIconClass: "text-accent-foreground" },
+  { key: "pastoral" as const, label: "Pastoral", icon: BookOpen, activeIconClass: "text-primary" },
 ];
 type SubTab = typeof SUB_TABS[number]["key"];
 
@@ -38,13 +41,16 @@ const subTabVariants = {
 // ─── MAIN COMPONENT ──────────────────────────────────────
 type DiscipleshipTabProps = {
   targetLessonId?: string | null;
+  targetLessonMode?: "choice" | "devotional";
   onTargetLessonConsumed?: () => void;
 };
 
-export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed }: DiscipleshipTabProps = {}) {
+export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "choice", onTargetLessonConsumed }: DiscipleshipTabProps = {}) {
   const { profile, role } = useAuth();
+  const { effectiveArea } = useAreaSwitch();
   const isLeaderOrAdmin = role === "admin" || role === "lider";
   const agendaSchedule = useAgendaSchedule();
+  const currentArea = effectiveArea || profile?.area || "";
 
   const [subTab, setSubTab] = useState<SubTab>("trilha");
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -57,6 +63,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [selectedLessonMode, setSelectedLessonMode] = useState<"choice" | "study" | "edit" | "edit-devotionals">("choice");
+  const [autoOpenDevotionalLessonId, setAutoOpenDevotionalLessonId] = useState<string | null>(null);
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
   const [fullyCompletedLessonIds, setFullyCompletedLessonIds] = useState<Set<string>>(new Set());
@@ -65,11 +72,13 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
   const [allAssessments, setAllAssessments] = useState<Assessment[]>([]);
   const [worshipCount, setWorshipCount] = useState(0);
   const [unlockedCourseIds, setUnlockedCourseIds] = useState<Set<string>>(new Set());
+  const [manualLessonOverrideMap, setManualLessonOverrideMap] = useState<Map<string, { id: string; custom_points: number | null }>>(new Map());
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [helpType, setHelpType] = useState<"crise" | "conversar" | "oracao" | null>(null);
   const [helpMessage, setHelpMessage] = useState("");
   const [helpSending, setHelpSending] = useState(false);
   const [helpSent, setHelpSent] = useState(false);
+  const [showLeaderRoom, setShowLeaderRoom] = useState(false);
 
   const [form, setForm] = useState({
     prayer_score: null as number | null,
@@ -84,29 +93,33 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { fetchAll(); }, [currentArea]);
 
-  // Auto-open lesson when navigating from agenda
+  // Auto-open lesson when navigating from agenda.
+  // Wait for agendaSchedule to finish loading so scheduledDevotionalDates
+  // are available before the lesson view mounts (prevents the fallback path
+  // from auto-opening the wrong devotional due to a race condition).
   useEffect(() => {
-    if (targetLessonId && !loading && courses.length > 0) {
+    if (targetLessonId && !loading && !agendaSchedule.loading && courses.length > 0) {
       const lesson = courses.flatMap(c => c.lessons).find(l => l.id === targetLessonId);
       if (lesson) {
         setSelectedLesson(lesson);
         setSelectedLessonMode("choice");
+        setAutoOpenDevotionalLessonId(targetLessonMode === "devotional" ? lesson.id : null);
         setSubTab("trilha");
         const course = courses.find(c => c.lessons.some(l => l.id === targetLessonId));
         if (course) setExpandedCourse(course.id);
       }
       onTargetLessonConsumed?.();
     }
-  }, [targetLessonId, loading, courses]);
+  }, [targetLessonId, targetLessonMode, loading, agendaSchedule.loading, courses, onTargetLessonConsumed]);
 
   async function fetchAll() {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }, { data: responsesData }, { data: eventsData }, { data: attendanceData }, { data: allAssess }, { data: devContentData }, { data: devProgressData }, { data: worshipData }, { data: unlocksData }] = await Promise.all([
+    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }, { data: responsesData }, { data: eventsData }, { data: attendanceData }, { data: allAssess }, { data: devContentData }, { data: devProgressData }, { data: worshipData }, { data: unlocksData }, { data: lessonOverrideData }] = await Promise.all([
       supabase.from("activities").select("id, type, title, points"),
       supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
       supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).eq("month", month).eq("year", year).maybeSingle(),
@@ -120,7 +133,8 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
       supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null),
       supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
       supabase.from("worship_attendance").select("id").eq("user_id", user.id).eq("status", "aprovado"),
-      supabase.from("course_unlocks").select("course_id").eq("area", profile?.area ?? ""),
+      supabase.from("course_unlocks").select("course_id").eq("area", currentArea),
+      supabase.from("user_lesson_overrides" as any).select("id, lesson_id, custom_points, available_from, available_until, is_unlocked").eq("user_id", user.id),
     ]);
 
     setActivities(acts ?? []);
@@ -154,6 +168,15 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
     }));
     setCourses(courseList);
     setUnlockedCourseIds(new Set((unlocksData ?? []).map((u: any) => u.course_id)));
+    const nowIso = new Date();
+    const activeLessonOverrides = new Map<string, { id: string; custom_points: number | null }>();
+    (lessonOverrideData ?? []).forEach((item: any) => {
+      if (!item?.lesson_id || item.is_unlocked === false) return;
+      if (item.available_from && new Date(item.available_from) > nowIso) return;
+      if (item.available_until && new Date(item.available_until) < nowIso) return;
+      activeLessonOverrides.set(item.lesson_id, { id: item.id, custom_points: item.custom_points ?? null });
+    });
+    setManualLessonOverrideMap(activeLessonOverrides);
     const unlockedSet = new Set((unlocksData ?? []).map((u: any) => u.course_id));
     const firstUnlocked = courseList.find(c => unlockedSet.has(c.id));
     if (firstUnlocked) setExpandedCourse(firstUnlocked.id);
@@ -362,11 +385,21 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
       const isLateAccessStudy = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id);
       return (
         <div className="px-5 pt-5 pb-6">
-          <JourneyLessonView lesson={selectedLesson} onBack={() => { setSelectedLesson(null); setSelectedLessonMode("choice"); }} isLateAccess={isLateAccessStudy} />
+          <JourneyLessonView
+            lesson={selectedLesson}
+            onBack={() => { setSelectedLesson(null); setSelectedLessonMode("choice"); }}
+            isLateAccess={isLateAccessStudy}
+            overrideId={manualLessonOverrideMap.get(selectedLesson.id)?.id}
+            awardedPoints={manualLessonOverrideMap.get(selectedLesson.id)?.custom_points ?? null}
+          />
         </div>
       );
     }
     const isLateAccess = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id);
+    const hasManualOverride = manualLessonOverrideMap.has(selectedLesson.id);
+    const isStudyOpen = isLeaderOrAdmin || agendaSchedule.studyOpenLessonIds.has(selectedLesson.id) || hasManualOverride;
+    const isFullyDone = fullyCompletedLessonIds.has(selectedLesson.id);
+    const isStudyLocked = !isLeaderOrAdmin && !isStudyOpen && !isLateAccess && !isFullyDone;
     const studyDone = completedLessonIds.has(selectedLesson.id);
     return (
       <LessonChoiceView
@@ -375,12 +408,34 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
         onOpenStudy={() => setSelectedLessonMode("study")}
         onOpenEdit={isLeaderOrAdmin ? () => setSelectedLessonMode("edit") : undefined}
         onOpenEditDevotionals={isLeaderOrAdmin ? () => setSelectedLessonMode("edit-devotionals") : undefined}
+        autoOpenAvailableDevotional={autoOpenDevotionalLessonId === selectedLesson.id}
+        onAutoOpenAvailableDevotionalConsumed={() => setAutoOpenDevotionalLessonId(null)}
         scheduledDevotionalDates={agendaSchedule.lessonDevotionalDates.get(selectedLesson.id)}
+        releasedDayNumbers={agendaSchedule.lessonReleasedDays.get(selectedLesson.id)}
+        devotionalMode={agendaSchedule.lessonDevotionalMode.get(selectedLesson.id) ?? "10_days"}
         eventDate={agendaSchedule.lessonEventDate.get(selectedLesson.id) ?? undefined}
-        isStudyLocked={false}
+        isStudyLocked={isStudyLocked}
         isLateAccess={isLateAccess}
         isStudyCompleted={studyDone}
+        overrideId={manualLessonOverrideMap.get(selectedLesson.id)?.id}
+        awardedPoints={manualLessonOverrideMap.get(selectedLesson.id)?.custom_points ?? null}
       />
+    );
+  }
+
+  if (showLeaderRoom && isLeaderOrAdmin) {
+    return (
+      <div className="px-5 pt-5 pb-6 space-y-4">
+        <button
+          onClick={() => setShowLeaderRoom(false)}
+          className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm font-inter font-semibold text-foreground shadow-sm hover:bg-muted/50 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Voltar ao discipulado
+        </button>
+
+        <LeaderRoomSection asTab />
+      </div>
     );
   }
 
@@ -389,9 +444,27 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
       {/* Hero — always visible */}
       <DiscipleshipHero
         fullName={profile?.full_name}
-        community={profile?.community}
+        community={currentArea}
         healthStatus={healthStatus}
       />
+
+      {isLeaderOrAdmin && (
+        <button
+          onClick={() => setShowLeaderRoom(true)}
+          className="w-full flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm hover:bg-muted/50 transition-colors text-left"
+        >
+          <div className="w-11 h-11 rounded-2xl flex items-center justify-center bg-primary/10 text-primary">
+            <ClipboardList className="w-5 h-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-montserrat font-bold text-foreground text-sm">Sala do Discipulador</p>
+            <p className="text-muted-foreground text-xs font-inter">
+              Acesse rapidamente a gestão da turma, encontros, avisos e relatórios.
+            </p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+        </button>
+      )}
 
       {/* Sub-tab pills */}
       <div className="flex gap-1.5 bg-muted/50 rounded-2xl p-1.5 border border-border/50">
@@ -402,7 +475,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
             <button
               key={tab.key}
               onClick={() => setSubTab(tab.key)}
-              className={`flex-1 relative flex items-center justify-center gap-2 py-3 rounded-xl font-inter text-xs font-bold transition-all duration-200 ${
+              className={`flex-1 relative flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl font-inter text-[11px] font-bold transition-all duration-200 ${
                 isActive
                   ? "text-foreground shadow-md"
                   : "text-muted-foreground hover:text-foreground hover:bg-card/50"
@@ -415,10 +488,8 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 />
               )}
-              <span className="relative z-10 flex items-center gap-2">
-                <Icon className={`w-5 h-5 ${isActive ? tab.activeIconClass : "text-muted-foreground"}`} />
-                <span>{tab.label}</span>
-              </span>
+              <Icon className={`relative z-10 w-4 h-4 ${isActive ? tab.activeIconClass : "text-muted-foreground"}`} />
+              <span className="relative z-10">{tab.label}</span>
             </button>
           );
         })}
@@ -436,6 +507,7 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
               completedLessonIds={completedLessonIds}
               fullyCompletedLessonIds={fullyCompletedLessonIds}
               agendaSchedule={agendaSchedule}
+              manualLessonOverrideIds={new Set(manualLessonOverrideMap.keys())}
               isLeaderOrAdmin={isLeaderOrAdmin}
               onSelectLesson={(lesson) => {
                 setSelectedLesson(lesson);
@@ -455,6 +527,11 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
               completedActs={completedActs} totalActs={totalActs} pct={pct}
             />
             <ThermometerSection dimensions={thermometerDimensions} />
+          </motion.div>
+        )}
+
+        {subTab === "avaliacao" && (
+          <motion.div key="avaliacao" variants={subTabVariants} initial="initial" animate="animate" exit="exit" className="space-y-4">
             <AssessmentSection
               assessment={assessment}
               showAssessment={showAssessment}
@@ -469,8 +546,10 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
           </motion.div>
         )}
 
-        {subTab === "crescimento" && (
-          <motion.div key="crescimento" variants={subTabVariants} initial="initial" animate="animate" exit="exit" className="space-y-4">
+        {subTab === "pastoral" && (
+          <motion.div key="pastoral" variants={subTabVariants} initial="initial" animate="animate" exit="exit" className="space-y-4">
+            <GrowthPlanSection plan={plan} />
+            <RewardsSection rewards={spiritualRewards} />
             <HelpSection
               helpSent={helpSent}
               showHelpModal={showHelpModal}
@@ -482,8 +561,6 @@ export default function DiscipleshipTab({ targetLessonId, onTargetLessonConsumed
               helpSending={helpSending}
               onSendHelp={handleSendHelp}
             />
-            <RewardsSection rewards={spiritualRewards} />
-            <GrowthPlanSection plan={plan} />
           </motion.div>
         )}
       </AnimatePresence>

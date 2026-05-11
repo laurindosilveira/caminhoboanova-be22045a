@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import BibleModal from "./BibleModal";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -61,9 +61,11 @@ type Props = {
   isAdmin?: boolean;
   targetUserId?: string;
   isLateAccess?: boolean;
+  overrideId?: string | null;
+  awardedPoints?: number | null;
 };
 
-export default function JourneyLessonView({ lesson, onBack, isAdmin = false, targetUserId, isLateAccess = false }: Props) {
+export default function JourneyLessonView({ lesson, onBack, isAdmin = false, targetUserId, isLateAccess = false, overrideId = null, awardedPoints = null }: Props) {
   const [content, setContent] = useState<LessonContent>(getDefaultContent(lesson.order_num));
   const [responses, setResponses] = useState<Response>({});
   const [bibleRef, setBibleRef] = useState<string | null>(null);
@@ -74,34 +76,76 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
   const [audioListened, setAudioListened] = useState(false);
   const [saveAttempted, setSaveAttempted] = useState(false);
   const [showCompletionAnim, setShowCompletionAnim] = useState(false);
+  const hasLoadedResponses = useRef(false);
 
-  // Load lesson content from DB (set by admin)
+  // Load lesson content from DB — checks turma override first, then global content
   useEffect(() => {
     async function loadContent() {
-      const { data } = await supabase
+      const defaults = getDefaultContent(lesson.order_num);
+
+      // 1. Load global content
+      const { data: globalData } = await supabase
         .from("lesson_content")
         .select("*")
         .eq("lesson_id", lesson.id)
         .maybeSingle();
 
-      if (data) {
-        setContent({
-          greeting: data.greeting || getDefaultContent(lesson.order_num).greeting,
-          icebreaker: data.icebreaker || getDefaultContent(lesson.order_num).icebreaker,
-          summary: data.summary || getDefaultContent(lesson.order_num).summary,
-          bible_texts: data.bible_texts?.length ? data.bible_texts : getDefaultContent(lesson.order_num).bible_texts,
-          questions: data.questions?.length ? data.questions : getDefaultContent(lesson.order_num).questions,
-          practice: data.practice || getDefaultContent(lesson.order_num).practice,
-          prayer_prompt: data.prayer_prompt || getDefaultContent(lesson.order_num).prayer_prompt,
-          video_link: data.video_link ?? "",
-          audio_link: data.audio_link ?? "",
-          pdf_link: (data as any).pdf_link ?? "",
-        });
+      const global: LessonContent = globalData ? {
+        greeting: globalData.greeting || defaults.greeting,
+        icebreaker: globalData.icebreaker || defaults.icebreaker,
+        summary: globalData.summary || defaults.summary,
+        bible_texts: globalData.bible_texts?.length ? globalData.bible_texts : defaults.bible_texts,
+        questions: globalData.questions?.length ? globalData.questions : defaults.questions,
+        practice: globalData.practice || defaults.practice,
+        prayer_prompt: globalData.prayer_prompt || defaults.prayer_prompt,
+        video_link: globalData.video_link ?? "",
+        audio_link: globalData.audio_link ?? "",
+        pdf_link: (globalData as any).pdf_link ?? "",
+      } : defaults;
+
+      // 2. Check for turma-specific override
+      const { data: { user } } = await supabase.auth.getUser();
+      const uid = targetUserId ?? user?.id;
+      if (uid) {
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("turma_id")
+          .eq("user_id", uid)
+          .maybeSingle();
+
+        if (profileData?.turma_id) {
+          const { data: override } = await supabase
+            .from("turma_lesson_content")
+            .select("*")
+            .eq("turma_id", profileData.turma_id)
+            .eq("lesson_id", lesson.id)
+            .maybeSingle();
+
+          if (override) {
+            // Merge: override fields take priority over global when set
+            setContent({
+              greeting: override.greeting || global.greeting,
+              icebreaker: override.icebreaker || global.icebreaker,
+              summary: override.summary || global.summary,
+              bible_texts: override.bible_texts?.length ? override.bible_texts : global.bible_texts,
+              questions: override.questions?.length ? override.questions : global.questions,
+              practice: override.practice || global.practice,
+              prayer_prompt: override.prayer_prompt || global.prayer_prompt,
+              video_link: override.video_link ?? global.video_link,
+              audio_link: override.audio_link ?? global.audio_link,
+              pdf_link: (override as any).pdf_link ?? global.pdf_link,
+            });
+            setContentLoaded(true);
+            return;
+          }
+        }
       }
+
+      setContent(global);
       setContentLoaded(true);
     }
     loadContent();
-  }, [lesson.id, lesson.order_num]);
+  }, [lesson.id, lesson.order_num, targetUserId]);
 
   // Load user responses
   useEffect(() => {
@@ -119,6 +163,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
         data.forEach(r => { map[r.question_key] = r.response; });
         setResponses(map);
       }
+      hasLoadedResponses.current = true;
     }
     loadResponses();
   }, [lesson.id, targetUserId]);
@@ -127,14 +172,69 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     if (isAdmin) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from("lesson_responses").upsert({
+    let { error } = await supabase.from("lesson_responses").upsert({
       user_id: user.id,
       lesson_id: lesson.id,
       question_key: key,
       response: value,
     }, { onConflict: "user_id,lesson_id,question_key" });
+    if (error && /awarded_points|override_release_id/i.test(error.message)) {
+      const fallback = await supabase.from("lesson_responses").upsert({
+        user_id: user.id,
+        lesson_id: lesson.id,
+        question_key: key,
+        response: value,
+      }, { onConflict: "user_id,lesson_id,question_key" });
+      error = fallback.error;
+    }
+    if (error) {
+      toast.error("Falha ao salvar a resposta da lição.", {
+        description: error.message,
+      });
+      return;
+    }
     setLastSaved(new Date());
   }, [lesson.id, isAdmin]);
+
+  useEffect(() => {
+    if (isAdmin || !contentLoaded || !hasLoadedResponses.current) return;
+
+    const entries = Object.entries(responses);
+    if (entries.length === 0) return;
+
+    const timeoutId = window.setTimeout(async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const upserts = entries.map(([key, response]) => ({
+        user_id: user.id,
+        lesson_id: lesson.id,
+        question_key: key,
+        response,
+      }));
+
+      let { error } = await supabase
+        .from("lesson_responses")
+        .upsert(upserts, { onConflict: "user_id,lesson_id,question_key" });
+      if (error && /awarded_points|override_release_id/i.test(error.message)) {
+        const fallback = await supabase
+          .from("lesson_responses")
+          .upsert(entries.map(([key, response]) => ({
+            user_id: user.id,
+            lesson_id: lesson.id,
+            question_key: key,
+            response,
+          })), { onConflict: "user_id,lesson_id,question_key" });
+        error = fallback.error;
+      }
+
+      if (!error) {
+        setLastSaved(new Date());
+      }
+    }, 1200);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [responses, lesson.id, isAdmin, contentLoaded]);
 
   // Validation: check all required fields
   const requiredKeys = ["icebreaker", ...content.questions.map((_, i) => `q${i}`), "practice", "prayer"];
@@ -163,10 +263,35 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSaving(false); return; }
     const upserts = Object.entries(responses).map(([key, response]) => ({
-      user_id: user.id, lesson_id: lesson.id, question_key: key, response,
+      user_id: user.id,
+      lesson_id: lesson.id,
+      question_key: key,
+      response,
+      awarded_points: isLateAccess ? 0 : awardedPoints,
+      override_release_id: overrideId,
     }));
     if (upserts.length > 0) {
-      await supabase.from("lesson_responses").upsert(upserts, { onConflict: "user_id,lesson_id,question_key" });
+      let { error } = await supabase
+        .from("lesson_responses")
+        .upsert(upserts, { onConflict: "user_id,lesson_id,question_key" });
+      if (error && /awarded_points|override_release_id/i.test(error.message)) {
+        const fallback = await supabase
+          .from("lesson_responses")
+          .upsert(Object.entries(responses).map(([key, response]) => ({
+            user_id: user.id,
+            lesson_id: lesson.id,
+            question_key: key,
+            response,
+          })), { onConflict: "user_id,lesson_id,question_key" });
+        error = fallback.error;
+      }
+      if (error) {
+        setSaving(false);
+        toast.error("Não foi possível salvar as respostas da lição.", {
+          description: error.message,
+        });
+        return;
+      }
     }
     setSaving(false);
     setLastSaved(new Date());

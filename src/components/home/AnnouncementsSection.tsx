@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { getAreaForCommunity } from "@/config/areas";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import { MessageCircle, Trash2, X } from "lucide-react";
 
 const REACTION_EMOJIS = [
@@ -16,6 +18,8 @@ interface Message {
   body: string;
   created_at: string;
   turma_id: string | null;
+  area: string | null;
+  community: string | null;
 }
 
 interface ReactionDetail {
@@ -38,6 +42,7 @@ function timeAgo(dateStr: string): string {
 
 export default function AnnouncementsSection() {
   const { profile, role } = useAuth();
+  const { effectiveArea } = useAreaSwitch();
   const canDelete = role === "admin" || role === "lider";
   const [messages, setMessages] = useState<Message[]>([]);
   const [reactions, setReactions] = useState<ReactionMap>({});
@@ -46,21 +51,27 @@ export default function AnnouncementsSection() {
   const [reactionUsers, setReactionUsers] = useState<string[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [turmaNames, setTurmaNames] = useState<Record<string, string>>({});
+  const currentArea = effectiveArea || profile?.area || "";
 
   useEffect(() => {
-    if (!profile) return;
+    if (!profile || !currentArea) return;
     async function fetchMessages() {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       const [{ data }, { data: reactionsData }] = await Promise.all([
         supabase
           .from("messages")
-          .select("id, title, body, created_at, turma_id")
+          .select("id, title, body, created_at, turma_id, area, community")
           .order("created_at", { ascending: false })
-          .limit(5),
+          .limit(25),
         supabase.from("message_reactions").select("message_id, emoji, user_id"),
       ]);
-      const msgs = (data ?? []) as Message[];
+      const msgs = ((data ?? []) as Message[]).filter((msg) => {
+        if (!msg.area && !msg.community && !msg.turma_id) return true;
+        if (msg.area) return msg.area === currentArea;
+        if (msg.community) return getAreaForCommunity(msg.community) === currentArea;
+        return true;
+      }).slice(0, 5);
       setMessages(msgs);
 
       // Record views for all fetched messages
@@ -90,7 +101,7 @@ export default function AnnouncementsSection() {
       setLoading(false);
     }
     fetchMessages();
-  }, [profile]);
+  }, [profile, currentArea]);
 
   async function toggleReaction(messageId: string, emoji: string) {
     const { data: { user } } = await supabase.auth.getUser();
@@ -151,14 +162,11 @@ export default function AnnouncementsSection() {
   if (messages.length === 0) return null;
 
   return (
-    <section className="px-5 mb-6" aria-labelledby="avisos-titulo">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-          <MessageCircle className="w-4.5 h-4.5 text-primary" />
-        </div>
-        <h2 id="avisos-titulo" className="font-montserrat font-black text-foreground text-sm uppercase tracking-widest">Avisos</h2>
+    <div className="px-5">
+      <div className="flex items-center gap-2 mb-3">
+        <MessageCircle className="w-4 h-4 text-primary" />
+        <span className="font-montserrat font-bold text-foreground text-sm">Avisos</span>
       </div>
-
       <div className="space-y-3">
         {messages.map((msg) => (
           <div key={msg.id} className="bg-card rounded-2xl p-4 border border-border shadow-sm">
@@ -260,7 +268,6 @@ export default function AnnouncementsSection() {
           </div>
         </div>
       )}
-    </section>
+    </div>
   );
 }
-

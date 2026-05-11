@@ -10,7 +10,7 @@ type AgendaSchedule = {
   lateAccessLessonIds: Set<string>;
   lessonEventDate: Map<string, Date>;
   lessonDevotionalDates: Map<string, Date[]>;
-  schedule: { lessonId: string; windowStart: Date }[];
+  schedule: { lessonId: string; eventDate: Date; windowStart: Date }[];
 };
 
 type Props = {
@@ -21,6 +21,7 @@ type Props = {
   completedLessonIds: Set<string>;
   fullyCompletedLessonIds: Set<string>;
   agendaSchedule: AgendaSchedule;
+  manualLessonOverrideIds: Set<string>;
   isLeaderOrAdmin: boolean;
   onSelectLesson: (lesson: Lesson) => void;
 };
@@ -28,7 +29,7 @@ type Props = {
 export default function CourseTrailSection({
   courses, expandedCourse, onExpandCourse,
   unlockedCourseIds, completedLessonIds, fullyCompletedLessonIds,
-  agendaSchedule, isLeaderOrAdmin, onSelectLesson,
+  agendaSchedule, manualLessonOverrideIds, isLeaderOrAdmin, onSelectLesson,
 }: Props) {
   if (courses.length === 0) return null;
 
@@ -61,8 +62,8 @@ export default function CourseTrailSection({
       {/* Course accordion */}
       {courses.map((course) => {
         const isOpen = expandedCourse === course.id;
-        const hasScheduledLesson = course.lessons.some(lesson => agendaSchedule.scheduledLessonIds.has(lesson.id));
-        const isCourseUnlocked = isLeaderOrAdmin || unlockedCourseIds.has(course.id) || hasScheduledLesson;
+        const courseHasManualOverride = course.lessons.some((lesson) => manualLessonOverrideIds.has(lesson.id));
+        const isCourseUnlocked = isLeaderOrAdmin || unlockedCourseIds.has(course.id) || courseHasManualOverride;
         const doneLessons = course.lessons.filter(l => fullyCompletedLessonIds.has(l.id)).length;
         const totalLessons = course.lessons.length;
         const coursePct = totalLessons > 0 ? Math.round((doneLessons / totalLessons) * 100) : 0;
@@ -71,7 +72,7 @@ export default function CourseTrailSection({
             isCourseUnlocked ? "border-border" : "border-border opacity-75"
           }`}>
             <button
-              onClick={() => isCourseUnlocked ? onExpandCourse(isOpen ? null : course.id) : toast.info("🔒 Aguarde a programação das lições deste curso.")}
+              onClick={() => isCourseUnlocked ? onExpandCourse(isOpen ? null : course.id) : toast.info("Este curso ainda não foi liberado pelo líder.")}
               className={`w-full flex items-center gap-3 p-4 text-left ${!isCourseUnlocked ? "cursor-default" : ""}`}
             >
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
@@ -103,7 +104,7 @@ export default function CourseTrailSection({
                     </div>
                   </>
                 ) : (
-                  <p className="text-muted-foreground font-inter text-xs mt-0.5">🔒 Aguarde a programação das lições deste curso</p>
+                  <p className="text-muted-foreground font-inter text-xs mt-0.5">🔒 Curso ainda não liberado pelo líder</p>
                 )}
               </div>
               {isCourseUnlocked && (
@@ -123,26 +124,29 @@ export default function CourseTrailSection({
                     const isFullyDone = fullyCompletedLessonIds.has(lesson.id);
                     const isScheduled = agendaSchedule.scheduledLessonIds.has(lesson.id);
                     const isStudyOpen = agendaSchedule.studyOpenLessonIds.has(lesson.id);
+                    const hasManualOverride = manualLessonOverrideIds.has(lesson.id);
                     const eventDate = agendaSchedule.lessonEventDate.get(lesson.id);
                     const eventDay = eventDate ? new Date(eventDate) : null;
                     if (eventDay) eventDay.setHours(0, 0, 0, 0);
                     const todayZero = new Date(); todayZero.setHours(0, 0, 0, 0);
                     const isLateAccess = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(lesson.id) && !isFullyDone;
-                    const isAccessible = isLeaderOrAdmin || isStudyOpen || isLateAccess || isFullyDone;
+                    const isAccessible = isLeaderOrAdmin || isStudyOpen || isLateAccess || isFullyDone || hasManualOverride;
                     const isLocked = !isLeaderOrAdmin && agendaSchedule.hasScheduledEvents && !isAccessible && !isFullyDone;
-                    const isNotScheduled = !isLeaderOrAdmin && agendaSchedule.hasScheduledEvents && !isScheduled && !isFullyDone;
+                    const isNotScheduled = !isLeaderOrAdmin && agendaSchedule.hasScheduledEvents && !isScheduled && !isFullyDone && !isDone && !hasManualOverride;
 
                     let lockMessage = "";
                     if (isNotScheduled) {
-                      lockMessage = "📅 Aguardando agendamento";
+                      lockMessage = "Aguardando agenda";
+                    } else if (hasManualOverride) {
+                      lockMessage = "Liberação manual do líder";
                     } else if (isLateAccess) {
-                      lockMessage = "⚠️ Atrasado — sem pontuação";
+                      lockMessage = "Acesso tardio — sem pontuação";
                     } else if (isLocked) {
                       const entry = agendaSchedule.schedule.find(e => e.lessonId === lesson.id);
                       if (entry) {
-                        lockMessage = `🔜 Liberada em ${entry.windowStart.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
+                        lockMessage = `Disponível em ${entry.windowStart.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
                       } else {
-                        lockMessage = "🔒 Ainda não liberada";
+                        lockMessage = "Ainda não liberada";
                       }
                     }
 
@@ -152,8 +156,8 @@ export default function CourseTrailSection({
                         onClick={() => {
                           if (isLocked || isNotScheduled) {
                             toast.info(isNotScheduled
-                              ? "📅 Esta lição ainda não foi agendada pelo seu líder."
-                              : "🔒 Esta lição ainda não foi liberada. Aguarde a data da agenda!", {
+                              ? "Esta lição ainda não foi agendada pelo líder."
+                              : "Esta lição ainda não foi liberada.", {
                               duration: 3000,
                             });
                             return;
@@ -182,12 +186,14 @@ export default function CourseTrailSection({
                           {lockMessage && (
                             <p className="font-inter text-[10px] text-muted-foreground mt-0.5">{lockMessage}</p>
                           )}
-                          {isDone && !isFullyDone && !(isLocked || isNotScheduled) && (
+                          {isDone && !isFullyDone && !isLateAccess && !(isLocked || isNotScheduled) && (
                             <p className="font-inter text-[10px] text-secondary mt-0.5">⏳ Faltam devocionais ou estudo</p>
                           )}
                         </div>
                         {isFullyDone
                           ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-brand-green/15 text-brand-green px-2 py-0.5 rounded-full">✓ Completa</span>
+                          : isLateAccess
+                          ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Prazo encerrado</span>
                           : isDone && !(isLocked || isNotScheduled)
                           ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-secondary/15 text-secondary px-2 py-0.5 rounded-full">Em andamento</span>
                           : (isLocked || isNotScheduled)

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2, Lock, BookOpen, ChevronDown, ChevronRight, CalendarDays, Heart, GraduationCap } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useAgendaSchedule } from "@/hooks/useAgendaSchedule";
+import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 
 type Lesson = {
   id: string;
@@ -43,9 +43,14 @@ function ProgressRing({ pct, color, size = 56 }: { pct: number; color: string; s
   );
 }
 
-export default function JourneyPath() {
+type Props = {
+  onSelectLesson?: (lessonId: string) => void;
+};
+
+export default function JourneyPath({ onSelectLesson }: Props = {}) {
   const { profile } = useAuth();
-  const agendaSchedule = useAgendaSchedule();
+  const { effectiveArea } = useAreaSwitch();
+  const currentArea = effectiveArea || profile?.area || "";
   const [courses, setCourses] = useState<Course[]>([]);
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
   const [fullyCompletedLessonIds, setFullyCompletedLessonIds] = useState<Set<string>>(new Set());
@@ -60,8 +65,8 @@ export default function JourneyPath() {
   });
 
   useEffect(() => {
-    if (profile?.area) fetchData();
-  }, [profile?.area]);
+    if (currentArea) fetchData();
+  }, [currentArea]);
 
   async function fetchData() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -86,7 +91,7 @@ export default function JourneyPath() {
       supabase.from("events").select("id").gte("event_date", new Date(Date.now() - 90 * 86400000).toISOString()),
       supabase.from("attendance").select("event_id, status").eq("user_id", user.id),
       supabase.from("worship_attendance").select("id, status").eq("user_id", user.id).eq("status", "aprovado"),
-      supabase.from("course_unlocks").select("course_id").eq("area", profile?.area ?? ""),
+      supabase.from("course_unlocks").select("course_id").eq("area", currentArea),
     ]);
 
     const lessons = lessonsData ?? [];
@@ -159,58 +164,35 @@ export default function JourneyPath() {
   const devPct = integrated.totalDevotionals > 0 ? Math.round((integrated.devotionalsCompleted / integrated.totalDevotionals) * 100) : 0;
 
   return (
-    <section className="px-5 pt-6" aria-labelledby="jornada-titulo">
+    <div className="px-5 pt-6">
       {/* Header + overall progress */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 id="jornada-titulo" className="font-montserrat font-black text-foreground text-xl">🛤️ Minha Jornada</h2>
-          <span className="text-primary font-bold text-[10px] font-inter uppercase tracking-wider bg-primary/10 rounded-full px-3 py-1.5 border border-primary/20">
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="font-montserrat font-black text-foreground text-xl">🛤️ Minha Jornada</h2>
+          <span className="text-muted-foreground text-xs font-inter bg-muted rounded-full px-3 py-1">
             {overallPct}% completo
           </span>
         </div>
-        
-        <div className="space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground font-inter text-[10px] font-bold uppercase tracking-widest">
-              Progresso Geral
-            </span>
-            <span className="text-xs font-montserrat font-extrabold text-foreground tabular-nums">
-              {doneItems} <span className="text-muted-foreground/60 font-medium">/ {totalItems}</span>
-            </span>
-          </div>
-          
-          <div className="relative h-4 bg-muted/50 rounded-full overflow-hidden border border-border/50 shadow-inner p-0.5">
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
             <div
-              className="h-full rounded-full transition-all duration-1000 ease-out shadow-sm"
-              role="progressbar"
-              aria-valuenow={overallPct}
-              aria-valuemin={0}
-              aria-valuemax={100}
+              className="h-full rounded-full transition-all duration-700"
               style={{
                 width: `${overallPct}%`,
                 background: overallPct >= 70 ? "var(--gradient-green)" : overallPct >= 34 ? "var(--gradient-orange)" : "hsl(var(--destructive))",
               }}
-            >
-              {overallPct > 15 && (
-                <div className="absolute inset-0 flex items-center justify-end px-2">
-                  <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
-                </div>
-              )}
-            </div>
+            />
           </div>
-          
-          <p className="text-muted-foreground font-inter text-[10px] font-medium leading-relaxed">
-            Soma de lições estudadas e devocionais concluídos
-          </p>
+          <span className="text-xs font-montserrat font-bold text-secondary flex-shrink-0">{doneItems}/{totalItems}</span>
         </div>
-
+        <p className="text-muted-foreground font-inter text-[11px] mt-1.5">
+          Progresso geral: lições estudadas e devocionais concluídos
+        </p>
 
         {/* Fase atual */}
         {(() => {
-          // Consider manually unlocked courses and courses with scheduled lessons
-          const unlockedCourses = courses.filter(c =>
-            unlockedCourseIds.has(c.id) || c.lessons.some(l => agendaSchedule.scheduledLessonIds.has(l.id))
-          );
+          // Only consider unlocked courses
+          const unlockedCourses = courses.filter(c => unlockedCourseIds.has(c.id));
           if (unlockedCourses.length === 0) return null;
 
           // Find the highest-order unlocked course that still has pending lessons
@@ -302,8 +284,7 @@ export default function JourneyPath() {
 
           {courses.map((course) => {
             const isOpen = expandedCourse === course.id;
-            const hasScheduledLesson = course.lessons.some(lesson => agendaSchedule.scheduledLessonIds.has(lesson.id));
-            const isCourseUnlocked = unlockedCourseIds.has(course.id) || hasScheduledLesson;
+            const isCourseUnlocked = unlockedCourseIds.has(course.id);
             const doneLessons = course.lessons.filter(l => fullyCompletedLessonIds.has(l.id)).length;
             const totalLessons = course.lessons.length;
             const coursePct = totalLessons > 0 ? Math.round((doneLessons / totalLessons) * 100) : 0;
@@ -346,7 +327,7 @@ export default function JourneyPath() {
                         </div>
                       </>
                     ) : (
-                      <p className="text-muted-foreground font-inter text-xs mt-0.5">🔒 Aguarde a programação das lições deste curso</p>
+                      <p className="text-muted-foreground font-inter text-xs mt-0.5">🔒 Curso ainda não liberado pelo líder</p>
                     )}
                   </div>
                   {isCourseUnlocked && (
@@ -366,14 +347,22 @@ export default function JourneyPath() {
                         const isDone = completedLessonIds.has(lesson.id);
                         const isFullyDone = fullyCompletedLessonIds.has(lesson.id);
                         const prevLesson = lessonIndex > 0 ? course.lessons[lessonIndex - 1] : null;
-                        const isLocked = prevLesson ? !fullyCompletedLessonIds.has(prevLesson.id) : false;
+                        // A lesson the user already started/completed is never locked for viewing
+                        const isLocked = !isDone && !isFullyDone && (prevLesson ? !fullyCompletedLessonIds.has(prevLesson.id) : false);
 
+                        const isClickable = !isLocked && !!onSelectLesson;
                         return (
                           <div
                             key={lesson.id}
+                            role={isClickable ? "button" : undefined}
+                            tabIndex={isClickable ? 0 : undefined}
+                            onClick={isClickable ? () => onSelectLesson(lesson.id) : undefined}
+                            onKeyDown={isClickable ? (e) => { if (e.key === "Enter" || e.key === " ") onSelectLesson(lesson.id); } : undefined}
                             className={`flex items-center gap-3 px-4 py-3 border-b border-border last:border-b-0 ${
                               isLocked ? "opacity-50" : ""
-                            } ${isFullyDone ? "bg-brand-green/5" : isDone ? "bg-secondary/5" : ""}`}
+                            } ${isFullyDone ? "bg-brand-green/5" : isDone ? "bg-secondary/5" : ""} ${
+                              isClickable ? "cursor-pointer active:bg-muted/60 transition-colors" : ""
+                            }`}
                           >
                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
                               isFullyDone ? "bg-brand-green/15" : isLocked ? "bg-muted" : "bg-secondary/10"
@@ -414,7 +403,6 @@ export default function JourneyPath() {
           })}
         </div>
       )}
-    </section>
+    </div>
   );
 }
-

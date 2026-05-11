@@ -1,14 +1,16 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { getAreaForCommunity } from "@/config/areas";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageCircle, GraduationCap, Cake, Sparkles, Send, Trash2, Target, Check, Users, ClipboardList, Upload, Image, Camera } from "lucide-react";
+import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
+import { MessageCircle, GraduationCap, Sparkles, Send, Trash2, Target, Check, Users, Upload, Image, Camera } from "lucide-react";
 import ClassroomTab from "./ClassroomTab";
 import AnnouncementsSection from "./AnnouncementsSection";
-import LeaderRoomSection from "./LeaderRoomSection";
 import PollsSection from "./PollsSection";
 import CommunityAchievements from "./CommunityAchievements";
 import PrayerPairsSection from "./PrayerPairsSection";
 import EventPhotoGallery from "./EventPhotoGallery";
+import BirthdayHighlights from "./BirthdayHighlights";
 
 const REACTION_EMOJIS = [
   { emoji: "🙏", label: "orando" },
@@ -51,16 +53,12 @@ interface Challenge {
   file_url: string | null;
 }
 
-interface BirthdayPerson {
-  full_name: string;
-  birth_date: string;
-  day: number;
-}
-
-type SubTab = "comunidade" | "sala" | "discipulador" | "galeria";
+type SubTab = "comunidade" | "sala" | "galeria";
 
 export default function CommunityTab() {
   const { profile, role } = useAuth();
+  const { effectiveArea, isOverriding } = useAreaSwitch();
+  const currentArea = effectiveArea || profile?.area || "";
   const [subTab, setSubTab] = useState<SubTab>("comunidade");
   const [messages, setMessages] = useState<Message[]>([]);
   const [reactions, setReactions] = useState<ReactionMap>({});
@@ -69,14 +67,13 @@ export default function CommunityTab() {
   const [submittingTestimony, setSubmittingTestimony] = useState(false);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
-  const [birthdays, setBirthdays] = useState<BirthdayPerson[]>([]);
   const [challengeResponses, setChallengeResponses] = useState<Record<string, string>>({});
   const [challengeFiles, setChallengeFiles] = useState<Record<string, File | null>>({});
   const [completingChallenge, setCompletingChallenge] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
-    if (!profile) return;
+    if (!profile || !currentArea) return;
 
     async function fetchMessages() {
       setLoadingMessages(true);
@@ -103,26 +100,6 @@ export default function CommunityTab() {
     }
 
 
-    async function fetchBirthdays() {
-      const currentMonth = new Date().getMonth() + 1;
-      const { data } = await supabase
-        .from("profiles")
-        .select("full_name, birth_date")
-        .eq("community", profile.community as any);
-      const bdays: BirthdayPerson[] = (data ?? [])
-        .filter(p => {
-          const month = new Date(p.birth_date + "T00:00:00").getMonth() + 1;
-          return month === currentMonth;
-        })
-        .map(p => ({
-          full_name: p.full_name,
-          birth_date: p.birth_date,
-          day: new Date(p.birth_date + "T00:00:00").getDate(),
-        }))
-        .sort((a, b) => a.day - b.day);
-      setBirthdays(bdays);
-    }
-
     async function fetchTestimonies() {
       const { data } = await supabase
         .from("testimonies")
@@ -140,13 +117,18 @@ export default function CommunityTab() {
         .select("*")
         .lte("start_date", today)
         .gte("end_date", today);
-      const cIds = (challengesData ?? []).map((c: any) => c.id);
+      const visibleChallenges = (challengesData ?? []).filter((challenge: any) => {
+        if (challenge.area) return challenge.area === currentArea;
+        if (challenge.community) return getAreaForCommunity(challenge.community) === currentArea;
+        return true;
+      });
+      const cIds = visibleChallenges.map((c: any) => c.id);
       let participantsData: any[] = [];
       if (cIds.length > 0) {
         const { data } = await supabase.from("challenge_participants").select("challenge_id, user_id, completed, response_text, file_url").in("challenge_id", cIds);
         participantsData = data ?? [];
       }
-      const mapped: Challenge[] = (challengesData ?? []).map((c: any) => {
+      const mapped: Challenge[] = visibleChallenges.map((c: any) => {
         const parts = participantsData.filter((p: any) => p.challenge_id === c.id);
         const myPart = user ? parts.find((p: any) => p.user_id === user.id) : null;
         return {
@@ -169,10 +151,9 @@ export default function CommunityTab() {
     }
 
     fetchMessages();
-    fetchBirthdays();
     fetchTestimonies();
     fetchChallenges();
-  }, [profile]);
+  }, [profile, currentArea]);
 
   async function toggleReaction(messageId: string, emoji: string) {
     const { data: { user } } = await supabase.auth.getUser();
@@ -281,9 +262,9 @@ export default function CommunityTab() {
       {/* Header */}
       <div className="flex items-center justify-between px-5">
         <h2 className="font-montserrat font-black text-foreground text-xl">👥 Comunidade</h2>
-        {profile?.community && (
+        {currentArea && (
           <span className="text-xs font-inter text-muted-foreground bg-muted rounded-full px-3 py-1">
-            {profile.community}
+            {isOverriding ? currentArea : profile?.community}
           </span>
         )}
       </div>
@@ -324,26 +305,8 @@ export default function CommunityTab() {
             <Camera className="w-3.5 h-3.5" />
             Galeria
           </button>
-          {(role === "admin" || role === "lider") && (
-            <button
-              onClick={() => setSubTab("discipulador")}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-montserrat font-bold transition-all ${
-                subTab === "discipulador"
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <ClipboardList className="w-3.5 h-3.5" />
-              Discipulador
-            </button>
-          )}
         </div>
       </div>
-
-      {/* ===== DISCIPULADOR (admin/lider) ===== */}
-      {subTab === "discipulador" && (role === "admin" || role === "lider") && (
-        <LeaderRoomSection asTab />
-      )}
 
       {/* ===== GALERIA ===== */}
       {subTab === "galeria" && (
@@ -363,6 +326,15 @@ export default function CommunityTab() {
 
           {/* 🏆 Conquistas da Comunidade */}
           <CommunityAchievements />
+
+          {isOverriding && (
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+              <p className="font-montserrat font-bold text-foreground text-sm">Visualização por área ativa</p>
+              <p className="mt-1 text-xs font-inter text-muted-foreground">
+                Itens baseados em comunidade individual, como testemunhos e sala da turma, continuam limitados pela comunidade original do seu perfil.
+              </p>
+            </div>
+          )}
 
 
           {challenges.length > 0 && (
@@ -541,43 +513,8 @@ export default function CommunityTab() {
             )}
           </div>
 
-          {/* Aniversariantes do mês */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <Cake className="w-4 h-4 text-secondary" />
-              <span className="font-montserrat font-bold text-foreground text-sm">
-                🎂 Aniversariantes de {new Date().toLocaleString("pt-BR", { month: "long" })}
-              </span>
-            </div>
-            {birthdays.length === 0 ? (
-              <div className="bg-card rounded-2xl border border-border p-4 text-center">
-                <p className="text-muted-foreground text-sm font-inter">Nenhum aniversariante este mês.</p>
-              </div>
-            ) : (
-              <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
-                {birthdays.map((b, i) => {
-                  const isToday = b.day === new Date().getDate();
-                  return (
-                    <div
-                      key={b.full_name + b.birth_date}
-                      className={`flex items-center gap-3 px-4 py-3 ${i < birthdays.length - 1 ? "border-b border-border" : ""} ${isToday ? "bg-secondary/5" : ""}`}
-                    >
-                      <span className="text-lg">{isToday ? "🎉" : "🎂"}</span>
-                      <span className="font-montserrat font-black text-card-foreground text-sm flex-shrink-0">
-                        {String(b.day).padStart(2, '0')}/{String(new Date().getMonth() + 1).padStart(2, '0')}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-montserrat text-card-foreground text-sm truncate">
-                          {b.full_name}
-                          {isToday && <span className="text-secondary text-xs font-inter ml-1">(hoje!)</span>}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          {/* Aniversariantes do mes */}
+          <BirthdayHighlights area={currentArea} variant="community" />
         </div>
       )}
     </div>

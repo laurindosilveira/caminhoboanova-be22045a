@@ -14,7 +14,14 @@ export type ScheduleEntry = {
   courseTitle: string;
   courseOrder: number;
   windowStart: Date;
-  devotionalDates: Date[]; // 5 dates for devotional days 1..5
+  /** 10 business-day dates before event. [0..4] = primary week, [5..9] = recovery week. */
+  devotionalDates: Date[];
+  /** Day numbers the leader chose to release. null = all released. */
+  releasedDayNumbers: number[] | null;
+  /** True when this event is < 10 calendar days from the previous one (auto-limit to 5 devotionals). */
+  autoLimited: boolean;
+  /** '5_days' = 5 devotionals with recovery week; '10_days' = 10 devotionals full window. */
+  devotionalMode: "5_days" | "10_days";
 };
 
 /**
@@ -34,62 +41,149 @@ export function getBusinessDaysBefore(date: Date, count: number): Date[] {
   return days;
 }
 
+function startOfLocalDay(date: Date): Date {
+  const day = new Date(date);
+  day.setHours(0, 0, 0, 0);
+  return day;
+}
+
 export function useAgendaSchedule() {
-  const { profile } = useAuth();
+  const { profile, role, user } = useAuth();
   const { effectiveArea } = useAreaSwitch();
   const currentArea = effectiveArea || profile?.area || "";
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (profile) fetchSchedule();
-  }, [currentArea]);
+    if (!profile) return;
 
-  // Realtime subscription for events changes
-  useEffect(() => {
+    fetchSchedule();
+
+    const channelName = `agenda-events-realtime:${currentArea}`;
     const channel = supabase
-      .channel('agenda-events-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'events' },
-        () => {
-          if (profile) fetchSchedule();
-        }
-      )
+      .channel(channelName)
+      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, () => {
+        fetchSchedule();
+      })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [currentArea]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentArea, profile]);
 
   async function fetchSchedule() {
     setLoading(true);
-    let eventsQuery = supabase.from("events").select("id, event_date, linked_lesson_id, title, type, area")
-      .not("linked_lesson_id", "is", null)
-      .order("event_date");
 
-    const [{ data: events }, { data: lessons }, { data: courses }] = await Promise.all([
-      eventsQuery,
-      supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
-      supabase.from("courses").select("id, title, order_num").order("order_num"),
-    ]);
+    const eventSelectFallbacks = [
+      "id, event_date, linked_lesson_id, title, type, area, community, turma_id, target_user_id, released_devotional_days",
+      "id, event_date, linked_lesson_id, title, type, area, community, turma_id, released_devotional_days",
+      "id, event_date, linked_lesson_id, title, type, area, community, released_devotional_days",
+      "id, event_date, linked_lesson_id, title, type, area, released_devotional_days",
+      "id, event_date, linked_lesson_id, title, type, area, community, turma_id, target_user_id",
+      "id, event_date, linked_lesson_id, title, type, area, community, turma_id",
+      "id, event_date, linked_lesson_id, title, type, area, community",
+      "id, event_date, linked_lesson_id, title, type, area",
+    ];
 
-    const lessonMap = new Map((lessons ?? []).map(l => [l.id, l]));
-    const courseMap = new Map((courses ?? []).map(c => [c.id, c]));
+    let eventsResult: any = null;
+    for (const selectClause of eventSelectFallbacks) {
+      const result = await supabase
+        .from("events")
+        .select(selectClause)
+        .not("linked_lesson_id", "is", null)
+        .order("event_date") as any;
+
+      if (!result.error) {
+        eventsResult = result;
+        break;
+      }
+    }
+
+    if (!eventsResult) {
+      eventsResult = {
+        data: null,
+        error: { message: "useAgendaSchedule: failed to load events with all fallbacks" },
+      };
+    }
+
+    let lessonsResult = await supabase
+      .from("lessons")
+      .select("id, title, order_num, course_id, devotional_mode")
+      .order("order_num");
+
+    if (lessonsResult.error && /devotional_mode/i.test(lessonsResult.error.message)) {
+      lessonsResult = await supabase
+        .from("lessons")
+        .select("id, title, order_num, course_id")
+        .order("order_num");
+    }
+
+    const { data: courses } = await supabase
+      .from("courses")
+      .select("id, title, order_num")
+      .order("order_num");
+
+    const events = eventsResult.data;
+    const eventsError = eventsResult.error;
+    const lessons = lessonsResult.data;
+
+    if (eventsError) {
+      console.error("useAgendaSchedule: failed to load events", eventsError.message);
+      setSchedule([]);
+      setLoading(false);
+      return;
+    }
+
+    if (lessonsResult.error) {
+      console.error("useAgendaSchedule: failed to load lessons", lessonsResult.error.message);
+      setSchedule([]);
+      setLoading(false);
+      return;
+    }
+
+    const lessonMap = new Map((lessons ?? []).map((l) => [l.id, l]));
+    const courseMap = new Map((courses ?? []).map((c) => [c.id, c]));
 
     const entries: ScheduleEntry[] = [];
-    for (const event of (events ?? [])) {
+    const isManager = role === "admin" || role === "lider";
+
+    for (const event of events ?? []) {
       if (!event.linked_lesson_id) continue;
-      // Filter by user's area: show events with no area or matching area
+      if ((event as any).target_user_id && (event as any).target_user_id !== user?.id) continue;
       if (event.area && currentArea && event.area !== currentArea) continue;
+      if ((event as any).turma_id && profile?.turma_id && (event as any).turma_id !== profile.turma_id) continue;
+      if ((event as any).turma_id && !profile?.turma_id) continue;
+      const isConfirmatorio = event.type === "confirmatorio";
+      if (event.community && !isManager && !isConfirmatorio && event.community !== profile?.community) continue;
+
       const lesson = lessonMap.get(event.linked_lesson_id);
       if (!lesson) continue;
       const course = courseMap.get(lesson.course_id);
       if (!course) continue;
 
-      const eventDate = new Date(event.event_date);
-      const businessDays = getBusinessDaysBefore(eventDate, 10);
-      const windowStart = businessDays[0];
-      const devotionalDates = businessDays.slice(0, 5);
+      const rawDate = event.event_date as string;
+      const eventDate = new Date(rawDate.includes("T") ? rawDate : `${rawDate}T12:00:00`);
+
+      const devotionalDates = getBusinessDaysBefore(eventDate, 10);
+      const windowStart = devotionalDates[0];
+
+      const prevEntry = entries[entries.length - 1];
+      const autoLimited = prevEntry
+        ? Math.round((eventDate.getTime() - prevEntry.eventDate.getTime()) / 86400000) < 10
+        : false;
+
+      const rawReleased: number[] | null = (event as any).released_devotional_days ?? null;
+      let releasedDayNumbers: number[] | null;
+      if (autoLimited) {
+        const base = rawReleased ?? null;
+        releasedDayNumbers = base ? base.filter((d) => d <= 5) : [1, 2, 3, 4, 5];
+      } else {
+        releasedDayNumbers = rawReleased;
+      }
+
+      const devotionalMode: "5_days" | "10_days" =
+        (lesson as any).devotional_mode === "5_days" ? "5_days" : "10_days";
 
       entries.push({
         eventId: event.id,
@@ -103,6 +197,9 @@ export function useAgendaSchedule() {
         courseOrder: course.order_num,
         windowStart,
         devotionalDates,
+        releasedDayNumbers,
+        autoLimited,
+        devotionalMode,
       });
     }
 
@@ -110,43 +207,34 @@ export function useAgendaSchedule() {
     setLoading(false);
   }
 
-  const today = new Date();
+  const now = new Date();
+  const today = new Date(now);
   today.setHours(0, 0, 0, 0);
 
-  // Which lessons are "released" (window is open)
   const releasedLessonIds = new Set<string>();
-  // Which lessons have study available (from first devotional until 1 day before event)
   const studyOpenLessonIds = new Set<string>();
-  // Lessons where event has already passed — accessible but 0 points
   const lateAccessLessonIds = new Set<string>();
   const lessonDevotionalDates = new Map<string, Date[]>();
   const lessonEventDate = new Map<string, Date>();
+  const lessonReleasedDays = new Map<string, number[] | null>();
+  const lessonDevotionalMode = new Map<string, "5_days" | "10_days">();
 
   for (const entry of schedule) {
-    if (today >= entry.windowStart) {
-      releasedLessonIds.add(entry.lessonId);
-    }
-    const eventDay = new Date(entry.eventDate);
-    eventDay.setHours(0, 0, 0, 0);
-    if (today >= entry.windowStart && today < eventDay) {
-      // Study is open from windowStart until the day BEFORE the event
-      studyOpenLessonIds.add(entry.lessonId);
-    } else if (today >= eventDay) {
-      // After event day: late access (no points)
-      lateAccessLessonIds.add(entry.lessonId);
-    }
+    const eventDay = startOfLocalDay(entry.eventDate);
+    if (today >= eventDay) releasedLessonIds.add(entry.lessonId);
+    if (now >= entry.eventDate) lateAccessLessonIds.add(entry.lessonId);
     lessonDevotionalDates.set(entry.lessonId, entry.devotionalDates);
     lessonEventDate.set(entry.lessonId, entry.eventDate);
+    lessonReleasedDays.set(entry.lessonId, entry.releasedDayNumbers);
+    lessonDevotionalMode.set(entry.lessonId, entry.devotionalMode);
   }
 
-  // All scheduled lesson IDs (regardless of window)
-  const scheduledLessonIds = new Set(schedule.map(e => e.lessonId));
+  const currentOpenEntry = schedule.find((e) => today >= e.windowStart && now < e.eventDate);
+  if (currentOpenEntry) studyOpenLessonIds.add(currentOpenEntry.lessonId);
 
-  // Next upcoming scheduled event (window open or future)
-  const nextScheduledEvent = schedule.find(e => e.eventDate >= today) ?? null;
-
-  // Current active entry = next one with window open
-  const currentEntry = schedule.find(e => today >= e.windowStart && e.eventDate >= today) ?? null;
+  const scheduledLessonIds = new Set(schedule.map((e) => e.lessonId));
+  const nextScheduledEvent = schedule.find((e) => e.eventDate >= now) ?? null;
+  const currentEntry = schedule.find((e) => today >= e.windowStart && e.eventDate >= now) ?? null;
 
   return {
     schedule,
@@ -157,6 +245,8 @@ export function useAgendaSchedule() {
     scheduledLessonIds,
     lessonDevotionalDates,
     lessonEventDate,
+    lessonReleasedDays,
+    lessonDevotionalMode,
     nextScheduledEvent,
     currentEntry,
     hasScheduledEvents: schedule.length > 0,
