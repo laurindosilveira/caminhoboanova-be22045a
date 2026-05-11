@@ -167,14 +167,14 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
   useEffect(() => {
     if (!canView || !turmaArea) return;
     async function fetchWaitingCount() {
-      const { data, error } = await (supabase
+      const { data, error } = await supabase
         .from("profiles")
-        .select("user_id, area, enrollment_status") as any)
+        .select("user_id, area, enrollment_status")
         .is("turma_id", null)
         .eq("enrollment_status", "pending");
       if (!error && data) {
         const myId = (await supabase.auth.getUser()).data.user?.id;
-        const filtered = (data as any[]).filter(p => p.user_id !== myId && p.area === turmaArea);
+        const filtered = data.filter(p => p.user_id !== myId && p.area === turmaArea);
         setWaitingCount(filtered.length);
       }
     }

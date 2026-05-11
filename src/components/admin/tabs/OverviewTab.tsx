@@ -63,12 +63,12 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
     async function fetchData() {
       setLoadingData(true);
       const queries: Promise<any>[] = [
-        (supabase.from("events").select("id, title, event_date, type") as any)
+        supabase.from("events").select("id, title, event_date, type")
           .eq("area", myArea as any)
           .lt("event_date", now.toISOString())
           .order("event_date", { ascending: false })
           .limit(1),
-        (supabase.from("events").select("id, title, event_date, type") as any)
+        supabase.from("events").select("id, title, event_date, type")
           .eq("area", myArea as any)
           .gt("event_date", now.toISOString())
           .order("event_date", { ascending: true })
@@ -77,12 +77,12 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
 
       if (ids.length > 0) {
         queries.push(
-          (supabase.from("devotional_progress").select("user_id, completed_at") as any).in("user_id", ids),
-          (supabase.from("user_progress").select("user_id, completed_at") as any).in("user_id", ids),
+          supabase.from("devotional_progress").select("user_id, completed_at").in("user_id", ids),
+          supabase.from("user_progress").select("user_id, completed_at").in("user_id", ids),
         );
       }
 
-      const results = await Promise.all(queries.map(q => q));
+      const results = await Promise.all(queries);
       const lastEvData = results[0]?.data;
       const nextEvData = results[1]?.data;
       const devData = results[2]?.data ?? [];
