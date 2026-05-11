@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.4"
+    PostgrestVersion: "14.1"
   }
   public: {
     Tables: {
@@ -116,6 +116,42 @@ export type Database = {
         }
         Relationships: []
       }
+      activity_removal_log: {
+        Row: {
+          activity_id: string
+          activity_title: string
+          activity_type: string
+          id: string
+          notes: string | null
+          points_removed: number
+          removed_at: string
+          removed_by: string
+          target_user_id: string
+        }
+        Insert: {
+          activity_id: string
+          activity_title?: string
+          activity_type: string
+          id?: string
+          notes?: string | null
+          points_removed?: number
+          removed_at?: string
+          removed_by: string
+          target_user_id: string
+        }
+        Update: {
+          activity_id?: string
+          activity_title?: string
+          activity_type?: string
+          id?: string
+          notes?: string | null
+          points_removed?: number
+          removed_at?: string
+          removed_by?: string
+          target_user_id?: string
+        }
+        Relationships: []
+      }
       area_pastors: {
         Row: {
           area: string
@@ -202,33 +238,30 @@ export type Database = {
           },
         ]
       }
-      bonus_grant_log: {
+      authorized_system_admins: {
         Row: {
-          achievement_id: string
-          granted_at: string
-          granted_by: string
+          created_at: string
+          created_by: string | null
+          email: string
           id: string
-          justification: string
-          points_granted: number
-          target_user_id: string
+          is_active: boolean
+          notes: string | null
         }
         Insert: {
-          achievement_id: string
-          granted_at?: string
-          granted_by: string
+          created_at?: string
+          created_by?: string | null
+          email: string
           id?: string
-          justification?: string
-          points_granted?: number
-          target_user_id: string
+          is_active?: boolean
+          notes?: string | null
         }
         Update: {
-          achievement_id?: string
-          granted_at?: string
-          granted_by?: string
+          created_at?: string
+          created_by?: string | null
+          email?: string
           id?: string
-          justification?: string
-          points_granted?: number
-          target_user_id?: string
+          is_active?: boolean
+          notes?: string | null
         }
         Relationships: []
       }
@@ -237,24 +270,30 @@ export type Database = {
           challenge_id: string
           completed: boolean
           completed_at: string | null
+          file_url: string | null
           id: string
           joined_at: string
+          response_text: string | null
           user_id: string
         }
         Insert: {
           challenge_id: string
           completed?: boolean
           completed_at?: string | null
+          file_url?: string | null
           id?: string
           joined_at?: string
+          response_text?: string | null
           user_id: string
         }
         Update: {
           challenge_id?: string
           completed?: boolean
           completed_at?: string | null
+          file_url?: string | null
           id?: string
           joined_at?: string
+          response_text?: string | null
           user_id?: string
         }
         Relationships: [
@@ -266,6 +305,81 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      church_subscriptions: {
+        Row: {
+          activities: string | null
+          average_age: string | null
+          church_address: string | null
+          church_email: string
+          church_name: string
+          church_phone: string | null
+          created_at: string
+          id: string
+          member_count: string | null
+          needs: string | null
+          objectives: string | null
+          pastor_email: string | null
+          pastor_name: string
+          pastor_phone: string | null
+          pastor_role: string | null
+          preferences: string | null
+          recommended_plan: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          subscription_status: string
+          trial_ends_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          activities?: string | null
+          average_age?: string | null
+          church_address?: string | null
+          church_email: string
+          church_name: string
+          church_phone?: string | null
+          created_at?: string
+          id?: string
+          member_count?: string | null
+          needs?: string | null
+          objectives?: string | null
+          pastor_email?: string | null
+          pastor_name: string
+          pastor_phone?: string | null
+          pastor_role?: string | null
+          preferences?: string | null
+          recommended_plan?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_status?: string
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          activities?: string | null
+          average_age?: string | null
+          church_address?: string | null
+          church_email?: string
+          church_name?: string
+          church_phone?: string | null
+          created_at?: string
+          id?: string
+          member_count?: string | null
+          needs?: string | null
+          objectives?: string | null
+          pastor_email?: string | null
+          pastor_name?: string
+          pastor_phone?: string | null
+          pastor_role?: string | null
+          preferences?: string | null
+          recommended_plan?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_status?: string
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       communities: {
         Row: {
@@ -309,6 +423,8 @@ export type Database = {
           emoji: string
           end_date: string
           id: string
+          requires_file: boolean
+          requires_text: boolean
           start_date: string
           title: string
         }
@@ -321,6 +437,8 @@ export type Database = {
           emoji?: string
           end_date: string
           id?: string
+          requires_file?: boolean
+          requires_text?: boolean
           start_date: string
           title: string
         }
@@ -333,6 +451,8 @@ export type Database = {
           emoji?: string
           end_date?: string
           id?: string
+          requires_file?: boolean
+          requires_text?: boolean
           start_date?: string
           title?: string
         }
@@ -342,28 +462,51 @@ export type Database = {
         Row: {
           community: string
           created_at: string
+          file_type: string | null
+          file_url: string | null
           id: string
           message: string
+          reply_to: string | null
+          reply_to_name: string | null
+          reply_to_text: string | null
           user_id: string
           user_name: string
         }
         Insert: {
           community: string
           created_at?: string
+          file_type?: string | null
+          file_url?: string | null
           id?: string
           message: string
+          reply_to?: string | null
+          reply_to_name?: string | null
+          reply_to_text?: string | null
           user_id: string
           user_name: string
         }
         Update: {
           community?: string
           created_at?: string
+          file_type?: string | null
+          file_url?: string | null
           id?: string
           message?: string
+          reply_to?: string | null
+          reply_to_name?: string | null
+          reply_to_text?: string | null
           user_id?: string
           user_name?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "community_chat_reply_to_fkey"
+            columns: ["reply_to"]
+            isOneToOne: false
+            referencedRelation: "community_chat"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       community_settings: {
         Row: {
@@ -451,6 +594,72 @@ export type Database = {
         }
         Relationships: []
       }
+      custom_event_types: {
+        Row: {
+          area: string | null
+          created_at: string
+          created_by: string | null
+          emoji: string
+          gives_points: boolean
+          id: string
+          label: string
+          points: number
+          value: string
+        }
+        Insert: {
+          area?: string | null
+          created_at?: string
+          created_by?: string | null
+          emoji?: string
+          gives_points?: boolean
+          id?: string
+          label: string
+          points?: number
+          value: string
+        }
+        Update: {
+          area?: string | null
+          created_at?: string
+          created_by?: string | null
+          emoji?: string
+          gives_points?: boolean
+          id?: string
+          label?: string
+          points?: number
+          value?: string
+        }
+        Relationships: []
+      }
+      data_export_audit: {
+        Row: {
+          created_at: string
+          export_type: string
+          id: string
+          metadata: Json
+          scope: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          export_type: string
+          id?: string
+          metadata?: Json
+          scope: string
+          status: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          export_type?: string
+          id?: string
+          metadata?: Json
+          scope?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       devotional_content: {
         Row: {
           activity_id: string | null
@@ -509,21 +718,30 @@ export type Database = {
       }
       devotional_progress: {
         Row: {
+          awarded_points: number | null
           completed_at: string
           devotional_id: string
           id: string
+          is_recovery: boolean
+          override_release_id: string | null
           user_id: string
         }
         Insert: {
+          awarded_points?: number | null
           completed_at?: string
           devotional_id: string
           id?: string
+          is_recovery?: boolean
+          override_release_id?: string | null
           user_id: string
         }
         Update: {
+          awarded_points?: number | null
           completed_at?: string
           devotional_id?: string
           id?: string
+          is_recovery?: boolean
+          override_release_id?: string | null
           user_id?: string
         }
         Relationships: [
@@ -532,6 +750,13 @@ export type Database = {
             columns: ["devotional_id"]
             isOneToOne: false
             referencedRelation: "devotional_content"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "devotional_progress_override_release_id_fkey"
+            columns: ["override_release_id"]
+            isOneToOne: false
+            referencedRelation: "user_devotional_overrides"
             referencedColumns: ["id"]
           },
         ]
@@ -622,6 +847,50 @@ export type Database = {
         }
         Relationships: []
       }
+      event_photos: {
+        Row: {
+          caption: string | null
+          created_at: string
+          event_id: string
+          file_url: string
+          id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          event_id: string
+          file_url: string
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          event_id?: string
+          file_url?: string
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_photos_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           area: string | null
@@ -633,8 +902,9 @@ export type Database = {
           id: string
           linked_lesson_id: string | null
           location: string | null
+          released_devotional_days: number[] | null
+          target_user_id: string | null
           title: string
-          turma_id: string | null
           type: string
         }
         Insert: {
@@ -647,8 +917,9 @@ export type Database = {
           id?: string
           linked_lesson_id?: string | null
           location?: string | null
+          released_devotional_days?: number[] | null
+          target_user_id?: string | null
           title: string
-          turma_id?: string | null
           type?: string
         }
         Update: {
@@ -661,8 +932,9 @@ export type Database = {
           id?: string
           linked_lesson_id?: string | null
           location?: string | null
+          released_devotional_days?: number[] | null
+          target_user_id?: string | null
           title?: string
-          turma_id?: string | null
           type?: string
         }
         Relationships: [
@@ -671,13 +943,6 @@ export type Database = {
             columns: ["linked_lesson_id"]
             isOneToOne: false
             referencedRelation: "lessons"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "events_turma_id_fkey"
-            columns: ["turma_id"]
-            isOneToOne: false
-            referencedRelation: "turmas"
             referencedColumns: ["id"]
           },
         ]
@@ -699,6 +964,56 @@ export type Database = {
           value?: number
         }
         Relationships: []
+      }
+      leader_guide: {
+        Row: {
+          bible_texts: string[]
+          created_at: string
+          greeting: string
+          icebreaker: string
+          id: string
+          lesson_id: string
+          practice: string
+          prayer_prompt: string
+          questions: string[]
+          summary: string
+          updated_at: string
+        }
+        Insert: {
+          bible_texts?: string[]
+          created_at?: string
+          greeting?: string
+          icebreaker?: string
+          id?: string
+          lesson_id: string
+          practice?: string
+          prayer_prompt?: string
+          questions?: string[]
+          summary?: string
+          updated_at?: string
+        }
+        Update: {
+          bible_texts?: string[]
+          created_at?: string
+          greeting?: string
+          icebreaker?: string
+          id?: string
+          lesson_id?: string
+          practice?: string
+          prayer_prompt?: string
+          questions?: string[]
+          summary?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leader_guide_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: true
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       leader_meeting_notes: {
         Row: {
@@ -800,38 +1115,53 @@ export type Database = {
       }
       lesson_responses: {
         Row: {
+          awarded_points: number | null
           created_at: string
           id: string
           lesson_id: string
+          override_release_id: string | null
           question_key: string
           response: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          awarded_points?: number | null
           created_at?: string
           id?: string
           lesson_id: string
+          override_release_id?: string | null
           question_key: string
           response?: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          awarded_points?: number | null
           created_at?: string
           id?: string
           lesson_id?: string
+          override_release_id?: string | null
           question_key?: string
           response?: string
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "lesson_responses_override_release_id_fkey"
+            columns: ["override_release_id"]
+            isOneToOne: false
+            referencedRelation: "user_lesson_overrides"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       lessons: {
         Row: {
           course_id: string
           created_at: string
+          devotional_mode: string
           id: string
           objective: string | null
           order_num: number
@@ -841,6 +1171,7 @@ export type Database = {
         Insert: {
           course_id: string
           created_at?: string
+          devotional_mode?: string
           id?: string
           objective?: string | null
           order_num: number
@@ -850,6 +1181,7 @@ export type Database = {
         Update: {
           course_id?: string
           created_at?: string
+          devotional_mode?: string
           id?: string
           objective?: string | null
           order_num?: number
@@ -945,6 +1277,35 @@ export type Database = {
           },
         ]
       }
+      message_views: {
+        Row: {
+          id: string
+          message_id: string
+          user_id: string
+          viewed_at: string
+        }
+        Insert: {
+          id?: string
+          message_id: string
+          user_id: string
+          viewed_at?: string
+        }
+        Update: {
+          id?: string
+          message_id?: string
+          user_id?: string
+          viewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_views_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           area: string | null
@@ -994,9 +1355,15 @@ export type Database = {
           id: string
           master_enabled: boolean
           mensagens: boolean
+          preferred_hour: number
           streak: boolean
+          timezone: string
           updated_at: string
           user_id: string
+          whatsapp_checkin: boolean
+          whatsapp_desafio: boolean
+          whatsapp_devocional: boolean
+          whatsapp_enabled: boolean
         }
         Insert: {
           created_at?: string
@@ -1005,9 +1372,15 @@ export type Database = {
           id?: string
           master_enabled?: boolean
           mensagens?: boolean
+          preferred_hour?: number
           streak?: boolean
+          timezone?: string
           updated_at?: string
           user_id: string
+          whatsapp_checkin?: boolean
+          whatsapp_desafio?: boolean
+          whatsapp_devocional?: boolean
+          whatsapp_enabled?: boolean
         }
         Update: {
           created_at?: string
@@ -1016,9 +1389,15 @@ export type Database = {
           id?: string
           master_enabled?: boolean
           mensagens?: boolean
+          preferred_hour?: number
           streak?: boolean
+          timezone?: string
           updated_at?: string
           user_id?: string
+          whatsapp_checkin?: boolean
+          whatsapp_desafio?: boolean
+          whatsapp_devocional?: boolean
+          whatsapp_enabled?: boolean
         }
         Relationships: []
       }
@@ -1049,6 +1428,122 @@ export type Database = {
           is_private?: boolean
           note_type?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      poll_votes: {
+        Row: {
+          id: string
+          option_index: number
+          poll_id: string
+          user_id: string
+          voted_at: string
+        }
+        Insert: {
+          id?: string
+          option_index: number
+          poll_id: string
+          user_id: string
+          voted_at?: string
+        }
+        Update: {
+          id?: string
+          option_index?: number
+          poll_id?: string
+          user_id?: string
+          voted_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poll_votes_poll_id_fkey"
+            columns: ["poll_id"]
+            isOneToOne: false
+            referencedRelation: "polls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      polls: {
+        Row: {
+          area: string | null
+          community: string
+          created_at: string
+          created_by: string
+          emoji: string
+          ends_at: string | null
+          id: string
+          is_active: boolean
+          options: string[]
+          question: string
+        }
+        Insert: {
+          area?: string | null
+          community: string
+          created_at?: string
+          created_by: string
+          emoji?: string
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          options?: string[]
+          question: string
+        }
+        Update: {
+          area?: string | null
+          community?: string
+          created_at?: string
+          created_by?: string
+          emoji?: string
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          options?: string[]
+          question?: string
+        }
+        Relationships: []
+      }
+      prayer_pairs: {
+        Row: {
+          community: string
+          created_at: string
+          id: string
+          user_a_confirmed: boolean
+          user_a_id: string
+          user_a_name: string
+          user_a_testimony: string | null
+          user_b_confirmed: boolean
+          user_b_id: string
+          user_b_name: string
+          user_b_testimony: string | null
+          week_start: string
+        }
+        Insert: {
+          community: string
+          created_at?: string
+          id?: string
+          user_a_confirmed?: boolean
+          user_a_id: string
+          user_a_name?: string
+          user_a_testimony?: string | null
+          user_b_confirmed?: boolean
+          user_b_id: string
+          user_b_name?: string
+          user_b_testimony?: string | null
+          week_start: string
+        }
+        Update: {
+          community?: string
+          created_at?: string
+          id?: string
+          user_a_confirmed?: boolean
+          user_a_id?: string
+          user_a_name?: string
+          user_a_testimony?: string | null
+          user_b_confirmed?: boolean
+          user_b_id?: string
+          user_b_name?: string
+          user_b_testimony?: string | null
+          week_start?: string
         }
         Relationships: []
       }
@@ -1088,14 +1583,55 @@ export type Database = {
         }
         Relationships: []
       }
+      privacy_requests: {
+        Row: {
+          admin_notes: string | null
+          created_at: string
+          details: string | null
+          id: string
+          request_type: string
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          created_at?: string
+          details?: string | null
+          id?: string
+          request_type: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          created_at?: string
+          details?: string | null
+          id?: string
+          request_type?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           address: string | null
-          area: string
+          area: Database["public"]["Enums"]["area_name"]
+          avatar_url: string | null
           birth_date: string
-          community: string
+          community: Database["public"]["Enums"]["community_name"]
+          confirmation_year: number | null
           created_at: string
-          enrollment_status: string
+          email: string | null
           father_name: string | null
           father_phone: string | null
           full_name: string
@@ -1106,14 +1642,20 @@ export type Database = {
           turma_id: string | null
           updated_at: string
           user_id: string
+          whatsapp_last_blocked_at: string | null
+          whatsapp_last_blocked_reason: string | null
+          whatsapp_number: string | null
+          whatsapp_validation_status: string | null
         }
         Insert: {
           address?: string | null
-          area: string
+          area: Database["public"]["Enums"]["area_name"]
+          avatar_url?: string | null
           birth_date: string
-          community: string
+          community: Database["public"]["Enums"]["community_name"]
+          confirmation_year?: number | null
           created_at?: string
-          enrollment_status?: string
+          email?: string | null
           father_name?: string | null
           father_phone?: string | null
           full_name: string
@@ -1124,14 +1666,20 @@ export type Database = {
           turma_id?: string | null
           updated_at?: string
           user_id: string
+          whatsapp_last_blocked_at?: string | null
+          whatsapp_last_blocked_reason?: string | null
+          whatsapp_number?: string | null
+          whatsapp_validation_status?: string | null
         }
         Update: {
           address?: string | null
-          area?: string
+          area?: Database["public"]["Enums"]["area_name"]
+          avatar_url?: string | null
           birth_date?: string
-          community?: string
+          community?: Database["public"]["Enums"]["community_name"]
+          confirmation_year?: number | null
           created_at?: string
-          enrollment_status?: string
+          email?: string | null
           father_name?: string | null
           father_phone?: string | null
           full_name?: string
@@ -1142,6 +1690,10 @@ export type Database = {
           turma_id?: string | null
           updated_at?: string
           user_id?: string
+          whatsapp_last_blocked_at?: string | null
+          whatsapp_last_blocked_reason?: string | null
+          whatsapp_number?: string | null
+          whatsapp_validation_status?: string | null
         }
         Relationships: [
           {
@@ -1152,6 +1704,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      push_activation_reminders: {
+        Row: {
+          created_at: string
+          dismissed_at: string | null
+          id: string
+          sent_by: string
+          target_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dismissed_at?: string | null
+          id?: string
+          sent_by: string
+          target_user_id: string
+        }
+        Update: {
+          created_at?: string
+          dismissed_at?: string | null
+          id?: string
+          sent_by?: string
+          target_user_id?: string
+        }
+        Relationships: []
       }
       push_automation_config: {
         Row: {
@@ -1177,6 +1753,45 @@ export type Database = {
           key?: string
           title?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      push_notification_log: {
+        Row: {
+          body: string
+          created_at: string
+          failed_count: number
+          id: string
+          sent_by: string | null
+          sent_count: number
+          target: string
+          target_value: string | null
+          title: string
+          type: string
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          failed_count?: number
+          id?: string
+          sent_by?: string | null
+          sent_count?: number
+          target?: string
+          target_value?: string | null
+          title?: string
+          type?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          failed_count?: number
+          id?: string
+          sent_by?: string | null
+          sent_count?: number
+          target?: string
+          target_value?: string | null
+          title?: string
+          type?: string
         }
         Relationships: []
       }
@@ -1219,6 +1834,36 @@ export type Database = {
           target?: string
           target_value?: string | null
           title?: string
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -1332,78 +1977,6 @@ export type Database = {
         }
         Relationships: []
       }
-      turma_lesson_content: {
-        Row: {
-          audio_link: string | null
-          bible_texts: string[] | null
-          created_at: string
-          created_by: string | null
-          greeting: string | null
-          icebreaker: string | null
-          id: string
-          lesson_id: string
-          pdf_link: string | null
-          practice: string | null
-          prayer_prompt: string | null
-          questions: string[] | null
-          summary: string | null
-          turma_id: string
-          updated_at: string
-          video_link: string | null
-        }
-        Insert: {
-          audio_link?: string | null
-          bible_texts?: string[] | null
-          created_at?: string
-          created_by?: string | null
-          greeting?: string | null
-          icebreaker?: string | null
-          id?: string
-          lesson_id: string
-          pdf_link?: string | null
-          practice?: string | null
-          prayer_prompt?: string | null
-          questions?: string[] | null
-          summary?: string | null
-          turma_id: string
-          updated_at?: string
-          video_link?: string | null
-        }
-        Update: {
-          audio_link?: string | null
-          bible_texts?: string[] | null
-          created_at?: string
-          created_by?: string | null
-          greeting?: string | null
-          icebreaker?: string | null
-          id?: string
-          lesson_id?: string
-          pdf_link?: string | null
-          practice?: string | null
-          prayer_prompt?: string | null
-          questions?: string[] | null
-          summary?: string | null
-          turma_id?: string
-          updated_at?: string
-          video_link?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "turma_lesson_content_lesson_id_fkey"
-            columns: ["lesson_id"]
-            isOneToOne: false
-            referencedRelation: "lessons"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "turma_lesson_content_turma_id_fkey"
-            columns: ["turma_id"]
-            isOneToOne: false
-            referencedRelation: "turmas"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       turmas: {
         Row: {
           area: string | null
@@ -1436,6 +2009,134 @@ export type Database = {
           year?: number
         }
         Relationships: []
+      }
+      user_devotional_overrides: {
+        Row: {
+          available_from: string | null
+          available_until: string | null
+          created_at: string
+          custom_points: number | null
+          devotional_id: string
+          granted_by: string | null
+          id: string
+          is_unlocked: boolean
+          notes: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          available_from?: string | null
+          available_until?: string | null
+          created_at?: string
+          custom_points?: number | null
+          devotional_id: string
+          granted_by?: string | null
+          id?: string
+          is_unlocked?: boolean
+          notes?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          available_from?: string | null
+          available_until?: string | null
+          created_at?: string
+          custom_points?: number | null
+          devotional_id?: string
+          granted_by?: string | null
+          id?: string
+          is_unlocked?: boolean
+          notes?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_devotional_overrides_devotional_id_fkey"
+            columns: ["devotional_id"]
+            isOneToOne: false
+            referencedRelation: "devotional_content"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_devotional_overrides_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "user_devotional_overrides_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      user_lesson_overrides: {
+        Row: {
+          available_from: string | null
+          available_until: string | null
+          created_at: string
+          custom_points: number | null
+          granted_by: string | null
+          id: string
+          is_unlocked: boolean
+          lesson_id: string
+          notes: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          available_from?: string | null
+          available_until?: string | null
+          created_at?: string
+          custom_points?: number | null
+          granted_by?: string | null
+          id?: string
+          is_unlocked?: boolean
+          lesson_id: string
+          notes?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          available_from?: string | null
+          available_until?: string | null
+          created_at?: string
+          custom_points?: number | null
+          granted_by?: string | null
+          id?: string
+          is_unlocked?: boolean
+          lesson_id?: string
+          notes?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_lesson_overrides_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "user_lesson_overrides_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_lesson_overrides_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       user_progress: {
         Row: {
@@ -1490,6 +2191,81 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_reminder_config: {
+        Row: {
+          description: string | null
+          enabled: boolean
+          key: string
+          message_template: string
+          threshold: number
+          updated_at: string
+        }
+        Insert: {
+          description?: string | null
+          enabled?: boolean
+          key: string
+          message_template: string
+          threshold?: number
+          updated_at?: string
+        }
+        Update: {
+          description?: string | null
+          enabled?: boolean
+          key?: string
+          message_template?: string
+          threshold?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      whatsapp_reminder_log: {
+        Row: {
+          blocked_reason_code: string | null
+          error_detail: string | null
+          id: string
+          is_resent: boolean
+          message: string
+          phone: string
+          reference_id: string | null
+          reminder_type: string
+          resent_at: string | null
+          resent_by: string | null
+          sent_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          blocked_reason_code?: string | null
+          error_detail?: string | null
+          id?: string
+          is_resent?: boolean
+          message: string
+          phone: string
+          reference_id?: string | null
+          reminder_type: string
+          resent_at?: string | null
+          resent_by?: string | null
+          sent_at?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          blocked_reason_code?: string | null
+          error_detail?: string | null
+          id?: string
+          is_resent?: boolean
+          message?: string
+          phone?: string
+          reference_id?: string | null
+          reminder_type?: string
+          resent_at?: string | null
+          resent_by?: string | null
+          sent_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       worship_attendance: {
         Row: {
           created_at: string
@@ -1529,19 +2305,101 @@ export type Database = {
         }
         Relationships: []
       }
+      year_promotion_requests: {
+        Row: {
+          from_year: number
+          id: string
+          requested_at: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          to_year: number
+          turma_id: string | null
+          user_id: string
+        }
+        Insert: {
+          from_year?: number
+          id?: string
+          requested_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          to_year?: number
+          turma_id?: string | null
+          user_id: string
+        }
+        Update: {
+          from_year?: number
+          id?: string
+          requested_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          to_year?: number
+          turma_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "year_promotion_requests_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      get_community_area: { Args: { _community: string }; Returns: string }
-      get_community_ranking: {
-        Args: { _community: string }
+      delete_push_scheduled: { Args: { _id: string }; Returns: undefined }
+      delete_user_from_discipleship: {
+        Args: { _target_user_id: string }
+        Returns: Json
+      }
+      get_all_areas: {
+        Args: never
         Returns: {
-          user_id: string
+          created_at: string
+          created_by: string
+          description: string
+          id: string
+          name: string
+        }[]
+      }
+      get_all_communities: {
+        Args: never
+        Returns: {
+          area_id: string
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+        }[]
+      }
+      get_area_birthdays: {
+        Args: { _area: string; _month?: number }
+        Returns: {
+          area: string
+          birth_date: string
+          community: string
           full_name: string
-          points: number
-          rank: number
+          user_id: string
+        }[]
+      }
+      get_community_area: {
+        Args: { _community: Database["public"]["Enums"]["community_name"] }
+        Returns: Database["public"]["Enums"]["area_name"]
+      }
+      get_community_ranking: {
+        Args: { _community: Database["public"]["Enums"]["community_name"] }
+        Returns: {
+          completed_count: number
+          faith_points: number
+          full_name: string
+          user_id: string
         }[]
       }
       get_game_config: {
@@ -1551,8 +2409,36 @@ export type Database = {
           value: number
         }[]
       }
-      get_my_area: { Args: never; Returns: string }
-      get_my_community: { Args: never; Returns: string }
+      get_my_area: {
+        Args: never
+        Returns: Database["public"]["Enums"]["area_name"]
+      }
+      get_my_community: {
+        Args: never
+        Returns: Database["public"]["Enums"]["community_name"]
+      }
+      get_push_automation_config: {
+        Args: never
+        Returns: {
+          body: string
+          description: string
+          enabled: boolean
+          key: string
+          title: string
+        }[]
+      }
+      get_push_scheduled_pending: {
+        Args: never
+        Returns: {
+          body: string
+          created_at: string
+          id: string
+          scheduled_at: string
+          target: string
+          target_value: string
+          title: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1560,7 +2446,23 @@ export type Database = {
         }
         Returns: boolean
       }
+      insert_push_scheduled: {
+        Args: {
+          _body: string
+          _created_by: string
+          _scheduled_at: string
+          _target: string
+          _target_value: string
+          _title: string
+        }
+        Returns: string
+      }
+      is_authorized_system_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      update_push_automation_config: {
+        Args: { _body: string; _enabled: boolean; _key: string; _title: string }
+        Returns: undefined
+      }
       upsert_game_config_item: {
         Args: { _key: string; _value: number }
         Returns: undefined
@@ -1568,7 +2470,7 @@ export type Database = {
     }
     Enums: {
       app_role: "user" | "admin" | "lider"
-      area_name: "Área 1" | "Área 2"
+      area_name: "Área 1" | "Área 2" | "DISCIPULADO JEMIAC"
       community_name:
         | "Martim Lutero"
         | "Bom Pastor"
@@ -1577,6 +2479,7 @@ export type Database = {
         | "Linha Brasil"
         | "Iriá Pira 1"
         | "Iriá Pira 2"
+        | "JEMIAC"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1705,7 +2608,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["user", "admin", "lider"],
-      area_name: ["Área 1", "Área 2"],
+      area_name: ["Área 1", "Área 2", "DISCIPULADO JEMIAC"],
       community_name: [
         "Martim Lutero",
         "Bom Pastor",
@@ -1714,6 +2617,7 @@ export const Constants = {
         "Linha Brasil",
         "Iriá Pira 1",
         "Iriá Pira 2",
+        "JEMIAC",
       ],
     },
   },
