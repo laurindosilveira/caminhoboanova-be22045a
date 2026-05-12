@@ -145,7 +145,7 @@ export default function PrayerCircles() {
     }
   };
 
-  const updateStatus = async (id: string, status: PrayerRequest['status']) => {
+  const updateStatus = async (id: string, status: PrayerRequest['status'], content: string) => {
     const { error } = await supabase
       .from("prayer_requests")
       .update({ status })
@@ -154,7 +154,22 @@ export default function PrayerCircles() {
     if (error) {
       toast.error("Erro ao atualizar status");
     } else {
-      toast.success(status === 'answered' ? "Glória a Deus pela resposta!" : "Pedido arquivado");
+      if (status === 'answered') {
+        toast.success("Glória a Deus pela resposta!");
+        // Automatically add to diary when answered
+        await supabase.from("prayer_diary").insert({
+          user_id: user?.id,
+          request_id: id,
+          title: "Pedido Respondido",
+          content: content,
+          answered_at: new Date().toISOString(),
+          area: currentArea,
+          turma_id: profile?.turma_id
+        });
+        toast.info("Testemunho registrado no seu Diário de Oração!");
+      } else {
+        toast.success("Pedido arquivado");
+      }
       fetchRequests();
     }
   };
@@ -278,12 +293,12 @@ export default function PrayerCircles() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="rounded-xl">
                         {user?.id === request.user_id && request.status === 'open' && (
-                          <DropdownMenuItem onClick={() => updateStatus(request.id, 'answered')} className="gap-2 text-brand-green">
+                          <DropdownMenuItem onClick={() => updateStatus(request.id, 'answered', request.content)} className="gap-2 text-brand-green">
                             <CheckCircle2 className="w-4 h-4" /> Deus respondeu!
                           </DropdownMenuItem>
                         )}
                         {user?.id === request.user_id && request.status !== 'archived' && (
-                          <DropdownMenuItem onClick={() => updateStatus(request.id, 'archived')} className="gap-2 text-muted-foreground">
+                          <DropdownMenuItem onClick={() => updateStatus(request.id, 'archived', request.content)} className="gap-2 text-muted-foreground">
                             <Archive className="w-4 h-4" /> Arquivar
                           </DropdownMenuItem>
                         )}
