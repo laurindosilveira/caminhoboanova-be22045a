@@ -161,6 +161,14 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
         return;
       }
     }
+    
+    // Dispatch celebration event
+    window.dispatchEvent(new CustomEvent("show-celebration", {
+      detail: {
+        type: "devotional",
+        points: awardedPoints ?? activity.points
+      }
+    }));
 
     await onComplete(activity.id);
     setCompleting(false);
