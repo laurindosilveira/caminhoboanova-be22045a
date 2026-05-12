@@ -676,7 +676,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         const next = [draft, ...manualReleaseDrafts.filter((item) => !(item.content_kind === "lesson" && item.lesson_id === draft.lesson_id))];
         setManualReleaseDrafts(next);
         window.localStorage.setItem(storageKey, JSON.stringify(next));
-        toast.info("Rascunho salvo localmente", description: "A tabela ainda nao existe no Supabase. Rode o SQL da parte 2 para persistir de verdade." });
+        toast.info("Rascunho salvo localmente", { description: "A tabela ainda nao existe no Supabase. Rode o SQL da parte 2 para persistir de verdade." });
         resetManualReleaseForm();
         setSavingManualRelease(false);
         setActiveSection("liberacoes");
@@ -727,14 +727,14 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         const next = [...drafts, ...manualReleaseDrafts.filter((item) => !(item.content_kind === "devotional" && existingIds.has(item.devotional_id)))];
         setManualReleaseDrafts(next);
         window.localStorage.setItem(storageKey, JSON.stringify(next));
-        toast.info("Rascunhos salvos localmente", description: `${devIds.length} devocional(is) preparado(s). A tabela ainda nao existe no Supabase.` });
+        toast.info("Rascunhos salvos localmente", { description: `${devIds.length} devocional(is) preparado(s). A tabela ainda nao existe no Supabase.` });
         resetManualReleaseForm();
         setSavingManualRelease(false);
         setActiveSection("liberacoes");
         return;
       }
       if (error) {
-        toast.info("Falha ao salvar liberacao", description: error.message });
+        toast.info("Falha ao salvar liberacao", { description: error.message });
         setSavingManualRelease(false);
         return;
       }
