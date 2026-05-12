@@ -446,7 +446,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         const statusLabel = w.status === "aprovado" ? "✅ Aprovado" : w.status === "rejeitado" ? "❌ Rejeitado" : "⏳ Pendente";
         if (w.status === "aprovado") worshipCount++;
         if (worshipCount === 1 && w.status === "aprovado") {
-          tl.push({ date: w.created_at, type: "milestone", category: "marco", "⛪ Primeiro culto confirmado!", detail: "Marco importante na caminhada", icon: "⛪", severity: "positive" });
+          tl.push({ date: w.created_at, type: "milestone", category: "marco", title: "⛪ Primeiro culto confirmado!", detail: "Marco importante na caminhada", icon: "⛪", severity: "positive" });
         }
         const eventLabel = w.event_type === "jemiac" ? "JEMIAC" : w.event_type === "retiro" ? "Retiro" : "Culto";
         const eventEmoji = w.event_type === "jemiac" ? "✝️" : w.event_type === "retiro" ? "🏕️" : "⛪";
