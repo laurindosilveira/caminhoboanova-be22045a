@@ -95,33 +95,35 @@ export default function PushActivationBanner() {
   if (!visible) return null;
 
   return (
-    <div className="mx-5 mt-2 rounded-2xl border border-primary/30 bg-primary/5 p-4 animate-in fade-in slide-in-from-top-2 duration-300">
+    <div className="mx-5 mt-6 rounded-3xl border border-primary/20 bg-primary/5 p-5 animate-in fade-in slide-in-from-top-2 duration-300 shadow-sm">
       <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0">
+        <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
           <Bell className="w-5 h-5 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-montserrat font-bold text-foreground text-sm">
-            Ative suas notificacoes!
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-montserrat font-black text-foreground text-sm uppercase tracking-tight">
+              Ative suas notificações
+            </p>
+            <button
+              onClick={handleDismiss}
+              className="p-1 rounded-lg text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
           <p className="text-muted-foreground font-inter text-xs mt-1 leading-relaxed">
-            Seu lider pediu para voce ativar as notificacoes. Assim voce ficara por dentro de tudo que acontece na sua caminhada.
+            Seu líder pediu para você ativar as notificações para não perder nada da jornada.
           </p>
-          <div className="flex gap-2 mt-3">
+          <div className="mt-4">
             <button
               onClick={handleActivate}
               disabled={activating}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-inter font-bold text-primary-foreground disabled:opacity-50 transition-all"
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-xs font-montserrat font-black text-primary-foreground disabled:opacity-50 transition-all shadow-md active:scale-95"
               style={{ background: "var(--gradient-hero)" }}
             >
-              <Bell className="w-3.5 h-3.5" />
-              {activating ? "Ativando..." : "Ativar notificacoes"}
-            </button>
-            <button
-              onClick={handleDismiss}
-              className="px-3 py-2.5 rounded-xl border border-border text-muted-foreground text-xs font-inter hover:bg-muted/50 transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
+              <Bell className="w-4 h-4" />
+              {activating ? "ATIVANDO..." : "ATIVAR AGORA"}
             </button>
           </div>
         </div>
