@@ -1,6 +1,6 @@
-import { Home, Trophy, Calendar, Users, User, Heart } from "lucide-react";
+import { Home, Trophy, Calendar, Users, User, Heart, Music } from "lucide-react";
 
-export type Tab = "jornada" | "conquistas" | "agenda" | "comunidade" | "perfil" | "discipulado";
+export type Tab = "jornada" | "conquistas" | "agenda" | "comunidade" | "perfil" | "discipulado" | "adoracao";
 
 interface BottomNavProps {
   activeTab: Tab;
@@ -9,10 +9,10 @@ interface BottomNavProps {
 
 const tabs = [
   { tab: "jornada" as Tab, icon: Home, label: "Jornada" },
-  { tab: "conquistas" as Tab, icon: Trophy, label: "Conquistas", badge: true },
-  { tab: "agenda" as Tab, icon: Calendar, label: "Agenda" },
+  { tab: "discipulado" as Tab, icon: Heart, label: "Caminho" },
+  { tab: "adoracao" as Tab, icon: Music, label: "Adoração" },
   { tab: "comunidade" as Tab, icon: Users, label: "Comunidade" },
-  { tab: "discipulado" as Tab, icon: Heart, label: "Discipulado" },
+  { tab: "agenda" as Tab, icon: Calendar, label: "Agenda" },
   { tab: "perfil" as Tab, icon: User, label: "Perfil" },
 ];
 
@@ -24,32 +24,29 @@ export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
       role="tablist"
     >
       <div className="grid grid-cols-6 py-1.5">
-        {tabs.map(({ tab, icon: Icon, label, badge }) => {
+        {tabs.map(({ tab, icon: Icon, label }) => {
           const isActive = activeTab === tab;
-          const isDiscipulado = tab === "discipulado";
+          const isPrimary = tab === "discipulado" || tab === "adoracao";
           return (
             <button
               key={tab}
               role="tab"
               aria-selected={isActive}
-              aria-label={badge ? `${label} (novo)` : label}
+              aria-label={label}
               onClick={() => onChange(tab)}
               className={`flex flex-col items-center gap-0.5 py-1.5 px-0.5 rounded-xl transition-all active:scale-95 ${
-                isActive ? (isDiscipulado ? "text-primary" : "text-secondary") : "text-muted-foreground"
+                isActive ? (isPrimary ? "text-primary" : "text-secondary") : "text-muted-foreground"
               }`}
             >
               <div className={`relative w-7 h-7 flex items-center justify-center rounded-xl transition-all ${
-                isActive ? (isDiscipulado ? "bg-primary/10" : "bg-secondary/10") : ""
+                isActive ? (isPrimary ? "bg-primary/10" : "bg-secondary/10") : ""
               }`}>
-                <Icon className={`w-4 h-4 ${isActive ? (isDiscipulado ? "text-primary" : "text-secondary") : "text-muted-foreground"}`} aria-hidden="true" />
-                {badge && (
-                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-secondary rounded-full" aria-hidden="true" />
-                )}
+                <Icon className={`w-4 h-4 ${isActive ? (isPrimary ? "text-primary" : "text-secondary") : "text-muted-foreground"}`} aria-hidden="true" />
               </div>
-              <span className={`text-[9px] font-inter leading-none ${isActive ? (isDiscipulado ? "font-bold text-primary" : "font-bold text-secondary") : "font-medium"}`}>
+              <span className={`text-[9px] font-inter leading-none ${isActive ? (isPrimary ? "font-bold text-primary" : "font-bold text-secondary") : "font-medium"}`}>
                 {label}
               </span>
-              {isActive && <div className={`w-1 h-1 rounded-full ${isDiscipulado ? "bg-primary" : "bg-secondary"}`} aria-hidden="true" />}
+              {isActive && <div className={`w-1 h-1 rounded-full ${isPrimary ? "bg-primary" : "bg-secondary"}`} aria-hidden="true" />}
             </button>
           );
         })}

@@ -2,9 +2,16 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ChevronLeft, Save, Plus, Trash2, BookOpen, Heart,
-  Pen, GripVertical, Edit2, Eye
+  Pen, GripVertical, Edit2, Eye, Music
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type Activity = {
   id: string; type: string; title: string; subtitle: string | null; order_num: number; points: number;
@@ -17,6 +24,7 @@ type DevotionalContent = {
   prayer: string;
   practice: string;
   questions: string[];
+  worship_song_id: string | null;
 };
 
 const DEFAULT_CONTENT: DevotionalContent = {
@@ -26,11 +34,13 @@ const DEFAULT_CONTENT: DevotionalContent = {
   prayer: "",
   practice: "",
   questions: [""],
+  worship_song_id: null,
 };
 
 export default function DevotionalsTab() {
   const { toast } = useToast();
   const [devotionals, setDevotionals] = useState<Activity[]>([]);
+  const [worshipSongs, setWorshipSongs] = useState<{id: string, title: string, artist: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Activity | null>(null);
   const [editingContent, setEditingContent] = useState(false);
@@ -50,7 +60,15 @@ export default function DevotionalsTab() {
   const [editSubtitle, setEditSubtitle] = useState("");
   const [editPoints, setEditPoints] = useState(10);
 
-  useEffect(() => { fetchDevotionals(); }, []);
+  useEffect(() => { 
+    fetchDevotionals(); 
+    fetchWorshipSongs();
+  }, []);
+
+  async function fetchWorshipSongs() {
+    const { data } = await supabase.from("worship_songs").select("id, title, artist").eq("is_active", true);
+    setWorshipSongs(data || []);
+  }
 
   async function fetchDevotionals() {
     setLoading(true);
@@ -136,6 +154,7 @@ export default function DevotionalsTab() {
         prayer: data.prayer || "",
         practice: data.practice || "",
         questions: (data.questions as string[])?.length ? data.questions as string[] : [""],
+        worship_song_id: data.worship_song_id || null,
       });
     } else {
       setIsPublished(false);
@@ -154,6 +173,7 @@ export default function DevotionalsTab() {
       prayer: content.prayer,
       practice: content.practice,
       questions: content.questions.filter(q => q.trim()),
+      worship_song_id: content.worship_song_id,
     }, { onConflict: "activity_id" });
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -284,6 +304,36 @@ export default function DevotionalsTab() {
             <Field label="Desafio prático" value={content.practice}
               onChange={v => setContent(p => ({ ...p, practice: v }))} rows={3}
               placeholder="Ex: Hoje, leia o texto em voz alta e medite por 5 minutos..." />
+          </div>
+        </div>
+
+        {/* Worship Music Integration */}
+        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
+            <Music className="w-4 h-4 text-primary" />
+            <p className="font-montserrat font-bold text-foreground text-sm">🎶 Sugestão de Louvor</p>
+          </div>
+          <div className="p-4">
+            <p className="font-inter text-xs font-semibold text-muted-foreground mb-1.5">Selecione uma música do catálogo</p>
+            <Select 
+              value={content.worship_song_id || "none"}
+              onValueChange={(val) => setContent(p => ({ ...p, worship_song_id: val === "none" ? null : val }))}
+            >
+              <SelectTrigger className="w-full rounded-xl border-border bg-background">
+                <SelectValue placeholder="Nenhuma música selecionada" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Nenhuma (Sem sugestão)</SelectItem>
+                {worshipSongs.map(song => (
+                  <SelectItem key={song.id} value={song.id}>
+                    {song.title} - {song.artist}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="mt-2 text-[10px] text-muted-foreground italic">
+              Você pode cadastrar novas músicas na aba "Louvor" do painel administrativo.
+            </p>
           </div>
         </div>
 

@@ -30,6 +30,7 @@ import { useUserStats } from "@/hooks/useUserStats";
 import { useAppNotifications } from "@/hooks/useAppNotifications";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import CelebrationModal, { type CelebrationType } from "@/components/gamification/CelebrationModal";
+import WorshipPlayerSection from "@/components/home/WorshipPlayerSection";
 
 
 type ProfileSubTab = "meu-perfil" | "minha-jornada" | "configuracoes";
@@ -234,6 +235,13 @@ export default function Index() {
 
         {/* ===== COMUNIDADE ===== */}
         {activeTab === "comunidade" && <CommunityTab key={`comunidade-${currentArea}`} />}
+
+        {/* ===== ADORAÇÃO ===== */}
+        {activeTab === "adoracao" && (
+          <div className="px-5 pt-6">
+            <WorshipPlayerSection />
+          </div>
+        )}
 
         {/* ===== DISCIPULADO ===== */}
         {activeTab === "discipulado" && (

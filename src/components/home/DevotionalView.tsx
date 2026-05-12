@@ -1,8 +1,19 @@
 import { useState, useEffect } from "react";
 import BibleModal from "./BibleModal";
 import { supabase } from "@/integrations/supabase/client";
-import { ChevronLeft, BookOpen, Heart, CheckCircle2, AlertCircle } from "lucide-react";
+import { ChevronLeft, BookOpen, Heart, CheckCircle2, AlertCircle, Music } from "lucide-react";
 import { toast } from "sonner";
+import WorshipCard from "./WorshipCard";
+
+type WorshipSong = {
+  id: string;
+  title: string;
+  artist: string;
+  url: string;
+  platform: 'youtube' | 'spotify' | 'other';
+  theme: string | null;
+  thumbnail_url: string | null;
+};
 
 type DevotionalContent = {
   bible_text: string;
@@ -11,6 +22,8 @@ type DevotionalContent = {
   prayer: string;
   practice: string;
   questions: string[];
+  worship_song_id?: string | null;
+  worship_song?: WorshipSong | null;
 };
 
 type Props = {
@@ -41,7 +54,10 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
     async function load() {
       const { data } = await supabase
         .from("devotional_content")
-        .select("*")
+        .select(`
+          *,
+          worship_song:worship_song_id(*)
+        `)
         .eq("activity_id", activity.id)
         .maybeSingle();
 
@@ -53,6 +69,8 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
           prayer: data.prayer || "",
           practice: data.practice || "",
           questions: (data.questions as string[]) ?? [],
+          worship_song_id: data.worship_song_id,
+          worship_song: data.worship_song as any
         });
       }
 
@@ -381,6 +399,13 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
             ⭐ Responda as perguntas para ganhar seus pontos de fé!
           </p>
         </div>
+      )}
+
+      {content?.worship_song && (
+        <WorshipCard 
+          song={content.worship_song} 
+          suggestionText={isCompleted ? "Continue esse momento ouvindo este louvor" : "Prepare o seu coração com este louvor"} 
+        />
       )}
 
       {isCompleted && (
