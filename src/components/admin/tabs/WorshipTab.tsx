@@ -302,6 +302,13 @@ export default function WorshipTab() {
               </div>
 
               <div className="flex items-center gap-1">
+                <button 
+                  onClick={() => handleEdit(song)}
+                  className="p-2.5 rounded-xl hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
+                  title="Editar música"
+                >
+                  <Pen className="w-4 h-4" />
+                </button>
                 <a href={song.url} target="_blank" rel="noopener noreferrer" className="p-2.5 rounded-xl hover:bg-muted text-primary transition-colors">
                   <ExternalLink className="w-4 h-4" />
                 </a>
