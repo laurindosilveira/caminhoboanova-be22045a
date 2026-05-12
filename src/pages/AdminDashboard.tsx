@@ -287,6 +287,7 @@ export default function AdminDashboard() {
             {activeTab === "push" && <AdminPushTab turmas={turmas} />}
             {activeTab === "users" && <UsersTab onSelectTurma={handleSelectTurmaFromUsers} />}
             {activeTab === "whatsapp" && <WhatsAppAuditTab />}
+            {activeTab === "worship" && <WorshipTab />}
           </Suspense>
         )}
       </main>
