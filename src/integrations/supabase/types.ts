@@ -675,6 +675,7 @@ export type Database = {
           reflection: string
           title: string
           updated_at: string
+          worship_song_id: string | null
         }
         Insert: {
           activity_id?: string | null
@@ -690,6 +691,7 @@ export type Database = {
           reflection?: string
           title?: string
           updated_at?: string
+          worship_song_id?: string | null
         }
         Update: {
           activity_id?: string | null
@@ -705,6 +707,7 @@ export type Database = {
           reflection?: string
           title?: string
           updated_at?: string
+          worship_song_id?: string | null
         }
         Relationships: [
           {
@@ -712,6 +715,13 @@ export type Database = {
             columns: ["lesson_id"]
             isOneToOne: false
             referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "devotional_content_worship_song_id_fkey"
+            columns: ["worship_song_id"]
+            isOneToOne: false
+            referencedRelation: "worship_songs"
             referencedColumns: ["id"]
           },
         ]
@@ -2471,6 +2481,45 @@ export type Database = {
           user_id?: string
           worship_date?: string
           worship_time?: string
+        }
+        Relationships: []
+      }
+      worship_songs: {
+        Row: {
+          artist: string
+          created_at: string
+          id: string
+          is_active: boolean | null
+          platform: string
+          theme: string | null
+          thumbnail_url: string | null
+          title: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          artist: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          platform: string
+          theme?: string | null
+          thumbnail_url?: string | null
+          title: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          artist?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          platform?: string
+          theme?: string | null
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+          url?: string
         }
         Relationships: []
       }
