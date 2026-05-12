@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   Music, 
@@ -10,7 +10,10 @@ import {
   Save,
   CheckCircle2,
   AlertCircle,
-  Pen
+  Pen,
+  Upload,
+  Image as ImageIcon,
+  X
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
