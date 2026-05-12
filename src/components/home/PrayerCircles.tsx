@@ -59,7 +59,7 @@ export default function PrayerCircles() {
       .from("prayer_requests")
       .select(`
         *,
-        profiles:user_id(full_name)
+        profiles!prayer_requests_profiles_user_id_fkey(full_name)
       `)
       .order("created_at", { ascending: false });
 
