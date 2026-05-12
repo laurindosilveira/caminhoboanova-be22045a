@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, Star, Sparkles, Trophy, Heart } from "lucide-react";
+import React, { useEffect, useState, useRef } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { CheckCircle2, Star, Sparkles, Trophy, Heart, X } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Button } from "@/components/ui/button";
 
@@ -11,38 +11,68 @@ interface CelebrationModalProps {
   onClose: () => void;
   type: CelebrationType;
   points?: number;
+  showConfetti?: boolean;
 }
 
-const CelebrationModal: React.FC<CelebrationModalProps> = ({ isOpen, onClose, type, points }) => {
+const CelebrationModal: React.FC<CelebrationModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  type, 
+  points,
+  showConfetti = true 
+}) => {
   const [mounted, setMounted] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
+  const modalRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (isOpen) {
       setMounted(true);
-      // Trigger confetti
-      const duration = 3 * 1000;
-      const animationEnd = Date.now() + duration;
-      const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
+      
+      // Auto-focus the close button or modal for accessibility
+      setTimeout(() => {
+        closeButtonRef.current?.focus();
+      }, 100);
 
-      const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+      const handleEsc = (e: KeyboardEvent) => {
+        if (e.key === "Escape") onClose();
+      };
+      window.addEventListener("keydown", handleEsc);
 
-      const interval: any = setInterval(function() {
-        const timeLeft = animationEnd - Date.now();
+      // Trigger confetti if enabled and not reduced motion
+      if (showConfetti && !prefersReducedMotion) {
+        const duration = 3 * 1000;
+        const animationEnd = Date.now() + duration;
+        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
 
-        if (timeLeft <= 0) {
-          return clearInterval(interval);
-        }
+        const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
 
-        const particleCount = 50 * (timeLeft / duration);
-        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
-        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
-      }, 250);
+        const interval: any = setInterval(function() {
+          const timeLeft = animationEnd - Date.now();
 
-      return () => clearInterval(interval);
+          if (timeLeft <= 0) {
+            return clearInterval(interval);
+          }
+
+          const particleCount = 50 * (timeLeft / duration);
+          confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+          confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+        }, 250);
+
+        return () => {
+          clearInterval(interval);
+          window.removeEventListener("keydown", handleEsc);
+        };
+      }
+
+      return () => {
+        window.removeEventListener("keydown", handleEsc);
+      };
     } else {
       setMounted(false);
     }
-  }, [isOpen]);
+  }, [isOpen, showConfetti, prefersReducedMotion, onClose]);
 
   const getContent = () => {
     switch (type) {
@@ -98,18 +128,33 @@ const CelebrationModal: React.FC<CelebrationModalProps> = ({ isOpen, onClose, ty
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="celebration-title"
+        >
           <motion.div
-            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+            ref={modalRef}
+            initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.8, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 20 }}
+            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.8, y: 20 }}
             className="bg-card w-full max-w-sm rounded-[2.5rem] overflow-hidden shadow-2xl border border-border flex flex-col items-center text-center p-8 relative"
           >
             {/* Background decoration */}
             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-primary via-secondary to-brand-green" />
             
+            <button
+              ref={closeButtonRef}
+              onClick={onClose}
+              className="absolute top-6 right-6 p-2 rounded-full bg-muted hover:bg-muted/80 transition-colors"
+              aria-label="Fechar celebração"
+            >
+              <X className="w-4 h-4 text-muted-foreground" />
+            </button>
+
             <motion.div
-              initial={{ rotate: -10, scale: 0.5 }}
+              initial={prefersReducedMotion ? {} : { rotate: -10, scale: 0.5 }}
               animate={{ rotate: 0, scale: 1 }}
               transition={{ 
                 type: "spring",
@@ -123,7 +168,8 @@ const CelebrationModal: React.FC<CelebrationModalProps> = ({ isOpen, onClose, ty
             </motion.div>
 
             <motion.h2 
-              initial={{ opacity: 0, y: 10 }}
+              id="celebration-title"
+              initial={prefersReducedMotion ? {} : { opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
               className="font-montserrat font-black text-2xl text-foreground mb-3"
@@ -132,7 +178,7 @@ const CelebrationModal: React.FC<CelebrationModalProps> = ({ isOpen, onClose, ty
             </motion.h2>
 
             <motion.p 
-              initial={{ opacity: 0, y: 10 }}
+              initial={prefersReducedMotion ? {} : { opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
               className="text-muted-foreground font-inter text-sm mb-8 leading-relaxed"
@@ -142,7 +188,7 @@ const CelebrationModal: React.FC<CelebrationModalProps> = ({ isOpen, onClose, ty
 
             {points && (
               <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
+                initial={prefersReducedMotion ? {} : { opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.4 }}
                 className="bg-brand-green/10 text-brand-green px-4 py-2 rounded-full font-montserrat font-bold text-sm mb-8 flex items-center gap-2"
@@ -153,7 +199,7 @@ const CelebrationModal: React.FC<CelebrationModalProps> = ({ isOpen, onClose, ty
             )}
 
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
+              initial={prefersReducedMotion ? {} : { opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
               className="w-full"
@@ -174,3 +220,4 @@ const CelebrationModal: React.FC<CelebrationModalProps> = ({ isOpen, onClose, ty
 };
 
 export default CelebrationModal;
+

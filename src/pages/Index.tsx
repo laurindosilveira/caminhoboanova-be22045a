@@ -34,23 +34,54 @@ import CelebrationModal, { type CelebrationType } from "@/components/gamificatio
 
 type ProfileSubTab = "meu-perfil" | "minha-jornada" | "configuracoes";
 type LessonNavigationMode = "choice" | "devotional";
+type CelebrationItem = { type: CelebrationType; points?: number };
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>("jornada");
   const [targetLessonId, setTargetLessonId] = useState<string | null>(null);
   const [targetLessonMode, setTargetLessonMode] = useState<LessonNavigationMode>("choice");
   const [profileSubTab, setProfileSubTab] = useState<ProfileSubTab>("meu-perfil");
-  const [celebration, setCelebration] = useState<{ isOpen: boolean; type: CelebrationType; points?: number }>({
-    isOpen: false,
-    type: "devotional"
-  });
   
-  const { profile, role } = useAuth();
+  // Celebration queue/lock logic
+  const [celebrationQueue, setCelebrationQueue] = useState<CelebrationItem[]>([]);
+  const [currentCelebration, setCurrentCelebration] = useState<CelebrationItem | null>(null);
+  const [showConfettiPref, setShowConfettiPref] = useState(true);
+
+  const { profile, role, user } = useAuth();
   const { effectiveArea } = useAreaSwitch();
   const currentArea = effectiveArea || profile?.area || "";
   const navigate = useNavigate();
   const stats = useUserStats(currentArea);
   useAppNotifications();
+
+  // Load confetti preference
+  useEffect(() => {
+    const saved = localStorage.getItem("caminho_show_confetti");
+    if (saved !== null) setShowConfettiPref(saved === "true");
+  }, []);
+
+  // Sync preference with localStorage if changed elsewhere
+  useEffect(() => {
+    const handler = () => {
+      const saved = localStorage.getItem("caminho_show_confetti");
+      if (saved !== null) setShowConfettiPref(saved === "true");
+    };
+    window.addEventListener("storage", handler);
+    window.addEventListener("confetti-pref-updated", handler);
+    return () => {
+      window.removeEventListener("storage", handler);
+      window.removeEventListener("confetti-pref-updated", handler);
+    };
+  }, []);
+
+  // Handle celebration queue
+  useEffect(() => {
+    if (!currentCelebration && celebrationQueue.length > 0) {
+      const next = celebrationQueue[0];
+      setCurrentCelebration(next);
+      setCelebrationQueue(prev => prev.slice(1));
+    }
+  }, [celebrationQueue, currentCelebration]);
 
   // Listen for lesson navigation and celebrations
   useEffect(() => {
@@ -67,11 +98,7 @@ export default function Index() {
     const handleCelebration = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail?.type) {
-        setCelebration({
-          isOpen: true,
-          type: detail.type,
-          points: detail.points
-        });
+        setCelebrationQueue(prev => [...prev, { type: detail.type, points: detail.points }]);
       }
     };
 
@@ -85,30 +112,27 @@ export default function Index() {
 
   // Check for streak milestones when stats update
   useEffect(() => {
-    if (stats.loading) return;
+    if (stats.loading || !user) return;
     
-    // Check if the current streak is a milestone
-    // We only want to show this once per day/milestone
-    const lastMilestoneShown = localStorage.getItem("last_streak_milestone_shown");
+    // Use user ID and area in the key for multi-device/multi-area persistence
     const today = new Date().toDateString();
+    const milestoneKey = `milestone_${user.id}_${currentArea}_${today}_${stats.streakDays}`;
+    const alreadyShown = localStorage.getItem(milestoneKey);
     
-    if (lastMilestoneShown !== `${today}_${stats.streakDays}`) {
+    if (!alreadyShown) {
       if (stats.streakDays === 3 || stats.streakDays === 7 || stats.streakDays === 30) {
         const type: CelebrationType = stats.streakDays === 3 ? "streak_3" : stats.streakDays === 7 ? "streak_7" : "streak_30";
         
-        // Show after a small delay to not overlap with direct completion celebrations
         const timer = setTimeout(() => {
-          setCelebration({
-            isOpen: true,
-            type: type
-          });
-          localStorage.setItem("last_streak_milestone_shown", `${today}_${stats.streakDays}`);
+          setCelebrationQueue(prev => [...prev, { type }]);
+          localStorage.setItem(milestoneKey, "true");
         }, 1500);
         
         return () => clearTimeout(timer);
       }
     }
-  }, [stats.streakDays, stats.loading]);
+  }, [stats.streakDays, stats.loading, user, currentArea]);
+
 
 
   // Activity completion is now handled by the real tracking tables
@@ -333,10 +357,11 @@ export default function Index() {
 
       {/* Celebration Modal */}
       <CelebrationModal
-        isOpen={celebration.isOpen}
-        onClose={() => setCelebration(prev => ({ ...prev, isOpen: false }))}
-        type={celebration.type}
-        points={celebration.points}
+        isOpen={!!currentCelebration}
+        onClose={() => setCurrentCelebration(null)}
+        type={currentCelebration?.type ?? "devotional"}
+        points={currentCelebration?.points}
+        showConfetti={showConfettiPref}
       />
     </div>
   );

@@ -124,11 +124,26 @@ export default function NotificationSettings() {
   const [showHelp, setShowHelp] = useState(false);
 
   const notificationOptions = [
-    { key: "devocional" as const, label: "Devocional diario", desc: `Lembrete as ${preferredHour}h para o devocional`, icon: BookOpen, color: "text-brand-green" },
-    { key: "eventos" as const, label: "Eventos e encontros", desc: "Avisos de eventos proximos", icon: CalendarDays, color: "text-primary" },
-    { key: "streak" as const, label: "Risco de perder sequencia", desc: "Alerta quando sua sequencia esta em risco", icon: Flame, color: "text-secondary" },
+    { key: "devocional" as const, label: "Devocional diário", desc: `Lembrete às ${preferredHour}h para o devocional`, icon: BookOpen, color: "text-brand-green" },
+    { key: "eventos" as const, label: "Eventos e encontros", desc: "Avisos de eventos próximos", icon: CalendarDays, color: "text-primary" },
+    { key: "streak" as const, label: "Risco de perder sequência", desc: "Alerta quando sua sequência está em risco", icon: Flame, color: "text-secondary" },
     { key: "mensagens" as const, label: "Mensagens do pastor", desc: "Novas mensagens e comunicados", icon: MessageSquare, color: "text-accent-foreground" },
   ];
+
+  const [showConfettiPref, setShowConfettiPref] = useState(true);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("caminho_show_confetti");
+    if (saved !== null) setShowConfettiPref(saved === "true");
+  }, []);
+
+  const handleToggleConfetti = () => {
+    const next = !showConfettiPref;
+    setShowConfettiPref(next);
+    localStorage.setItem("caminho_show_confetti", next.toString());
+    window.dispatchEvent(new Event("confetti-pref-updated"));
+  };
+
 
   useEffect(() => {
     if (!user) return;
@@ -630,6 +645,23 @@ export default function NotificationSettings() {
                     )}
                   </div>
                 )}
+
+                {/* ── Gamificação / Celebrações ── */}
+                <div className="border-t border-border px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <Sparkles className="w-4 h-4 text-secondary" />
+                    <div className="flex-1">
+                      <p className="font-inter text-sm font-semibold text-foreground">Celebrações e Confetes</p>
+                      <p className="text-muted-foreground text-[10px] font-inter">Exibir animações de confete ao concluir metas</p>
+                    </div>
+                    <button
+                      onClick={handleToggleConfetti}
+                      className={`w-11 h-6 rounded-full relative transition-colors ${showConfettiPref ? "bg-secondary" : "bg-muted"}`}
+                    >
+                      <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${showConfettiPref ? "translate-x-[22px]" : "translate-x-0.5"}`} />
+                    </button>
+                  </div>
+                </div>
 
                 <button
                   onClick={handleToggleMaster}
