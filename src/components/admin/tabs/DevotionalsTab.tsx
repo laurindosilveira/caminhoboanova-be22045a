@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ChevronLeft, Save, Plus, Trash2, BookOpen, Heart,
-  Pen, GripVertical, Edit2, Eye
+  Pen, GripVertical, Edit2, Eye, Music
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
