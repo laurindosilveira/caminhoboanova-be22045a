@@ -103,21 +103,22 @@ export default function HeroHeader({ streakDays, faithPoints, faithLevel, faithE
           </div>
         </div>
 
-        {/* Spiritual energy — flame icons */}
+        {/* Spiritual energy — simple progress bar */}
         <div className="mt-3 bg-white/10 rounded-2xl p-3" role="meter" aria-label="Energia espiritual" aria-valuenow={faithEnergy} aria-valuemin={0} aria-valuemax={5}>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-primary-foreground/80 text-xs font-inter font-medium">Energia espiritual</span>
-            <span className="text-primary-foreground/60 text-xs">{faithEnergy}/5</span>
+          <div className="flex items-center justify-between mb-1.5 px-0.5">
+            <span className="text-primary-foreground/80 text-[10px] uppercase font-inter font-bold tracking-wider">Energia Espiritual</span>
+            <span className="text-primary-foreground/90 text-[10px] font-bold font-mono">{faithEnergy}/5</span>
           </div>
-          <div className="flex gap-2 justify-center" aria-hidden="true">
+          <div className="flex gap-1.5 h-1.5" aria-hidden="true">
             {Array.from({ length: 5 }).map((_, i) => (
-              <span
+              <div
                 key={i}
-                className={`text-2xl transition-all duration-300 ${i < faithEnergy ? "drop-shadow-[0_0_6px_hsl(29_100%_50%_/_0.8)]" : "opacity-30 grayscale"}`}
-                style={{ filter: i < faithEnergy ? "drop-shadow(0 0 4px hsl(29 100% 50% / 0.9))" : undefined }}
-              >
-                🔥
-              </span>
+                className={`flex-1 rounded-full transition-all duration-500 ${
+                  i < faithEnergy 
+                    ? "bg-secondary shadow-[0_0_8px_rgba(249,115,22,0.6)]" 
+                    : "bg-white/10"
+                }`}
+              />
             ))}
           </div>
         </div>

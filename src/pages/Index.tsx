@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 
 import HeroHeader from "@/components/home/HeroHeader";
 import AnnouncementsSection from "@/components/home/AnnouncementsSection";
-import NextCourseActivityCard from "@/components/home/NextCourseActivityCard";
+import FocusSection from "@/components/home/FocusSection";
 import JourneyPath from "@/components/home/JourneyPath";
 import AchievementsGrid from "@/components/home/AchievementsGrid";
 import DiscipleProfile from "@/components/home/DiscipleProfile";
@@ -80,62 +80,38 @@ export default function Index() {
         {/* ===== JORNADA ===== */}
         {activeTab === "jornada" && (
           <>
-            {/* Push activation reminder from leader */}
+            {/* 1. Alertas Críticos e Notificações (PWA/Push) */}
             <PushActivationBanner />
 
-            {/* Avisos do pastor no topo */}
+            {/* 2. Cabeçalho de Foco (Ação Principal do Dia) */}
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, ease: "easeOut" }}
-              className="pt-4"
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="pt-6"
             >
+              <FocusSection onNavigateToDiscipulado={() => setActiveTab("discipulado")} />
+            </motion.div>
+
+            {/* 3. Saudação e Comunidade (Menos destaque, mais social) */}
+            <PersonalizedGreeting />
+            
+            {/* 4. Eventos e Avisos (Contexto) */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4, delay: 0.3 }}
+            >
+              <NextMeetingCard onNavigateToAgenda={() => setActiveTab("agenda")} />
               <AnnouncementsSection />
             </motion.div>
 
-            {/* Personalized greeting based on last activity */}
-            <PersonalizedGreeting />
-
-            {/* Aniversariantes do mes em destaque */}
-            <BirthdayHighlights area={currentArea} variant="journey" />
-
-            {/* Indicador de impacto espiritual */}
+            {/* 5. A Jornada (Visualização do Progresso) */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.35, delay: 0.15, ease: "easeOut" }}
-              className="px-5 mb-2"
-            >
-              <div className="flex flex-wrap gap-2">
-                {(() => {
-                  const indicators: string[] = [];
-                  if (stats.faithLevel >= 3) indicators.push("✨ Você está crescendo");
-                  if (stats.streakDays >= 3) indicators.push("✨ Em constância");
-                  if (stats.faithEnergy >= 3) indicators.push("✨ Em comunhão");
-                  if (indicators.length === 0) indicators.push("🌱 Comece sua jornada!");
-                  return indicators.map((text, i) => (
-                    <span key={i} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-secondary/10 text-secondary font-inter text-xs font-semibold">
-                      {text}
-                    </span>
-                  ));
-                })()}
-              </div>
-            </motion.div>
-
-            {/* Próximo encontro */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: 0.2, ease: "easeOut" }}
-            >
-              <NextMeetingCard onNavigateToAgenda={() => setActiveTab("agenda")} />
-            </motion.div>
-
-            {/* Caminho da jornada — posição proeminente */}
-            <motion.div
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.25, ease: "easeOut" }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+              className="mb-8"
             >
               <JourneyPath onSelectLesson={(lessonId) => {
                 setTargetLessonId(lessonId);
@@ -144,16 +120,8 @@ export default function Index() {
               }} />
             </motion.div>
 
-            {/* Próxima etapa do curso ativo */}
-            <motion.div
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.3, ease: "easeOut" }}
-            >
-              <NextCourseActivityCard onNavigateToDiscipulado={() => setActiveTab("discipulado")} />
-            </motion.div>
-
-            {/* Lembretes agrupados — seção colapsável */}
+            {/* 6. Utilidades e Lembretes (Rodapé da página) */}
+            <BirthdayHighlights area={currentArea} variant="journey" />
             <RemindersSection
               onNavigateToDiscipulado={() => setActiveTab("discipulado")}
               onNavigateToAgenda={() => setActiveTab("agenda")}
