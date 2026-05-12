@@ -114,14 +114,15 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
           .maybeSingle();
 
         if (profileData?.turma_id) {
-          const { data: override } = await supabase
-            .from("turma_lesson_content")
+          const { data: ov } = await supabase
+            .from("turma_lesson_content" as any)
             .select("*")
             .eq("turma_id", profileData.turma_id)
             .eq("lesson_id", lesson.id)
             .maybeSingle();
 
-          if (override) {
+          if (ov) {
+            const override = ov as any;
             // Merge: override fields take priority over global when set
             setContent({
               greeting: override.greeting || global.greeting,
@@ -133,7 +134,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
               prayer_prompt: override.prayer_prompt || global.prayer_prompt,
               video_link: override.video_link ?? global.video_link,
               audio_link: override.audio_link ?? global.audio_link,
-              pdf_link: (override as any).pdf_link ?? global.pdf_link,
+              pdf_link: override.pdf_link ?? global.pdf_link,
             });
             setContentLoaded(true);
             return;

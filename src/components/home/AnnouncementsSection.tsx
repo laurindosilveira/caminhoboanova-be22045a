@@ -71,7 +71,7 @@ export default function AnnouncementsSection() {
         if (msg.area) return msg.area === currentArea;
         if (msg.community) return getAreaForCommunity(msg.community) === currentArea;
         return true;
-      }).slice(0, 5);
+      }).slice(0, 10); // Aumentado para 10 para garantir visibilidade de novos avisos
       setMessages(msgs);
 
       // Record views for all fetched messages

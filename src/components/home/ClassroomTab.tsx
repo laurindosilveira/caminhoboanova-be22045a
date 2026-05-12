@@ -110,7 +110,10 @@ export default function ClassroomTab() {
           .limit(50),
         supabase
           .from("prayer_requests")
-          .select("*")
+          .select(`
+            *,
+            profiles:user_id(full_name)
+          `)
           .eq("community", community!)
           .order("created_at", { ascending: false })
           .limit(20),
@@ -122,7 +125,18 @@ export default function ClassroomTab() {
       ]);
 
       setChatMessages((chatRes.data ?? []) as ChatMessage[]);
-      setPrayers((prayerRes.data ?? []) as PrayerRequest[]);
+      
+      const mappedPrayers: PrayerRequest[] = (prayerRes.data ?? []).map((p: any) => ({
+        id: p.id,
+        user_id: p.user_id,
+        user_name: p.profiles?.full_name || 'Usuário',
+        content: p.content,
+        is_anonymous: p.visibility === 'anonymous',
+        amen_count: p.prayers_count || 0,
+        created_at: p.created_at,
+        status: p.status
+      }));
+      setPrayers(mappedPrayers);
       setSettings(settingsRes.data as CommunitySettings | null);
     }
 
@@ -182,11 +196,26 @@ export default function ClassroomTab() {
           // Re-fetch prayers on any change
           supabase
             .from("prayer_requests")
-            .select("*")
+            .select(`
+              *,
+              profiles:user_id(full_name)
+            `)
             .eq("community", community!)
             .order("created_at", { ascending: false })
             .limit(20)
-            .then(({ data }) => setPrayers((data ?? []) as PrayerRequest[]));
+            .then(({ data }) => {
+              const mapped = (data ?? []).map((p: any) => ({
+                id: p.id,
+                user_id: p.user_id,
+                user_name: p.profiles?.full_name || 'Usuário',
+                content: p.content,
+                is_anonymous: p.visibility === 'anonymous',
+                amen_count: p.prayers_count || 0,
+                created_at: p.created_at,
+                status: p.status
+              }));
+              setPrayers(mapped);
+            });
         }
       )
       .subscribe();
@@ -368,10 +397,12 @@ export default function ClassroomTab() {
     setSendingPrayer(true);
     await supabase.from("prayer_requests").insert({
       community,
+      area: profile?.area || "",
       user_id: myUserId,
-      user_name: myName,
       content: prayerInput.trim(),
-      is_anonymous: isAnonymous,
+      visibility: isAnonymous ? 'anonymous' : 'public',
+      status: 'open',
+      turma_id: profile?.turma_id
     });
     setPrayerInput("");
     setIsAnonymous(false);
@@ -383,10 +414,10 @@ export default function ClassroomTab() {
     setAmenLoading(prayer.id);
     await supabase
       .from("prayer_requests")
-      .update({ amen_count: prayer.amen_count + 1 })
+      .update({ prayers_count: (prayer.amen_count || 0) + 1 } as any)
       .eq("id", prayer.id);
     setPrayers((prev) =>
-      prev.map((p) => p.id === prayer.id ? { ...p, amen_count: p.amen_count + 1 } : p)
+      prev.map((p) => p.id === prayer.id ? { ...p, amen_count: (p.amen_count || 0) + 1 } : p)
     );
     setAmenLoading(null);
   }

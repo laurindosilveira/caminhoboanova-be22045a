@@ -102,7 +102,7 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
     // Load turma override if exists
     if (profile?.turma_id) {
       const { data: ov } = await supabase
-        .from("turma_lesson_content")
+        .from("turma_lesson_content" as any)
         .select("*")
         .eq("turma_id", profile.turma_id)
         .eq("lesson_id", lesson.id)
@@ -110,31 +110,32 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
 
       if (ov) {
         setHasOverride(true);
+        const data = ov as any;
         // A field is overridden if it's non-null/non-empty in the override record
         const f: OverrideFlags = {
-          greeting: !!ov.greeting,
-          icebreaker: !!ov.icebreaker,
-          summary: !!ov.summary,
-          bible_texts: !!(ov.bible_texts?.length),
-          questions: !!(ov.questions?.length),
-          practice: !!ov.practice,
-          prayer_prompt: !!ov.prayer_prompt,
-          video_link: !!ov.video_link,
-          audio_link: !!ov.audio_link,
-          pdf_link: !!(ov as any).pdf_link,
+          greeting: !!data.greeting,
+          icebreaker: !!data.icebreaker,
+          summary: !!data.summary,
+          bible_texts: !!(data.bible_texts?.length),
+          questions: !!(data.questions?.length),
+          practice: !!data.practice,
+          prayer_prompt: !!data.prayer_prompt,
+          video_link: !!data.video_link,
+          audio_link: !!data.audio_link,
+          pdf_link: !!data.pdf_link,
         };
         setFlags(f);
         setOverride({
-          greeting: ov.greeting ?? "",
-          icebreaker: ov.icebreaker ?? "",
-          summary: ov.summary ?? "",
-          bible_texts: ov.bible_texts ?? [],
-          questions: ov.questions ?? [],
-          practice: ov.practice ?? "",
-          prayer_prompt: ov.prayer_prompt ?? "",
-          video_link: ov.video_link ?? "",
-          audio_link: ov.audio_link ?? "",
-          pdf_link: (ov as any).pdf_link ?? "",
+          greeting: data.greeting ?? "",
+          icebreaker: data.icebreaker ?? "",
+          summary: data.summary ?? "",
+          bible_texts: data.bible_texts ?? [],
+          questions: data.questions ?? [],
+          practice: data.practice ?? "",
+          prayer_prompt: data.prayer_prompt ?? "",
+          video_link: data.video_link ?? "",
+          audio_link: data.audio_link ?? "",
+          pdf_link: data.pdf_link ?? "",
         });
       }
     }
