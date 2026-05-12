@@ -102,7 +102,7 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
     // Load turma override if exists
     if (profile?.turma_id) {
       const { data: ov } = await supabase
-        .from("turma_lesson_content")
+        .from("turma_lesson_content" as any)
         .select("*")
         .eq("turma_id", profile.turma_id)
         .eq("lesson_id", lesson.id)
@@ -110,9 +110,10 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
 
       if (ov) {
         setHasOverride(true);
+        const data = ov as any;
         // A field is overridden if it's non-null/non-empty in the override record
         const f: OverrideFlags = {
-          greeting: !!ov.greeting,
+          greeting: !!data.greeting,
           icebreaker: !!ov.icebreaker,
           summary: !!ov.summary,
           bible_texts: !!(ov.bible_texts?.length),
