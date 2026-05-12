@@ -330,6 +330,14 @@ export default function Index() {
 
       {/* Bottom Navigation */}
       <BottomNav activeTab={activeTab} onChange={setActiveTab} />
+
+      {/* Celebration Modal */}
+      <CelebrationModal
+        isOpen={celebration.isOpen}
+        onClose={() => setCelebration(prev => ({ ...prev, isOpen: false }))}
+        type={celebration.type}
+        points={celebration.points}
+      />
     </div>
   );
 }
