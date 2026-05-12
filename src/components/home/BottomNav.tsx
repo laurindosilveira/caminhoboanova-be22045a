@@ -1,6 +1,6 @@
-import { Home, Trophy, Calendar, Users, User, Heart } from "lucide-react";
+import { Home, Trophy, Calendar, Users, User, Heart, Music } from "lucide-react";
 
-export type Tab = "jornada" | "conquistas" | "agenda" | "comunidade" | "perfil" | "discipulado";
+export type Tab = "jornada" | "conquistas" | "agenda" | "comunidade" | "perfil" | "discipulado" | "adoracao";
 
 interface BottomNavProps {
   activeTab: Tab;
@@ -9,10 +9,10 @@ interface BottomNavProps {
 
 const tabs = [
   { tab: "jornada" as Tab, icon: Home, label: "Jornada" },
-  { tab: "conquistas" as Tab, icon: Trophy, label: "Conquistas", badge: true },
-  { tab: "agenda" as Tab, icon: Calendar, label: "Agenda" },
+  { tab: "discipulado" as Tab, icon: Heart, label: "Caminho" },
+  { tab: "adoracao" as Tab, icon: Music, label: "Adoração" },
   { tab: "comunidade" as Tab, icon: Users, label: "Comunidade" },
-  { tab: "discipulado" as Tab, icon: Heart, label: "Discipulado" },
+  { tab: "agenda" as Tab, icon: Calendar, label: "Agenda" },
   { tab: "perfil" as Tab, icon: User, label: "Perfil" },
 ];
 
