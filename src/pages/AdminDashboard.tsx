@@ -111,15 +111,22 @@ export default function AdminDashboard() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [{ data: activitiesData }, { data: profilesData }, userResult, { data: turmasData }] = await Promise.all([
+    const [{ data: activitiesData }, { data: profilesData }, userResult] = await Promise.all([
       supabase.from("activities").select("*").order("order_num"),
-      supabase.from("profiles").select("user_id, full_name, community, area, birth_date, phone, turma_id, confirmation_year, avatar_url, father_name, mother_name, father_phone, mother_phone, address, email"),
+      (supabase.from as any)("profiles").select("user_id, full_name, community, area, birth_date, phone, turma_id, confirmation_year, avatar_url, father_name, mother_name, father_phone, mother_phone, address, email, church_id"),
       supabase.auth.getUser(),
-      supabase.from("turmas").select("*").eq("is_active", true).order("area").order("name"),
     ]);
 
     const myId = userResult.data.user?.id ?? "";
-    const profilesList = (profilesData ?? []).filter(p => p.user_id !== myId);
+    const myProfile = (profilesData as any[] ?? []).find(p => p.user_id === myId);
+    const profilesList = (profilesData as any[] ?? []).filter(p => p.user_id !== myId && (!myProfile?.church_id || p.church_id === myProfile.church_id));
+
+    const { data: turmasData } = await (supabase.from as any)("turmas")
+      .select("*")
+      .eq("is_active", true)
+      .eq("church_id", myProfile?.church_id || "")
+      .order("area")
+      .order("name");
 
     const [{ data: progressData }, { data: lessonRespsData }, { data: devProgressData }, { data: attendanceData }] = await Promise.all([
       supabase.from("user_progress").select("user_id, activity_id"),
@@ -360,15 +367,18 @@ function TurmaSelector({
   onBack: () => void;
 }) {
   const areaIcons: Record<string, string> = { "Área 1": "⛪", "Área 2": "✝️" };
-  const allAreasToShow = AREAS.map(a => ({
-    name: a,
-    turmas: turmas.filter(t => t.area === a),
-    communities: getCommunitiesForArea(a),
-    icon: areaIcons[a] ?? "📍",
-  }));
-  const areasToShow = isSuper
-    ? allAreasToShow
-    : allAreasToShow.filter(a => a.name === adminArea);
+  const areasToShow = areasToShowList(AREAS, turmas, isSuper, adminArea);
+  
+  // Auxiliary function to filter areas
+  function areasToShowList(areas: string[], turmas: Turma[], isSuper: boolean, adminArea: string) {
+    const all = areas.map(a => ({
+      name: a,
+      turmas: turmas.filter(t => t.area === a),
+      communities: getCommunitiesForArea(a),
+      icon: areaIcons[a] ?? "📍",
+    }));
+    return isSuper ? all : all.filter(a => a.name === adminArea);
+  }
 
   // Filter turmas by search
   const searchLower = turmaSearch.toLowerCase().trim();

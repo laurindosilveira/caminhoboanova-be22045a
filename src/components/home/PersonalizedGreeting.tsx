@@ -47,6 +47,10 @@ export default function PersonalizedGreeting() {
     const period = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
 
     let msg = `${period}, ${firstName}! `;
+    const churchName = (profile as any)?.churches?.name;
+    if (churchName) {
+      msg = `${period}! Bem-vindo à ${churchName}. `;
+    }
     if (lastActivity === "devocional") {
       msg += "Continue sua caminhada devocional 📖";
     } else if (lastActivity === "lição") {

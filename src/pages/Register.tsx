@@ -24,6 +24,7 @@ const registerSchema = z.object({
   motherPhone: z.string().trim().max(20).optional(),
   email: z.string().trim().email("Email inválido").max(255),
   password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres").max(128),
+  churchId: z.string().trim().min(1, "Selecione sua igreja"),
   area: z.string().trim().min(1, "Selecione sua área"),
   community: z.string().trim().min(1, "Selecione sua comunidade"),
 });
@@ -44,7 +45,9 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loadingAreas, setLoadingAreas] = useState(true);
+  const [loadingChurches, setLoadingChurches] = useState(true);
+  const [churchOptions, setChurchOptions] = useState<{ id: string; name: string }[]>([]);
+  const [loadingAreas, setLoadingAreas] = useState(false);
   const [areaOptions, setAreaOptions] = useState<RegisterArea[]>([]);
   const [communityOptionsByArea, setCommunityOptionsByArea] = useState<Record<string, string[]>>({});
 
@@ -62,6 +65,7 @@ export default function Register() {
   const [showCropper, setShowCropper] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [churchId, setChurchId] = useState("");
   const [area, setArea] = useState("");
   const [community, setCommunity] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -69,33 +73,79 @@ export default function Register() {
   useEffect(() => {
     let isMounted = true;
 
+    async function loadChurches() {
+      setLoadingChurches(true);
+      try {
+        const { data, error } = await supabase
+          .from("churches")
+          .select("id, name")
+          .eq("is_active", true)
+          .order("name");
+
+        if (error) throw error;
+        if (isMounted) setChurchOptions(data || []);
+      } catch (err) {
+        console.error("Error loading churches:", err);
+      } finally {
+        if (isMounted) setLoadingChurches(false);
+      }
+    }
+
+    loadChurches();
+    return () => { isMounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!churchId) {
+      setAreaOptions([]);
+      setCommunityOptionsByArea({});
+      return;
+    }
+
+    let isMounted = true;
+
     async function loadAreaOptions() {
       setLoadingAreas(true);
       try {
-        const { areas, areaCommunities } = await fetchAreasConfig();
-        if (!isMounted) return;
+        const { data: areasData, error: areasError } = await supabase
+          .from("areas")
+          .select("id, name")
+          .eq("church_id", churchId)
+          .order("name");
 
-        if (areas.length > 0) {
-          setAreaOptions(areas);
-          setCommunityOptionsByArea(areaCommunities);
-        } else {
-          setAreaOptions(AREAS.map((name) => ({ id: name, name, description: null })));
-          setCommunityOptionsByArea(AREA_COMMUNITIES);
+        if (areasError) throw areasError;
+
+        const { data: commsData, error: commsError } = await supabase
+          .from("communities")
+          .select("name, area_id, areas(name)")
+          .eq("church_id", churchId)
+          .order("name");
+
+        if (commsError) throw commsError;
+
+        if (isMounted) {
+          setAreaOptions((areasData || []).map(a => ({ id: a.id, name: a.name, description: null })));
+          
+          const commMap: Record<string, string[]> = {};
+          (commsData || []).forEach((c: any) => {
+            const areaName = c.areas?.name;
+            if (areaName) {
+              if (!commMap[areaName]) commMap[areaName] = [];
+              commMap[areaName].push(c.name);
+            }
+          });
+          setCommunityOptionsByArea(commMap);
         }
-      } catch {
-        if (!isMounted) return;
-        setAreaOptions(AREAS.map((name) => ({ id: name, name, description: null })));
-        setCommunityOptionsByArea(AREA_COMMUNITIES);
+      } catch (err) {
+        console.error("Error loading areas/communities:", err);
       } finally {
         if (isMounted) setLoadingAreas(false);
       }
     }
 
     loadAreaOptions();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    return () => { isMounted = false; };
+  }, [churchId]);
 
   const communitiesForSelectedArea = useMemo(
     () => (area ? (communityOptionsByArea[area] ?? []) : []),
@@ -155,6 +205,11 @@ export default function Register() {
     e.preventDefault();
     setError(null);
 
+    if (!churchId) {
+      setError("Selecione sua igreja.");
+      return;
+    }
+
     if (!area) {
       setError("Selecione sua área.");
       return;
@@ -167,7 +222,7 @@ export default function Register() {
 
     const parsed = registerSchema.safeParse({
       fullName, birthDate, phone, fatherName, motherName,
-      fatherPhone, motherPhone, email, password, area, community,
+      fatherPhone, motherPhone, email, password, churchId, area, community,
     });
     if (!parsed.success) {
       setError(parsed.error.errors[0].message);
@@ -192,6 +247,8 @@ export default function Register() {
           phone: parsed.data.phone,
           community: parsed.data.community,
           area: parsed.data.area,
+          church_id: parsed.data.churchId,
+          enrollment_status: "pending",
           father_name: parsed.data.fatherName || "",
           mother_name: parsed.data.motherName || "",
           father_phone: parsed.data.fatherPhone || "",
@@ -420,6 +477,28 @@ export default function Register() {
                 </div>
               </div>
               <div>
+                <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Sua Igreja / Paróquia</label>
+                <div className="relative">
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <select
+                    value={churchId}
+                    onChange={(e) => {
+                      setChurchId(e.target.value);
+                      setArea("");
+                      setCommunity("");
+                    }}
+                    className="w-full pl-4 pr-10 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none"
+                    required
+                    disabled={loadingChurches}
+                  >
+                    <option value="">{loadingChurches ? "Carregando igrejas..." : "Selecione sua igreja..."}</option>
+                    {churchOptions.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div>
                 <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Sua área</label>
                 <div className="relative">
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
@@ -431,9 +510,11 @@ export default function Register() {
                     }}
                     className="w-full pl-4 pr-10 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none"
                     required
-                    disabled={loadingAreas}
+                    disabled={!churchId || loadingAreas}
                   >
-                    <option value="">{loadingAreas ? "Carregando áreas..." : "Selecione sua área..."}</option>
+                    <option value="">
+                      {!churchId ? "Selecione primeiro a igreja..." : (loadingAreas ? "Carregando áreas..." : "Selecione sua área...")}
+                    </option>
                     {areaOptions.map((item) => (
                       <option key={item.id} value={item.name}>{item.name}</option>
                     ))}
@@ -505,11 +586,8 @@ export default function Register() {
         </a>
 
         <div className="mt-3 flex items-center gap-2 bg-white/10 rounded-2xl px-4 py-2 backdrop-blur">
-          <Suspense fallback={<IconFallback />}>
-            <Flame className="w-5 h-5 text-secondary" />
-          </Suspense>
           <span className="text-primary-foreground font-inter text-sm">
-            Profissão de fé - Paróquia Boa Nova
+            Caminho — Plataforma de Discipulado
           </span>
         </div>
       </div>

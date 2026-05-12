@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function fetchProfileAndRole(userId: string) {
     const [profileRes, isAdminRes, isLiderRes, isSuperRes, roleRowsRes] = await Promise.all([
-      supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
+      supabase.from("profiles").select("*, churches(name)").eq("user_id", userId).maybeSingle(),
       supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
       supabase.rpc("has_role", { _user_id: userId, _role: "lider" }),
       supabase.rpc("is_super_admin", { _user_id: userId }),

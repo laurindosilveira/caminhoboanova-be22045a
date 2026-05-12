@@ -9,7 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import WhatsAppPhoneInput from "@/components/ui/WhatsAppPhoneInput";
 import { validateBRPhone, type PhoneValidation } from "@/lib/phoneValidation";
 
-import { ALL_COMMUNITIES, getAreaForCommunity } from "@/config/areas";
+import { ALL_COMMUNITIES, fetchAreasConfig } from "@/config/areas";
+import { useEffect } from "react";
 const COMMUNITIES = ALL_COMMUNITIES as unknown as readonly [string, ...string[]];
 
 const CONFIRMATION_YEARS = [
@@ -23,7 +24,9 @@ const profileSchema = z.object({
   phone: z.string().trim().min(8, "Telefone inválido").max(20, "Máximo 20 caracteres"),
   whatsapp_number: z.string().max(20).optional(),
   birth_date: z.string().min(1, "Data de nascimento é obrigatória"),
-  community: z.enum(COMMUNITIES, { required_error: "Selecione uma comunidade" }),
+  church_id: z.string().min(1, "Selecione uma igreja"),
+  community: z.string().min(1, "Selecione uma comunidade"),
+  area: z.string().min(1, "Selecione uma área"),
   father_name: z.string().max(100).optional(),
   mother_name: z.string().max(100).optional(),
   father_phone: z.string().max(20).optional(),
@@ -61,6 +64,12 @@ export default function EditProfileForm() {
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [churchOptions, setChurchOptions] = useState<{id: string, name: string}[]>([]);
+  const [areaOptions, setAreaOptions] = useState<{id: string, name: string}[]>([]);
+  const [communityOptions, setCommunityOptions] = useState<string[]>([]);
+  const [loadingChurches, setLoadingChurches] = useState(true);
+  const [loadingAreas, setLoadingAreas] = useState(false);
+  const [loadingCommunities, setLoadingCommunities] = useState(false);
 
   // Validação em tempo real do WhatsApp (fora do react-hook-form para maior controle)
   const [phoneValidation, setPhoneValidation] = useState<PhoneValidation>(
@@ -84,7 +93,9 @@ export default function EditProfileForm() {
       phone: profile?.phone ?? "",
       whatsapp_number: (profile as any)?.whatsapp_number ?? "",
       birth_date: profile?.birth_date ?? "",
-      community: (profile?.community as (typeof COMMUNITIES)[number]) ?? undefined,
+      church_id: (profile as any)?.church_id ?? "",
+      area: profile?.area ?? "",
+      community: profile?.community ?? "",
       father_name: profile?.father_name ?? "",
       mother_name: profile?.mother_name ?? "",
       father_phone: profile?.father_phone ?? "",
@@ -96,6 +107,56 @@ export default function EditProfileForm() {
 
   // Watch values for real-time validation feedback
   const watchedValues = watch();
+
+  useEffect(() => {
+    async function loadChurches() {
+      setLoadingChurches(true);
+      const { data } = await supabase.from("churches").select("id, name").eq("is_active", true).order("name");
+      setChurchOptions(data || []);
+      setLoadingChurches(false);
+    }
+    loadChurches();
+  }, []);
+
+  useEffect(() => {
+    const cid = watchedValues.church_id;
+    if (!cid) {
+      setAreaOptions([]);
+      return;
+    }
+    async function loadAreas() {
+      setLoadingAreas(true);
+      const { data } = await supabase.from("areas").select("id, name").eq("church_id", cid).order("name");
+      setAreaOptions(data || []);
+      setLoadingAreas(false);
+    }
+    loadAreas();
+  }, [watchedValues.church_id]);
+
+  useEffect(() => {
+    const cid = watchedValues.church_id;
+    const areaName = watchedValues.area;
+    if (!cid || !areaName) {
+      setCommunityOptions([]);
+      return;
+    }
+    async function loadCommunities() {
+      setLoadingCommunities(true);
+      const { data } = await supabase
+        .from("communities")
+        .select("name, areas(name)")
+        .eq("church_id", cid)
+        .order("name");
+      
+      const filtered = (data || [])
+        .filter((c: any) => c.areas?.name === areaName)
+        .map((c: any) => c.name);
+      
+      setCommunityOptions(filtered);
+      setLoadingCommunities(false);
+    }
+    loadCommunities();
+  }, [watchedValues.church_id, watchedValues.area]);
 
   function handleCancel() {
     reset({
@@ -156,7 +217,6 @@ export default function EditProfileForm() {
     if (!user?.id) return;
     setSaving(true);
     try {
-      const areaVal = getAreaForCommunity(values.community);
 
       // Marca status de validação do WhatsApp ao salvar
       const waNum = values.whatsapp_number?.trim() ?? "";
@@ -178,8 +238,9 @@ export default function EditProfileForm() {
               : null,
             whatsapp_last_blocked_at: waNum && !waValid?.valid ? new Date().toISOString() : null,
             birth_date: values.birth_date,
+            church_id: values.church_id,
             community: values.community,
-            area: areaVal as "Área 1" | "Área 2",
+            area: values.area,
             father_name: values.father_name ?? "",
             mother_name: values.mother_name ?? "",
             father_phone: values.father_phone ?? "",
@@ -265,6 +326,7 @@ export default function EditProfileForm() {
         >
           <PhotoSection />
           <div className="divide-y divide-border">
+            <InfoRow icon={<Shield className="w-4 h-4 text-muted-foreground" />} label="Igreja" value={(profile as any)?.churches?.name ?? "—"} />
             <InfoRow icon={<User className="w-4 h-4 text-muted-foreground" />} label="Nome completo" value={profile?.full_name ?? "—"} />
             <InfoRow icon={<Phone className="w-4 h-4 text-muted-foreground" />} label="Telefone" value={profile?.phone ?? "—"} />
             <InfoRow
@@ -401,6 +463,44 @@ export default function EditProfileForm() {
               />
             </div>
 
+            {/* Igreja */}
+            <div className="space-y-1">
+              <label className="text-xs font-inter font-medium text-muted-foreground">Igreja / Paróquia *</label>
+              <div className="relative">
+                <select
+                  {...register("church_id")}
+                  className={`${inputClass("church_id")} pr-8 appearance-none`}
+                  disabled={loadingChurches}
+                >
+                  <option value="">{loadingChurches ? "Carregando igrejas..." : "Selecione sua igreja"}</option>
+                  {churchOptions.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              </div>
+            </div>
+
+            {/* Área */}
+            <div className="space-y-1">
+              <label className="text-xs font-inter font-medium text-muted-foreground">Área *</label>
+              <div className="relative">
+                <select
+                  {...register("area")}
+                  className={`${inputClass("area")} pr-8 appearance-none`}
+                  disabled={!watchedValues.church_id || loadingAreas}
+                >
+                  <option value="">
+                    {!watchedValues.church_id ? "Selecione primeiro a igreja" : (loadingAreas ? "Carregando áreas..." : "Selecione sua área")}
+                  </option>
+                  {areaOptions.map((a) => (
+                    <option key={a.id} value={a.name}>{a.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              </div>
+            </div>
+
             {/* Comunidade */}
             <div className="space-y-1">
               <label className="text-xs font-inter font-medium text-muted-foreground">Comunidade *</label>
@@ -408,9 +508,12 @@ export default function EditProfileForm() {
                 <select
                   {...register("community")}
                   className={`${inputClass("community")} pr-8 appearance-none`}
+                  disabled={!watchedValues.area || loadingCommunities}
                 >
-                  <option value="">Selecione sua comunidade</option>
-                  {COMMUNITIES.map((c) => (
+                  <option value="">
+                    {!watchedValues.area ? "Selecione primeiro a área" : (loadingCommunities ? "Carregando..." : "Selecione sua comunidade")}
+                  </option>
+                  {communityOptions.map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
