@@ -3,7 +3,7 @@ import { useAgendaSchedule } from "@/hooks/useAgendaSchedule";
 import { supabase } from "@/integrations/supabase/client";
 import { BookOpen, ChevronRight, CheckCircle2, Star, Sparkles, GraduationCap } from "lucide-react";
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface FocusSectionProps {
   onNavigateToDiscipulado: () => void;
