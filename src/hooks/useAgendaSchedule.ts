@@ -88,11 +88,10 @@ export function useAgendaSchedule() {
 
     let eventsResult: any = null;
     for (const selectClause of eventSelectFallbacks) {
-      const result = await supabase
-        .from("events")
+      const result = await (supabase.from as any)("events")
         .select(selectClause)
         .not("linked_lesson_id", "is", null)
-        .order("event_date") as any;
+        .order("event_date");
 
       if (!result.error) {
         eventsResult = result;
@@ -107,20 +106,17 @@ export function useAgendaSchedule() {
       };
     }
 
-    let lessonsResult = await supabase
-      .from("lessons")
+    let lessonsResult = await (supabase.from as any)("lessons")
       .select("id, title, order_num, course_id, devotional_mode")
       .order("order_num");
 
     if (lessonsResult.error && /devotional_mode/i.test(lessonsResult.error.message)) {
-      lessonsResult = await supabase
-        .from("lessons")
+      lessonsResult = await (supabase.from as any)("lessons")
         .select("id, title, order_num, course_id")
-        .order("order_num") as any;
+        .order("order_num");
     }
 
-    const { data: courses } = await supabase
-      .from("courses")
+    const { data: courses } = await (supabase.from as any)("courses")
       .select("id, title, order_num")
       .order("order_num");
 
@@ -146,13 +142,13 @@ export function useAgendaSchedule() {
       return;
     }
 
-    const lessonMap = new Map((lessons ?? []).map((l) => [l.id, l]));
-    const courseMap = new Map((courses ?? []).map((c) => [c.id, c]));
+    const lessonMap = new Map((lessons as any[] ?? []).map((l) => [l.id, l]));
+    const courseMap = new Map((courses as any[] ?? []).map((c) => [c.id, c]));
 
     const entries: ScheduleEntry[] = [];
     const isManager = role === "admin" || role === "lider";
 
-    for (const event of events ?? []) {
+    for (const event of (events as any[]) ?? []) {
       if (!event.linked_lesson_id) continue;
       if ((event as any).target_user_id && (event as any).target_user_id !== user?.id) continue;
       if (event.area && currentArea && event.area !== currentArea) continue;
@@ -161,9 +157,9 @@ export function useAgendaSchedule() {
       const isConfirmatorio = event.type === "confirmatorio";
       if (event.community && !isManager && !isConfirmatorio && event.community !== profile?.community) continue;
 
-      const lesson = lessonMap.get(event.linked_lesson_id);
+      const lesson: any = lessonMap.get(event.linked_lesson_id);
       if (!lesson) continue;
-      const course = courseMap.get(lesson.course_id);
+      const course: any = courseMap.get(lesson.course_id);
       if (!course) continue;
 
       const rawDate = event.event_date as string;
