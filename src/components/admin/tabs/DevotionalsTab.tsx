@@ -27,6 +27,7 @@ const DEFAULT_CONTENT: DevotionalContent = {
   prayer: "",
   practice: "",
   questions: [""],
+  worship_song_id: null,
 };
 
 export default function DevotionalsTab() {
