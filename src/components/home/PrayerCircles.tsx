@@ -54,11 +54,12 @@ export default function PrayerCircles() {
 
   const fetchRequests = async () => {
     setLoading(true);
+    // Destructuring to check for specific profile info if needed
     const { data, error } = await supabase
       .from("prayer_requests")
       .select(`
         *,
-        profiles:user_id (full_name)
+        profiles!prayer_requests_user_id_fkey(full_name)
       `)
       .order("created_at", { ascending: false });
 
