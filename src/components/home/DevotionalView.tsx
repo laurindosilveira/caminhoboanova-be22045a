@@ -48,7 +48,7 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
   const [readConfirmed, setReadConfirmed] = useState(false);
 
   useEffect(() => {
-    if (devotionalData) return;
+    if (devotionalData && devotionalData.worship_songs && devotionalData.worship_songs.length > 0) return;
 
     async function load() {
       const { data: contentData } = await supabase
