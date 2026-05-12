@@ -63,6 +63,7 @@ export default function EditProfileForm() {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [churchOptions, setChurchOptions] = useState<{id: string, name: string}[]>([]);
   const [areaOptions, setAreaOptions] = useState<{id: string, name: string}[]>([]);
   const [communityOptions, setCommunityOptions] = useState<string[]>([]);
