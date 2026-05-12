@@ -3,7 +3,7 @@ import { getAreaForCommunity } from "@/config/areas";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { MessageCircle, GraduationCap, Sparkles, Send, Trash2, Target, Check, Users, Upload, Image, Camera, Heart } from "lucide-react";
+import { MessageCircle, GraduationCap, Sparkles, Send, Trash2, Target, Check, Users, Upload, Image, Camera, Heart, Book } from "lucide-react";
 import ClassroomTab from "./ClassroomTab";
 import AnnouncementsSection from "./AnnouncementsSection";
 import PollsSection from "./PollsSection";
@@ -12,6 +12,7 @@ import PrayerPairsSection from "./PrayerPairsSection";
 import EventPhotoGallery from "./EventPhotoGallery";
 import BirthdayHighlights from "./BirthdayHighlights";
 import PrayerCircles from "./PrayerCircles";
+import PrayerDiary from "../community/PrayerDiary";
 
 
 const REACTION_EMOJIS = [
@@ -55,7 +56,7 @@ interface Challenge {
   file_url: string | null;
 }
 
-type SubTab = "comunidade" | "sala" | "galeria";
+type SubTab = "comunidade" | "sala" | "galeria" | "diario";
 
 export default function CommunityTab() {
   const { profile, role } = useAuth();
@@ -307,6 +308,17 @@ export default function CommunityTab() {
             <Camera className="w-3.5 h-3.5" />
             Galeria
           </button>
+          <button
+            onClick={() => setSubTab("diario")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-montserrat font-bold transition-all ${
+              subTab === "diario"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Book className="w-3.5 h-3.5" />
+            Diário
+          </button>
         </div>
       </div>
 
@@ -319,6 +331,13 @@ export default function CommunityTab() {
 
       {/* ===== SALA DA TURMA ===== */}
       {subTab === "sala" && <ClassroomTab />}
+
+      {/* ===== DIÁRIO ===== */}
+      {subTab === "diario" && (
+        <div className="px-5">
+          <PrayerDiary />
+        </div>
+      )}
 
       {/* ===== COMUNIDADE ===== */}
       {subTab === "comunidade" && (
