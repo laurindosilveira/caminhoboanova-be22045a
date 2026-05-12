@@ -94,7 +94,7 @@ export default function FocusSection({ onNavigateToDiscipulado }: FocusSectionPr
       
       // Look for a lesson that should be studied (event date passed or today)
       const pendingLessonEntry = agenda.schedule.find(e => 
-        !studiedLessons.has(e.lessonId) && today >= new Date(e.eventDate).setHours(0,0,0,0)
+        !studiedLessons.has(e.lessonId) && today.getTime() >= new Date(e.eventDate).setHours(0,0,0,0)
       );
 
       if (pendingLessonEntry) {
@@ -251,4 +251,4 @@ export default function FocusSection({ onNavigateToDiscipulado }: FocusSectionPr
   );
 }
 
-import { AnimatePresence } from "framer-motion";
+
