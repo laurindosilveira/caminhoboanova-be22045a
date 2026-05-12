@@ -246,7 +246,7 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
     await supabase.from("profiles").update({ whatsapp_number: waNum }).eq("user_id", editingUser.user_id);
 
     // 2. Chama a RPC de revalidação no banco
-    const { data, error } = await supabase.rpc("revalidate_user_whatsapp", {
+    const { data, error } = await supabase.rpc("revalidate_user_whatsapp" as any, {
       _target_user_id: editingUser.user_id,
     });
 
