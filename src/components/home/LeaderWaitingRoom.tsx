@@ -52,7 +52,7 @@ export default function LeaderWaitingRoom({ areaFilter, onAssigned }: Props) {
         .select("user_id, full_name, community, area, phone, birth_date, turma_id, enrollment_status")
         .is("turma_id", null)
         .eq("enrollment_status", "pending")
-        .eq("area", areaFilter),
+        .eq("area", areaFilter as any),
       supabase
         .from("turmas")
         .select("id, name, year, area")
