@@ -421,11 +421,16 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
         </div>
       )}
 
-      {content?.worship_song && (
-        <WorshipCard 
-          song={content.worship_song} 
-          suggestionText={isCompleted ? "Continue esse momento ouvindo este louvor" : "Prepare o seu coração com este louvor"} 
-        />
+      {content?.worship_songs && content.worship_songs.length > 0 && (
+        <div className="space-y-3 pt-2">
+          {content.worship_songs.map(song => (
+            <WorshipCard 
+              key={song.id} 
+              song={song} 
+              suggestionText={isCompleted ? "Continue esse momento ouvindo este louvor" : "Prepare o seu coração com este louvor"} 
+            />
+          ))}
+        </div>
       )}
 
       {isCompleted && (
