@@ -401,6 +401,13 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
         </div>
       )}
 
+      {content?.worship_song && (
+        <WorshipCard 
+          song={content.worship_song} 
+          suggestionText={isCompleted ? "Continue esse momento ouvindo este louvor" : "Prepare o seu coração com este louvor"} 
+        />
+      )}
+
       {isCompleted && (
         <div className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-brand-green/10 border border-brand-green/20">
           <CheckCircle2 className="w-4 h-4 text-brand-green" />
