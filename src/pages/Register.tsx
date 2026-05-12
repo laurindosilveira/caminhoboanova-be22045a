@@ -117,7 +117,7 @@ export default function Register() {
 
         const { data: commsData, error: commsError } = await supabase
           .from("communities")
-          .select("name, area")
+          .select("name, area_id, areas(name)")
           .eq("church_id", churchId)
           .order("name");
 
@@ -127,9 +127,12 @@ export default function Register() {
           setAreaOptions((areasData || []).map(a => ({ id: a.id, name: a.name, description: null })));
           
           const commMap: Record<string, string[]> = {};
-          (commsData || []).forEach(c => {
-            if (!commMap[c.area]) commMap[c.area] = [];
-            commMap[c.area].push(c.name);
+          (commsData || []).forEach((c: any) => {
+            const areaName = c.areas?.name;
+            if (areaName) {
+              if (!commMap[areaName]) commMap[areaName] = [];
+              commMap[areaName].push(c.name);
+            }
           });
           setCommunityOptionsByArea(commMap);
         }
