@@ -414,10 +414,10 @@ export default function ClassroomTab() {
     setAmenLoading(prayer.id);
     await supabase
       .from("prayer_requests")
-      .update({ amen_count: prayer.amen_count + 1 })
+      .update({ prayers_count: (prayer.amen_count || 0) + 1 } as any)
       .eq("id", prayer.id);
     setPrayers((prev) =>
-      prev.map((p) => p.id === prayer.id ? { ...p, amen_count: p.amen_count + 1 } : p)
+      prev.map((p) => p.id === prayer.id ? { ...p, amen_count: (p.amen_count || 0) + 1 } : p)
     );
     setAmenLoading(null);
   }
