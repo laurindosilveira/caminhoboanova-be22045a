@@ -181,6 +181,7 @@ export type Database = {
       }
       areas: {
         Row: {
+          church_id: string | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -188,6 +189,7 @@ export type Database = {
           name: string
         }
         Insert: {
+          church_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -195,13 +197,22 @@ export type Database = {
           name: string
         }
         Update: {
+          church_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
           id?: string
           name?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "areas_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       attendance: {
         Row: {
@@ -381,9 +392,55 @@ export type Database = {
         }
         Relationships: []
       }
+      churches: {
+        Row: {
+          address: string | null
+          city: string | null
+          created_at: string
+          id: string
+          is_active: boolean | null
+          logo_url: string | null
+          name: string
+          primary_color: string | null
+          secondary_color: string | null
+          slug: string
+          state: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          logo_url?: string | null
+          name: string
+          primary_color?: string | null
+          secondary_color?: string | null
+          slug: string
+          state?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          logo_url?: string | null
+          name?: string
+          primary_color?: string | null
+          secondary_color?: string | null
+          slug?: string
+          state?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       communities: {
         Row: {
           area_id: string
+          church_id: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -391,6 +448,7 @@ export type Database = {
         }
         Insert: {
           area_id: string
+          church_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -398,6 +456,7 @@ export type Database = {
         }
         Update: {
           area_id?: string
+          church_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -409,6 +468,13 @@ export type Database = {
             columns: ["area_id"]
             isOneToOne: false
             referencedRelation: "areas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "communities_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
             referencedColumns: ["id"]
           },
         ]
@@ -572,6 +638,7 @@ export type Database = {
       }
       courses: {
         Row: {
+          church_id: string | null
           created_at: string
           id: string
           order_num: number
@@ -579,6 +646,7 @@ export type Database = {
           title: string
         }
         Insert: {
+          church_id?: string | null
           created_at?: string
           id?: string
           order_num: number
@@ -586,13 +654,22 @@ export type Database = {
           title: string
         }
         Update: {
+          church_id?: string | null
           created_at?: string
           id?: string
           order_num?: number
           subtitle?: string | null
           title?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "courses_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       custom_event_types: {
         Row: {
@@ -1366,6 +1443,7 @@ export type Database = {
         Row: {
           area: string | null
           body: string
+          church_id: string | null
           community: string | null
           created_at: string
           id: string
@@ -1376,6 +1454,7 @@ export type Database = {
         Insert: {
           area?: string | null
           body: string
+          church_id?: string | null
           community?: string | null
           created_at?: string
           id?: string
@@ -1386,6 +1465,7 @@ export type Database = {
         Update: {
           area?: string | null
           body?: string
+          church_id?: string | null
           community?: string | null
           created_at?: string
           id?: string
@@ -1394,6 +1474,13 @@ export type Database = {
           turma_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "messages_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "messages_turma_id_fkey"
             columns: ["turma_id"]
@@ -1831,6 +1918,7 @@ export type Database = {
           area: Database["public"]["Enums"]["area_name"]
           avatar_url: string | null
           birth_date: string
+          church_id: string | null
           community: Database["public"]["Enums"]["community_name"]
           confirmation_year: number | null
           created_at: string
@@ -1859,6 +1947,7 @@ export type Database = {
           area: Database["public"]["Enums"]["area_name"]
           avatar_url?: string | null
           birth_date: string
+          church_id?: string | null
           community: Database["public"]["Enums"]["community_name"]
           confirmation_year?: number | null
           created_at?: string
@@ -1887,6 +1976,7 @@ export type Database = {
           area?: Database["public"]["Enums"]["area_name"]
           avatar_url?: string | null
           birth_date?: string
+          church_id?: string | null
           community?: Database["public"]["Enums"]["community_name"]
           confirmation_year?: number | null
           created_at?: string
@@ -1911,6 +2001,13 @@ export type Database = {
           whatsapp_validation_status?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "profiles_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "profiles_turma_id_fkey"
             columns: ["turma_id"]
@@ -2387,6 +2484,7 @@ export type Database = {
           admin_area: string | null
           id: string
           is_super: boolean
+          is_super_admin: boolean | null
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
@@ -2394,6 +2492,7 @@ export type Database = {
           admin_area?: string | null
           id?: string
           is_super?: boolean
+          is_super_admin?: boolean | null
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
@@ -2401,6 +2500,7 @@ export type Database = {
           admin_area?: string | null
           id?: string
           is_super?: boolean
+          is_super_admin?: boolean | null
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
