@@ -47,8 +47,7 @@ export default function LeaderWaitingRoom({ areaFilter, onAssigned }: Props) {
       { data: turmasData, error: turmasError },
       userResult,
     ] = await Promise.all([
-      supabase
-        .from("profiles")
+      (supabase.from as any)("profiles")
         .select("user_id, full_name, community, area, phone, birth_date, turma_id, enrollment_status")
         .is("turma_id", null)
         .eq("enrollment_status", "pending")
@@ -75,8 +74,8 @@ export default function LeaderWaitingRoom({ areaFilter, onAssigned }: Props) {
     }
 
     const myId = userResult.data.user?.id;
-    setUsers((profiles ?? []).filter((profile) => profile.user_id !== myId));
-    setTurmas(turmasData ?? []);
+    setUsers(((profiles as any) ?? []).filter((profile: any) => profile.user_id !== myId));
+    setTurmas((turmasData as any) ?? []);
     setLoading(false);
   }
 

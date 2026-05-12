@@ -66,6 +66,10 @@ type Props = {
   isLateAccess?: boolean;
   /** Whether the study (lesson responses) has been completed */
   isStudyCompleted?: boolean;
+  /** Manual override ID for lesson responses */
+  overrideId?: string | null;
+  /** Manual awarded points for lesson responses */
+  awardedPoints?: number | null;
 };
 
 function normalizeDate(date: Date) {
@@ -309,6 +313,8 @@ export default function LessonChoiceView({
   isStudyLocked,
   isLateAccess,
   isStudyCompleted = true,
+  overrideId = null,
+  awardedPoints = null,
 }: Props) {
   const { role } = useAuth();
   const isLeaderOrAdmin = role === "admin" || role === "lider";

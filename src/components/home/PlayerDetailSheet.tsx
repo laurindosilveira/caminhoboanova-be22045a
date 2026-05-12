@@ -512,7 +512,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
 
       if (error) throw error;
 
-      await supabase.from("bonus_grant_log").insert({
+      await (supabase.from as any)("bonus_grant_log").insert({
         granted_by: user?.id ?? "",
         target_user_id: userId,
         achievement_id: data.id,

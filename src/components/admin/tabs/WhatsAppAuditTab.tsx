@@ -141,7 +141,7 @@ export default function WhatsAppAuditTab() {
     setSending(row.id);
 
     // 1. Prepara (valida número no banco e cria log pendente)
-    const { data, error } = await supabase.rpc("prepare_whatsapp_resend", {
+    const { data, error } = await (supabase.rpc as any)("prepare_whatsapp_resend", {
       _target_user_id: row.user_id,
       _reminder_type:  row.reminder_type,
       _reference_id:   row.reference_id ?? null,
@@ -153,16 +153,16 @@ export default function WhatsAppAuditTab() {
       return;
     }
 
-    if (!data.can_send) {
+    if (!(data as any).can_send) {
       toast({
         title: "Número ainda inválido",
-        description: `${data.reason_code}: ${data.reason_text}`,
+        description: `${(data as any).reason_code}: ${(data as any).reason_text}`,
         variant: "destructive",
       });
       setSending(null);
       // Atualiza linha localmente
       setRows(prev => prev.map(r => r.id === row.id
-        ? { ...r, blocked_reason_code: data.reason_code }
+        ? { ...r, blocked_reason_code: (data as any).reason_code }
         : r
       ));
       return;
@@ -173,16 +173,16 @@ export default function WhatsAppAuditTab() {
       body: {
         single_resend: true,
         user_id:       row.user_id,
-        phone:         data.e164,
+        phone:         (data as any).e164,
         message:       row.message,
-        log_id:        data.log_id,
+        log_id:        (data as any).log_id,
       },
     });
     const resendOk = !fnErr && resendResult?.ok !== false;
 
     // 3. Confirma o resultado no log
-    await supabase.rpc("confirm_whatsapp_resend", {
-      _log_id:  data.log_id,
+    await (supabase.rpc as any)("confirm_whatsapp_resend", {
+      _log_id:  (data as any).log_id,
       _success: resendOk,
       _error:   fnErr?.message ?? resendResult?.error ?? null,
     });
@@ -190,7 +190,7 @@ export default function WhatsAppAuditTab() {
     if (!resendOk) {
       toast({ title: "Reenvio falhou", description: fnErr?.message ?? resendResult?.error, variant: "destructive" });
     } else {
-      toast({ title: "✅ Reenviado", description: `Mensagem enviada para ${data.e164}` });
+      toast({ title: "✅ Reenviado", description: `Mensagem enviada para ${(data as any).e164}` });
     }
 
     setSending(null);

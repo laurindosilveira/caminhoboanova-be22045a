@@ -1,20 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 import HeroHeader from "@/components/home/HeroHeader";
 import AnnouncementsSection from "@/components/home/AnnouncementsSection";
 import FocusSection from "@/components/home/FocusSection";
 import JourneyPath from "@/components/home/JourneyPath";
-import AchievementsGrid from "@/components/home/AchievementsGrid";
 import DiscipleProfile from "@/components/home/DiscipleProfile";
 import EditProfileForm from "@/components/home/EditProfileForm";
-import CommunityTab from "@/components/home/CommunityTab";
-import DiscipleshipTab from "@/components/home/DiscipleshipTab";
 import NextMeetingCard from "@/components/home/NextMeetingCard";
-import UserAgendaTab from "@/components/home/UserAgendaTab";
 import NotificationSettings from "@/components/home/NotificationSettings";
 import InstallAppCard from "@/components/home/InstallAppCard";
 import TypingMetricsPanel from "@/components/home/TypingMetricsPanel";
@@ -30,7 +26,14 @@ import { useUserStats } from "@/hooks/useUserStats";
 import { useAppNotifications } from "@/hooks/useAppNotifications";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import CelebrationModal, { type CelebrationType } from "@/components/gamification/CelebrationModal";
-import WorshipPlayerSection from "@/components/home/WorshipPlayerSection";
+import NextCourseActivityCard from "@/components/home/NextCourseActivityCard";
+
+// Lazy load tab contents for better performance
+const CommunityTab = lazy(() => import("@/components/home/CommunityTab"));
+const DiscipleshipTab = lazy(() => import("@/components/home/DiscipleshipTab"));
+const UserAgendaTab = lazy(() => import("@/components/home/UserAgendaTab"));
+const AchievementsGrid = lazy(() => import("@/components/home/AchievementsGrid"));
+const WorshipPlayerSection = lazy(() => import("@/components/home/WorshipPlayerSection"));
 
 
 type ProfileSubTab = "meu-perfil" | "minha-jornada" | "configuracoes";
@@ -152,6 +155,12 @@ export default function Index() {
 
       {/* Scrollable content */}
       <main className="flex-1 overflow-y-auto pb-24">
+        <Suspense fallback={
+          <div className="flex flex-col items-center justify-center p-12 text-muted-foreground animate-pulse">
+            <Loader2 className="w-8 h-8 animate-spin mb-3 opacity-20" />
+            <p className="text-xs font-medium tracking-widest uppercase">Carregando</p>
+          </div>
+        }>
 
         {/* ===== JORNADA ===== */}
         {activeTab === "jornada" && (
@@ -358,6 +367,7 @@ export default function Index() {
             )}
           </div>
         )}
+        </Suspense>
       </main>
 
       {/* Bottom Navigation */}

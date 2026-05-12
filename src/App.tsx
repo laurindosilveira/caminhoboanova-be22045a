@@ -1,3 +1,4 @@
+import { Suspense, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import OfflineBanner from "@/components/home/OfflineBanner";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -6,21 +7,23 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AreaSwitchProvider } from "@/contexts/AreaSwitchContext";
-import Index from "./pages/Index";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
-import VerifyEmail from "./pages/VerifyEmail";
-import AdminDashboard from "./pages/AdminDashboard";
-import Install from "./pages/Install";
-import ExportData from "./pages/ExportData";
-import Apresentacao from "./pages/Apresentacao";
-import MinhaIgreja from "./pages/MinhaIgreja";
-import Onboarding from "./pages/Onboarding";
-import AdminSistema from "./pages/AdminSistema";
-import AreaMembros from "./pages/AreaMembros";
-import NotFound from "./pages/NotFound";
+
+// Lazy load pages for better initial performance
+const Index = lazy(() => import("./pages/Index"));
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const Install = lazy(() => import("./pages/Install"));
+const ExportData = lazy(() => import("./pages/ExportData"));
+const Apresentacao = lazy(() => import("./pages/Apresentacao"));
+const MinhaIgreja = lazy(() => import("./pages/MinhaIgreja"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
+const AdminSistema = lazy(() => import("./pages/AdminSistema"));
+const AreaMembros = lazy(() => import("./pages/AreaMembros"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 import AdminSistemaPasswordGate from "./components/auth/AdminSistemaPasswordGate";
 
 const queryClient = new QueryClient();
@@ -81,36 +84,49 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+const LoadingFallback = () => (
+  <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
+    <div className="text-center">
+      <div className="w-16 h-16 rounded-3xl bg-white/15 backdrop-blur border-2 border-white/30 flex items-center justify-center mx-auto mb-4 animate-float">
+        <span className="text-3xl">✝️</span>
+      </div>
+      <p className="text-primary-foreground font-inter text-sm">Carregando...</p>
+    </div>
+  </div>
+);
+
 const AppRoutes = () => (
-  <Routes>
-    {/* Protected routes */}
-    <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-    <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+  <Suspense fallback={<LoadingFallback />}>
+    <Routes>
+      {/* Protected routes */}
+      <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+      <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
 
-    {/* Public auth routes */}
-    <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-    <Route path="/cadastro" element={<PublicRoute><Register /></PublicRoute>} />
-    <Route path="/recuperar-senha" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
-    <Route path="/verificar-email" element={<VerifyEmail />} />
-    <Route path="/redefinir-senha" element={<ResetPassword />} />
-    <Route path="/instalar" element={<Install />} />
-    <Route path="/apresentacao" element={<Apresentacao />} />
-    <Route path="/area-membros" element={<PublicRoute><AreaMembros /></PublicRoute>} />
-    <Route path="/exportar-dados" element={<ProtectedRoute><ExportData /></ProtectedRoute>} />
-    <Route path="/minha-igreja" element={<ProtectedRoute><MinhaIgreja /></ProtectedRoute>} />
-    <Route path="/onboarding" element={<Onboarding />} />
-    <Route
-      path="/admin-sistema"
-      element={
-        <AdminSistemaPasswordGate>
-          <AdminSistema />
-        </AdminSistemaPasswordGate>
-      }
-    />
+      {/* Public auth routes */}
+      <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+      <Route path="/cadastro" element={<PublicRoute><Register /></PublicRoute>} />
+      <Route path="/recuperar-senha" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+      <Route path="/verificar-email" element={<VerifyEmail />} />
+      <Route path="/redefinir-senha" element={<ResetPassword />} />
+      <Route path="/instalar" element={<Install />} />
+      <Route path="/apresentacao" element={<Apresentacao />} />
+      <Route path="/area-membros" element={<PublicRoute><AreaMembros /></PublicRoute>} />
+      <Route path="/exportar-dados" element={<ProtectedRoute><ExportData /></ProtectedRoute>} />
+      <Route path="/minha-igreja" element={<ProtectedRoute><MinhaIgreja /></ProtectedRoute>} />
+      <Route path="/onboarding" element={<Onboarding />} />
+      <Route
+        path="/admin-sistema"
+        element={
+          <AdminSistemaPasswordGate>
+            <AdminSistema />
+          </AdminSistemaPasswordGate>
+        }
+      />
 
-    {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-    <Route path="*" element={<NotFound />} />
-  </Routes>
+      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  </Suspense>
 );
 
 const App = () => {

@@ -116,7 +116,7 @@ export function useAgendaSchedule() {
       lessonsResult = await supabase
         .from("lessons")
         .select("id, title, order_num, course_id")
-        .order("order_num");
+        .order("order_num") as any;
     }
 
     const { data: courses } = await supabase
@@ -126,7 +126,11 @@ export function useAgendaSchedule() {
 
     const events = eventsResult.data;
     const eventsError = eventsResult.error;
-    const lessons = lessonsResult.data;
+
+    const lessons = (lessonsResult.data as any[])?.map(l => ({
+      ...l,
+      devotional_mode: l.devotional_mode || "10_days"
+    }));
 
     if (eventsError) {
       console.error("useAgendaSchedule: failed to load events", eventsError.message);

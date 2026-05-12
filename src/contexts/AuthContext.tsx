@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       supabase.rpc("is_super_admin", { _user_id: userId }),
       supabase.from("user_roles").select("role, admin_area").eq("user_id", userId).in("role", ["admin", "lider"]),
     ]);
-    setProfile(profileRes.data ?? null);
+    setProfile((profileRes.data as any) ?? null);
     setIsSuper(isSuperRes.data === true);
     const roleRows = roleRowsRes.data ?? [];
     const selectedRoleRow = roleRows.find((row) => row.role === "admin") ?? roleRows[0] ?? null;
