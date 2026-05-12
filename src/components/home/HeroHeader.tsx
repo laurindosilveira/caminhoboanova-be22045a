@@ -29,7 +29,7 @@ export default function HeroHeader({ streakDays, faithPoints, faithLevel, faithE
             <div>
               <p className="text-primary-foreground/70 text-xs font-inter">Olá, {firstName}!</p>
               <p className="text-primary-foreground font-montserrat font-bold text-sm">
-                {profile?.full_name ?? (profile?.community || "Confirmatório Boa Nova")}
+                {profile?.full_name ?? "Participante"}
               </p>
             </div>
           </div>

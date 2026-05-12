@@ -78,9 +78,9 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
       { data: responsesData },
       { data: devContentData },
       { data: devProgressData },
-      { data: events },
-      { data: attendance },
-      { data: worship },
+      { data: eventsData },
+      { data: attendanceData },
+      { data: worshipData },
       { data: unlocksData },
     ] = await Promise.all([
       supabase.from("courses").select("*").order("order_num"),
@@ -132,9 +132,9 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
       totalLessons: lessons.length,
       devotionalsCompleted: completedDevIds.size,
       totalDevotionals,
-      attendancePresent: (attendance ?? []).filter(a => a.status === "presente").length,
-      totalEvents: (events ?? []).length,
-      worshipApproved: (worship ?? []).length,
+      attendancePresent: (attendanceData ?? []).filter((a: any) => a.status === "presente").length,
+      totalEvents: (eventsData ?? []).length,
+      worshipApproved: (worshipData ?? []).length,
     });
 
     setLoading(false);

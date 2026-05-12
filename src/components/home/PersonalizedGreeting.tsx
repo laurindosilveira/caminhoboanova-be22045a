@@ -50,7 +50,7 @@ export default function PersonalizedGreeting() {
     const churchName = (profile as any)?.churches?.name;
     if (churchName) {
       msg = `${period}! Bem-vindo à ${churchName}. `;
-    } else if (profile?.community) {
+    } else if (profile?.community && !churchName) {
       msg = `${period}! Bem-vindo ao ${profile.community}. `;
     }
     if (lastActivity === "devocional") {
