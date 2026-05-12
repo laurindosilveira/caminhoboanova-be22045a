@@ -39,6 +39,7 @@ export default function WorshipTab() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [editingSong, setEditingSong] = useState<WorshipSong | null>(null);
   
   const [form, setForm] = useState({
     title: "",
@@ -69,30 +70,95 @@ export default function WorshipTab() {
     setLoading(false);
   }
 
+  function validateUrl(url: string, platform: string): string | null {
+    if (!url.trim()) return "O link não pode estar vazio";
+    
+    try {
+      const parsedUrl = new URL(url);
+      if (platform === 'youtube') {
+        if (!parsedUrl.hostname.includes('youtube.com') && !parsedUrl.hostname.includes('youtu.be')) {
+          return "Link inválido. Deve ser um link do YouTube.";
+        }
+      } else if (platform === 'spotify') {
+        if (!parsedUrl.hostname.includes('spotify.com')) {
+          return "Link inválido. Deve ser um link do Spotify.";
+        }
+      }
+      return null;
+    } catch (e) {
+      return "URL inválida. Verifique o formato do link.";
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.title || !form.artist || !form.url) return;
+    if (!form.title || !form.artist || !form.url) {
+      toast({ title: "Campos obrigatórios", description: "Preencha título, artista e link.", variant: "destructive" });
+      return;
+    }
+
+    const urlError = validateUrl(form.url, form.platform);
+    if (urlError) {
+      toast({ title: "Link Inválido", description: urlError, variant: "destructive" });
+      return;
+    }
 
     setSubmitting(true);
-    const { error } = await supabase.from("worship_songs").insert([form]);
+    
+    if (editingSong) {
+      const { error } = await supabase
+        .from("worship_songs")
+        .update(form)
+        .eq("id", editingSong.id);
 
-    if (error) {
-      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+      if (error) {
+        toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Música atualizada com sucesso! 🎶" });
+        resetForm();
+        fetchSongs();
+      }
     } else {
-      toast({ title: "Música cadastrada com sucesso! 🎶" });
-      setForm({
-        title: "",
-        artist: "",
-        url: "",
-        platform: "youtube",
-        theme: "",
-        thumbnail_url: "",
-        is_active: true
-      });
-      setShowForm(false);
-      fetchSongs();
+      const { error } = await supabase.from("worship_songs").insert([form]);
+
+      if (error) {
+        toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Música cadastrada com sucesso! 🎶" });
+        resetForm();
+        fetchSongs();
+      }
     }
     setSubmitting(false);
+  }
+
+  function resetForm() {
+    setForm({
+      title: "",
+      artist: "",
+      url: "",
+      platform: "youtube",
+      theme: "",
+      thumbnail_url: "",
+      is_active: true
+    });
+    setEditingSong(null);
+    setShowForm(false);
+  }
+
+  function handleEdit(song: WorshipSong) {
+    setEditingSong(song);
+    setForm({
+      title: song.title,
+      artist: song.artist,
+      url: song.url,
+      platform: song.platform,
+      theme: song.theme || "",
+      thumbnail_url: song.thumbnail_url || "",
+      is_active: song.is_active
+    });
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   async function toggleStatus(song: WorshipSong) {
