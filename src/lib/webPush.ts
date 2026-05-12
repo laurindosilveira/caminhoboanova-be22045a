@@ -35,7 +35,7 @@ export async function subscribeToWebPush(vapidPublicKey: string): Promise<boolea
       const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
       subscription = await pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey,
+        applicationServerKey: applicationServerKey as any,
       });
     }
 
