@@ -64,7 +64,7 @@ export default function WorshipTab() {
     if (error) {
       toast({ title: "Erro ao carregar músicas", description: error.message, variant: "destructive" });
     } else {
-      setSongs(data || []);
+      setSongs((data || []) as WorshipSong[]);
     }
     setLoading(false);
   }
