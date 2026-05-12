@@ -270,7 +270,7 @@ export default function WorshipTab() {
             </div>
           </div>
           <Button type="submit" disabled={submitting} className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-bold">
-            {submitting ? "Salvando..." : "Salvar Música"}
+            {submitting ? "Salvando..." : editingSong ? "Atualizar Música" : "Salvar Música"}
           </Button>
         </form>
       )}
