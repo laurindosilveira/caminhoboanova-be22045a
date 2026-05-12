@@ -40,6 +40,11 @@ export default function Index() {
   const [targetLessonId, setTargetLessonId] = useState<string | null>(null);
   const [targetLessonMode, setTargetLessonMode] = useState<LessonNavigationMode>("choice");
   const [profileSubTab, setProfileSubTab] = useState<ProfileSubTab>("meu-perfil");
+  const [celebration, setCelebration] = useState<{ isOpen: boolean; type: CelebrationType; points?: number }>({
+    isOpen: false,
+    type: "devotional"
+  });
+  
   const { profile, role } = useAuth();
   const { effectiveArea } = useAreaSwitch();
   const currentArea = effectiveArea || profile?.area || "";
@@ -47,9 +52,9 @@ export default function Index() {
   const stats = useUserStats(currentArea);
   useAppNotifications();
 
-  // Listen for lesson navigation from agenda
+  // Listen for lesson navigation and celebrations
   useEffect(() => {
-    const handler = (e: Event) => {
+    const handleNavigate = (e: Event) => {
       const lessonId = (e as CustomEvent).detail?.lessonId;
       const mode = (e as CustomEvent).detail?.mode as LessonNavigationMode | undefined;
       if (lessonId) {
@@ -58,9 +63,53 @@ export default function Index() {
         setActiveTab("discipulado");
       }
     };
-    window.addEventListener("navigate-to-lesson", handler);
-    return () => window.removeEventListener("navigate-to-lesson", handler);
+
+    const handleCelebration = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.type) {
+        setCelebration({
+          isOpen: true,
+          type: detail.type,
+          points: detail.points
+        });
+      }
+    };
+
+    window.addEventListener("navigate-to-lesson", handleNavigate);
+    window.addEventListener("show-celebration", handleCelebration);
+    return () => {
+      window.removeEventListener("navigate-to-lesson", handleNavigate);
+      window.removeEventListener("show-celebration", handleCelebration);
+    };
   }, []);
+
+  // Check for streak milestones when stats update
+  useEffect(() => {
+    if (stats.loading) return;
+    
+    // Check if the current streak is a milestone
+    // We only want to show this once per day/milestone
+    const lastMilestoneShown = localStorage.getItem("last_streak_milestone_shown");
+    const today = new Date().toDateString();
+    
+    if (lastMilestoneShown !== `${today}_${stats.streakDays}`) {
+      if (stats.streakDays === 3 || stats.streakDays === 7 || stats.streakDays === 30) {
+        const type: CelebrationType = stats.streakDays === 3 ? "streak_3" : stats.streakDays === 7 ? "streak_7" : "streak_30";
+        
+        // Show after a small delay to not overlap with direct completion celebrations
+        const timer = setTimeout(() => {
+          setCelebration({
+            isOpen: true,
+            type: type
+          });
+          localStorage.setItem("last_streak_milestone_shown", `${today}_${stats.streakDays}`);
+        }, 1500);
+        
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [stats.streakDays, stats.loading]);
+
 
   // Activity completion is now handled by the real tracking tables
   // (lesson_responses, devotional_progress, attendance, worship_attendance)
