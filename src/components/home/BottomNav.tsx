@@ -11,6 +11,7 @@ const tabs = [
   { tab: "jornada" as Tab, icon: Home, label: "Jornada" },
   { tab: "discipulado" as Tab, icon: Heart, label: "Caminho" },
   { tab: "adoracao" as Tab, icon: Music, label: "Adoração" },
+  { tab: "conquistas" as Tab, icon: Trophy, label: "Ranking" },
   { tab: "comunidade" as Tab, icon: Users, label: "Comunidade" },
   { tab: "agenda" as Tab, icon: Calendar, label: "Agenda" },
   { tab: "perfil" as Tab, icon: User, label: "Perfil" },
@@ -23,10 +24,10 @@ export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
       aria-label="Navegação principal"
       role="tablist"
     >
-      <div className="grid grid-cols-6 py-1.5">
+      <div className="grid grid-cols-7 py-1.5">
         {tabs.map(({ tab, icon: Icon, label }) => {
           const isActive = activeTab === tab;
-          const isPrimary = tab === "discipulado" || tab === "adoracao";
+          const isPrimary = tab === "discipulado" || tab === "adoracao" || tab === "conquistas";
           return (
             <button
               key={tab}
@@ -43,7 +44,7 @@ export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
               }`}>
                 <Icon className={`w-4 h-4 ${isActive ? (isPrimary ? "text-primary" : "text-secondary") : "text-muted-foreground"}`} aria-hidden="true" />
               </div>
-              <span className={`text-[9px] font-inter leading-none ${isActive ? (isPrimary ? "font-bold text-primary" : "font-bold text-secondary") : "font-medium"}`}>
+              <span className={`text-[8px] font-inter leading-none ${isActive ? (isPrimary ? "font-bold text-primary" : "font-bold text-secondary") : "font-medium"}`}>
                 {label}
               </span>
               {isActive && <div className={`w-1 h-1 rounded-full ${isPrimary ? "bg-primary" : "bg-secondary"}`} aria-hidden="true" />}
