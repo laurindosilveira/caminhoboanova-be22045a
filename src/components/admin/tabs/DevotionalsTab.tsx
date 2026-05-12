@@ -140,32 +140,45 @@ export default function DevotionalsTab() {
   async function openContentEditor(dev: Activity) {
     setEditing(dev);
     setEditingContent(true);
-    const { data } = await supabase
+    
+    // Fetch devotional content
+    const { data: contentData } = await supabase
       .from("devotional_content")
       .select("*")
       .eq("activity_id", dev.id)
       .maybeSingle();
-    if (data) {
+
+    // Fetch related songs
+    const { data: songsData } = await supabase
+      .from("devotional_worship_songs")
+      .select("worship_song_id")
+      .eq("devotional_id", dev.id);
+
+    const songIds = songsData?.map(s => s.worship_song_id) || [];
+
+    if (contentData) {
       setIsPublished(true);
       setContent({
-        bible_text: data.bible_text || "",
-        bible_reference: data.bible_reference || "",
-        reflection: data.reflection || "",
-        prayer: data.prayer || "",
-        practice: data.practice || "",
-        questions: (data.questions as string[])?.length ? data.questions as string[] : [""],
-        worship_song_id: data.worship_song_id || null,
+        bible_text: contentData.bible_text || "",
+        bible_reference: contentData.bible_reference || "",
+        reflection: contentData.reflection || "",
+        prayer: contentData.prayer || "",
+        practice: contentData.practice || "",
+        questions: (contentData.questions as string[])?.length ? contentData.questions as string[] : [""],
+        worship_song_ids: songIds,
       });
     } else {
       setIsPublished(false);
-      setContent({ ...DEFAULT_CONTENT, questions: [""] });
+      setContent({ ...DEFAULT_CONTENT, questions: [""], worship_song_ids: [] });
     }
   }
 
   async function handleSaveContent() {
     if (!editing) return;
     setSaving(true);
-    const { error } = await supabase.from("devotional_content").upsert({
+    
+    // Save main content
+    const { error: contentError } = await supabase.from("devotional_content").upsert({
       activity_id: editing.id,
       bible_text: content.bible_text,
       bible_reference: content.bible_reference,
@@ -173,14 +186,29 @@ export default function DevotionalsTab() {
       prayer: content.prayer,
       practice: content.practice,
       questions: content.questions.filter(q => q.trim()),
-      worship_song_id: content.worship_song_id,
     }, { onConflict: "activity_id" });
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Conteúdo salvo ✅" });
-      setIsPublished(true);
+
+    if (contentError) {
+      toast({ title: "Erro ao salvar conteúdo", description: contentError.message, variant: "destructive" });
+      setSaving(false);
+      return;
     }
+
+    // Update songs junction table
+    // First, remove old associations
+    await supabase.from("devotional_worship_songs").delete().eq("devotional_id", editing.id);
+    
+    // Then add new ones
+    if (content.worship_song_ids.length > 0) {
+      const songEntries = content.worship_song_ids.map(songId => ({
+        devotional_id: editing.id,
+        worship_song_id: songId
+      }));
+      await supabase.from("devotional_worship_songs").insert(songEntries);
+    }
+
+    toast({ title: "Conteúdo e louvores salvos ✅" });
+    setIsPublished(true);
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
