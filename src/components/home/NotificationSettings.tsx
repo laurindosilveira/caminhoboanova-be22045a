@@ -18,6 +18,7 @@ import {
   Smartphone,
   Trophy,
   X,
+  Sparkles,
 } from "lucide-react";
 import { requestNotificationPermission, isNotificationEnabled, sendNotification } from "@/lib/notifications";
 import { subscribeToWebPush, isWebPushSubscribed } from "@/lib/webPush";
