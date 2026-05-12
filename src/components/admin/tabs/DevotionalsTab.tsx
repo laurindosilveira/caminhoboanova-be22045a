@@ -33,6 +33,7 @@ const DEFAULT_CONTENT: DevotionalContent = {
 export default function DevotionalsTab() {
   const { toast } = useToast();
   const [devotionals, setDevotionals] = useState<Activity[]>([]);
+  const [worshipSongs, setWorshipSongs] = useState<{id: string, title: string, artist: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Activity | null>(null);
   const [editingContent, setEditingContent] = useState(false);
@@ -52,7 +53,15 @@ export default function DevotionalsTab() {
   const [editSubtitle, setEditSubtitle] = useState("");
   const [editPoints, setEditPoints] = useState(10);
 
-  useEffect(() => { fetchDevotionals(); }, []);
+  useEffect(() => { 
+    fetchDevotionals(); 
+    fetchWorshipSongs();
+  }, []);
+
+  async function fetchWorshipSongs() {
+    const { data } = await supabase.from("worship_songs").select("id, title, artist").eq("is_active", true);
+    setWorshipSongs(data || []);
+  }
 
   async function fetchDevotionals() {
     setLoading(true);
