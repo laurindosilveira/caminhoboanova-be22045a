@@ -209,15 +209,31 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
 
   if (!content || (!content.bible_text && !content.reflection)) {
     return (
-      <div className="px-5 pt-6 space-y-4">
+      <div className="px-5 pt-6 space-y-4 pb-24">
         <button onClick={onBack} className="flex items-center gap-1.5 text-muted-foreground font-inter text-sm hover:text-foreground transition-colors">
           <ChevronLeft className="w-4 h-4" /> Voltar
         </button>
-        <div className="text-center py-12">
-          <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+        <div className="text-center py-12 bg-card rounded-3xl border border-border border-dashed">
+          <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-20" />
           <p className="font-montserrat font-bold text-foreground">{activity.title}</p>
           <p className="text-muted-foreground font-inter text-sm mt-1">Conteúdo em preparação pelo seu pastor. Volte em breve!</p>
         </div>
+
+        {content?.worship_songs && content.worship_songs.length > 0 && (
+          <div className="space-y-3 pt-4 border-t border-border">
+            <div className="flex items-center gap-2 mb-1 px-1">
+              <Music className="w-4 h-4 text-primary" />
+              <p className="font-montserrat font-bold text-foreground text-sm">Prepare o seu coração</p>
+            </div>
+            {content.worship_songs.map(song => (
+              <WorshipCard 
+                key={song.id} 
+                song={song} 
+                suggestionText="Prepare o seu coração com este louvor" 
+              />
+            ))}
+          </div>
+        )}
       </div>
     );
   }
