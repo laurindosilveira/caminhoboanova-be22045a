@@ -339,28 +339,39 @@ export default function DevotionalsTab() {
         <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <Music className="w-4 h-4 text-primary" />
-            <p className="font-montserrat font-bold text-foreground text-sm">🎶 Sugestão de Louvor</p>
+            <p className="font-montserrat font-bold text-foreground text-sm">🎶 Sugestões de Louvor</p>
           </div>
           <div className="p-4">
-            <p className="font-inter text-xs font-semibold text-muted-foreground mb-1.5">Selecione uma música do catálogo</p>
-            <Select 
-              value={content.worship_song_id || "none"}
-              onValueChange={(val) => setContent(p => ({ ...p, worship_song_id: val === "none" ? null : val }))}
-            >
-              <SelectTrigger className="w-full rounded-xl border-border bg-background">
-                <SelectValue placeholder="Nenhuma música selecionada" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Nenhuma (Sem sugestão)</SelectItem>
-                {worshipSongs.map(song => (
-                  <SelectItem key={song.id} value={song.id}>
-                    {song.title} - {song.artist}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <p className="font-inter text-xs font-semibold text-muted-foreground mb-1.5">Selecione as músicas sugeridas para este devocional</p>
+            
+            <div className="max-h-48 overflow-y-auto space-y-2 pr-2 border border-border rounded-xl p-3 bg-muted/10">
+              {worshipSongs.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic text-center py-4">Nenhuma música cadastrada no catálogo.</p>
+              ) : (
+                worshipSongs.map(song => (
+                  <label key={song.id} className="flex items-center gap-3 p-2 hover:bg-muted/50 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-border">
+                    <input 
+                      type="checkbox"
+                      checked={content.worship_song_ids.includes(song.id)}
+                      onChange={(e) => {
+                        const ids = e.target.checked 
+                          ? [...content.worship_song_ids, song.id]
+                          : content.worship_song_ids.filter(id => id !== song.id);
+                        setContent(p => ({ ...p, worship_song_ids: ids }));
+                      }}
+                      className="w-4 h-4 accent-primary rounded"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{song.title}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{song.artist}</p>
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+            
             <p className="mt-2 text-[10px] text-muted-foreground italic">
-              Você pode cadastrar novas músicas na aba "Louvor" do painel administrativo.
+              Você pode gerenciar o catálogo completo na aba "Louvor".
             </p>
           </div>
         </div>
