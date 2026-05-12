@@ -357,10 +357,11 @@ export default function Index() {
 
       {/* Celebration Modal */}
       <CelebrationModal
-        isOpen={celebration.isOpen}
-        onClose={() => setCelebration(prev => ({ ...prev, isOpen: false }))}
-        type={celebration.type}
-        points={celebration.points}
+        isOpen={!!currentCelebration}
+        onClose={() => setCurrentCelebration(null)}
+        type={currentCelebration?.type ?? "devotional"}
+        points={currentCelebration?.points}
+        showConfetti={showConfettiPref}
       />
     </div>
   );
