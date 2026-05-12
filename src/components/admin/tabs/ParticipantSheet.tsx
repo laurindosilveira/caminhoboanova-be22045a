@@ -629,7 +629,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       new Date(manualReleaseForm.available_until).getTime() < new Date(manualReleaseForm.available_from).getTime()
     ) {
       toast.error("Janela inválida", {
-        { description: "A data de expiração precisa ser igual ou posterior ao início da liberação.",
+        description: "A data de expiração precisa ser igual ou posterior ao início da liberação.",
       });
       return;
     }
