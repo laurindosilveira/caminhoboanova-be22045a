@@ -131,6 +131,11 @@ export function useAgendaSchedule() {
       ...l,
       devotional_mode: l.devotional_mode || "10_days"
     }));
+
+    if (eventsError) {
+      console.error("useAgendaSchedule: failed to load events", eventsError.message);
+      setSchedule([]);
+      setLoading(false);
       return;
     }
 
