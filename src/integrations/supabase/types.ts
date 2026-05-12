@@ -1574,6 +1574,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "prayer_diary_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
             foreignKeyName: "prayer_diary_request_id_fkey"
             columns: ["request_id"]
             isOneToOne: false
@@ -1602,6 +1609,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "prayer_interactions_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "prayer_interactions_request_id_fkey"
             columns: ["request_id"]
@@ -1700,6 +1714,13 @@ export type Database = {
           visibility?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "prayer_requests_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "prayer_requests_turma_id_fkey"
             columns: ["turma_id"]
