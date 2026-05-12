@@ -78,7 +78,7 @@ const CelebrationModal: React.FC<CelebrationModalProps> = ({ isOpen, onClose, ty
         return {
           icon: <Trophy className="w-12 h-12 text-yellow-500" />,
           title: "30 Dias no Caminho!",
-          description: "Um mês de constância espiritual. Continue firme!",
+          description: "Um mês de constância espiritual. Continue no Caminho!",
           color: "primary"
         };
       default:
