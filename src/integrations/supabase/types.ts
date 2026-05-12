@@ -809,6 +809,42 @@ export type Database = {
           },
         ]
       }
+      devotional_worship_songs: {
+        Row: {
+          created_at: string | null
+          devotional_id: string
+          id: string
+          worship_song_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          devotional_id: string
+          id?: string
+          worship_song_id: string
+        }
+        Update: {
+          created_at?: string | null
+          devotional_id?: string
+          id?: string
+          worship_song_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "devotional_worship_songs_devotional_id_fkey"
+            columns: ["devotional_id"]
+            isOneToOne: false
+            referencedRelation: "devotional_content"
+            referencedColumns: ["activity_id"]
+          },
+          {
+            foreignKeyName: "devotional_worship_songs_worship_song_id_fkey"
+            columns: ["worship_song_id"]
+            isOneToOne: false
+            referencedRelation: "worship_songs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       discipleship_plans: {
         Row: {
           aptidao: string | null
