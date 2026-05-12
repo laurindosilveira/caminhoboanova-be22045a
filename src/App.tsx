@@ -113,27 +113,43 @@ const AppRoutes = () => (
   </Routes>
 );
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100000] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-primary focus:text-primary-foreground focus:font-semibold focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-ring"
-      >
-        Pular para o conteúdo principal
-      </a>
-      <OfflineBanner />
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <AreaSwitchProvider>
-            <AppRoutes />
-          </AreaSwitchProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  const commitSha = import.meta.env.VITE_COMMIT_SHA || "dev";
+  const branchName = import.meta.env.VITE_BRANCH_NAME || "main";
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100000] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-primary focus:text-primary-foreground focus:font-semibold focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          Pular para o conteúdo principal
+        </a>
+        
+        {/* Debug info for version tracking */}
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none">
+          <div className="bg-black/60 backdrop-blur-md text-[10px] text-white/90 px-2 py-0.5 rounded-full flex items-center gap-1.5 border border-white/10 shadow-lg">
+            <span className="opacity-60 italic">v:</span>
+            <span className="font-mono font-bold tracking-tight">{branchName}</span>
+            <span className="opacity-30">|</span>
+            <span className="font-mono opacity-80">{commitSha.substring(0, 7)}</span>
+          </div>
+        </div>
+
+        <OfflineBanner />
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <AreaSwitchProvider>
+              <AppRoutes />
+            </AreaSwitchProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
