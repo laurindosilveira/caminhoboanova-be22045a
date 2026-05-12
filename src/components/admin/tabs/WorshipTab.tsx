@@ -138,6 +138,37 @@ export default function WorshipTab() {
     setSubmitting(false);
   }
 
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "Arquivo muito grande", description: "O limite é 2MB", variant: "destructive" });
+      return;
+    }
+
+    setUploading(true);
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random()}.${fileExt}`;
+    const filePath = `covers/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('worship-covers')
+      .upload(filePath, file);
+
+    if (uploadError) {
+      toast({ title: "Erro no upload", description: uploadError.message, variant: "destructive" });
+    } else {
+      const { data: { publicUrl } } = supabase.storage
+        .from('worship-covers')
+        .getPublicUrl(filePath);
+      
+      setForm(prev => ({ ...prev, thumbnail_url: publicUrl }));
+      toast({ title: "Capa carregada!" });
+    }
+    setUploading(false);
+  }
+
   function resetForm() {
     setForm({
       title: "",
