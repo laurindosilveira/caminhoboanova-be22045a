@@ -125,7 +125,18 @@ export default function ClassroomTab() {
       ]);
 
       setChatMessages((chatRes.data ?? []) as ChatMessage[]);
-      setPrayers((prayerRes.data ?? []) as PrayerRequest[]);
+      
+      const mappedPrayers: PrayerRequest[] = (prayerRes.data ?? []).map((p: any) => ({
+        id: p.id,
+        user_id: p.user_id,
+        user_name: p.profiles?.full_name || 'Usuário',
+        content: p.content,
+        is_anonymous: p.visibility === 'anonymous',
+        amen_count: p.prayers_count || 0,
+        created_at: p.created_at,
+        status: p.status
+      }));
+      setPrayers(mappedPrayers);
       setSettings(settingsRes.data as CommunitySettings | null);
     }
 
