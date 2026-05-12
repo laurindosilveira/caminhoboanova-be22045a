@@ -88,11 +88,10 @@ export function useAgendaSchedule() {
 
     let eventsResult: any = null;
     for (const selectClause of eventSelectFallbacks) {
-      const result = await supabase
-        .from("events")
+      const result = await (supabase.from as any)("events")
         .select(selectClause)
         .not("linked_lesson_id", "is", null)
-        .order("event_date") as any;
+        .order("event_date");
 
       if (!result.error) {
         eventsResult = result;
@@ -107,20 +106,17 @@ export function useAgendaSchedule() {
       };
     }
 
-    let lessonsResult = await supabase
-      .from("lessons")
+    let lessonsResult = await (supabase.from as any)("lessons")
       .select("id, title, order_num, course_id, devotional_mode")
       .order("order_num");
 
     if (lessonsResult.error && /devotional_mode/i.test(lessonsResult.error.message)) {
-      lessonsResult = await supabase
-        .from("lessons")
+      lessonsResult = await (supabase.from as any)("lessons")
         .select("id, title, order_num, course_id")
-        .order("order_num") as any;
+        .order("order_num");
     }
 
-    const { data: courses } = await supabase
-      .from("courses")
+    const { data: courses } = await (supabase.from as any)("courses")
       .select("id, title, order_num")
       .order("order_num");
 

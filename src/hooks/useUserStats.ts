@@ -91,7 +91,7 @@ export function useUserStats(currentArea?: string): UserStats {
         supabase.from("courses").select("id"),
         supabase.from("lessons").select("id, course_id"),
         supabase.from("challenge_participants").select("id, completed").eq("user_id", user.id).eq("completed", true),
-        supabase.rpc("get_game_config" as any),
+        (supabase.rpc as any)("get_game_config"),
         supabase.from("custom_event_types").select("value, gives_points, points, area"),
       ]);
 
