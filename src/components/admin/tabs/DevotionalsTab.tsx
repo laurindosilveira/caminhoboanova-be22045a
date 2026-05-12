@@ -138,6 +138,7 @@ export default function DevotionalsTab() {
         prayer: data.prayer || "",
         practice: data.practice || "",
         questions: (data.questions as string[])?.length ? data.questions as string[] : [""],
+        worship_song_id: data.worship_song_id || null,
       });
     } else {
       setIsPublished(false);
