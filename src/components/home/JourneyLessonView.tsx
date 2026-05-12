@@ -298,9 +298,13 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
 
     if (!isLateAccess) {
       // Celebration animation
+      window.dispatchEvent(new CustomEvent("show-celebration", {
+        detail: {
+          type: "lesson",
+          points: 20
+        }
+      }));
       setShowCompletionAnim(true);
-      confetti({ particleCount: 80, spread: 90, origin: { y: 0.7 } });
-      setTimeout(() => confetti({ particleCount: 40, spread: 60, origin: { x: 0.3, y: 0.6 } }), 300);
       setTimeout(() => setShowCompletionAnim(false), 3500);
     }
 
