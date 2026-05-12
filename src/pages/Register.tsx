@@ -586,11 +586,8 @@ export default function Register() {
         </a>
 
         <div className="mt-3 flex items-center gap-2 bg-white/10 rounded-2xl px-4 py-2 backdrop-blur">
-          <Suspense fallback={<IconFallback />}>
-            <Flame className="w-5 h-5 text-secondary" />
-          </Suspense>
           <span className="text-primary-foreground font-inter text-sm">
-            Profissão de fé - Paróquia Boa Nova
+            Caminho — Plataforma de Discipulado
           </span>
         </div>
       </div>
