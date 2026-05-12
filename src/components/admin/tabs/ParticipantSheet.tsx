@@ -461,7 +461,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       // First registered assessment as milestone
       if (allAssArr.length > 0) {
         const first = [...allAssArr].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0];
-        tl.push({ date: first.created_at, type: "milestone", category: "marco", "💗 Primeira autoavaliação espiritual", detail: "Início do acompanhamento da vida espiritual", icon: "💗", severity: "positive" });
+        tl.push({ date: first.created_at, type: "milestone", category: "marco", title: "💗 Primeira autoavaliação espiritual", detail: "Início do acompanhamento da vida espiritual", icon: "💗", severity: "positive" });
       }
 
       // Challenge participations
