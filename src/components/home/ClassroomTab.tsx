@@ -368,10 +368,12 @@ export default function ClassroomTab() {
     setSendingPrayer(true);
     await supabase.from("prayer_requests").insert({
       community,
+      area: profile?.area || "",
       user_id: myUserId,
-      user_name: myName,
       content: prayerInput.trim(),
-      is_anonymous: isAnonymous,
+      visibility: isAnonymous ? 'anonymous' : 'public',
+      status: 'open',
+      turma_id: profile?.turma_id
     });
     setPrayerInput("");
     setIsAnonymous(false);
