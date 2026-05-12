@@ -1779,6 +1779,9 @@ export type Database = {
           confirmation_year: number | null
           created_at: string
           email: string | null
+          enrollment_status: string | null
+          enrollment_status_updated_at: string | null
+          enrollment_status_updated_by: string | null
           father_name: string | null
           father_phone: string | null
           full_name: string
@@ -1804,6 +1807,9 @@ export type Database = {
           confirmation_year?: number | null
           created_at?: string
           email?: string | null
+          enrollment_status?: string | null
+          enrollment_status_updated_at?: string | null
+          enrollment_status_updated_by?: string | null
           father_name?: string | null
           father_phone?: string | null
           full_name: string
@@ -1829,6 +1835,9 @@ export type Database = {
           confirmation_year?: number | null
           created_at?: string
           email?: string | null
+          enrollment_status?: string | null
+          enrollment_status_updated_at?: string | null
+          enrollment_status_updated_by?: string | null
           father_name?: string | null
           father_phone?: string | null
           full_name?: string
