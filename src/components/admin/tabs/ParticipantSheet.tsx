@@ -48,7 +48,7 @@ type TimelineItem = {
   date: string;
   type: "activity" | "note" | "assessment" | "attendance" | "evaluation" | "worship" | "milestone" | "crisis";
   category: TimelineCategory;
-  title: string;
+  message: string;
   detail?: string;
   icon: string;
   severity?: "positive" | "neutral" | "warning" | "critical";
@@ -78,7 +78,7 @@ export type Participant = {
   email?: string | null;
 };
 
-export type Activity = { id: string; type: string; points: number; title: string; order_num: number; subtitle: string | null };
+export type Activity = { id: string; type: string; points: number; message: string; order_num: number; submessage: string | null };
 
 const EMOJIS = ["😔", "😐", "🙂", "😊", "🔥"];
 const HEALTH_CFG = {
@@ -107,17 +107,17 @@ function calcAge(birthDate: string) {
   return age;
 }
 
-type Lesson = { id: string; title: string; order_num: number; objective: string | null; topics: string[] | null; course_id: string };
-type Course = { id: string; title: string; order_num: number };
+type Lesson = { id: string; message: string; order_num: number; objective: string | null; topics: string[] | null; course_id: string };
+type Course = { id: string; message: string; order_num: number };
 type LessonCompletion = { lesson_id: string; completed_at: string | null };
 type DevotionalCompletion = { devotional_id: string; lesson_id: string | null; completed_at: string };
 type DevotionalCatalogItem = {
   id: string;
   lesson_id: string | null;
-  title: string;
+  message: string;
   day_number: number;
-  lesson_title: string;
-  course_title: string;
+  lesson_message: string;
+  course_message: string;
 };
 type ManualReleaseDraft = {
   id: string;
@@ -282,10 +282,10 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           return {
             id: devotional.id,
             lesson_id: devotional.lesson_id,
-            title: devotional.title || `Devocional ${devotional.day_number}`,
+            message: devotional.title || `Devocional ${devotional.day_number}`,
             day_number: devotional.day_number ?? 0,
-            lesson_title: lesson?.title ?? "Lição",
-            course_title: lesson ? courseTitleMap.get(lesson.course_id) ?? "Curso" : "Curso",
+            lesson_message: lesson?.title ?? "Lição",
+            course_message: lesson ? courseTitleMap.get(lesson.course_id) ?? "Curso" : "Curso",
           };
         })
         .sort((a, b) => {
@@ -321,7 +321,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         const eventsMap = new Map((eventsData ?? []).map(e => [e.id, e]));
         const enriched = attArr.map(a => ({
           ...a,
-          event_title: eventsMap.get(a.event_id)?.title ?? "Evento",
+          event_message: eventsMap.get(a.event_id)?.title ?? "Evento",
           event_date: eventsMap.get(a.event_id)?.event_date ?? a.created_at,
         }));
         enriched.sort((a, b) => new Date(b.event_date!).getTime() - new Date(a.event_date!).getTime());
@@ -341,9 +341,9 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           completedCount++;
           const isMilestone = completedCount === 1 || completedCount === 10 || completedCount === 25 || completedCount === 50 || completedCount % 25 === 0;
           if (isMilestone) {
-            tl.push({ date: pr.completed_at, type: "milestone", category: "marco", title: `🏆 Marco: ${completedCount}ª atividade concluída!`, detail: act.title, icon: "🏆", severity: "positive" });
+            tl.push({ date: pr.completed_at, type: "milestone", category: "marco", message: `🏆 Marco: ${completedCount}ª atividade concluída!`, detail: act.title, icon: "🏆", severity: "positive" });
           }
-          tl.push({ date: pr.completed_at, type: "activity", category: "progresso", title: act.title, detail: act.type === "devocional" ? "Devocional" : act.type === "formacao" ? "Formação" : act.type === "encontro" ? "Encontro" : "Atividade", icon: act.type === "devocional" ? "📖" : act.type === "formacao" ? "🎓" : act.type === "encontro" ? "📅" : "✨", severity: "positive" });
+          tl.push({ date: pr.completed_at, type: "activity", category: "progresso", message: act.title, detail: act.type === "devocional" ? "Devocional" : act.type === "formacao" ? "Formação" : act.type === "encontro" ? "Encontro" : "Atividade", icon: act.type === "devocional" ? "📖" : act.type === "formacao" ? "🎓" : act.type === "encontro" ? "📅" : "✨", severity: "positive" });
         }
       });
 
@@ -355,7 +355,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         tl.push({
           date: n.created_at, type: "note",
           category: isCrisis ? "crise" : "conversa",
-          title: isCrisis ? `⚠️ ${typeLabel}` : typeLabel,
+          message: isCrisis ? `⚠️ ${typeLabel}` : typeLabel,
           detail: n.content.slice(0, 100),
           icon: isCrisis ? "⚠️" : "📝",
           severity: isCrisis ? "critical" : "neutral",
@@ -369,11 +369,11 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         const isHigh = avg >= 4;
         const isLow = avg > 0 && avg <= 2;
         if (isHigh) {
-          tl.push({ date: a.created_at, type: "milestone", category: "marco", title: `🌟 Autoavaliação excelente — ${MONTH_NAMES[a.month - 1]}/${a.year}`, detail: `Média: ${avg.toFixed(1)}/5`, icon: "🌟", severity: "positive" });
+          tl.push({ date: a.created_at, type: "milestone", category: "marco", message: `🌟 Autoavaliação excelente — ${MONTH_NAMES[a.month - 1]}/${a.year}`, detail: `Média: ${avg.toFixed(1)}/5`, icon: "🌟", severity: "positive" });
         } else if (isLow) {
-          tl.push({ date: a.created_at, type: "crisis", category: "crise", title: `💔 Autoavaliação preocupante — ${MONTH_NAMES[a.month - 1]}/${a.year}`, detail: `Média: ${avg.toFixed(1)}/5 — Precisa de atenção pastoral`, icon: "💔", severity: "critical" });
+          tl.push({ date: a.created_at, type: "crisis", category: "crise", message: `💔 Autoavaliação preocupante — ${MONTH_NAMES[a.month - 1]}/${a.year}`, detail: `Média: ${avg.toFixed(1)}/5 — Precisa de atenção pastoral`, icon: "💔", severity: "critical" });
         }
-        tl.push({ date: a.created_at, type: "assessment", category: "progresso", title: `Autoavaliação ${MONTH_NAMES[a.month - 1]}/${a.year}`, icon: "💗", severity: "neutral" });
+        tl.push({ date: a.created_at, type: "assessment", category: "progresso", message: `Autoavaliação ${MONTH_NAMES[a.month - 1]}/${a.year}`, icon: "💗", severity: "neutral" });
       });
 
       // Attendance — detect consecutive absences as crises
@@ -399,16 +399,16 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           } else {
             if (consecutiveMisses >= 3) {
               // Returning after crisis
-              tl.push({ date: ev?.event_date ?? a.created_at, type: "milestone", category: "marco", title: `🎉 Retornou após ${consecutiveMisses} faltas!`, detail: "Momento de acolhimento", icon: "🎉", severity: "positive" });
+              tl.push({ date: ev?.event_date ?? a.created_at, type: "milestone", category: "marco", message: `🎉 Retornou após ${consecutiveMisses} faltas!`, detail: "Momento de acolhimento", icon: "🎉", severity: "positive" });
             }
             consecutiveMisses = 0;
           }
 
           if (consecutiveMisses === 3) {
-            tl.push({ date: ev?.event_date ?? a.created_at, type: "crisis", category: "crise", title: `🚨 3 faltas consecutivas`, detail: "Alerta pastoral — possível afastamento", icon: "🚨", severity: "critical" });
+            tl.push({ date: ev?.event_date ?? a.created_at, type: "crisis", category: "crise", message: `🚨 3 faltas consecutivas`, detail: "Alerta pastoral — possível afastamento", icon: "🚨", severity: "critical" });
           }
 
-          tl.push({ date: ev?.event_date ?? a.created_at, type: "attendance", category: "encontro", title: `${statusEmoji} ${ev?.title ?? "Evento"}`, detail: normalizedStatus === "presente" ? "Presente" : normalizedStatus === "faltou" ? "Faltou" : "Justificou", icon: statusEmoji, severity });
+          tl.push({ date: ev?.event_date ?? a.created_at, type: "attendance", category: "encontro", message: `${statusEmoji} ${ev?.title ?? "Evento"}`, detail: normalizedStatus === "presente" ? "Presente" : normalizedStatus === "faltou" ? "Faltou" : "Justificou", icon: statusEmoji, severity });
         });
       }
 
@@ -420,7 +420,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         const evalEventsMap = new Map((evalEventsData ?? []).map(e => [e.id, e]));
         const enrichedEvals: MeetingEval[] = evalsArr.map(e => ({
           ...e,
-          event_title: evalEventsMap.get(e.event_id)?.title ?? "Encontro",
+          event_message: evalEventsMap.get(e.event_id)?.title ?? "Encontro",
           event_date: evalEventsMap.get(e.event_id)?.event_date ?? e.created_at,
         }));
         enrichedEvals.sort((a, b) => new Date(b.event_date!).getTime() - new Date(a.event_date!).getTime());
@@ -431,7 +431,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           const avg = scores.length > 0 ? (scores.reduce((s, v) => s + (v ?? 0), 0) / scores.length).toFixed(1) : "—";
           tl.push({
             date: ev.event_date ?? ev.created_at, type: "evaluation", category: "encontro",
-            title: `⭐ Avaliação: ${ev.event_title}`,
+            message: `⭐ Avaliação: ${ev.event_title}`,
             detail: `Média: ${avg}/5${ev.notes ? ` · ${ev.notes.slice(0, 50)}` : ""}`,
             icon: "⭐", severity: "neutral",
           });
@@ -446,13 +446,13 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         const statusLabel = w.status === "aprovado" ? "✅ Aprovado" : w.status === "rejeitado" ? "❌ Rejeitado" : "⏳ Pendente";
         if (w.status === "aprovado") worshipCount++;
         if (worshipCount === 1 && w.status === "aprovado") {
-          tl.push({ date: w.created_at, type: "milestone", category: "marco", title: "⛪ Primeiro culto confirmado!", detail: "Marco importante na caminhada", icon: "⛪", severity: "positive" });
+          tl.push({ date: w.created_at, type: "milestone", category: "marco", message: "⛪ Primeiro culto confirmado!", detail: "Marco importante na caminhada", icon: "⛪", severity: "positive" });
         }
         const eventLabel = w.event_type === "jemiac" ? "JEMIAC" : w.event_type === "retiro" ? "Retiro" : "Culto";
         const eventEmoji = w.event_type === "jemiac" ? "✝️" : w.event_type === "retiro" ? "🏕️" : "⛪";
         tl.push({
           date: w.created_at, type: "worship", category: "encontro",
-          title: `${eventEmoji} ${eventLabel}: ${new Date(w.worship_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} ${w.worship_time}`,
+          message: `${eventEmoji} ${eventLabel}: ${new Date(w.worship_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} ${w.worship_time}`,
           detail: `Pregador: ${w.preacher_name} · ${statusLabel}`,
           icon: eventEmoji, severity: w.status === "aprovado" ? "positive" : "neutral",
         });
@@ -461,7 +461,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       // First registered assessment as milestone
       if (allAssArr.length > 0) {
         const first = [...allAssArr].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0];
-        tl.push({ date: first.created_at, type: "milestone", category: "marco", title: "💗 Primeira autoavaliação espiritual", detail: "Início do acompanhamento da vida espiritual", icon: "💗", severity: "positive" });
+        tl.push({ date: first.created_at, type: "milestone", category: "marco", message: "💗 Primeira autoavaliação espiritual", detail: "Início do acompanhamento da vida espiritual", icon: "💗", severity: "positive" });
       }
 
       // Challenge participations
@@ -483,7 +483,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
             date,
             type: cp.completed ? "activity" : "attendance",
             category: "progresso",
-            title: `${ch.emoji} Desafio: ${ch.title}`,
+            message: `${ch.emoji} Desafio: ${ch.title}`,
             detail,
             icon: ch.emoji,
             severity: cp.completed ? "positive" : "neutral",
@@ -676,19 +676,19 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         const next = [draft, ...manualReleaseDrafts.filter((item) => !(item.content_kind === "lesson" && item.lesson_id === draft.lesson_id))];
         setManualReleaseDrafts(next);
         window.localStorage.setItem(storageKey, JSON.stringify(next));
-        toast({ title: "Rascunho salvo localmente", description: "A tabela ainda nao existe no Supabase. Rode o SQL da parte 2 para persistir de verdade." });
+        toast.info( message: "Rascunho salvo localmente", description: "A tabela ainda nao existe no Supabase. Rode o SQL da parte 2 para persistir de verdade." });
         resetManualReleaseForm();
         setSavingManualRelease(false);
         setActiveSection("liberacoes");
         return;
       }
       if (error) {
-        toast({ title: "Falha ao salvar liberacao", description: error.message });
+        toast.info( message: "Falha ao salvar liberacao", description: error.message });
         setSavingManualRelease(false);
         return;
       }
       await fetchManualReleaseDrafts();
-      toast({ title: "Liberacao manual salva", description: "O override desta licao ja esta registrado no banco." });
+      toast.info( message: "Liberacao manual salva", description: "O override desta licao ja esta registrado no banco." });
     } else {
       // devotional — one upsert per selected devotional
       const devIds = manualReleaseForm.devotional_ids;
@@ -727,20 +727,20 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         const next = [...drafts, ...manualReleaseDrafts.filter((item) => !(item.content_kind === "devotional" && existingIds.has(item.devotional_id)))];
         setManualReleaseDrafts(next);
         window.localStorage.setItem(storageKey, JSON.stringify(next));
-        toast({ title: "Rascunhos salvos localmente", description: `${devIds.length} devocional(is) preparado(s). A tabela ainda nao existe no Supabase.` });
+        toast.info( message: "Rascunhos salvos localmente", description: `${devIds.length} devocional(is) preparado(s). A tabela ainda nao existe no Supabase.` });
         resetManualReleaseForm();
         setSavingManualRelease(false);
         setActiveSection("liberacoes");
         return;
       }
       if (error) {
-        toast({ title: "Falha ao salvar liberacao", description: error.message });
+        toast.info( message: "Falha ao salvar liberacao", description: error.message });
         setSavingManualRelease(false);
         return;
       }
       await fetchManualReleaseDrafts();
-      toast({
-        title: "Liberacoes salvas",
+      toast.info(
+        message: "Liberacoes salvas",
         description: devIds.length === 1
           ? "O override deste devocional ja esta registrado no banco."
           : `${devIds.length} devocionais liberados e registrados no banco.`,
@@ -764,8 +764,8 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
 
     if (!error) {
       setManualReleaseDrafts((prev) => prev.filter((item) => item.id !== draftId));
-      toast({
-        title: "Liberacao removida",
+      toast.info(
+        message: "Liberacao removida",
         description: draft.content_kind === "lesson"
           ? "O override da licao foi apagado do banco."
           : "O override do devocional foi apagado do banco.",
@@ -774,8 +774,8 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
     }
 
     if (!isMissingManualReleaseStorage(error)) {
-      toast({
-        title: "Falha ao remover liberacao",
+      toast.info(
+        message: "Falha ao remover liberacao",
         description: error.message,
       });
       return;
@@ -1209,7 +1209,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   // Create event with local date to avoid timezone issues
                   const eventDate = `${scheduleDate}T${scheduleTime}:00`;
                   const { error } = await supabase.from("events").insert({
-                    title: `Conversa pastoral — ${p.full_name.split(" ")[0]}`,
+                    message: `Conversa pastoral — ${p.full_name.split(" ")[0]}`,
                     description: scheduleNote || `Conversa agendada com ${p.full_name}`,
                     event_date: eventDate,
                     type: "conversa",
@@ -1222,7 +1222,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   // Send push notification via admin-push
                   await supabase.functions.invoke("admin-push", {
                     body: {
-                      title: "💬 Conversa agendada!",
+                      message: "💬 Conversa agendada!",
                       body: `Seu líder agendou uma conversa com você para ${new Date(eventDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })} às ${scheduleTime}. Confira na sua agenda!`,
                       target: "user",
                       targetValue: p.user_id,
