@@ -3,7 +3,7 @@ import { getAreaForCommunity } from "@/config/areas";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { MessageCircle, GraduationCap, Sparkles, Send, Trash2, Target, Check, Users, Upload, Image, Camera } from "lucide-react";
+import { MessageCircle, GraduationCap, Sparkles, Send, Trash2, Target, Check, Users, Upload, Image, Camera, Heart } from "lucide-react";
 import ClassroomTab from "./ClassroomTab";
 import AnnouncementsSection from "./AnnouncementsSection";
 import PollsSection from "./PollsSection";
@@ -11,6 +11,8 @@ import CommunityAchievements from "./CommunityAchievements";
 import PrayerPairsSection from "./PrayerPairsSection";
 import EventPhotoGallery from "./EventPhotoGallery";
 import BirthdayHighlights from "./BirthdayHighlights";
+import PrayerCircles from "./PrayerCircles";
+
 
 const REACTION_EMOJIS = [
   { emoji: "🙏", label: "orando" },
@@ -320,9 +322,13 @@ export default function CommunityTab() {
 
       {/* ===== COMUNIDADE ===== */}
       {subTab === "comunidade" && (
-        <div className="px-5 space-y-5">
+        <div className="px-5 space-y-6">
           {/* Pastor messages */}
           <AnnouncementsSection />
+
+          {/* 🙏 Círculos de Oração (Novo) */}
+          <PrayerCircles />
+
 
           {/* 🏆 Conquistas da Comunidade */}
           <CommunityAchievements />
