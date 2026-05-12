@@ -1,8 +1,19 @@
 import { useState, useEffect } from "react";
 import BibleModal from "./BibleModal";
 import { supabase } from "@/integrations/supabase/client";
-import { ChevronLeft, BookOpen, Heart, CheckCircle2, AlertCircle } from "lucide-react";
+import { ChevronLeft, BookOpen, Heart, CheckCircle2, AlertCircle, Music } from "lucide-react";
 import { toast } from "sonner";
+import WorshipCard from "./WorshipCard";
+
+type WorshipSong = {
+  id: string;
+  title: string;
+  artist: string;
+  url: string;
+  platform: 'youtube' | 'spotify' | 'other';
+  theme: string | null;
+  thumbnail_url: string | null;
+};
 
 type DevotionalContent = {
   bible_text: string;
@@ -11,6 +22,8 @@ type DevotionalContent = {
   prayer: string;
   practice: string;
   questions: string[];
+  worship_song_id?: string | null;
+  worship_song?: WorshipSong | null;
 };
 
 type Props = {
