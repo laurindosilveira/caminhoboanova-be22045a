@@ -22,8 +22,7 @@ type DevotionalContent = {
   prayer: string;
   practice: string;
   questions: string[];
-  worship_song_id?: string | null;
-  worship_song?: WorshipSong | null;
+  worship_songs: WorshipSong[];
 };
 
 type Props = {
