@@ -76,7 +76,7 @@ export default function PrayerCircles() {
 
       const mapped = (data || []).map((r: any) => ({
         ...r,
-        user_name: r.profiles?.full_name,
+        user_name: (r as any).profiles?.full_name || (r as any).profiles_user_id_fkey?.full_name,
         is_praying: prayingIds.has(r.id)
       }));
       setRequests(mapped);
