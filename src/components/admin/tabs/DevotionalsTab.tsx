@@ -24,7 +24,7 @@ type DevotionalContent = {
   prayer: string;
   practice: string;
   questions: string[];
-  worship_song_id: string | null;
+  worship_song_ids: string[];
 };
 
 const DEFAULT_CONTENT: DevotionalContent = {
@@ -34,7 +34,7 @@ const DEFAULT_CONTENT: DevotionalContent = {
   prayer: "",
   practice: "",
   questions: [""],
-  worship_song_id: null,
+  worship_song_ids: [],
 };
 
 export default function DevotionalsTab() {
