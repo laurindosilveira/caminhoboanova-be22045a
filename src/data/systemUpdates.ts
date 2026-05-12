@@ -1,9 +1,22 @@
-import { AutomatedSystemUpdate } from "../components/home/discipleship/shared";
+export type AutomatedSystemUpdate = {
+  id: string;
+  title: string;
+  summary: string;
+  details: string;
+  version: string;
+  updateType: "nova_funcionalidade" | "melhoria" | "correcao" | "comunicado";
+  createdAt: string;
+  authorName: string;
+  codeChanges: Array<{
+    area: string;
+    description: string;
+  }>;
+};
 
 const BUILD_VERSION = (typeof window !== 'undefined' && (window as any).__APP_VERSION__) || "0.0.0";
 const BUILD_DATE = (typeof window !== 'undefined' && (window as any).__APP_BUILD_DATE__) || new Date().toISOString();
 
-export const AUTOMATED_SYSTEM_UPDATES: any[] = [
+export const AUTOMATED_SYSTEM_UPDATES: AutomatedSystemUpdate[] = [
   {
     id: "build-current",
     title: "Build atual publicado automaticamente",

@@ -47,12 +47,11 @@ export default function LeaderWaitingRoom({ areaFilter, onAssigned }: Props) {
       { data: turmasData, error: turmasError },
       userResult,
     ] = await Promise.all([
-      supabase
-        .from("profiles")
+      (supabase.from as any)("profiles")
         .select("user_id, full_name, community, area, phone, birth_date, turma_id, enrollment_status")
         .is("turma_id", null)
         .eq("enrollment_status", "pending")
-        .eq("area", areaFilter as any),
+        .eq("area", areaFilter),
       supabase
         .from("turmas")
         .select("id, name, year, area")
