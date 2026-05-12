@@ -29,6 +29,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUserStats } from "@/hooks/useUserStats";
 import { useAppNotifications } from "@/hooks/useAppNotifications";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
+import CelebrationModal, { type CelebrationType } from "@/components/gamification/CelebrationModal";
+
 
 type ProfileSubTab = "meu-perfil" | "minha-jornada" | "configuracoes";
 type LessonNavigationMode = "choice" | "devotional";
