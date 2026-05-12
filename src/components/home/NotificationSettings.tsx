@@ -646,6 +646,23 @@ export default function NotificationSettings() {
                   </div>
                 )}
 
+                {/* ── Gamificação / Celebrações ── */}
+                <div className="border-t border-border px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <Sparkles className="w-4 h-4 text-secondary" />
+                    <div className="flex-1">
+                      <p className="font-inter text-sm font-semibold text-foreground">Celebrações e Confetes</p>
+                      <p className="text-muted-foreground text-[10px] font-inter">Exibir animações de confete ao concluir metas</p>
+                    </div>
+                    <button
+                      onClick={handleToggleConfetti}
+                      className={`w-11 h-6 rounded-full relative transition-colors ${showConfettiPref ? "bg-secondary" : "bg-muted"}`}
+                    >
+                      <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${showConfettiPref ? "translate-x-[22px]" : "translate-x-0.5"}`} />
+                    </button>
+                  </div>
+                </div>
+
                 <button
                   onClick={handleToggleMaster}
                   className="w-full flex items-center justify-center gap-2 py-3 text-sm font-inter font-bold text-destructive hover:bg-destructive/5 transition-colors border-t border-border"
