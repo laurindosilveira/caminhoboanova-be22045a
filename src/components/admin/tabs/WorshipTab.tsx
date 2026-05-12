@@ -197,7 +197,10 @@ export default function WorshipTab() {
             <p className="text-muted-foreground text-xs font-inter">Gerencie as músicas sugeridas para os jovens</p>
           </div>
         </div>
-        <Button onClick={() => setShowForm(!showForm)} className="rounded-xl gap-2">
+        <Button onClick={() => {
+          if (showForm) resetForm();
+          else setShowForm(true);
+        }} className="rounded-xl gap-2">
           {showForm ? "Cancelar" : <><Plus className="w-4 h-4" /> Cadastrar Música</>}
         </Button>
       </div>
