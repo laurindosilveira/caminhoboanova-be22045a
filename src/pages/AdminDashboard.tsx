@@ -113,16 +113,15 @@ export default function AdminDashboard() {
     setLoading(true);
     const [{ data: activitiesData }, { data: profilesData }, userResult] = await Promise.all([
       supabase.from("activities").select("*").order("order_num"),
-      supabase.from("profiles").select("user_id, full_name, community, area, birth_date, phone, turma_id, confirmation_year, avatar_url, father_name, mother_name, father_phone, mother_phone, address, email, church_id"),
+      (supabase.from as any)("profiles").select("user_id, full_name, community, area, birth_date, phone, turma_id, confirmation_year, avatar_url, father_name, mother_name, father_phone, mother_phone, address, email, church_id"),
       supabase.auth.getUser(),
     ]);
 
     const myId = userResult.data.user?.id ?? "";
-    const myProfile = (profilesData ?? []).find(p => p.user_id === myId);
-    const profilesList = (profilesData ?? []).filter(p => p.user_id !== myId && (!myProfile?.church_id || p.church_id === myProfile.church_id));
+    const myProfile = (profilesData as any[] ?? []).find(p => p.user_id === myId);
+    const profilesList = (profilesData as any[] ?? []).filter(p => p.user_id !== myId && (!myProfile?.church_id || p.church_id === myProfile.church_id));
 
-    const { data: turmasData } = await supabase
-      .from("turmas")
+    const { data: turmasData } = await (supabase.from as any)("turmas")
       .select("*")
       .eq("is_active", true)
       .eq("church_id", myProfile?.church_id || "")
