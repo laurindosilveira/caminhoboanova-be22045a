@@ -9,7 +9,8 @@ import {
   Play,
   Save,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Pen
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
