@@ -99,7 +99,7 @@ export default function MinhaIgreja() {
           <ArrowLeft className="w-5 h-5 text-foreground" />
         </button>
         <div>
-          <h1 className="font-montserrat font-black text-xl text-foreground">⛪ {(profile as any)?.churches?.name || "Minha Igreja"}</h1>
+          <h1 className="font-montserrat font-black text-xl text-foreground">⛪ {(profile as any)?.churches?.name || profile?.community || "Minha Igreja"}</h1>
           <p className="text-muted-foreground text-xs font-inter">Informações e gestão da igreja</p>
         </div>
         <button onClick={fetchSubscription} aria-label="Atualizar status da assinatura" className="ml-auto w-10 h-10 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors">

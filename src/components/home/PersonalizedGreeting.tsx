@@ -51,7 +51,7 @@ export default function PersonalizedGreeting() {
     if (churchName) {
       msg = `${period}! Bem-vindo à ${churchName}. `;
     } else if (profile?.community && !churchName) {
-      msg = `${period}! Bem-vindo ao ${profile.community}. `;
+      msg = `${period}! Bem-vindo à comunidade ${profile.community}. `;
     }
     if (lastActivity === "devocional") {
       msg += "Continue sua caminhada devocional 📖";
