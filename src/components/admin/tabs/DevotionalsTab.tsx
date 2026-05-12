@@ -166,6 +166,7 @@ export default function DevotionalsTab() {
       prayer: content.prayer,
       practice: content.practice,
       questions: content.questions.filter(q => q.trim()),
+      worship_song_id: content.worship_song_id,
     }, { onConflict: "activity_id" });
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
