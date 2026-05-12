@@ -143,15 +143,6 @@ const App = () => {
           Pular para o conteúdo principal
         </a>
         
-        {/* Debug info for version tracking */}
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none">
-          <div className="bg-black/60 backdrop-blur-md text-[10px] text-white/90 px-2 py-0.5 rounded-full flex items-center gap-1.5 border border-white/10 shadow-lg">
-            <span className="opacity-60 italic">v:</span>
-            <span className="font-mono font-bold tracking-tight">{branchName}</span>
-            <span className="opacity-30">|</span>
-            <span className="font-mono opacity-80">{commitSha.substring(0, 7)}</span>
-          </div>
-        </div>
 
         <OfflineBanner />
         <Toaster />
