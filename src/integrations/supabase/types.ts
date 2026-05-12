@@ -905,6 +905,7 @@ export type Database = {
           released_devotional_days: number[] | null
           target_user_id: string | null
           title: string
+          turma_id: string | null
           type: string
         }
         Insert: {
@@ -920,6 +921,7 @@ export type Database = {
           released_devotional_days?: number[] | null
           target_user_id?: string | null
           title: string
+          turma_id?: string | null
           type?: string
         }
         Update: {
@@ -935,6 +937,7 @@ export type Database = {
           released_devotional_days?: number[] | null
           target_user_id?: string | null
           title?: string
+          turma_id?: string | null
           type?: string
         }
         Relationships: [
@@ -943,6 +946,13 @@ export type Database = {
             columns: ["linked_lesson_id"]
             isOneToOne: false
             referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
             referencedColumns: ["id"]
           },
         ]
