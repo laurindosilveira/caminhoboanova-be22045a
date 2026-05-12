@@ -322,9 +322,13 @@ export default function CommunityTab() {
 
       {/* ===== COMUNIDADE ===== */}
       {subTab === "comunidade" && (
-        <div className="px-5 space-y-5">
+        <div className="px-5 space-y-6">
           {/* Pastor messages */}
           <AnnouncementsSection />
+
+          {/* 🙏 Círculos de Oração (Novo) */}
+          <PrayerCircles />
+
 
           {/* 🏆 Conquistas da Comunidade */}
           <CommunityAchievements />
