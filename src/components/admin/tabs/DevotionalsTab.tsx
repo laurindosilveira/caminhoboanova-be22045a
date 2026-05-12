@@ -17,6 +17,7 @@ type DevotionalContent = {
   prayer: string;
   practice: string;
   questions: string[];
+  worship_song_id: string | null;
 };
 
 const DEFAULT_CONTENT: DevotionalContent = {
