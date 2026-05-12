@@ -10,7 +10,7 @@ interface BottomNavProps {
 const tabs = [
   { tab: "jornada" as Tab, icon: Home, label: "Jornada" },
   { tab: "discipulado" as Tab, icon: Heart, label: "Caminho" },
-  { tab: "adoracao" as Tab, icon: Music, label: "Adoração" },
+  { tab: "adoracao" as Tab, icon: Music, label: "Ranking" },
   { tab: "comunidade" as Tab, icon: Users, label: "Comunidade" },
   { tab: "agenda" as Tab, icon: Calendar, label: "Agenda" },
   { tab: "perfil" as Tab, icon: User, label: "Perfil" },
