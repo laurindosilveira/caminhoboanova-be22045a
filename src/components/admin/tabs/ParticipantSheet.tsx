@@ -683,12 +683,12 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         return;
       }
       if (error) {
-        toast.info( message: "Falha ao salvar liberacao", description: error.message });
+        toast.error("Falha ao salvar liberação", { description: error.message });
         setSavingManualRelease(false);
         return;
       }
       await fetchManualReleaseDrafts();
-      toast.info( message: "Liberacao manual salva", description: "O override desta licao ja esta registrado no banco." });
+      toast.success("Liberação manual salva", { description: "O override desta lição já está registrado no banco." });
     } else {
       // devotional — one upsert per selected devotional
       const devIds = manualReleaseForm.devotional_ids;
