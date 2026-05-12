@@ -39,11 +39,13 @@ interface WorshipSong {
 
 export default function WorshipTab() {
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [songs, setSongs] = useState<WorshipSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editingSong, setEditingSong] = useState<WorshipSong | null>(null);
+  const [uploading, setUploading] = useState(false);
   
   const [form, setForm] = useState({
     title: "",
