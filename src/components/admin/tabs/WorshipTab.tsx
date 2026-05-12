@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   Music, 
@@ -10,7 +10,10 @@ import {
   Save,
   CheckCircle2,
   AlertCircle,
-  Pen
+  Pen,
+  Upload,
+  Image as ImageIcon,
+  X
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -36,11 +39,13 @@ interface WorshipSong {
 
 export default function WorshipTab() {
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [songs, setSongs] = useState<WorshipSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editingSong, setEditingSong] = useState<WorshipSong | null>(null);
+  const [uploading, setUploading] = useState(false);
   
   const [form, setForm] = useState({
     title: "",
@@ -131,6 +136,37 @@ export default function WorshipTab() {
       }
     }
     setSubmitting(false);
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "Arquivo muito grande", description: "O limite é 2MB", variant: "destructive" });
+      return;
+    }
+
+    setUploading(true);
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random()}.${fileExt}`;
+    const filePath = `covers/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('worship-covers')
+      .upload(filePath, file);
+
+    if (uploadError) {
+      toast({ title: "Erro no upload", description: uploadError.message, variant: "destructive" });
+    } else {
+      const { data: { publicUrl } } = supabase.storage
+        .from('worship-covers')
+        .getPublicUrl(filePath);
+      
+      setForm(prev => ({ ...prev, thumbnail_url: publicUrl }));
+      toast({ title: "Capa carregada!" });
+    }
+    setUploading(false);
   }
 
   function resetForm() {
@@ -260,13 +296,58 @@ export default function WorshipTab() {
                 placeholder="Ex: Oração, Entrega, Missões"
               />
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-muted-foreground ml-1">URL da Capa (Opcional)</label>
-              <Input 
-                value={form.thumbnail_url}
-                onChange={e => setForm({...form, thumbnail_url: e.target.value})}
-                placeholder="https://..."
-              />
+            <div className="space-y-1.5 md:col-span-2">
+              <label className="text-xs font-bold text-muted-foreground ml-1">Capa da Música</label>
+              <div className="flex flex-col md:flex-row gap-4 items-start md:items-center bg-muted/20 p-4 rounded-xl border border-border border-dashed">
+                <div className="w-24 h-24 rounded-lg bg-muted flex items-center justify-center overflow-hidden flex-shrink-0 border border-border shadow-inner">
+                  {form.thumbnail_url ? (
+                    <div className="relative group w-full h-full">
+                      <img src={form.thumbnail_url} alt="Preview" className="w-full h-full object-cover" />
+                      <button 
+                        type="button"
+                        onClick={() => setForm(prev => ({ ...prev, thumbnail_url: "" }))}
+                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                      >
+                        <X className="w-6 h-6" />
+                      </button>
+                    </div>
+                  ) : (
+                    <ImageIcon className="w-8 h-8 text-muted-foreground/40" />
+                  )}
+                </div>
+                <div className="flex-1 space-y-3 w-full">
+                  <div className="flex flex-wrap gap-2">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-lg gap-2"
+                      disabled={uploading}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload className="w-4 h-4" />
+                      {uploading ? "Enviando..." : "Upload de Imagem"}
+                    </Button>
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      onChange={handleFileUpload} 
+                      className="hidden" 
+                      accept="image/*" 
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1 w-full">Limite de 2MB. Dimensões sugeridas: 500x500px.</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">Ou cole o link direto:</p>
+                    <Input 
+                      value={form.thumbnail_url}
+                      onChange={e => setForm({...form, thumbnail_url: e.target.value})}
+                      placeholder="https://exemplo.com/imagem.jpg"
+                      className="h-8 text-xs bg-background"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           <Button type="submit" disabled={submitting} className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-bold">
