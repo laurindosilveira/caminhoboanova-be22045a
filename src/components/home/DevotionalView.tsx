@@ -22,8 +22,7 @@ type DevotionalContent = {
   prayer: string;
   practice: string;
   questions: string[];
-  worship_song_id?: string | null;
-  worship_song?: WorshipSong | null;
+  worship_songs: WorshipSong[];
 };
 
 type Props = {
@@ -49,28 +48,33 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
   const [readConfirmed, setReadConfirmed] = useState(false);
 
   useEffect(() => {
-    if (devotionalData) return;
+    if (devotionalData && devotionalData.worship_songs && devotionalData.worship_songs.length > 0) return;
 
     async function load() {
-      const { data } = await supabase
+      const { data: contentData } = await supabase
         .from("devotional_content")
-        .select(`
-          *,
-          worship_song:worship_song_id(*)
-        `)
+        .select("*")
         .eq("activity_id", activity.id)
         .maybeSingle();
 
-      if (data) {
+      const { data: songsData } = await supabase
+        .from("devotional_worship_songs")
+        .select(`
+          worship_song:worship_songs(*)
+        `)
+        .eq("devotional_id", activity.id);
+
+      const songs = songsData?.map(s => s.worship_song).filter(Boolean) as WorshipSong[] || [];
+
+      if (contentData) {
         setContent({
-          bible_text: data.bible_text || "",
-          bible_reference: data.bible_reference || "",
-          reflection: data.reflection || "",
-          prayer: data.prayer || "",
-          practice: data.practice || "",
-          questions: (data.questions as string[]) ?? [],
-          worship_song_id: data.worship_song_id,
-          worship_song: data.worship_song as any
+          bible_text: contentData.bible_text || "",
+          bible_reference: contentData.bible_reference || "",
+          reflection: contentData.reflection || "",
+          prayer: contentData.prayer || "",
+          practice: contentData.practice || "",
+          questions: (contentData.questions as string[]) ?? [],
+          worship_songs: songs
         });
       }
 
@@ -205,15 +209,31 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
 
   if (!content || (!content.bible_text && !content.reflection)) {
     return (
-      <div className="px-5 pt-6 space-y-4">
+      <div className="px-5 pt-6 space-y-4 pb-24">
         <button onClick={onBack} className="flex items-center gap-1.5 text-muted-foreground font-inter text-sm hover:text-foreground transition-colors">
           <ChevronLeft className="w-4 h-4" /> Voltar
         </button>
-        <div className="text-center py-12">
-          <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+        <div className="text-center py-12 bg-card rounded-3xl border border-border border-dashed">
+          <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-20" />
           <p className="font-montserrat font-bold text-foreground">{activity.title}</p>
           <p className="text-muted-foreground font-inter text-sm mt-1">Conteúdo em preparação pelo seu pastor. Volte em breve!</p>
         </div>
+
+        {content?.worship_songs && content.worship_songs.length > 0 && (
+          <div className="space-y-3 pt-4 border-t border-border">
+            <div className="flex items-center gap-2 mb-1 px-1">
+              <Music className="w-4 h-4 text-primary" />
+              <p className="font-montserrat font-bold text-foreground text-sm">Prepare o seu coração</p>
+            </div>
+            {content.worship_songs.map(song => (
+              <WorshipCard 
+                key={song.id} 
+                song={song} 
+                suggestionText="Prepare o seu coração com este louvor" 
+              />
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -401,11 +421,16 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
         </div>
       )}
 
-      {content?.worship_song && (
-        <WorshipCard 
-          song={content.worship_song} 
-          suggestionText={isCompleted ? "Continue esse momento ouvindo este louvor" : "Prepare o seu coração com este louvor"} 
-        />
+      {content?.worship_songs && content.worship_songs.length > 0 && (
+        <div className="space-y-3 pt-2">
+          {content.worship_songs.map(song => (
+            <WorshipCard 
+              key={song.id} 
+              song={song} 
+              suggestionText={isCompleted ? "Continue esse momento ouvindo este louvor" : "Prepare o seu coração com este louvor"} 
+            />
+          ))}
+        </div>
       )}
 
       {isCompleted && (

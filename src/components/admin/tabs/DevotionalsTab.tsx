@@ -24,7 +24,7 @@ type DevotionalContent = {
   prayer: string;
   practice: string;
   questions: string[];
-  worship_song_id: string | null;
+  worship_song_ids: string[];
 };
 
 const DEFAULT_CONTENT: DevotionalContent = {
@@ -34,7 +34,7 @@ const DEFAULT_CONTENT: DevotionalContent = {
   prayer: "",
   practice: "",
   questions: [""],
-  worship_song_id: null,
+  worship_song_ids: [],
 };
 
 export default function DevotionalsTab() {
@@ -140,32 +140,45 @@ export default function DevotionalsTab() {
   async function openContentEditor(dev: Activity) {
     setEditing(dev);
     setEditingContent(true);
-    const { data } = await supabase
+    
+    // Fetch devotional content
+    const { data: contentData } = await supabase
       .from("devotional_content")
       .select("*")
       .eq("activity_id", dev.id)
       .maybeSingle();
-    if (data) {
+
+    // Fetch related songs
+    const { data: songsData } = await supabase
+      .from("devotional_worship_songs")
+      .select("worship_song_id")
+      .eq("devotional_id", dev.id);
+
+    const songIds = songsData?.map(s => s.worship_song_id) || [];
+
+    if (contentData) {
       setIsPublished(true);
       setContent({
-        bible_text: data.bible_text || "",
-        bible_reference: data.bible_reference || "",
-        reflection: data.reflection || "",
-        prayer: data.prayer || "",
-        practice: data.practice || "",
-        questions: (data.questions as string[])?.length ? data.questions as string[] : [""],
-        worship_song_id: data.worship_song_id || null,
+        bible_text: contentData.bible_text || "",
+        bible_reference: contentData.bible_reference || "",
+        reflection: contentData.reflection || "",
+        prayer: contentData.prayer || "",
+        practice: contentData.practice || "",
+        questions: (contentData.questions as string[])?.length ? contentData.questions as string[] : [""],
+        worship_song_ids: songIds,
       });
     } else {
       setIsPublished(false);
-      setContent({ ...DEFAULT_CONTENT, questions: [""] });
+      setContent({ ...DEFAULT_CONTENT, questions: [""], worship_song_ids: [] });
     }
   }
 
   async function handleSaveContent() {
     if (!editing) return;
     setSaving(true);
-    const { error } = await supabase.from("devotional_content").upsert({
+    
+    // Save main content
+    const { error: contentError } = await supabase.from("devotional_content").upsert({
       activity_id: editing.id,
       bible_text: content.bible_text,
       bible_reference: content.bible_reference,
@@ -173,14 +186,29 @@ export default function DevotionalsTab() {
       prayer: content.prayer,
       practice: content.practice,
       questions: content.questions.filter(q => q.trim()),
-      worship_song_id: content.worship_song_id,
     }, { onConflict: "activity_id" });
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Conteúdo salvo ✅" });
-      setIsPublished(true);
+
+    if (contentError) {
+      toast({ title: "Erro ao salvar conteúdo", description: contentError.message, variant: "destructive" });
+      setSaving(false);
+      return;
     }
+
+    // Update songs junction table
+    // First, remove old associations
+    await supabase.from("devotional_worship_songs").delete().eq("devotional_id", editing.id);
+    
+    // Then add new ones
+    if (content.worship_song_ids.length > 0) {
+      const songEntries = content.worship_song_ids.map(songId => ({
+        devotional_id: editing.id,
+        worship_song_id: songId
+      }));
+      await supabase.from("devotional_worship_songs").insert(songEntries);
+    }
+
+    toast({ title: "Conteúdo e louvores salvos ✅" });
+    setIsPublished(true);
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -311,28 +339,39 @@ export default function DevotionalsTab() {
         <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <Music className="w-4 h-4 text-primary" />
-            <p className="font-montserrat font-bold text-foreground text-sm">🎶 Sugestão de Louvor</p>
+            <p className="font-montserrat font-bold text-foreground text-sm">🎶 Sugestões de Louvor</p>
           </div>
           <div className="p-4">
-            <p className="font-inter text-xs font-semibold text-muted-foreground mb-1.5">Selecione uma música do catálogo</p>
-            <Select 
-              value={content.worship_song_id || "none"}
-              onValueChange={(val) => setContent(p => ({ ...p, worship_song_id: val === "none" ? null : val }))}
-            >
-              <SelectTrigger className="w-full rounded-xl border-border bg-background">
-                <SelectValue placeholder="Nenhuma música selecionada" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Nenhuma (Sem sugestão)</SelectItem>
-                {worshipSongs.map(song => (
-                  <SelectItem key={song.id} value={song.id}>
-                    {song.title} - {song.artist}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <p className="font-inter text-xs font-semibold text-muted-foreground mb-1.5">Selecione as músicas sugeridas para este devocional</p>
+            
+            <div className="max-h-48 overflow-y-auto space-y-2 pr-2 border border-border rounded-xl p-3 bg-muted/10">
+              {worshipSongs.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic text-center py-4">Nenhuma música cadastrada no catálogo.</p>
+              ) : (
+                worshipSongs.map(song => (
+                  <label key={song.id} className="flex items-center gap-3 p-2 hover:bg-muted/50 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-border">
+                    <input 
+                      type="checkbox"
+                      checked={content.worship_song_ids.includes(song.id)}
+                      onChange={(e) => {
+                        const ids = e.target.checked 
+                          ? [...content.worship_song_ids, song.id]
+                          : content.worship_song_ids.filter(id => id !== song.id);
+                        setContent(p => ({ ...p, worship_song_ids: ids }));
+                      }}
+                      className="w-4 h-4 accent-primary rounded"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{song.title}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{song.artist}</p>
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+            
             <p className="mt-2 text-[10px] text-muted-foreground italic">
-              Você pode cadastrar novas músicas na aba "Louvor" do painel administrativo.
+              Você pode gerenciar o catálogo completo na aba "Louvor".
             </p>
           </div>
         </div>
