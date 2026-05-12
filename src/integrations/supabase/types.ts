@@ -1401,6 +1401,39 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          link: string | null
+          message: string
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          link?: string | null
+          message: string
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          link?: string | null
+          message?: string
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       pastoral_notes: {
         Row: {
           admin_id: string
@@ -1502,6 +1535,53 @@ export type Database = {
         }
         Relationships: []
       }
+      prayer_diary: {
+        Row: {
+          answered_at: string | null
+          area: string | null
+          content: string
+          created_at: string | null
+          id: string
+          request_id: string | null
+          response: string | null
+          title: string
+          turma_id: string | null
+          user_id: string
+        }
+        Insert: {
+          answered_at?: string | null
+          area?: string | null
+          content: string
+          created_at?: string | null
+          id?: string
+          request_id?: string | null
+          response?: string | null
+          title: string
+          turma_id?: string | null
+          user_id: string
+        }
+        Update: {
+          answered_at?: string | null
+          area?: string | null
+          content?: string
+          created_at?: string | null
+          id?: string
+          request_id?: string | null
+          response?: string | null
+          title?: string
+          turma_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prayer_diary_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "prayer_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prayer_interactions: {
         Row: {
           created_at: string
@@ -1579,6 +1659,7 @@ export type Database = {
       prayer_requests: {
         Row: {
           area: string
+          community: string | null
           content: string
           created_at: string
           id: string
@@ -1592,6 +1673,7 @@ export type Database = {
         }
         Insert: {
           area: string
+          community?: string | null
           content: string
           created_at?: string
           id?: string
@@ -1605,6 +1687,7 @@ export type Database = {
         }
         Update: {
           area?: string
+          community?: string | null
           content?: string
           created_at?: string
           id?: string
@@ -1682,6 +1765,7 @@ export type Database = {
           mother_name: string | null
           mother_phone: string | null
           phone: string
+          role: Database["public"]["Enums"]["app_role"] | null
           turma_id: string | null
           updated_at: string
           user_id: string
@@ -1706,6 +1790,7 @@ export type Database = {
           mother_name?: string | null
           mother_phone?: string | null
           phone: string
+          role?: Database["public"]["Enums"]["app_role"] | null
           turma_id?: string | null
           updated_at?: string
           user_id: string
@@ -1730,6 +1815,7 @@ export type Database = {
           mother_name?: string | null
           mother_phone?: string | null
           phone?: string
+          role?: Database["public"]["Enums"]["app_role"] | null
           turma_id?: string | null
           updated_at?: string
           user_id?: string
