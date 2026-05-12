@@ -162,10 +162,10 @@ export default function AnnouncementsSection() {
   if (messages.length === 0) return null;
 
   return (
-    <div className="px-5">
-      <div className="flex items-center gap-2 mb-3">
-        <MessageCircle className="w-4 h-4 text-primary" />
-        <span className="font-montserrat font-bold text-foreground text-sm">Avisos</span>
+    <div className="px-5 mb-5">
+      <div className="flex items-center gap-2 mb-2 px-1">
+        <MessageCircle className="w-3.5 h-3.5 text-muted-foreground" />
+        <span className="font-montserrat font-bold text-muted-foreground text-[10px] uppercase tracking-wider">Avisos Recentes</span>
       </div>
       <div className="space-y-3">
         {messages.map((msg) => (
