@@ -110,7 +110,10 @@ export default function ClassroomTab() {
           .limit(50),
         supabase
           .from("prayer_requests")
-          .select("*")
+          .select(`
+            *,
+            profiles:user_id(full_name)
+          `)
           .eq("community", community!)
           .order("created_at", { ascending: false })
           .limit(20),
