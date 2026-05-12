@@ -529,6 +529,7 @@ export default function LessonChoiceView({
           prayer: viewingDevotional.prayer,
           practice: viewingDevotional.practice,
           questions: viewingDevotional.questions,
+          worship_songs: [],
         }}
         onBack={() => setViewingDevotional(null)}
         onComplete={async (id) => {
