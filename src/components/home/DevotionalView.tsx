@@ -54,7 +54,10 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
     async function load() {
       const { data } = await supabase
         .from("devotional_content")
-        .select("*")
+        .select(`
+          *,
+          worship_song:worship_song_id(*)
+        `)
         .eq("activity_id", activity.id)
         .maybeSingle();
 
@@ -66,6 +69,8 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
           prayer: data.prayer || "",
           practice: data.practice || "",
           questions: (data.questions as string[]) ?? [],
+          worship_song_id: data.worship_song_id,
+          worship_song: data.worship_song as any
         });
       }
 
