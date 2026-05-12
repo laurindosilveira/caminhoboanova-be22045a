@@ -111,16 +111,23 @@ export default function AdminDashboard() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [{ data: activitiesData }, { data: profilesData }, userResult, { data: turmasData }] = await Promise.all([
+    const [{ data: activitiesData }, { data: profilesData }, userResult] = await Promise.all([
       supabase.from("activities").select("*").order("order_num"),
       supabase.from("profiles").select("user_id, full_name, community, area, birth_date, phone, turma_id, confirmation_year, avatar_url, father_name, mother_name, father_phone, mother_phone, address, email, church_id"),
       supabase.auth.getUser(),
-      supabase.from("turmas").select("*").eq("is_active", true).order("area").order("name"),
     ]);
 
     const myId = userResult.data.user?.id ?? "";
     const myProfile = (profilesData ?? []).find(p => p.user_id === myId);
     const profilesList = (profilesData ?? []).filter(p => p.user_id !== myId && (!myProfile?.church_id || p.church_id === myProfile.church_id));
+
+    const { data: turmasData } = await supabase
+      .from("turmas")
+      .select("*")
+      .eq("is_active", true)
+      .eq("church_id", myProfile?.church_id || "")
+      .order("area")
+      .order("name");
 
     const [{ data: progressData }, { data: lessonRespsData }, { data: devProgressData }, { data: attendanceData }] = await Promise.all([
       supabase.from("user_progress").select("user_id, activity_id"),
