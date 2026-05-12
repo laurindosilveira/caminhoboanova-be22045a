@@ -124,11 +124,26 @@ export default function NotificationSettings() {
   const [showHelp, setShowHelp] = useState(false);
 
   const notificationOptions = [
-    { key: "devocional" as const, label: "Devocional diario", desc: `Lembrete as ${preferredHour}h para o devocional`, icon: BookOpen, color: "text-brand-green" },
-    { key: "eventos" as const, label: "Eventos e encontros", desc: "Avisos de eventos proximos", icon: CalendarDays, color: "text-primary" },
-    { key: "streak" as const, label: "Risco de perder sequencia", desc: "Alerta quando sua sequencia esta em risco", icon: Flame, color: "text-secondary" },
+    { key: "devocional" as const, label: "Devocional diário", desc: `Lembrete às ${preferredHour}h para o devocional`, icon: BookOpen, color: "text-brand-green" },
+    { key: "eventos" as const, label: "Eventos e encontros", desc: "Avisos de eventos próximos", icon: CalendarDays, color: "text-primary" },
+    { key: "streak" as const, label: "Risco de perder sequência", desc: "Alerta quando sua sequência está em risco", icon: Flame, color: "text-secondary" },
     { key: "mensagens" as const, label: "Mensagens do pastor", desc: "Novas mensagens e comunicados", icon: MessageSquare, color: "text-accent-foreground" },
   ];
+
+  const [showConfettiPref, setShowConfettiPref] = useState(true);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("caminho_show_confetti");
+    if (saved !== null) setShowConfettiPref(saved === "true");
+  }, []);
+
+  const handleToggleConfetti = () => {
+    const next = !showConfettiPref;
+    setShowConfettiPref(next);
+    localStorage.setItem("caminho_show_confetti", next.toString());
+    window.dispatchEvent(new Event("confetti-pref-updated"));
+  };
+
 
   useEffect(() => {
     if (!user) return;
