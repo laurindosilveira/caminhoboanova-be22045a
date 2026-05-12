@@ -51,25 +51,30 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
     if (devotionalData) return;
 
     async function load() {
-      const { data } = await supabase
+      const { data: contentData } = await supabase
         .from("devotional_content")
-        .select(`
-          *,
-          worship_song:worship_song_id(*)
-        `)
+        .select("*")
         .eq("activity_id", activity.id)
         .maybeSingle();
 
-      if (data) {
+      const { data: songsData } = await supabase
+        .from("devotional_worship_songs")
+        .select(`
+          worship_song:worship_songs(*)
+        `)
+        .eq("devotional_id", activity.id);
+
+      const songs = songsData?.map(s => s.worship_song).filter(Boolean) as WorshipSong[] || [];
+
+      if (contentData) {
         setContent({
-          bible_text: data.bible_text || "",
-          bible_reference: data.bible_reference || "",
-          reflection: data.reflection || "",
-          prayer: data.prayer || "",
-          practice: data.practice || "",
-          questions: (data.questions as string[]) ?? [],
-          worship_song_id: data.worship_song_id,
-          worship_song: data.worship_song as any
+          bible_text: contentData.bible_text || "",
+          bible_reference: contentData.bible_reference || "",
+          reflection: contentData.reflection || "",
+          prayer: contentData.prayer || "",
+          practice: contentData.practice || "",
+          questions: (contentData.questions as string[]) ?? [],
+          worship_songs: songs
         });
       }
 
