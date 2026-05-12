@@ -236,6 +236,13 @@ export default function Index() {
         {/* ===== COMUNIDADE ===== */}
         {activeTab === "comunidade" && <CommunityTab key={`comunidade-${currentArea}`} />}
 
+        {/* ===== ADORAÇÃO ===== */}
+        {activeTab === "adoracao" && (
+          <div className="px-5 pt-6">
+            <WorshipPlayerSection />
+          </div>
+        )}
+
         {/* ===== DISCIPULADO ===== */}
         {activeTab === "discipulado" && (
           <DiscipleshipTab
