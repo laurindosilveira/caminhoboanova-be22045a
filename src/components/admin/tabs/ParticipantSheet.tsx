@@ -629,7 +629,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       new Date(manualReleaseForm.available_until).getTime() < new Date(manualReleaseForm.available_from).getTime()
     ) {
       toast.error("Janela inválida", {
-        description: "A data de expiração precisa ser igual ou posterior ao início da liberação.",
+        { description: "A data de expiração precisa ser igual ou posterior ao início da liberação.",
       });
       return;
     }
@@ -741,7 +741,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       await fetchManualReleaseDrafts();
       toast.info(
         "Liberacoes salvas",
-        description: devIds.length === 1
+        { description: devIds.length === 1
           ? "O override deste devocional ja esta registrado no banco."
           : `${devIds.length} devocionais liberados e registrados no banco.`,
       });
@@ -766,7 +766,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       setManualReleaseDrafts((prev) => prev.filter((item) => item.id !== draftId));
       toast.info(
         "Liberacao removida",
-        description: draft.content_kind === "lesson"
+        { description: draft.content_kind === "lesson"
           ? "O override da licao foi apagado do banco."
           : "O override do devocional foi apagado do banco.",
       });
@@ -776,7 +776,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
     if (!isMissingManualReleaseStorage(error)) {
       toast.info(
         "Falha ao remover liberacao",
-        description: error.message,
+        { description: error.message,
       });
       return;
     }
