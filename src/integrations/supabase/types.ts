@@ -1502,6 +1502,35 @@ export type Database = {
         }
         Relationships: []
       }
+      prayer_interactions: {
+        Row: {
+          created_at: string
+          id: string
+          request_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          request_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          request_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prayer_interactions_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "prayer_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prayer_pairs: {
         Row: {
           community: string
@@ -1549,39 +1578,53 @@ export type Database = {
       }
       prayer_requests: {
         Row: {
-          amen_count: number
-          community: string
+          area: string
           content: string
           created_at: string
           id: string
-          is_anonymous: boolean
+          is_sensitive: boolean | null
+          prayers_count: number | null
           status: string
+          turma_id: string | null
+          updated_at: string
           user_id: string
-          user_name: string
+          visibility: string
         }
         Insert: {
-          amen_count?: number
-          community: string
+          area: string
           content: string
           created_at?: string
           id?: string
-          is_anonymous?: boolean
+          is_sensitive?: boolean | null
+          prayers_count?: number | null
           status?: string
+          turma_id?: string | null
+          updated_at?: string
           user_id: string
-          user_name: string
+          visibility: string
         }
         Update: {
-          amen_count?: number
-          community?: string
+          area?: string
           content?: string
           created_at?: string
           id?: string
-          is_anonymous?: boolean
+          is_sensitive?: boolean | null
+          prayers_count?: number | null
           status?: string
+          turma_id?: string | null
+          updated_at?: string
           user_id?: string
-          user_name?: string
+          visibility?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "prayer_requests_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       privacy_requests: {
         Row: {
