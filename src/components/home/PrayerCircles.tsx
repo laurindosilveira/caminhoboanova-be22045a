@@ -97,6 +97,7 @@ export default function PrayerCircles() {
       visibility,
       is_sensitive: isSensitive,
       area: currentArea,
+      community: profile?.community,
       turma_id: profile?.turma_id
     });
 
