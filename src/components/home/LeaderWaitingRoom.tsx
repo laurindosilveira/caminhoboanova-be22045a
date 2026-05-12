@@ -75,8 +75,8 @@ export default function LeaderWaitingRoom({ areaFilter, onAssigned }: Props) {
     }
 
     const myId = userResult.data.user?.id;
-    setUsers((profiles ?? []).filter((profile) => profile.user_id !== myId));
-    setTurmas(turmasData ?? []);
+    setUsers(((profiles as any) ?? []).filter((profile: any) => profile.user_id !== myId));
+    setTurmas((turmasData as any) ?? []);
     setLoading(false);
   }
 
