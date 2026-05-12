@@ -1,7 +1,7 @@
-import { AutomatedSystemUpdate } from "./discipleship/shared";
+import { AutomatedSystemUpdate } from "../components/home/discipleship/shared";
 
-const BUILD_VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "0.0.0";
-const BUILD_DATE = typeof __APP_BUILD_DATE__ === "string" ? __APP_BUILD_DATE__ : new Date().toISOString();
+const BUILD_VERSION = (typeof window !== 'undefined' && (window as any).__APP_VERSION__) || "0.0.0";
+const BUILD_DATE = (typeof window !== 'undefined' && (window as any).__APP_BUILD_DATE__) || new Date().toISOString();
 
 export const AUTOMATED_SYSTEM_UPDATES: any[] = [
   {
