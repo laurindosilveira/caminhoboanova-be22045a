@@ -62,7 +62,7 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
     if (!myArea) { setLoadingData(false); return; }
     async function fetchData() {
       setLoadingData(true);
-      const queries: Promise<any>[] = [
+      const queries: any[] = [
         supabase.from("events").select("id, title, event_date, type")
           .eq("area", myArea as any)
           .lt("event_date", now.toISOString())

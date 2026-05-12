@@ -45,7 +45,7 @@ export default function WaitingRoom() {
 
     const myId = userResult.data.user?.id;
     // Waiting room = users without turma_id (excluding current admin)
-    const waiting = (profiles ?? []).filter(p => !p.turma_id && p.user_id !== myId);
+    const waiting = (profiles ?? []).filter(p => !p.turma_id && p.user_id !== myId) as WaitingUser[];
     setUsers(waiting);
     setTurmas(turmasData ?? []);
     setLoading(false);

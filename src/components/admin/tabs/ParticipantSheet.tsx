@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import PastoralReportPDF from "@/components/admin/PastoralReportPDF";
 import JourneyLessonView from "@/components/home/JourneyLessonView";
+import { toast } from "sonner";
 
 type Assessment = {
   prayer_score: number | null; presence_score: number | null;
@@ -627,9 +628,8 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       manualReleaseForm.available_until &&
       new Date(manualReleaseForm.available_until).getTime() < new Date(manualReleaseForm.available_from).getTime()
     ) {
-      toast({
-        title: "Janela invalida",
-        description: "A data de expiração precisa ser igual ou posterior ao inicio da liberação.",
+      toast.error("Janela inválida", {
+        description: "A data de expiração precisa ser igual ou posterior ao início da liberação.",
       });
       return;
     }
@@ -676,19 +676,19 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         const next = [draft, ...manualReleaseDrafts.filter((item) => !(item.content_kind === "lesson" && item.lesson_id === draft.lesson_id))];
         setManualReleaseDrafts(next);
         window.localStorage.setItem(storageKey, JSON.stringify(next));
-        toast({ title: "Rascunho salvo localmente", description: "A tabela ainda nao existe no Supabase. Rode o SQL da parte 2 para persistir de verdade." });
+        toast.info("Rascunho salvo localmente", { description: "A tabela ainda nao existe no Supabase. Rode o SQL da parte 2 para persistir de verdade." });
         resetManualReleaseForm();
         setSavingManualRelease(false);
         setActiveSection("liberacoes");
         return;
       }
       if (error) {
-        toast({ title: "Falha ao salvar liberacao", description: error.message });
+        toast.error("Falha ao salvar liberação", { description: error.message });
         setSavingManualRelease(false);
         return;
       }
       await fetchManualReleaseDrafts();
-      toast({ title: "Liberacao manual salva", description: "O override desta licao ja esta registrado no banco." });
+      toast.success("Liberação manual salva", { description: "O override desta lição já está registrado no banco." });
     } else {
       // devotional — one upsert per selected devotional
       const devIds = manualReleaseForm.devotional_ids;
@@ -727,21 +727,21 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         const next = [...drafts, ...manualReleaseDrafts.filter((item) => !(item.content_kind === "devotional" && existingIds.has(item.devotional_id)))];
         setManualReleaseDrafts(next);
         window.localStorage.setItem(storageKey, JSON.stringify(next));
-        toast({ title: "Rascunhos salvos localmente", description: `${devIds.length} devocional(is) preparado(s). A tabela ainda nao existe no Supabase.` });
+        toast.info("Rascunhos salvos localmente", { description: `${devIds.length} devocional(is) preparado(s). A tabela ainda nao existe no Supabase.` });
         resetManualReleaseForm();
         setSavingManualRelease(false);
         setActiveSection("liberacoes");
         return;
       }
       if (error) {
-        toast({ title: "Falha ao salvar liberacao", description: error.message });
+        toast.info("Falha ao salvar liberacao", { description: error.message });
         setSavingManualRelease(false);
         return;
       }
       await fetchManualReleaseDrafts();
-      toast({
-        title: "Liberacoes salvas",
-        description: devIds.length === 1
+      toast.info(
+        "Liberacoes salvas",
+        { description: devIds.length === 1
           ? "O override deste devocional ja esta registrado no banco."
           : `${devIds.length} devocionais liberados e registrados no banco.`,
       });
@@ -764,9 +764,9 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
 
     if (!error) {
       setManualReleaseDrafts((prev) => prev.filter((item) => item.id !== draftId));
-      toast({
-        title: "Liberacao removida",
-        description: draft.content_kind === "lesson"
+      toast.info(
+        "Liberacao removida",
+        { description: draft.content_kind === "lesson"
           ? "O override da licao foi apagado do banco."
           : "O override do devocional foi apagado do banco.",
       });
@@ -774,9 +774,9 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
     }
 
     if (!isMissingManualReleaseStorage(error)) {
-      toast({
-        title: "Falha ao remover liberacao",
-        description: error.message,
+      toast.info(
+        "Falha ao remover liberacao",
+        { description: error.message,
       });
       return;
     }
