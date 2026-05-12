@@ -196,11 +196,26 @@ export default function ClassroomTab() {
           // Re-fetch prayers on any change
           supabase
             .from("prayer_requests")
-            .select("*")
+            .select(`
+              *,
+              profiles:user_id(full_name)
+            `)
             .eq("community", community!)
             .order("created_at", { ascending: false })
             .limit(20)
-            .then(({ data }) => setPrayers((data ?? []) as PrayerRequest[]));
+            .then(({ data }) => {
+              const mapped = (data ?? []).map((p: any) => ({
+                id: p.id,
+                user_id: p.user_id,
+                user_name: p.profiles?.full_name || 'Usuário',
+                content: p.content,
+                is_anonymous: p.visibility === 'anonymous',
+                amen_count: p.prayers_count || 0,
+                created_at: p.created_at,
+                status: p.status
+              }));
+              setPrayers(mapped);
+            });
         }
       )
       .subscribe();
