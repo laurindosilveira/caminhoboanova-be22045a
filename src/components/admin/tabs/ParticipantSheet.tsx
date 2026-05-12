@@ -446,7 +446,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         const statusLabel = w.status === "aprovado" ? "✅ Aprovado" : w.status === "rejeitado" ? "❌ Rejeitado" : "⏳ Pendente";
         if (w.status === "aprovado") worshipCount++;
         if (worshipCount === 1 && w.status === "aprovado") {
-          tl.push({ date: w.created_at, type: "milestone", category: "marco", message: "⛪ Primeiro culto confirmado!", detail: "Marco importante na caminhada", icon: "⛪", severity: "positive" });
+          tl.push({ date: w.created_at, type: "milestone", category: "marco", "⛪ Primeiro culto confirmado!", detail: "Marco importante na caminhada", icon: "⛪", severity: "positive" });
         }
         const eventLabel = w.event_type === "jemiac" ? "JEMIAC" : w.event_type === "retiro" ? "Retiro" : "Culto";
         const eventEmoji = w.event_type === "jemiac" ? "✝️" : w.event_type === "retiro" ? "🏕️" : "⛪";
@@ -461,7 +461,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       // First registered assessment as milestone
       if (allAssArr.length > 0) {
         const first = [...allAssArr].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0];
-        tl.push({ date: first.created_at, type: "milestone", category: "marco", message: "💗 Primeira autoavaliação espiritual", detail: "Início do acompanhamento da vida espiritual", icon: "💗", severity: "positive" });
+        tl.push({ date: first.created_at, type: "milestone", category: "marco", "💗 Primeira autoavaliação espiritual", detail: "Início do acompanhamento da vida espiritual", icon: "💗", severity: "positive" });
       }
 
       // Challenge participations
@@ -676,7 +676,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         const next = [draft, ...manualReleaseDrafts.filter((item) => !(item.content_kind === "lesson" && item.lesson_id === draft.lesson_id))];
         setManualReleaseDrafts(next);
         window.localStorage.setItem(storageKey, JSON.stringify(next));
-        toast.info( message: "Rascunho salvo localmente", description: "A tabela ainda nao existe no Supabase. Rode o SQL da parte 2 para persistir de verdade." });
+        toast.info("Rascunho salvo localmente", description: "A tabela ainda nao existe no Supabase. Rode o SQL da parte 2 para persistir de verdade." });
         resetManualReleaseForm();
         setSavingManualRelease(false);
         setActiveSection("liberacoes");
@@ -727,20 +727,20 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         const next = [...drafts, ...manualReleaseDrafts.filter((item) => !(item.content_kind === "devotional" && existingIds.has(item.devotional_id)))];
         setManualReleaseDrafts(next);
         window.localStorage.setItem(storageKey, JSON.stringify(next));
-        toast.info( message: "Rascunhos salvos localmente", description: `${devIds.length} devocional(is) preparado(s). A tabela ainda nao existe no Supabase.` });
+        toast.info("Rascunhos salvos localmente", description: `${devIds.length} devocional(is) preparado(s). A tabela ainda nao existe no Supabase.` });
         resetManualReleaseForm();
         setSavingManualRelease(false);
         setActiveSection("liberacoes");
         return;
       }
       if (error) {
-        toast.info( message: "Falha ao salvar liberacao", description: error.message });
+        toast.info("Falha ao salvar liberacao", description: error.message });
         setSavingManualRelease(false);
         return;
       }
       await fetchManualReleaseDrafts();
       toast.info(
-        message: "Liberacoes salvas",
+        "Liberacoes salvas",
         description: devIds.length === 1
           ? "O override deste devocional ja esta registrado no banco."
           : `${devIds.length} devocionais liberados e registrados no banco.`,
@@ -765,7 +765,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
     if (!error) {
       setManualReleaseDrafts((prev) => prev.filter((item) => item.id !== draftId));
       toast.info(
-        message: "Liberacao removida",
+        "Liberacao removida",
         description: draft.content_kind === "lesson"
           ? "O override da licao foi apagado do banco."
           : "O override do devocional foi apagado do banco.",
@@ -775,7 +775,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
 
     if (!isMissingManualReleaseStorage(error)) {
       toast.info(
-        message: "Falha ao remover liberacao",
+        "Falha ao remover liberacao",
         description: error.message,
       });
       return;
@@ -1222,7 +1222,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   // Send push notification via admin-push
                   await supabase.functions.invoke("admin-push", {
                     body: {
-                      message: "💬 Conversa agendada!",
+                      "💬 Conversa agendada!",
                       body: `Seu líder agendou uma conversa com você para ${new Date(eventDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })} às ${scheduleTime}. Confira na sua agenda!`,
                       target: "user",
                       targetValue: p.user_id,
