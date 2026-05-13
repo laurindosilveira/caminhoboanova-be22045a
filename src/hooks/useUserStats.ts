@@ -35,7 +35,6 @@ function calculateStreak(dates: string[]): number {
 }
 
 function calculateLevel(points: number, thresholds: number[]): number {
-  // thresholds = [level2, level3, level4, level5]
   if (points >= thresholds[3]) return 5;
   if (points >= thresholds[2]) return 4;
   if (points >= thresholds[1]) return 3;
@@ -76,20 +75,7 @@ export function useUserStats(currentArea?: string): UserStats {
       const { data: profile } = await supabase.from("profiles").select("church_id").eq("user_id", user.id).single();
       const churchId = profile?.church_id;
 
-      const [
-        { data: activities, error: actErr },
-        { data: progress, error: progErr },
-        { data: devProgress, error: devErr },
-        { data: lessonResponses, error: lessErr },
-        { data: attendance, error: attErr },
-        { data: worshipData, error: worErr },
-        { data: achievementUnlocks, error: achErr },
-        { data: coursesData },
-        { data: lessonsData },
-        { data: challengeData },
-        { data: gameConfig },
-        { data: customEventTypesData },
-      console.log("useUserStats: Starting Promise.all for churchId", churchId);
+      console.log("useUserStats: Starting Promise.allSettled for churchId", churchId);
       const results = await Promise.allSettled([
         supabase.from("activities").select("id, type, title, subtitle, order_num, points, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null').order("order_num"),
         supabase.from("user_progress").select("activity_id, completed_at, church_id").eq("user_id", user.id).eq("church_id", churchId),
@@ -116,6 +102,19 @@ export function useUserStats(currentArea?: string): UserStats {
         console.error("useUserStats: Some queries failed", results.filter(r => r.status === 'rejected'));
       }
 
+      const activities = activitiesRes.data ?? [];
+      const progress = progressRes.data ?? [];
+      const devProgress = devProgressRes.data ?? [];
+      const lessonResponses = lessonResponsesRes.data ?? [];
+      const attendance = attendanceRes.data ?? [];
+      const worshipData = worshipDataRes.data ?? [];
+      const achievementUnlocks = achievementUnlocksRes.data ?? [];
+      const coursesData = coursesDataRes.data ?? [];
+      const lessonsData = lessonsDataRes.data ?? [];
+      const challengeData = challengeDataRes.data ?? [];
+      const gameConfig = gameConfigRes.data ?? [];
+      const customEventTypesData = customEventTypesDataRes.data ?? [];
+
       // Carrega configuração dinâmica com fallback nos defaults
       const cfgMap = new Map<string, number>((gameConfig ?? []).map((r: any) => [r.key, Number(r.value)]));
       const cfg = {
@@ -135,42 +134,26 @@ export function useUserStats(currentArea?: string): UserStats {
         cfgMap.get("level_5_threshold") ?? 200,
       ];
 
-      const activities = activitiesRes.data ?? [];
-      const progress = progressRes.data ?? [];
-      const devProgress = devProgressRes.data ?? [];
-      const lessonResponses = lessonResponsesRes.data ?? [];
-      const attendance = attendanceRes.data ?? [];
-      const worshipData = worshipDataRes.data ?? [];
-      const achievementUnlocks = achievementUnlocksRes.data ?? [];
-      const coursesData = coursesDataRes.data ?? [];
-      const lessonsData = lessonsDataRes.data ?? [];
-      const challengeData = challengeDataRes.data ?? [];
-      const gameConfig = gameConfigRes.data ?? [];
-      const customEventTypesData = customEventTypesDataRes.data ?? [];
-
-      const acts = activities ?? [];
-      const prog = progress ?? [];
-      const devProg = devProgress ?? [];
+      const acts = activities;
+      const prog = progress;
+      const devProg = devProgress;
       const completedIds = new Set(prog.map((p: any) => p.activity_id));
       const allDates = [
         ...prog.map((p: any) => p.completed_at),
         ...devProg.map((p: any) => p.completed_at),
       ];
 
-      // Pontos de atividades legadas
       const activityPoints = acts
-        .filter(a => completedIds.has(a.id) && a.type !== "devocional" && a.type !== "formacao" && a.type !== "encontro")
-        .reduce((sum, a) => sum + (a.points ?? 0), 0);
+        .filter((a: any) => completedIds.has(a.id) && a.type !== "devocional" && a.type !== "formacao" && a.type !== "encontro")
+        .reduce((sum: number, a: any) => sum + (a.points ?? 0), 0);
 
-      // Pontos de devocionais: recovery = valor reduzido, fim de semana = weekendPts, normal = devotionalPoints
-      const devotionalPoints = devProg.reduce((sum, dp: any) => {
+      const devotionalPoints = devProg.reduce((sum: number, dp: any) => {
         if (typeof dp.awarded_points === "number") return sum + dp.awarded_points;
         if (dp.is_recovery) return sum + cfg.devotionalRecoveryPts;
         const dow = new Date(dp.completed_at).getDay();
         return sum + (dow === 0 || dow === 6 ? cfg.devotionalWeekendPts : cfg.devotionalPoints);
       }, 0);
 
-      // Map custom event type value → points
       const relevantCustomTypes = (customEventTypesData ?? []).filter((t: any) =>
         !t.area || !currentArea || t.area === currentArea
       );
@@ -185,9 +168,8 @@ export function useUserStats(currentArea?: string): UserStats {
         }
       });
 
-      // Fetch event types for attended events so we can apply per-type custom points
-      const presentAttendance = (attendance ?? []).filter(a => a.status === "presente");
-      const attendedEventIds = presentAttendance.map(a => a.event_id).filter(Boolean);
+      const presentAttendance = (attendance ?? []).filter((a: any) => a.status === "presente");
+      const attendedEventIds = presentAttendance.map((a: any) => a.event_id).filter(Boolean);
       let eventTypeById = new Map<string, string>();
       if (attendedEventIds.length > 0) {
         const { data: eventsData } = await supabase
@@ -197,26 +179,24 @@ export function useUserStats(currentArea?: string): UserStats {
         (eventsData ?? []).forEach((e: any) => eventTypeById.set(e.id, e.type));
       }
 
-      const completedLessonIds = new Set((lessonResponses ?? []).map(r => r.lesson_id));
+      const completedLessonIds = new Set((lessonResponses ?? []).map((r: any) => r.lesson_id));
       const lessonStudyPoints = completedLessonIds.size * cfg.lessonPoints;
 
-      // Attendance: custom type with gives_points=true → custom pts; otherwise → default cfg.attendancePoints
-      const attendancePoints = presentAttendance.reduce((sum, a) => {
+      const attendancePoints = presentAttendance.reduce((sum: number, a: any) => {
         const eventType = eventTypeById.get(a.event_id);
         const custom = eventType ? customTypeMap.get(eventType) : undefined;
         if (custom && custom.gives_points) return sum + custom.points;
         return sum + cfg.attendancePoints;
       }, 0);
       const worshipPoints = (worshipData ?? []).length * cfg.worshipPoints;
-      const achievementBonusPoints = (achievementUnlocks ?? []).reduce((sum, a) => sum + (a.bonus_points ?? 0), 0);
+      const achievementBonusPoints = (achievementUnlocks ?? []).reduce((sum: number, a: any) => sum + (a.bonus_points ?? 0), 0);
       const challengePoints = (challengeData ?? []).length * cfg.challengePoints;
 
-      // Bônus por curso completo
       let courseBonusPoints = 0;
       const allLessons = lessonsData ?? [];
-      (coursesData ?? []).forEach(course => {
-        const courseLessons = allLessons.filter(l => l.course_id === course.id);
-        if (courseLessons.length > 0 && courseLessons.every(l => completedLessonIds.has(l.id))) {
+      (coursesData ?? []).forEach((course: any) => {
+        const courseLessons = allLessons.filter((l: any) => l.course_id === course.id);
+        if (courseLessons.length > 0 && courseLessons.every((l: any) => completedLessonIds.has(l.id))) {
           courseBonusPoints += cfg.courseBonus;
         }
       });
@@ -228,7 +208,7 @@ export function useUserStats(currentArea?: string): UserStats {
       const faithEnergy = calculateEnergy(allDates);
       const completedCount = completedIds.size;
 
-      const nextActivity = acts.find(a => !completedIds.has(a.id)) ?? null;
+      const nextActivity = acts.find((a: any) => !completedIds.has(a.id)) ?? null;
 
       setStats({
         faithPoints,
