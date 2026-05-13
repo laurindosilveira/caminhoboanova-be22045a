@@ -169,10 +169,8 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
   }
 
   async function handleAddDay() {
-    if (!canEditLesson) {
-      toast({ title: "Acesso Restrito", description: "Apenas Super Admins podem adicionar devocionais a lições globais.", variant: "destructive" });
-      return;
-    }
+    // Anyone (leaders/admins) can add a devotional day for their church.
+    // Super admins can add global ones (churchId will be null).
 
     const nextDay = devotionals.length > 0
       ? Math.max(...devotionals.map(d => d.day_number)) + 1
