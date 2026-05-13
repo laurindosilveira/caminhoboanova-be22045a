@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import {
-  ChevronLeft, Save, Plus, Trash2, BookOpen, Heart, Pen, Edit3, CalendarDays, AlertTriangle
+  ChevronLeft, Save, Plus, Trash2, BookOpen, Heart, Pen, Edit3, CalendarDays, AlertTriangle, Globe, Lock
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
