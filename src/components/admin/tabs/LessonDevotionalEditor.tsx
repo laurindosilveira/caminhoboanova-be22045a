@@ -230,6 +230,11 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
 
   async function handleSave() {
     if (!editing) return;
+    const isGlobalDev = !editing.church_id;
+    if (isGlobalDev && !isSuper) {
+      toast({ title: "Erro de Permissão", description: "Líderes não podem editar devocionais globais. Crie um novo para sua igreja.", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     await supabase.from("devotional_content").update({
       title: form.title,
