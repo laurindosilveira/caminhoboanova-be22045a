@@ -280,8 +280,8 @@ export type Database = {
           justification: string | null
           leader_confirmed_at: string | null
           status: string
-          user_requested_at: string | null
           user_id: string
+          user_requested_at: string | null
         }
         Insert: {
           church_id?: string | null
@@ -293,8 +293,8 @@ export type Database = {
           justification?: string | null
           leader_confirmed_at?: string | null
           status?: string
-          user_requested_at?: string | null
           user_id: string
+          user_requested_at?: string | null
         }
         Update: {
           church_id?: string | null
@@ -306,8 +306,8 @@ export type Database = {
           justification?: string | null
           leader_confirmed_at?: string | null
           status?: string
-          user_requested_at?: string | null
           user_id?: string
+          user_requested_at?: string | null
         }
         Relationships: [
           {

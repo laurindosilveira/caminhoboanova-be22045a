@@ -97,7 +97,7 @@ export default function AttendanceTab({ participants, activities, communities, i
   const [savingWorship, setSavingWorship] = useState<string | null>(null);
 
   // Pending event attendance requests
-  type PendingAttendance = { id: string; event_id: string; user_id: string; status: string; justification: string | null; created_at: string; confirmation_source?: AttendanceSource | null; full_name?: string; community?: string; event_title?: string; event_date?: string };
+  type PendingAttendance = { id: string; event_id: string; user_id: string; status: string; justification: string | null; created_at: string; confirmation_source?: string | null; full_name?: string; community?: string; event_title?: string; event_date?: string };
   const [pendingAttendance, setPendingAttendance] = useState<PendingAttendance[]>([]);
   const [savingAttendanceApproval, setSavingAttendanceApproval] = useState<string | null>(null);
 
