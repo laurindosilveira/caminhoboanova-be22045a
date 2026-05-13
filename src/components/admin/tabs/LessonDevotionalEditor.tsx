@@ -94,7 +94,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
   }
 
   async function saveDevotionalMode(mode: "10_days" | "5_days") {
-    if (!canEditLesson) {
+    if (!canEditLessonProps) {
       toast({ title: "Acesso Restrito", description: "Apenas Super Admins podem alterar o modo de devocionais globais.", variant: "destructive" });
       return;
     }
