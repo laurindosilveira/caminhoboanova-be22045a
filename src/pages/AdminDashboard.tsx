@@ -82,12 +82,12 @@ export default function AdminDashboard() {
           setSelectedTurma(myTurma);
         } else {
           // turma_id set but not found in active list — use placeholder so they can manage it
-          setSelectedTurma({ id: "", name: "Minha Área", area: profile.area ?? null, year: new Date().getFullYear(), is_active: true, description: null });
+          setSelectedTurma({ id: profile.turma_id || "", name: "Minha Área", area: profile.area ?? null, year: new Date().getFullYear(), is_active: true, description: null });
           setActiveTab("turma");
         }
       } else if (!profile?.turma_id) {
         // No turma yet — skip selector, go straight to turma management tab
-        setSelectedTurma({ id: "", name: "Minha Área", area: profile?.area ?? null, year: new Date().getFullYear(), is_active: true, description: null });
+        setSelectedTurma({ id: "new-leader-turma", name: "Minha Área", area: profile?.area ?? null, year: new Date().getFullYear(), is_active: true, description: null });
         setActiveTab("turma");
       }
     }

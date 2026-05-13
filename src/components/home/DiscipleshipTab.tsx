@@ -46,7 +46,7 @@ type DiscipleshipTabProps = {
 };
 
 export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "choice", onTargetLessonConsumed }: DiscipleshipTabProps = {}) {
-  const { profile, role } = useAuth();
+  const { profile, role, signOut } = useAuth();
   const { effectiveArea } = useAreaSwitch();
   const isLeaderOrAdmin = role === "admin" || role === "lider";
   const agendaSchedule = useAgendaSchedule();
@@ -254,9 +254,15 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
             <Lock className="w-7 h-7 text-secondary" />
           </div>
           <h3 className="font-montserrat font-bold text-foreground text-lg mb-1">Aguardando aprovação</h3>
-          <p className="text-muted-foreground font-inter text-sm leading-relaxed max-w-xs">
+          <p className="text-muted-foreground font-inter text-sm leading-relaxed max-w-xs mb-4">
             Você ainda não foi atribuído(a) a uma turma. Enquanto isso, conheça o que te espera! 👇
           </p>
+          <button
+            onClick={() => void signOut()}
+            className="w-full max-w-xs flex items-center justify-center gap-2 rounded-xl bg-destructive px-4 py-3 font-montserrat text-sm font-bold text-destructive-foreground transition-colors hover:bg-destructive/90"
+          >
+            Sair e tentar outra conta
+          </button>
         </div>
 
         {/* Introductory content */}
