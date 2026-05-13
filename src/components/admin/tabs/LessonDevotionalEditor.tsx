@@ -199,8 +199,12 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
   }
 
   async function handleDelete(id: string) {
-    if (!canEditLesson && !isSuper) {
-      toast({ title: "Erro", description: "Você não tem permissão para excluir devocionais desta lição.", variant: "destructive" });
+    const dev = devotionals.find(d => d.id === id);
+    if (!dev) return;
+
+    const isGlobalDev = !dev.church_id;
+    if (isGlobalDev && !isSuper) {
+      toast({ title: "Erro", description: "Líderes não podem excluir devocionais globais.", variant: "destructive" });
       return;
     }
     if (!confirm("Excluir este devocional?")) return;
