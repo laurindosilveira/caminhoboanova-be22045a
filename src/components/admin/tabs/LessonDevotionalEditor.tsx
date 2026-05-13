@@ -200,6 +200,10 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
   }
 
   async function handleDelete(id: string) {
+    if (!canEditLesson && !isSuper) {
+      toast({ title: "Erro", description: "Você não tem permissão para excluir devocionais desta lição.", variant: "destructive" });
+      return;
+    }
     if (!confirm("Excluir este devocional?")) return;
     await supabase.from("devotional_content").delete().eq("id", id);
     setEditing(null);
