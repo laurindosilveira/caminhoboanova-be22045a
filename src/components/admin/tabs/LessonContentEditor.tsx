@@ -91,8 +91,12 @@ export default function LessonContentEditor({ lesson, onBack }: Props) {
 
   async function handleSave() {
     setSaving(true);
+    const { data: profile } = await supabase.from("profiles").select("church_id").eq("user_id", (await supabase.auth.getUser()).data.user?.id).single();
+    const churchId = profile?.church_id;
+
     await supabase.from("lesson_content").upsert({
       lesson_id: lesson.id,
+      church_id: churchId,
       greeting: content.greeting,
       icebreaker: content.icebreaker,
       summary: content.summary,
