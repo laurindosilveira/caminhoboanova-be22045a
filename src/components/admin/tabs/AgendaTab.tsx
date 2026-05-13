@@ -3,6 +3,7 @@ import { AREAS, ALL_COMMUNITIES } from "@/config/areas";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
+import { useChurch } from "@/hooks/useChurch";
 import { useCustomEventTypes } from "@/hooks/useCustomEventTypes";
 import { CalendarDays, Plus, X, MapPin, Users, BookOpen, Pencil, Check, Sparkles } from "lucide-react";
 import { format } from "date-fns";
@@ -46,6 +47,7 @@ type Props = {
 
 export default function AgendaTab({ leaderMode = false }: Props) {
   const { profile } = useAuth();
+  const { churchId } = useChurch();
   const { effectiveArea } = useAreaSwitch();
   const currentArea = effectiveArea || profile?.area || "";
   const { allTypes, customTypes, getLabel, getEmoji, getColor, refetch: refetchTypes } = useCustomEventTypes(currentArea);
@@ -73,14 +75,16 @@ export default function AgendaTab({ leaderMode = false }: Props) {
   });
   const [savingType, setSavingType] = useState(false);
 
-  useEffect(() => { fetchEvents(); fetchLessons(); }, []);
+  useEffect(() => { 
+    if (churchId) {
+      fetchEvents(); 
+      fetchLessons(); 
+    }
+  }, [churchId]);
 
   async function fetchEvents() {
+    if (!churchId) return;
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data: profile } = await supabase.from("profiles").select("church_id").eq("user_id", user.id).single();
-    const churchId = profile?.church_id;
 
     const { data, error } = await supabase.from("events").select("*").eq("church_id", churchId).order("event_date");
     if (error) {
@@ -148,9 +152,6 @@ export default function AgendaTab({ leaderMode = false }: Props) {
       setSaving(false);
       return;
     }
-
-    const { data: profile } = await supabase.from("profiles").select("church_id").eq("user_id", (await supabase.auth.getUser()).data.user?.id).single();
-    const churchId = profile?.church_id;
 
     const payload = {
       title: form.title,
