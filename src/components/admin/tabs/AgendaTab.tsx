@@ -77,7 +77,12 @@ export default function AgendaTab({ leaderMode = false }: Props) {
 
   async function fetchEvents() {
     setLoading(true);
-    const { data, error } = await supabase.from("events").select("*").order("event_date");
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data: profile } = await supabase.from("profiles").select("church_id").eq("user_id", user.id).single();
+    const churchId = profile?.church_id;
+
+    const { data, error } = await supabase.from("events").select("*").eq("church_id", churchId).order("event_date");
     if (error) {
       toast.error("Erro ao carregar eventos", { description: error.message });
     }
@@ -144,12 +149,16 @@ export default function AgendaTab({ leaderMode = false }: Props) {
       return;
     }
 
+    const { data: profile } = await supabase.from("profiles").select("church_id").eq("user_id", (await supabase.auth.getUser()).data.user?.id).single();
+    const churchId = profile?.church_id;
+
     const payload = {
       title: form.title,
       description: form.description || null,
       event_date: normalizedEventDate.toISOString(),
       location: form.location || null,
       type: form.type,
+      church_id: churchId,
       area: leaderMode
         ? (form.scope === "area" ? currentArea || null : null)
         : (form.area || null),

@@ -158,8 +158,12 @@ export default function LessonDevotionalEditor({ lesson, onBack }: Props) {
       toast({ title: "Máximo de 6 devocionais por lição", variant: "destructive" });
       return;
     }
+    const { data: profile } = await supabase.from("profiles").select("church_id").eq("user_id", (await supabase.auth.getUser()).data.user?.id).single();
+    const churchId = profile?.church_id;
+
     const { error } = await supabase.from("devotional_content").insert({
       lesson_id: lesson.id,
+      church_id: churchId,
       day_number: nextDay,
       title: `Dia ${nextDay} — ${DAY_LABELS[nextDay] || ""}`,
       bible_text: "",
@@ -200,8 +204,12 @@ export default function LessonDevotionalEditor({ lesson, onBack }: Props) {
   async function handleSave() {
     if (!editing) return;
     setSaving(true);
+    const { data: profile } = await supabase.from("profiles").select("church_id").eq("user_id", (await supabase.auth.getUser()).data.user?.id).single();
+    const churchId = profile?.church_id;
+
     await supabase.from("devotional_content").update({
       title: form.title,
+      church_id: churchId,
       bible_text: form.bible_text,
       bible_reference: form.bible_reference,
       reflection: form.reflection,
