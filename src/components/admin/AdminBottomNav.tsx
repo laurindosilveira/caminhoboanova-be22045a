@@ -17,9 +17,10 @@ const ALL_TABS: TabDef[] = [
 ];
 
 const LIDER_TAB_DEFS: TabDef[] = [
-  { id: "turma", label: "Turma", icon: GraduationCap },
+  { id: "overview", label: "Visão", icon: BarChart3 },
+  { id: "turma", label: "Discípulos", icon: GraduationCap },
+  { id: "agenda", label: "Encontros", icon: CalendarDays },
   { id: "avisos", label: "Avisos", icon: MessageSquare },
-  { id: "agenda", label: "Agenda", icon: CalendarDays },
   { id: "contatos", label: "Contatos", icon: Phone },
   { id: "courses", label: "Cursos", icon: BookOpen },
 ];
@@ -35,7 +36,7 @@ export default function AdminBottomNav({ active, onChange, userRole }: Props) {
       aria-label="Navegação do painel administrativo"
       role="tablist"
     >
-      <div className="max-w-2xl mx-auto flex overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap px-2">
+      <div className="max-w-2xl mx-auto flex overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap px-4 py-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = active === tab.id;
@@ -46,10 +47,10 @@ export default function AdminBottomNav({ active, onChange, userRole }: Props) {
               aria-selected={isActive}
               aria-label={tab.label}
               onClick={() => onChange(tab.id)}
-              className="flex-none w-[78px] flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors"
+              className="flex-none w-[80px] flex flex-col items-center justify-center py-2.5 gap-1 transition-all active:scale-90"
             >
               <Icon
-                className={`w-5 h-5 ${isActive ? "text-primary" : "text-muted-foreground"}`}
+                className={`w-5 h-5 transition-colors ${isActive ? "text-primary fill-primary/10" : "text-muted-foreground"}`}
                 aria-hidden="true"
               />
               <span
