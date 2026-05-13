@@ -40,7 +40,7 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
               <span className="text-xl">✝️</span>
             </div>
             <div>
-              <p className="text-primary-foreground/60 font-inter text-xs">Painel do Administrador</p>
+              <p className="text-primary-foreground/60 font-inter text-xs">SALA DO LIDER</p>
               <h1 className="font-montserrat font-black text-primary-foreground text-lg">{areaName}</h1>
               {subtitle && <p className="text-primary-foreground/60 font-inter text-xs mt-0.5">📍 {subtitle}</p>}
             </div>
