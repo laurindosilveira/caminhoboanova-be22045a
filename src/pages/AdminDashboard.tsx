@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
-// Cache bust: v2-sala-do-lider-force-reload-1349
+// Cache bust: v3-sala-do-lider-force-reload-immediate-999
 
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -410,7 +410,7 @@ function TurmaSelector({
             </div>
             <div>
               <p className="text-primary-foreground/60 font-inter text-xs">
-                {isSuper ? "Super Administrador" : "SALA DO LIDER"}
+                {isSuper ? "Super Administrador" : "SALA DO LÍDER"}
               </p>
               <h1 className="font-montserrat font-black text-primary-foreground text-lg">Selecione a Turma</h1>
             </div>
