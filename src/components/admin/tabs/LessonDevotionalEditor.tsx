@@ -38,7 +38,7 @@ type EventRelease = {
   intervalDays: number | null;
 };
 
-const DAY_LABELS = ["", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+const DAY_LABELS = ["", "Dia 1", "Dia 2", "Dia 3", "Dia 4", "Dia 5", "Dia 6", "Dia 7", "Dia 8", "Dia 9", "Dia 10", "Dia 11", "Dia 12"];
 
 type Props = {
   lesson: Lesson;
