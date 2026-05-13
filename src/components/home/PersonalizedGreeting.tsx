@@ -43,13 +43,13 @@ export default function PersonalizedGreeting() {
 
   useEffect(() => {
     const hour = new Date().getHours();
-    const firstName = profile?.full_name?.split(" ")[0] || "";
+    const firstName = profile?.full_name?.split(" ")[0] || "Participante";
     const period = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
 
     let msg = `${period}, ${firstName}! `;
     const churchName = (profile as any)?.churches?.name;
     if (churchName) {
-      msg = `${period}! Bem-vindo à ${churchName}. `;
+      msg = `${period}, ${firstName}! Bem-vindo à ${churchName}. `;
     } else if (profile?.community && !churchName) {
       msg = `${period}! Bem-vindo à comunidade ${profile.community}. `;
     }
