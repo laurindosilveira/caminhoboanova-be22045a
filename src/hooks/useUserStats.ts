@@ -65,16 +65,22 @@ export function useUserStats(currentArea?: string): UserStats {
   useEffect(() => {
     async function fetchStats() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setStats(s => ({ ...s, loading: false })); return; }
+      if (!user) { 
+        console.log("useUserStats: No user found");
+        setStats(s => ({ ...s, loading: false })); 
+        return; 
+      }
+
+      console.log("useUserStats: Fetching stats for user", user.id, "area", currentArea);
 
       const [
-        { data: activities },
-        { data: progress },
-        { data: devProgress },
-        { data: lessonResponses },
-        { data: attendance },
-        { data: worshipData },
-        { data: achievementUnlocks },
+        { data: activities, error: actErr },
+        { data: progress, error: progErr },
+        { data: devProgress, error: devErr },
+        { data: lessonResponses, error: lessErr },
+        { data: attendance, error: attErr },
+        { data: worshipData, error: worErr },
+        { data: achievementUnlocks, error: achErr },
         { data: coursesData },
         { data: lessonsData },
         { data: challengeData },
