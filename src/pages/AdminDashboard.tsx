@@ -412,7 +412,7 @@ function TurmaSelector({
             </div>
             <div>
               <p className="text-primary-foreground/60 font-inter text-xs">
-                {isSuper ? "Super Administrador" : "SALA DO DISCIPULADOR"}
+                {isSuper ? "Super Administrador" : "DISCIPULADOR"}
               </p>
               <h1 className="font-montserrat font-black text-primary-foreground text-lg uppercase tracking-tight">SALA DO DISCIPULADOR</h1>
             </div>
