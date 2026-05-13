@@ -42,12 +42,19 @@ export default function CoursesTab() {
 
   async function fetchCourses() {
     setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: profile } = await supabase.from("profiles").select("church_id").eq("user_id", user.id).single();
+    const churchId = profile?.church_id;
+
     const [{ data: coursesData }, { data: lessonsData }, { data: contentData }, { data: devData }] = await Promise.all([
-      supabase.from("courses").select("*").order("order_num"),
-      supabase.from("lessons").select("*").order("order_num"),
-      supabase.from("lesson_content").select("lesson_id"),
-      supabase.from("devotional_content").select("lesson_id").not("lesson_id", "is", null),
+      supabase.from("courses").select("*").or(`church_id.is.null,church_id.eq.${churchId}`).order("order_num"),
+      supabase.from("lessons").select("*").or(`church_id.is.null,church_id.eq.${churchId}`).order("order_num"),
+      supabase.from("lesson_content").select("lesson_id, church_id").or(`church_id.is.null,church_id.eq.${churchId}`),
+      supabase.from("devotional_content").select("lesson_id, church_id").not("lesson_id", "is", null).or(`church_id.is.null,church_id.eq.${churchId}`),
     ]);
+
     const courseList = (coursesData ?? []).map(c => ({
       ...c,
       lessons: (lessonsData ?? []).filter(l => l.course_id === c.id),
@@ -55,14 +62,13 @@ export default function CoursesTab() {
     setCourses(courseList);
     setPublishedLessonIds(new Set((contentData ?? []).map(c => c.lesson_id)));
     
-    // Count devotionals per lesson
     const counts: Record<string, number> = {};
     (devData ?? []).forEach(d => {
       if (d.lesson_id) counts[d.lesson_id] = (counts[d.lesson_id] || 0) + 1;
     });
     setDevotionalCounts(counts);
     
-    if (courseList.length > 0) setExpandedCourse(courseList[0].id);
+    if (courseList.length > 0 && !expandedCourse) setExpandedCourse(courseList[0].id);
     setLoading(false);
   }
 
@@ -179,8 +185,8 @@ export default function CoursesTab() {
 
                         {/* Action buttons */}
                         <div className="flex gap-2 ml-10 flex-wrap">
-                          {/* Admin-only buttons */}
-                          {!isLider && (
+                          {/* Admin or Leader (if church match) buttons */}
+                          {(!isLider || lesson.church_id) && (
                             <>
                               <button
                                 onClick={() => setEditMode({ lesson, mode: "study" })}
