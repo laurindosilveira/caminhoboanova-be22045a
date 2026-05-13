@@ -17,6 +17,7 @@ type SubTab     = "enviar" | "automacoes" | "historico";
 
 interface Props {
   turmas?: Array<{ id: string; name: string; area: string | null }>;
+  churchId?: string | null;
 }
 
 interface AutomationConfig {
@@ -49,7 +50,7 @@ const AUTOMATION_LABELS: Record<string, string> = {
 
 // ─── Root component ────────────────────────────────────────────────────────────
 
-export default function AdminPushTab({ turmas = [] }: Props) {
+export default function AdminPushTab({ turmas = [], churchId }: Props) {
   const [subTab, setSubTab] = useState<SubTab>("enviar");
 
   return (
@@ -75,7 +76,7 @@ export default function AdminPushTab({ turmas = [] }: Props) {
         ))}
       </div>
 
-      {subTab === "enviar"     && <SendSection turmas={turmas} />}
+      {subTab === "enviar"     && <SendSection turmas={turmas} churchId={churchId} />}
       {subTab === "automacoes" && <AutomationsSection />}
       {subTab === "historico"  && (
         <>
@@ -89,7 +90,7 @@ export default function AdminPushTab({ turmas = [] }: Props) {
 
 // ─── Send Section ──────────────────────────────────────────────────────────────
 
-function SendSection({ turmas }: { turmas: Array<{ id: string; name: string; area: string | null }> }) {
+function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: string; area: string | null }>; churchId?: string | null }) {
   const { isSuper } = useAuth();
   const [mode, setMode]               = useState<SendMode>("agora");
   const [title, setTitle]             = useState("");
@@ -138,7 +139,7 @@ function SendSection({ turmas }: { turmas: Array<{ id: string; name: string; are
     if (mode === "agora") {
       try {
         const { data, error: fnError } = await supabase.functions.invoke("admin-push", {
-          body: { title, body, target, targetValue: target === "all" ? undefined : targetValue },
+          body: { title, body, target, targetValue: target === "all" ? undefined : targetValue, churchId },
         });
         if (fnError) throw fnError;
         setResult({ sent: data.sent, failed: data.failed });

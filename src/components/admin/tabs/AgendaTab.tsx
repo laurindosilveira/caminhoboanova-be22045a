@@ -43,11 +43,13 @@ const EMOJI_OPTIONS = ["📅", "⛪", "✝️", "🏕️", "📖", "🎉", "💬
 type Props = {
   /** When true, restricts the leader to create events only for their area or turma */
   leaderMode?: boolean;
+  churchId?: string | null;
 };
 
-export default function AgendaTab({ leaderMode = false }: Props) {
+export default function AgendaTab({ leaderMode = false, churchId: churchIdOverride }: Props) {
   const { profile } = useAuth();
-  const { churchId } = useChurch();
+  const { churchId: profileChurchId } = useChurch();
+  const churchId = churchIdOverride ?? profileChurchId;
   const { effectiveArea } = useAreaSwitch();
   const currentArea = effectiveArea || profile?.area || "";
   const { allTypes, customTypes, getLabel, getEmoji, getColor, refetch: refetchTypes } = useCustomEventTypes(currentArea);
@@ -96,8 +98,8 @@ export default function AgendaTab({ leaderMode = false }: Props) {
 
   async function fetchLessons() {
     const [{ data: coursesData, error: coursesError }, { data: lessonsData, error: lessonsError }] = await Promise.all([
-      supabase.from("courses").select("id, title, order_num").order("order_num"),
-      supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
+      supabase.from("courses").select("id, title, order_num, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null").order("order_num"),
+      supabase.from("lessons").select("id, title, order_num, course_id, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null").order("order_num"),
     ]);
     if (coursesError || lessonsError) {
       toast.error("Erro ao carregar estudos", { description: coursesError?.message ?? lessonsError?.message });

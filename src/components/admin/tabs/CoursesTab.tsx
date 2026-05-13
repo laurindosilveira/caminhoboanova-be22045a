@@ -28,9 +28,10 @@ type Course = {
 
 type EditMode = { lesson: Lesson; mode: "study" | "devotionals" | "leader-guide" | "leader-customize" } | null;
 
-export default function CoursesTab() {
+export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: string | null }) {
   const { role } = useAuth();
   const { churchId } = useChurch();
+  const effectiveChurchId = selectedChurchId ?? churchId;
   const isLider = role === "lider";
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,20 +41,20 @@ export default function CoursesTab() {
   const [devotionalCounts, setDevotionalCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    if (churchId) {
+    if (effectiveChurchId) {
       fetchCourses();
     }
-  }, [churchId]);
+  }, [effectiveChurchId]);
 
   async function fetchCourses() {
-    if (!churchId) return;
+    if (!effectiveChurchId) return;
     setLoading(true);
 
     const [{ data: coursesData }, { data: lessonsData }, { data: contentData }, { data: devData }] = await Promise.all([
-      supabase.from("courses").select("*").or(`church_id.is.null,church_id.eq.${churchId}`).order("order_num"),
-      supabase.from("lessons").select("*").or(`church_id.is.null,church_id.eq.${churchId}`).order("order_num"),
-      supabase.from("lesson_content").select("lesson_id, church_id").or(`church_id.is.null,church_id.eq.${churchId}`),
-      supabase.from("devotional_content").select("lesson_id, church_id").not("lesson_id", "is", null).or(`church_id.is.null,church_id.eq.${churchId}`),
+      supabase.from("courses").select("*").or(`church_id.is.null,church_id.eq.${effectiveChurchId}`).order("order_num"),
+      supabase.from("lessons").select("*").or(`church_id.is.null,church_id.eq.${effectiveChurchId}`).order("order_num"),
+      supabase.from("lesson_content").select("lesson_id, church_id").or(`church_id.is.null,church_id.eq.${effectiveChurchId}`),
+      supabase.from("devotional_content").select("lesson_id, church_id").not("lesson_id", "is", null).or(`church_id.is.null,church_id.eq.${effectiveChurchId}`),
     ]);
 
     const courseList = (coursesData ?? []).map(c => ({
@@ -87,7 +88,7 @@ export default function CoursesTab() {
   // If editing a lesson
   if (editMode) {
     if (editMode.mode === "study") {
-      return <LessonContentEditor lesson={editMode.lesson} onBack={() => { setEditMode(null); fetchCourses(); }} />;
+      return <LessonContentEditor lesson={editMode.lesson} churchId={effectiveChurchId} onBack={() => { setEditMode(null); fetchCourses(); }} />;
     }
     if (editMode.mode === "leader-guide") {
       return <LeaderGuideEditor lesson={editMode.lesson} onBack={() => { setEditMode(null); fetchCourses(); }} />;
@@ -95,7 +96,7 @@ export default function CoursesTab() {
     if (editMode.mode === "leader-customize") {
       return <LeaderLessonEditor lesson={editMode.lesson} onBack={() => { setEditMode(null); fetchCourses(); }} />;
     }
-    return <LessonDevotionalEditor lesson={editMode.lesson} onBack={() => { setEditMode(null); fetchCourses(); }} />;
+    return <LessonDevotionalEditor lesson={editMode.lesson} churchId={effectiveChurchId} onBack={() => { setEditMode(null); fetchCourses(); }} />;
   }
 
   return (

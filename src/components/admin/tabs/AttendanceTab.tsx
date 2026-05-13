@@ -16,6 +16,7 @@ type Event = {
   id: string; title: string; event_date: string; type: string;
   location: string | null; community: string | null; area: string | null;
   description: string | null; linked_lesson_id: string | null;
+  church_id?: string | null;
 };
 type Participant = {
   user_id: string; full_name: string; community: string; area: string;
@@ -70,9 +71,10 @@ type AttendanceProps = {
   initialParticipant?: Participant | null;
   onClearInitial?: () => void;
   adminArea?: string | null;
+  churchId?: string | null;
 };
 
-export default function AttendanceTab({ participants, activities, communities, initialParticipant, onClearInitial, adminArea }: AttendanceProps) {
+export default function AttendanceTab({ participants, activities, communities, initialParticipant, onClearInitial, adminArea, churchId }: AttendanceProps) {
   const { profile } = useAuth();
   const { toast } = useToast();
   const [events, setEvents] = useState<Event[]>([]);
@@ -119,12 +121,15 @@ export default function AttendanceTab({ participants, activities, communities, i
   type LessonOption = { id: string; title: string; order_num: number; course_title: string; course_order: number };
   const [lessonOptions, setLessonOptions] = useState<LessonOption[]>([]);
 
-  useEffect(() => { fetchEvents(); fetchWorshipRequests(); fetchLessonOptions(); fetchPromotionRequests(); fetchPendingAttendance(); }, []);
+  useEffect(() => { fetchEvents(); fetchWorshipRequests(); fetchLessonOptions(); fetchPromotionRequests(); fetchPendingAttendance(); }, [churchId, adminArea, participants.length]);
 
   async function fetchLessonOptions() {
+    const applyChurchScope = (query: any) => churchId
+      ? query.or(`church_id.is.null,church_id.eq.${churchId}`)
+      : query.is("church_id", null);
     const [{ data: coursesData }, { data: lessonsData }] = await Promise.all([
-      supabase.from("courses").select("id, title, order_num").order("order_num"),
-      supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
+      applyChurchScope(supabase.from("courses").select("id, title, order_num, church_id").order("order_num")),
+      applyChurchScope(supabase.from("lessons").select("id, title, order_num, course_id, church_id").order("order_num")),
     ]);
     const courses = coursesData ?? [];
     const lessonsList = lessonsData ?? [];
@@ -141,9 +146,10 @@ export default function AttendanceTab({ participants, activities, communities, i
     setLoading(true);
     let query = supabase
       .from("events")
-      .select("id, title, event_date, type, location, community, area, description, linked_lesson_id")
+      .select("id, title, event_date, type, location, community, area, description, linked_lesson_id, church_id")
       .order("event_date", { ascending: true })
       .limit(50);
+    query = churchId ? query.eq("church_id", churchId) : query.is("church_id", null);
     // Filter by admin area (non-super admins only see their area + events without area)
     if (adminArea) {
       query = query.or(`area.is.null,area.eq.${adminArea}`);
@@ -160,6 +166,7 @@ export default function AttendanceTab({ participants, activities, communities, i
       .from("worship_attendance")
       .select("*")
       .in("user_id", participantIds)
+      .or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null")
       .order("created_at", { ascending: false })
       .limit(50);
     const enriched = (data ?? []).map(w => {
@@ -194,6 +201,7 @@ export default function AttendanceTab({ participants, activities, communities, i
       .select("id, event_id, user_id, status, justification, created_at")
       .in("user_id", participantIds)
       .in("status", ["pendente_presente", "pendente_falta"])
+      .or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null")
       .order("created_at", { ascending: false });
     if (!data || data.length === 0) { setPendingAttendance([]); return; }
     const eventIds = [...new Set(data.map(a => a.event_id))];
@@ -235,7 +243,8 @@ export default function AttendanceTab({ participants, activities, communities, i
     const { data: attData, error: attendanceError } = await supabase
       .from("attendance")
       .select("user_id, status")
-      .eq("event_id", eventId);
+      .eq("event_id", eventId)
+      .or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null");
     if (attendanceError) {
       toast({ title: "Erro ao carregar presenças", description: attendanceError.message, variant: "destructive" });
       return;
@@ -248,8 +257,8 @@ export default function AttendanceTab({ participants, activities, communities, i
     // For encontros, also load evaluations + progress
     if (isEncontro && userIds.length > 0) {
       const [{ data: evalData, error: evaluationError }, { data: progressData, error: progressError }] = await Promise.all([
-        supabase.from("meeting_evaluations").select("*").eq("event_id", eventId),
-        supabase.from("user_progress").select("user_id, activity_id, completed_at").in("user_id", userIds),
+        supabase.from("meeting_evaluations").select("*").eq("event_id", eventId).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
+        supabase.from("user_progress").select("user_id, activity_id, completed_at").in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
       ]);
       if (evaluationError || progressError) {
         toast({
@@ -300,6 +309,7 @@ export default function AttendanceTab({ participants, activities, communities, i
       area: adminArea || eventForm.area || null,
       community: eventForm.community || null,
       linked_lesson_id: eventForm.linked_lesson_id || null,
+      church_id: churchId ?? null,
     };
 
     if (editingEventId) {
@@ -312,10 +322,12 @@ export default function AttendanceTab({ participants, activities, communities, i
       // Check if lesson changed and cascade is needed
       if (oldLessonId !== newLessonId && newLessonId && oldEvent) {
         // Fetch fresh events from DB to ensure accurate cascade check
-        const { data: freshEvents } = await supabase
+        let freshEventsQuery = supabase
           .from("events")
-          .select("id, title, event_date, type, location, community, area, description, linked_lesson_id")
+          .select("id, title, event_date, type, location, community, area, description, linked_lesson_id, church_id")
           .order("event_date", { ascending: true });
+        freshEventsQuery = churchId ? freshEventsQuery.eq("church_id", churchId) : freshEventsQuery.is("church_id", null);
+        const { data: freshEvents } = await freshEventsQuery;
 
         const allEvents = freshEvents ?? events;
         const subsequentWithLessons = allEvents.filter(
@@ -473,7 +485,7 @@ export default function AttendanceTab({ participants, activities, communities, i
       });
     } else {
       const { error } = await supabase.from("attendance").upsert({
-        event_id: eventId, user_id: userId, status,
+        event_id: eventId, user_id: userId, status, church_id: churchId ?? null,
       }, { onConflict: "event_id,user_id" });
       if (error) {
         toast({ title: "Erro ao salvar presença", description: error.message, variant: "destructive" });
@@ -511,6 +523,7 @@ export default function AttendanceTab({ participants, activities, communities, i
       understanding_score: ev.understanding_score,
       engagement_score: ev.engagement_score,
       notes: ev.notes,
+      church_id: churchId ?? null,
     }, { onConflict: "event_id,user_id" });
     if (error) {
       toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
@@ -1407,6 +1420,7 @@ export default function AttendanceTab({ participants, activities, communities, i
     const { data, error } = await supabase
       .from("year_promotion_requests")
       .select("*")
+      .or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null")
       .order("requested_at", { ascending: false })
       .limit(50);
     if (error) {
@@ -1462,6 +1476,7 @@ export default function AttendanceTab({ participants, activities, communities, i
       turma_id: (p as any).turma_id ?? null,
       status: "pendente",
       requested_by: userResult.user.id,
+      church_id: churchId ?? null,
     }));
 
     const { error } = await supabase.from("year_promotion_requests").insert(inserts as any);
@@ -1532,12 +1547,12 @@ export default function AttendanceTab({ participants, activities, communities, i
     }
 
     const resetOperations = await Promise.all([
-      supabase.from("user_progress").delete().in("user_id", userIds),
-      supabase.from("lesson_responses").delete().in("user_id", userIds),
-      supabase.from("devotional_progress").delete().in("user_id", userIds),
-      supabase.from("achievement_unlocks").delete().in("user_id", userIds),
-      supabase.from("attendance").delete().in("user_id", userIds),
-      supabase.from("worship_attendance").delete().in("user_id", userIds),
+      supabase.from("user_progress").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
+      supabase.from("lesson_responses").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
+      supabase.from("devotional_progress").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
+      supabase.from("achievement_unlocks").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
+      supabase.from("attendance").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
+      supabase.from("worship_attendance").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
     ]);
 
     const resetError = resetOperations.find(result => result.error)?.error;

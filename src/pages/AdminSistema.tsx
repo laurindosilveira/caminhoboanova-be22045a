@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Church,
   Clock,
+  DatabaseBackup,
   Megaphone,
   RefreshCw,
   Search,
@@ -201,6 +202,7 @@ export default function AdminSistema() {
           <TabsList className="h-auto flex-wrap justify-start gap-2 rounded-2xl bg-muted/60 p-2">
             <TabsTrigger value="igrejas" className="rounded-xl px-4 py-2">Igrejas</TabsTrigger>
             <TabsTrigger value="atualizacoes" className="rounded-xl px-4 py-2">Atualizacoes do app</TabsTrigger>
+            <TabsTrigger value="backup" className="rounded-xl px-4 py-2">Backup e migracao</TabsTrigger>
           </TabsList>
 
           <TabsContent value="igrejas" className="space-y-6">
@@ -484,6 +486,31 @@ export default function AdminSistema() {
                 })}
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="backup" className="space-y-6">
+            <Card className="border-border">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 font-montserrat text-xl font-black">
+                  <DatabaseBackup className="h-5 w-5 text-primary" />
+                  Backup completo do sistema
+                </CardTitle>
+                <CardDescription>
+                  Gere pacotes de migracao com estrutura, dados, manifesto de storage e checklist para troca futura de banco.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-2xl border border-border bg-muted/30 p-4">
+                  <p className="text-sm font-semibold text-foreground">Escopo do backup</p>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    A exportacao inclui igrejas, usuarios, turmas, progresso, agenda, mensagens, trilhas, push, auditoria e demais tabelas operacionais conhecidas.
+                  </p>
+                </div>
+                <Button onClick={() => navigate("/exportar-dados")} className="rounded-xl">
+                  Abrir exportacao e migracao
+                </Button>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

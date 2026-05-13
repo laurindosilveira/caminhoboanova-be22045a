@@ -15,6 +15,7 @@ dist-ssr
 backups/
 supabase/secrets.env
 supabase/*.local.env
+supabase/.temp/
 
 # Editor directories and files
 .vscode/*

@@ -30,15 +30,16 @@ const WorshipTab = lazy(() => import("@/components/admin/tabs/WorshipTab"));
 import { AREAS, AREA_COMMUNITIES, ALL_COMMUNITIES, getCommunitiesForArea } from "@/config/areas";
 
 type Activity = {
-  id: string; type: string; title: string; subtitle: string | null; order_num: number; points: number;
+  id: string; type: string; title: string; subtitle: string | null; order_num: number; points: number; church_id?: string | null;
 };
 type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
-  confirmation_year?: number | null;
+  confirmation_year?: number | null; church_id?: string | null;
 };
 type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
-type Turma = { id: string; name: string; area: string | null; year: number; is_active: boolean; description: string | null };
+type Turma = { id: string; name: string; area: string | null; year: number; is_active: boolean; description: string | null; church_id?: string | null };
+type Church = { id: string; name: string; slug: string; city: string | null; state: string | null; is_active: boolean | null };
 
 function TabSkeleton() {
   return (
@@ -61,6 +62,9 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<AdminTab>(role === "lider" ? "overview" : "overview");
 
+  const [churches, setChurches] = useState<Church[]>([]);
+  const [selectedChurchId, setSelectedChurchId] = useState<string | null>(null);
+
   // Turma selection state
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [selectedTurma, setSelectedTurma] = useState<Turma | null>(null);
@@ -70,7 +74,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (role !== "admin" && role !== "lider") { navigate("/"); return; }
     fetchData();
-  }, [role]);
+  }, [role, selectedChurchId]);
 
   // For leaders, auto-select their turma (or use a placeholder if they have none yet)
   useEffect(() => {
@@ -115,28 +119,82 @@ export default function AdminDashboard() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [{ data: activitiesData }, { data: profilesData }, userResult] = await Promise.all([
-      supabase.from("activities").select("*").order("order_num"),
+    const [{ data: churchesData }, { data: profilesData }, userResult] = await Promise.all([
+      (supabase.from as any)("churches").select("id, name, slug, city, state, is_active").order("name"),
       (supabase.from as any)("profiles").select("user_id, full_name, community, area, birth_date, phone, turma_id, confirmation_year, avatar_url, father_name, mother_name, father_phone, mother_phone, address, email, church_id"),
       supabase.auth.getUser(),
     ]);
 
     const myId = userResult.data.user?.id ?? "";
     const myProfile = (profilesData as any[] ?? []).find(p => p.user_id === myId);
-    const profilesList = (profilesData as any[] ?? []).filter(p => p.user_id !== myId && (!myProfile?.church_id || p.church_id === myProfile.church_id));
+    const allChurches = ((churchesData as Church[] | null) ?? []).filter(church => church.is_active !== false);
+    const allowedChurches = isSuper
+      ? allChurches
+      : allChurches.filter(church => church.id === myProfile?.church_id);
+    const scopedChurchId = isSuper
+      ? selectedChurchId ?? allowedChurches[0]?.id ?? null
+      : myProfile?.church_id ?? null;
 
-    const { data: turmasData } = await (supabase.from as any)("turmas")
+    setChurches(allowedChurches);
+    if (scopedChurchId && selectedChurchId !== scopedChurchId) {
+      setSelectedChurchId(scopedChurchId);
+    }
+
+    const profilesList = (profilesData as any[] ?? []).filter(p => {
+      if (p.user_id === myId) return false;
+      if (!scopedChurchId) return !p.church_id;
+      return p.church_id === scopedChurchId;
+    });
+
+    const churchScope = (query: any) => scopedChurchId
+      ? query.or(`church_id.is.null,church_id.eq.${scopedChurchId}`)
+      : query;
+
+    const userIds = profilesList.map(p => p.user_id).filter(Boolean);
+
+    let activitiesQuery = supabase.from("activities").select("*").order("order_num");
+    activitiesQuery = churchScope(activitiesQuery);
+
+    let turmasQuery = (supabase.from as any)("turmas")
       .select("*")
       .eq("is_active", true)
-      .eq("church_id", myProfile?.church_id || "")
       .order("area")
       .order("name");
+    if (scopedChurchId) {
+      turmasQuery = turmasQuery.eq("church_id", scopedChurchId);
+    } else {
+      turmasQuery = turmasQuery.is("church_id", null);
+    }
 
-    const [{ data: progressData }, { data: lessonRespsData }, { data: devProgressData }, { data: attendanceData }] = await Promise.all([
-      supabase.from("user_progress").select("user_id, activity_id"),
-      supabase.from("lesson_responses").select("user_id, lesson_id"),
-      supabase.from("devotional_progress").select("user_id"),
-      supabase.from("attendance").select("user_id, status").eq("status", "presente"),
+    let progressQuery = supabase.from("user_progress").select("user_id, activity_id, church_id");
+    let lessonQuery = supabase.from("lesson_responses").select("user_id, lesson_id, church_id");
+    let devotionalQuery = supabase.from("devotional_progress").select("user_id, church_id");
+    let attendanceQuery = supabase.from("attendance").select("user_id, status, church_id").eq("status", "presente");
+    if (userIds.length > 0) {
+      progressQuery = progressQuery.in("user_id", userIds);
+      lessonQuery = lessonQuery.in("user_id", userIds);
+      devotionalQuery = devotionalQuery.in("user_id", userIds);
+      attendanceQuery = attendanceQuery.in("user_id", userIds);
+    }
+    progressQuery = churchScope(progressQuery);
+    lessonQuery = churchScope(lessonQuery);
+    devotionalQuery = churchScope(devotionalQuery);
+    attendanceQuery = churchScope(attendanceQuery);
+
+    const [
+      { data: activitiesData },
+      { data: turmasData },
+      { data: progressData },
+      { data: lessonRespsData },
+      { data: devProgressData },
+      { data: attendanceData },
+    ] = await Promise.all([
+      activitiesQuery,
+      turmasQuery,
+      userIds.length > 0 ? progressQuery : Promise.resolve({ data: [] }),
+      userIds.length > 0 ? lessonQuery : Promise.resolve({ data: [] }),
+      userIds.length > 0 ? devotionalQuery : Promise.resolve({ data: [] }),
+      userIds.length > 0 ? attendanceQuery : Promise.resolve({ data: [] }),
     ]);
 
     // lesson count = unique lessons per user
@@ -178,14 +236,17 @@ export default function AdminDashboard() {
     setTurmas(turmasData ?? []);
     await fetchPlans(participantList.map(p => p.user_id));
     setLoading(false);
-  }, [fetchPlans]);
+  }, [fetchPlans, isSuper, selectedChurchId]);
 
   // Memoized filtered participants (by turma — used for overview, scores, etc.)
+  const isAreaScope = selectedTurma?.id.startsWith("area::") ?? false;
   const filteredParticipants = useMemo(() =>
     selectedTurma
-      ? participants.filter(p => (p as any).turma_id === selectedTurma.id)
+      ? isAreaScope
+        ? participants.filter(p => (p as any).area === selectedTurma.area)
+        : participants.filter(p => (p as any).turma_id === selectedTurma.id)
       : participants,
-    [selectedTurma, participants]
+    [isAreaScope, selectedTurma, participants]
   );
 
   // Participants filtered only by area — used for attendance so no student is
@@ -201,6 +262,20 @@ export default function AdminDashboard() {
     selectedTurma?.area ? getCommunitiesForArea(selectedTurma.area) : ALL_COMMUNITIES,
     [selectedTurma]
   );
+
+  const selectedChurch = useMemo(() =>
+    churches.find(church => church.id === selectedChurchId) ?? null,
+    [churches, selectedChurchId]
+  );
+
+  const currentChurchId = isSuper ? selectedChurchId : profile?.church_id ?? null;
+
+  const handleSelectChurch = useCallback((churchId: string) => {
+    setSelectedChurchId(churchId);
+    setSelectedTurma(null);
+    setExpandedArea(null);
+    setTurmaSearch("");
+  }, []);
 
   const stats = useMemo(() => ({
     total: filteredParticipants.length,
@@ -237,6 +312,10 @@ export default function AdminDashboard() {
         participants={participants}
         isSuper={isSuper}
         adminArea={profile?.area ?? ""}
+        churches={churches}
+        selectedChurchId={selectedChurchId}
+        selectedChurchName={selectedChurch?.name ?? (profile?.churches as any)?.name ?? ""}
+        onSelectChurch={handleSelectChurch}
         expandedArea={expandedArea}
         setExpandedArea={setExpandedArea}
         turmaSearch={turmaSearch}
@@ -249,13 +328,13 @@ export default function AdminDashboard() {
 
   // ===== MAIN DASHBOARD =====
   const turmaName = selectedTurma.name;
-  const displayTurma = isSuper ? `👑 ${turmaName}` : turmaName;
+  const displayTurma = isSuper && !isAreaScope ? `👑 ${turmaName}` : turmaName;
 
   return (
     <div className="min-h-screen bg-background">
       <AdminHeader
         areaName={displayTurma}
-        subtitle={selectedTurma.area}
+        subtitle={[selectedChurch?.name, selectedTurma.area].filter(Boolean).join(" · ")}
         stats={stats}
         onSignOut={signOut}
         onBackToUser={() => navigate("/")}
@@ -275,7 +354,8 @@ export default function AdminDashboard() {
               <AdminOverviewTab
                 participants={filteredParticipants}
                 activities={activities}
-                turmas={turmas}
+                turmas={isAreaScope ? turmas.filter(t => t.area === selectedTurma.area) : turmas}
+                churchId={currentChurchId}
               />
             )}
             {activeTab === "alerts" && (
@@ -287,15 +367,21 @@ export default function AdminDashboard() {
                 activities={activities}
                 communities={communities}
                 adminArea={selectedTurma.area ?? profile?.area ?? ""}
+                churchId={currentChurchId}
               />
             )}
-            {activeTab === "turma" && <LeaderTurmaManagement />}
-            {activeTab === "avisos" && <MessagesTab leaderMode={role === "lider"} />}
-            {activeTab === "agenda" && <AgendaTab leaderMode={role === "lider"} />}
+            {activeTab === "turma" && (
+              <LeaderTurmaManagement
+                defaultArea={selectedTurma.area ?? profile?.area ?? ""}
+                defaultChurchId={currentChurchId}
+              />
+            )}
+            {activeTab === "avisos" && <MessagesTab leaderMode={role === "lider"} churchId={currentChurchId} />}
+            {activeTab === "agenda" && <AgendaTab leaderMode={role === "lider"} churchId={currentChurchId} />}
             {activeTab === "contatos" && <LeaderContactsTab />}
-            {activeTab === "courses" && <CoursesTab />}
-            {activeTab === "leaders" && <AdminLeadersTab turmas={turmas} />}
-            {activeTab === "push" && <AdminPushTab turmas={turmas} />}
+            {activeTab === "courses" && <CoursesTab churchId={currentChurchId} />}
+            {activeTab === "leaders" && <AdminLeadersTab turmas={isAreaScope ? turmas.filter(t => t.area === selectedTurma.area) : turmas} />}
+            {activeTab === "push" && <AdminPushTab turmas={isAreaScope ? turmas.filter(t => t.area === selectedTurma.area) : turmas} churchId={currentChurchId} />}
             {activeTab === "users" && <UsersTab onSelectTurma={handleSelectTurmaFromUsers} />}
             {activeTab === "whatsapp" && <WhatsAppAuditTab />}
             {activeTab === "worship" && <WorshipTab />}
@@ -310,12 +396,13 @@ export default function AdminDashboard() {
 
 // ===== Admin Settings Panel (areas + attendance toggle) =====
 function AdminSettingsPanel({
-  areaParticipants, activities, communities, adminArea,
+  areaParticipants, activities, communities, adminArea, churchId,
 }: {
   areaParticipants: Participant[];
   activities: Activity[];
   communities: string[];
   adminArea: string;
+  churchId: string | null;
 }) {
   const [view, setView] = useState<"areas" | "attendance">("areas");
 
@@ -339,13 +426,14 @@ function AdminSettingsPanel({
           Frequência
         </button>
       </div>
-      {view === "areas" && <AdminAreasTab />}
+      {view === "areas" && <AdminAreasTab churchId={churchId} />}
       {view === "attendance" && (
         <AttendanceTab
           participants={areaParticipants}
           activities={activities}
           communities={communities}
           adminArea={adminArea}
+          churchId={churchId}
         />
       )}
     </div>
@@ -355,6 +443,7 @@ function AdminSettingsPanel({
 // ===== Turma Selector extracted component =====
 function TurmaSelector({
   loading, turmas, participants, isSuper, adminArea,
+  churches, selectedChurchId, selectedChurchName, onSelectChurch,
   expandedArea, setExpandedArea, turmaSearch, setTurmaSearch,
   onSelectTurma, onBack,
 }: {
@@ -363,6 +452,10 @@ function TurmaSelector({
   participants: Participant[];
   isSuper: boolean;
   adminArea: string;
+  churches: Church[];
+  selectedChurchId: string | null;
+  selectedChurchName: string;
+  onSelectChurch: (churchId: string) => void;
   expandedArea: string | null;
   setExpandedArea: (a: string | null) => void;
   turmaSearch: string;
@@ -372,6 +465,18 @@ function TurmaSelector({
 }) {
   const areaIcons: Record<string, string> = { "Área 1": "⛪", "Área 2": "✝️" };
   const areasToShow = areasToShowList(AREAS, turmas, isSuper, adminArea);
+
+  const selectArea = (areaName: string) => {
+    onSelectTurma({
+      id: `area::${areaName}`,
+      name: areaName,
+      area: areaName,
+      year: new Date().getFullYear(),
+      is_active: true,
+      description: null,
+      church_id: selectedChurchId,
+    });
+  };
   
   // Auxiliary function to filter areas
   function areasToShowList(areas: string[], turmas: Turma[], isSuper: boolean, adminArea: string) {
@@ -414,7 +519,10 @@ function TurmaSelector({
               <p className="text-primary-foreground/60 font-inter text-xs">
                 {isSuper ? "Super Administrador" : "DISCIPULADOR"}
               </p>
-              <h1 className="font-montserrat font-black text-primary-foreground text-lg uppercase tracking-tight">SALA DO DISCIPULADOR</h1>
+              <h1 className="font-montserrat font-black text-primary-foreground text-lg uppercase tracking-tight">SALA DO LIDER</h1>
+              {selectedChurchName && (
+                <p className="text-primary-foreground/70 font-inter text-[11px] mt-0.5">{selectedChurchName}</p>
+              )}
             </div>
           </div>
         </div>
@@ -426,8 +534,30 @@ function TurmaSelector({
         ) : (
           <>
             <p className="text-center text-muted-foreground font-inter text-xs">
-              Escolha uma turma para gerenciar
+              {isSuper ? "Escolha uma igreja e depois a área ou turma" : "Escolha uma turma para gerenciar"}
             </p>
+
+            {isSuper && churches.length > 0 && (
+              <div className="rounded-2xl border border-border bg-card p-3 shadow-sm">
+                <label className="mb-1 block font-inter text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                  Igreja selecionada
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedChurchId ?? ""}
+                    onChange={event => onSelectChurch(event.target.value)}
+                    className="h-11 w-full appearance-none rounded-xl border border-input bg-background px-3 pr-9 font-inter text-sm font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {churches.map(church => (
+                      <option key={church.id} value={church.id}>
+                        {[church.name, church.city, church.state].filter(Boolean).join(" · ")}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+              </div>
+            )}
 
             {/* Search bar for turmas */}
             {turmas.length > 3 && (
@@ -458,7 +588,13 @@ function TurmaSelector({
               return (
                 <div key={areaInfo.name} className="space-y-2">
                   <button
-                    onClick={() => setExpandedArea(isExpanded && !searchLower ? null : areaInfo.name)}
+                    onClick={() => {
+                      if (areaInfo.turmas.length === 0 && !searchLower) {
+                        selectArea(areaInfo.name);
+                        return;
+                      }
+                      setExpandedArea(isExpanded && !searchLower ? null : areaInfo.name);
+                    }}
                     className={`w-full flex items-center gap-4 p-4 bg-card rounded-2xl border-2 shadow-sm transition-all ${
                       isExpanded ? "border-primary/50 bg-primary/5" : "border-border hover:border-primary/30 hover:bg-primary/5"
                     }`}
@@ -485,9 +621,20 @@ function TurmaSelector({
                   {isExpanded && (
                     <div className="pl-6 space-y-2 animate-in slide-in-from-top-2 duration-200">
                       {areaInfo.turmas.length === 0 ? (
-                        <p className="text-muted-foreground font-inter text-xs py-3 text-center">
-                          {searchLower ? "Nenhuma turma encontrada." : "Nenhuma turma ativa nesta área."}
-                        </p>
+                        <div className="py-3 text-center">
+                          <p className="text-muted-foreground font-inter text-xs">
+                            {searchLower ? "Nenhuma turma encontrada." : "Nenhuma turma ativa nesta área."}
+                          </p>
+                          {!searchLower && (
+                            <button
+                              type="button"
+                              onClick={() => selectArea(areaInfo.name)}
+                              className="mt-3 rounded-xl bg-primary px-4 py-2 font-inter text-xs font-bold text-primary-foreground transition-colors hover:bg-primary/90"
+                            >
+                              Gerenciar esta área
+                            </button>
+                          )}
+                        </div>
                       ) : (
                         areaInfo.turmas.map(turma => {
                           const turmaParticipants = participants.filter(p => (p as any).turma_id === turma.id);

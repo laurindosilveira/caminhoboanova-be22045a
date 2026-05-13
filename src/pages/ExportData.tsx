@@ -21,6 +21,10 @@ type StorageListItem = {
 };
 
 const MIGRATION_TABLES = [
+  "churches",
+  "church_subscriptions",
+  "areas",
+  "communities",
   "courses",
   "activities",
   "turmas",
@@ -32,9 +36,14 @@ const MIGRATION_TABLES = [
   "ranking_seasons",
   "lesson_content",
   "devotional_content",
+  "turma_lesson_content",
+  "leader_guide",
   "events",
+  "event_photos",
+  "custom_event_types",
   "leader_meeting_notes",
   "messages",
+  "message_views",
   "profiles",
   "user_roles",
   "user_progress",
@@ -43,7 +52,12 @@ const MIGRATION_TABLES = [
   "devotional_responses",
   "attendance",
   "worship_attendance",
+  "worship_songs",
+  "devotional_worship_songs",
   "achievement_unlocks",
+  "achievement_definitions",
+  "game_config",
+  "bonus_grant_log",
   "challenge_participants",
   "meeting_evaluations",
   "message_reactions",
@@ -51,9 +65,22 @@ const MIGRATION_TABLES = [
   "pastoral_notes",
   "spiritual_assessments",
   "notification_preferences",
+  "push_subscriptions",
+  "push_notification_log",
+  "push_scheduled",
+  "push_automation_config",
+  "push_activation_reminders",
+  "whatsapp_reminder_log",
   "community_chat",
   "prayer_requests",
+  "prayer_pairs",
   "testimonies",
+  "polls",
+  "poll_votes",
+  "year_promotion_requests",
+  "activity_removal_log",
+  "data_export_audit",
+  "privacy_requests",
   "user_devotional_overrides",
   "user_lesson_overrides",
 ];
@@ -84,7 +111,7 @@ function escapeSQL(value: unknown): string {
 function buildInserts(table: string, rows: Record<string, unknown>[]): string {
   if (!rows || rows.length === 0) return `-- No data for ${table}\n`;
 
-  const columns = Object.keys(rows[0]);
+  const columns = Array.from(new Set(rows.flatMap((row) => Object.keys(row))));
   const values = rows.map((row) => {
     const rowValues = columns.map((column) => escapeSQL(row[column]));
     return `(${rowValues.join(", ")})`;
@@ -152,91 +179,15 @@ export default function ExportData() {
   }
 
   async function fetchAllData() {
-    const [block1, block2, block3, block4] = await Promise.all([
-      Promise.all([
-        supabase.from("courses").select("*").order("order_num"),
-        supabase.from("lessons").select("*").order("course_id, order_num"),
-        supabase.from("lesson_content").select("*"),
-        supabase.from("devotional_content").select("*").order("lesson_id, day_number"),
-        supabase.from("activities").select("*").order("order_num"),
-        supabase.from("turmas").select("*"),
-        supabase.from("events").select("*").order("event_date"),
-        supabase.from("community_settings").select("*"),
-        supabase.from("community_challenges").select("*"),
-        supabase.from("course_unlocks").select("*"),
-      ]),
-      Promise.all([
-        supabase.from("profiles").select("*"),
-        supabase.from("user_roles").select("*"),
-        supabase.from("user_progress").select("*"),
-        supabase.from("lesson_responses").select("*"),
-        supabase.from("devotional_progress").select("*"),
-        supabase.from("devotional_responses").select("*"),
-        supabase.from("attendance").select("*"),
-        supabase.from("worship_attendance").select("*"),
-        supabase.from("achievement_unlocks").select("*"),
-      ]),
-      Promise.all([
-        supabase.from("discipleship_plans").select("*"),
-        supabase.from("pastoral_notes").select("*"),
-        supabase.from("spiritual_assessments").select("*"),
-        supabase.from("meeting_evaluations").select("*"),
-        supabase.from("leader_meeting_notes").select("*"),
-        supabase.from("messages").select("*"),
-        supabase.from("message_reactions").select("*"),
-        supabase.from("area_pastors").select("*"),
-        supabase.from("ranking_seasons").select("*"),
-        supabase.from("challenge_participants").select("*"),
-        supabase.from("notification_preferences").select("*"),
-        supabase.from("community_chat").select("*"),
-        supabase.from("prayer_requests").select("*"),
-        supabase.from("testimonies").select("*"),
-      ]),
-      Promise.all([
-        supabase.from("user_devotional_overrides" as never).select("*"),
-        supabase.from("user_lesson_overrides" as never).select("*"),
-      ]),
-    ]);
+    const sections = await Promise.all(MIGRATION_TABLES.map(async (table) => {
+      const { data, error } = await (supabase.from as any)(table).select("*");
+      if (error) {
+        return `-- ${table}: ignorado na exportacao (${error.message})\n\n`;
+      }
+      return buildInserts(table, (data ?? []) as Record<string, unknown>[]);
+    }));
 
-    const sections = [
-      ["courses", unwrapQuery("courses", block1[0])],
-      ["activities", unwrapQuery("activities", block1[4])],
-      ["turmas", unwrapQuery("turmas", block1[5])],
-      ["community_settings", unwrapQuery("community_settings", block1[7])],
-      ["area_pastors", unwrapQuery("area_pastors", block3[7])],
-      ["community_challenges", unwrapQuery("community_challenges", block1[8])],
-      ["lessons", unwrapQuery("lessons", block1[1])],
-      ["course_unlocks", unwrapQuery("course_unlocks", block1[9])],
-      ["ranking_seasons", unwrapQuery("ranking_seasons", block3[8])],
-      ["lesson_content", unwrapQuery("lesson_content", block1[2])],
-      ["devotional_content", unwrapQuery("devotional_content", block1[3])],
-      ["events", unwrapQuery("events", block1[6])],
-      ["leader_meeting_notes", unwrapQuery("leader_meeting_notes", block3[4])],
-      ["messages", unwrapQuery("messages", block3[5])],
-      ["profiles", unwrapQuery("profiles", block2[0])],
-      ["user_roles", unwrapQuery("user_roles", block2[1])],
-      ["user_progress", unwrapQuery("user_progress", block2[2])],
-      ["lesson_responses", unwrapQuery("lesson_responses", block2[3])],
-      ["devotional_progress", unwrapQuery("devotional_progress", block2[4])],
-      ["devotional_responses", unwrapQuery("devotional_responses", block2[5])],
-      ["attendance", unwrapQuery("attendance", block2[6])],
-      ["worship_attendance", unwrapQuery("worship_attendance", block2[7])],
-      ["achievement_unlocks", unwrapQuery("achievement_unlocks", block2[8])],
-      ["challenge_participants", unwrapQuery("challenge_participants", block3[9])],
-      ["meeting_evaluations", unwrapQuery("meeting_evaluations", block3[3])],
-      ["message_reactions", unwrapQuery("message_reactions", block3[6])],
-      ["discipleship_plans", unwrapQuery("discipleship_plans", block3[0])],
-      ["pastoral_notes", unwrapQuery("pastoral_notes", block3[1])],
-      ["spiritual_assessments", unwrapQuery("spiritual_assessments", block3[2])],
-      ["notification_preferences", unwrapQuery("notification_preferences", block3[10])],
-      ["community_chat", unwrapQuery("community_chat", block3[11])],
-      ["prayer_requests", unwrapQuery("prayer_requests", block3[12])],
-      ["testimonies", unwrapQuery("testimonies", block3[13])],
-      ["user_devotional_overrides", unwrapQuery("user_devotional_overrides", block4[0] as GenericRowsResult)],
-      ["user_lesson_overrides", unwrapQuery("user_lesson_overrides", block4[1] as GenericRowsResult)],
-    ] as Array<[string, Record<string, unknown>[]]>;
-
-    return sections.map(([table, rows]) => buildInserts(table, rows)).join("");
+    return sections.join("");
   }
 
   async function fetchPersonalData(userId: string) {

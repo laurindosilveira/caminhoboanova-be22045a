@@ -42,10 +42,12 @@ export default function AdminOverviewTab({
   participants,
   activities,
   turmas,
+  churchId,
 }: {
   participants: any[];
   activities: any[];
   turmas: any[];
+  churchId?: string | null;
 }) {
   const { isSuper } = useAuth();
 
@@ -58,14 +60,25 @@ export default function AdminOverviewTab({
   const [period, setPeriod] = useState("6m");
   const [selectedTurmaId, setSelectedTurmaId] = useState<string>("all");
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [churchId, participants.length]);
 
   async function fetchData() {
     setLoading(true);
+    const userIds = participants.map(p => p.user_id).filter(Boolean);
+    if (userIds.length === 0) {
+      setAttRows([]);
+      setDevRows([]);
+      setLessonRows([]);
+      setLoading(false);
+      return;
+    }
+    const applyChurchScope = (query: any) => churchId
+      ? query.or(`church_id.is.null,church_id.eq.${churchId}`)
+      : query.is("church_id", null);
     const [{ data: att }, { data: dev }, { data: les }] = await Promise.all([
-      supabase.from("attendance").select("user_id, status, created_at"),
-      supabase.from("devotional_progress").select("user_id, completed_at"),
-      supabase.from("lesson_responses").select("user_id, lesson_id, created_at"),
+      applyChurchScope(supabase.from("attendance").select("user_id, status, created_at, church_id").in("user_id", userIds)),
+      applyChurchScope(supabase.from("devotional_progress").select("user_id, completed_at, church_id").in("user_id", userIds)),
+      applyChurchScope(supabase.from("lesson_responses").select("user_id, lesson_id, created_at, church_id").in("user_id", userIds)),
     ]);
     setAttRows(att ?? []);
     setDevRows(dev ?? []);

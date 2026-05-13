@@ -1,4 +1,4 @@
-import { Home, Trophy, Calendar, Users, User, Heart, Music, Menu } from "lucide-react";
+import { Home, Trophy, Calendar, Users, User, Heart, Music, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -9,17 +9,14 @@ interface BottomNavProps {
   onChange: (tab: Tab) => void;
 }
 
-const mainTabs = [
+const tabs = [
   { tab: "jornada" as Tab, icon: Home, label: "Jornada" },
-  { tab: "discipulado" as Tab, icon: Heart, label: "Minha Sala" },
+  { tab: "discipulado" as Tab, icon: Heart, label: "CAMINHO" },
   { tab: "adoracao" as Tab, icon: Music, label: "Adoração" },
-  { tab: "perfil" as Tab, icon: User, label: "Perfil" },
-];
-
-const menuTabs = [
+  { tab: "agenda" as Tab, icon: Calendar, label: "Agenda" },
   { tab: "conquistas" as Tab, icon: Trophy, label: "Ranking" },
   { tab: "comunidade" as Tab, icon: Users, label: "Comunidade" },
-  { tab: "agenda" as Tab, icon: Calendar, label: "Agenda" },
+  { tab: "perfil" as Tab, icon: User, label: "Perfil" },
 ];
 
 export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
@@ -30,9 +27,11 @@ export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
     setIsMenuOpen(false);
   };
 
+  const activeTabInfo = tabs.find((item) => item.tab === activeTab) ?? tabs[0];
+  const ActiveIcon = activeTabInfo.icon;
+
   return (
     <>
-      {/* Menu Overlay */}
       <AnimatePresence>
         {isMenuOpen && (
           <>
@@ -41,33 +40,38 @@ export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
+              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
             />
+
             <motion.div
-              initial={{ opacity: 0, y: 100 }}
+              initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 100 }}
-              className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-md bg-card border border-border rounded-t-3xl shadow-2xl z-50 p-4"
+              exit={{ opacity: 0, y: 24 }}
+              className="fixed bottom-[92px] left-1/2 z-50 max-h-80 w-[calc(100%-32px)] max-w-md -translate-x-1/2 overflow-y-auto rounded-2xl border border-border bg-card p-2 shadow-2xl"
             >
-              <div className="grid grid-cols-3 gap-4">
-                {menuTabs.map(({ tab, icon: Icon, label }) => {
+              <div className="px-2 py-2">
+                <p className="font-inter text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                  Escolha a aba
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                {tabs.map(({ tab, icon: Icon, label }) => {
                   const isActive = activeTab === tab;
+
                   return (
                     <button
+                      type="button"
                       key={tab}
                       onClick={() => handleTabClick(tab)}
-                      className={`flex flex-col items-center gap-2 p-3 rounded-2xl transition-all active:scale-95 ${
-                        isActive ? "bg-secondary/10 text-secondary" : "text-muted-foreground hover:bg-muted"
+                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "text-foreground hover:bg-muted"
                       }`}
                     >
-                      <div className={`w-12 h-12 flex items-center justify-center rounded-2xl transition-all ${
-                        isActive ? "bg-secondary/20" : "bg-muted"
-                      }`}>
-                        <Icon className="w-6 h-6" />
-                      </div>
-                      <span className={`text-[10px] font-bold uppercase tracking-wider ${isActive ? "text-secondary" : "text-muted-foreground"}`}>
-                        {label}
-                      </span>
+                      <Icon className="h-5 w-5 shrink-0" />
+                      <span className="min-w-0 flex-1 font-inter text-sm font-semibold">{label}</span>
                     </button>
                   );
                 })}
@@ -78,48 +82,33 @@ export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
       </AnimatePresence>
 
       <nav
-        className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-card border-t border-border shadow-[0_-8px_30px_rgb(0,0,0,0.12)] z-50"
+        className="fixed bottom-0 left-1/2 z-50 w-full max-w-md -translate-x-1/2 border-t border-border bg-card shadow-[0_-8px_30px_rgb(0,0,0,0.12)]"
         aria-label="Navegação principal"
       >
-        <div className="flex items-center justify-between px-2 py-2">
-          {mainTabs.map(({ tab, icon: Icon, label }) => {
-            const isActive = activeTab === tab;
-            const isPrimary = tab === "discipulado" || tab === "adoracao";
-            return (
-              <button
-                key={tab}
-                onClick={() => handleTabClick(tab)}
-                className={`flex-1 flex flex-col items-center gap-1 py-1 rounded-xl transition-all active:scale-95 ${
-                  isActive ? (isPrimary ? "text-primary" : "text-secondary") : "text-muted-foreground"
-                }`}
-              >
-                <div className={`relative w-8 h-8 flex items-center justify-center rounded-xl transition-all ${
-                  isActive ? (isPrimary ? "bg-primary/10" : "bg-secondary/10") : ""
-                }`}>
-                  <Icon className={`w-5 h-5 ${isActive ? (isPrimary ? "text-primary" : "text-secondary") : "text-muted-foreground"}`} />
-                </div>
-                <span className={`text-[9px] font-bold tracking-tight ${isActive ? "" : "font-medium"}`}>
-                  {label}
-                </span>
-              </button>
-            );
-          })}
-
-          {/* Menu Button */}
+        <div className="px-4 py-3">
           <button
+            type="button"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className={`flex-1 flex flex-col items-center gap-1 py-1 rounded-xl transition-all active:scale-95 ${
-              isMenuOpen ? "text-secondary" : "text-muted-foreground"
-            }`}
+            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border bg-muted px-4 py-3 text-left transition-all hover:bg-muted/80 active:scale-[0.98]"
+            aria-expanded={isMenuOpen}
+            aria-label={isMenuOpen ? "Fechar menu de abas" : "Abrir menu de abas"}
           >
-            <div className={`relative w-8 h-8 flex items-center justify-center rounded-xl transition-all ${
-              isMenuOpen ? "bg-secondary/10" : ""
-            }`}>
-              <Menu className={`w-5 h-5 ${isMenuOpen ? "text-secondary" : "text-muted-foreground"}`} />
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <ActiveIcon className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-inter text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                  Aba atual
+                </p>
+                <p className="truncate font-montserrat text-sm font-black text-foreground">{activeTabInfo.label}</p>
+              </div>
             </div>
-            <span className={`text-[9px] font-bold tracking-tight ${isMenuOpen ? "" : "font-medium"}`}>
-              Mais
-            </span>
+            {isMenuOpen ? (
+              <ChevronUp className="h-5 w-5 shrink-0 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
+            )}
           </button>
         </div>
       </nav>

@@ -17,10 +17,12 @@ Deno.serve(async (req) => {
     const VAPID_PUBLIC_KEY = (Deno.env.get("VAPID_PUBLIC_KEY") ?? "").replace(/["\s,]/g, "");
     const VAPID_PRIVATE_KEY = (Deno.env.get("VAPID_PRIVATE_KEY") ?? "").replace(/["\s,]/g, "");
 
-    // Verify caller is admin/lider
+    // Verify caller is admin/lider and keep the request inside one church.
     const authHeader = req.headers.get("Authorization");
     const supabaseUser = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!);
     let callerId: string | null = null;
+    let callerChurchId: string | null = null;
+    let callerIsSuper = false;
 
     if (authHeader === `Bearer ${SERVICE_ROLE_KEY}`) {
       callerId = null;
@@ -37,11 +39,18 @@ Deno.serve(async (req) => {
 
       // Check role using service role client
       const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-      const { data: roles } = await supabase
+      const [{ data: roles }, { data: callerProfile }] = await Promise.all([
+        supabase
         .from("user_roles")
-        .select("role")
+        .select("role, is_super, is_super_admin, church_id")
         .eq("user_id", user.id)
-        .in("role", ["admin", "lider"]);
+        .in("role", ["admin", "lider", "super_admin"]),
+        supabase
+          .from("profiles")
+          .select("church_id")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+      ]);
 
       if (!roles || roles.length === 0) {
         return new Response(JSON.stringify({ error: "Forbidden" }), {
@@ -49,6 +58,8 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      callerChurchId = (callerProfile as any)?.church_id ?? (roles[0] as any)?.church_id ?? null;
+      callerIsSuper = roles.some((r: any) => r.role === "super_admin" || r.is_super || r.is_super_admin);
     } else {
       return new Response(JSON.stringify({ error: "No auth header" }), {
         status: 401,
@@ -56,7 +67,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { title, body, target, targetValue } = await req.json();
+    const { title, body, target, targetValue, churchId } = await req.json();
 
     if (!title || !body) {
       return new Response(JSON.stringify({ error: "title and body required" }), {
@@ -66,38 +77,56 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+    const scopeChurchId = churchId ?? callerChurchId;
+    if (callerId && !callerIsSuper && churchId && callerChurchId && churchId !== callerChurchId) {
+      return new Response(JSON.stringify({ error: "Church scope forbidden" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const applyChurchScope = (query: any) => {
+      if (!scopeChurchId) return query;
+      return query.eq("church_id", scopeChurchId);
+    };
 
     // Get target user IDs based on filter
     let targetUserIds: string[] = [];
 
     if (target === "all") {
-      // For "all", just get all subscriptions directly
-      const { data: allSubs } = await supabase.from("push_subscriptions").select("user_id");
-      targetUserIds = [...new Set((allSubs ?? []).map((d: any) => d.user_id))];
+      const { data: profiles } = await applyChurchScope(
+        supabase.from("profiles").select("user_id")
+      );
+      targetUserIds = [...new Set((profiles ?? []).map((d: any) => d.user_id))];
       console.log(`Target=all, found ${targetUserIds.length} unique users with subscriptions`);
     } else if (target === "area" && targetValue) {
-      const { data: profiles } = await supabase
+      const { data: profiles } = await applyChurchScope(supabase
         .from("profiles")
         .select("user_id")
-        .eq("area", targetValue);
+        .eq("area", targetValue));
       targetUserIds = (profiles ?? []).map((p: any) => p.user_id);
       console.log(`Target=area(${targetValue}), found ${targetUserIds.length} profiles`);
     } else if (target === "community" && targetValue) {
-      const { data: profiles } = await supabase
+      const { data: profiles } = await applyChurchScope(supabase
         .from("profiles")
         .select("user_id")
-        .eq("community", targetValue);
+        .eq("community", targetValue));
       targetUserIds = (profiles ?? []).map((p: any) => p.user_id);
       console.log(`Target=community(${targetValue}), found ${targetUserIds.length} profiles`);
     } else if (target === "turma" && targetValue) {
-      const { data: profiles } = await supabase
+      const { data: profiles } = await applyChurchScope(supabase
         .from("profiles")
         .select("user_id")
-        .eq("turma_id", targetValue);
+        .eq("turma_id", targetValue));
       targetUserIds = (profiles ?? []).map((p: any) => p.user_id);
       console.log(`Target=turma(${targetValue}), found ${targetUserIds.length} profiles`);
     } else if (target === "user" && targetValue) {
-      targetUserIds = [targetValue];
+      const { data: profile } = await applyChurchScope(supabase
+        .from("profiles")
+        .select("user_id")
+        .eq("user_id", targetValue)
+        .maybeSingle());
+      targetUserIds = profile ? [targetValue] : [];
       console.log(`Target=user(${targetValue})`);
     }
 
@@ -110,10 +139,10 @@ Deno.serve(async (req) => {
     }
 
     // Get subscriptions for target users
-    const { data: subscriptions } = await supabase
+    const { data: subscriptions } = await applyChurchScope(supabase
       .from("push_subscriptions")
       .select("*")
-      .in("user_id", targetUserIds);
+      .in("user_id", targetUserIds));
 
     console.log(`Found ${subscriptions?.length ?? 0} subscriptions for ${targetUserIds.length} users`);
 
@@ -126,10 +155,10 @@ Deno.serve(async (req) => {
 
     // Check notification preferences - only send to users with mensagens enabled
     const subUserIds = [...new Set(subscriptions.map((s: any) => s.user_id))];
-    const { data: allPrefs } = await supabase
+    const { data: allPrefs } = await applyChurchScope(supabase
       .from("notification_preferences")
       .select("user_id, master_enabled, mensagens")
-      .in("user_id", subUserIds);
+      .in("user_id", subUserIds));
 
     const prefsMap = new Map((allPrefs ?? []).map((p: any) => [p.user_id, p]));
 
@@ -187,6 +216,7 @@ Deno.serve(async (req) => {
       sent_count: sent,
       failed_count: failed,
       sent_by: callerId,
+      church_id: scopeChurchId,
     });
 
     return new Response(

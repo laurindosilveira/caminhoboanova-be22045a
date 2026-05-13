@@ -119,6 +119,17 @@ All colors MUST be HSL.
   }
 }
 
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @keyframes tab-slide-in {
   0% {
     opacity: 0;

@@ -15,6 +15,7 @@ type Message = {
   area: string | null;
   community: string | null;
   turma_id: string | null;
+  church_id?: string | null;
   created_at: string;
 };
 
@@ -22,6 +23,7 @@ type Turma = {
   id: string;
   name: string;
   area: string | null;
+  church_id?: string | null;
 };
 
 const FINAL_PUSH_COPY = {
@@ -33,11 +35,13 @@ const FINAL_PUSH_COPY = {
 type Props = {
   /** When true, restricts sending options to only the leader's own area/turma */
   leaderMode?: boolean;
+  churchId?: string | null;
 };
 
-export default function MessagesTab({ leaderMode = false }: Props) {
+export default function MessagesTab({ leaderMode = false, churchId }: Props) {
   const { profile } = useAuth();
   const { effectiveArea } = useAreaSwitch();
+  const currentChurchId = churchId ?? profile?.church_id ?? null;
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -61,14 +65,18 @@ export default function MessagesTab({ leaderMode = false }: Props) {
 
   useEffect(() => {
     void loadTurmasAndMessages();
-  }, [effectiveArea]);
+  }, [currentChurchId, effectiveArea]);
 
   async function loadTurmasAndMessages() {
-    const { data: turmasData, error: turmasError } = await supabase
+    let turmasQuery = supabase
       .from("turmas")
       .select("id, name, area")
       .eq("is_active", true)
       .order("name");
+    if (currentChurchId) {
+      turmasQuery = (turmasQuery as any).eq("church_id", currentChurchId);
+    }
+    const { data: turmasData, error: turmasError } = await turmasQuery;
 
     if (turmasError) {
       toast.error(`Erro ao carregar turmas: ${turmasError.message}`);
@@ -84,7 +92,11 @@ export default function MessagesTab({ leaderMode = false }: Props) {
 
   async function fetchMessages(currentTurmas: Turma[] = turmas) {
     setLoading(true);
-    const { data, error } = await supabase.from("messages").select("*").order("created_at", { ascending: false });
+    let messagesQuery = supabase.from("messages").select("*").order("created_at", { ascending: false });
+    if (currentChurchId) {
+      messagesQuery = (messagesQuery as any).or(`church_id.is.null,church_id.eq.${currentChurchId}`);
+    }
+    const { data, error } = await messagesQuery;
     if (error) {
       toast.error(`Erro ao carregar comunicados: ${error.message}`);
       setMessages([]);
@@ -153,6 +165,7 @@ export default function MessagesTab({ leaderMode = false }: Props) {
       area: messageArea,
       community: messageCommunity,
       turma_id: messageTurmaId,
+      church_id: currentChurchId,
       sent_by: userId,
     } as any);
 
@@ -184,6 +197,7 @@ export default function MessagesTab({ leaderMode = false }: Props) {
           body: FINAL_PUSH_COPY.body,
           target: pushTarget,
           targetValue: targetValue,
+          churchId: currentChurchId,
         },
       });
 

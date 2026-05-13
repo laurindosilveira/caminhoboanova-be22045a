@@ -10,6 +10,8 @@ interface Profile {
   phone: string;
   community: string;
   area: string;
+  church_id?: string | null;
+  churches?: { name: string | null } | null;
   turma_id?: string | null;
   father_name?: string;
   mother_name?: string;

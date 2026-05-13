@@ -13,6 +13,7 @@ type WaitingUser = {
   birth_date: string;
   turma_id: string | null;
   enrollment_status: "pending" | "approved" | "rejected";
+  church_id?: string | null;
 };
 
 type Turma = {
@@ -20,14 +21,16 @@ type Turma = {
   name: string;
   year: number;
   area: string | null;
+  church_id?: string | null;
 };
 
 interface Props {
   areaFilter: string;
+  churchId?: string | null;
   onAssigned?: () => void;
 }
 
-export default function LeaderWaitingRoom({ areaFilter, onAssigned }: Props) {
+export default function LeaderWaitingRoom({ areaFilter, churchId, onAssigned }: Props) {
   const { toast } = useToast();
   const [users, setUsers] = useState<WaitingUser[]>([]);
   const [turmas, setTurmas] = useState<Turma[]>([]);
@@ -37,7 +40,7 @@ export default function LeaderWaitingRoom({ areaFilter, onAssigned }: Props) {
 
   useEffect(() => {
     void fetchData();
-  }, [areaFilter]);
+  }, [areaFilter, churchId]);
 
   async function fetchData() {
     setLoading(true);
@@ -47,17 +50,34 @@ export default function LeaderWaitingRoom({ areaFilter, onAssigned }: Props) {
       { data: turmasData, error: turmasError },
       userResult,
     ] = await Promise.all([
-      (supabase.from as any)("profiles")
-        .select("user_id, full_name, community, area, phone, birth_date, turma_id, enrollment_status")
-        .is("turma_id", null)
-        .eq("enrollment_status", "pending")
-        .eq("area", areaFilter),
-      supabase
-        .from("turmas")
-        .select("id, name, year, area")
-        .eq("is_active", true)
-        .eq("area", areaFilter)
-        .order("year", { ascending: false }),
+      (churchId
+        ? (supabase.from as any)("profiles")
+          .select("user_id, full_name, community, area, phone, birth_date, turma_id, enrollment_status, church_id")
+          .is("turma_id", null)
+          .eq("enrollment_status", "pending")
+          .eq("area", areaFilter)
+          .eq("church_id", churchId)
+        : (supabase.from as any)("profiles")
+          .select("user_id, full_name, community, area, phone, birth_date, turma_id, enrollment_status, church_id")
+          .is("turma_id", null)
+          .eq("enrollment_status", "pending")
+          .eq("area", areaFilter)
+          .is("church_id", null)),
+      churchId
+        ? supabase
+          .from("turmas")
+          .select("id, name, year, area, church_id")
+          .eq("is_active", true)
+          .eq("area", areaFilter)
+          .eq("church_id", churchId)
+          .order("year", { ascending: false })
+        : supabase
+          .from("turmas")
+          .select("id, name, year, area, church_id")
+          .eq("is_active", true)
+          .eq("area", areaFilter)
+          .is("church_id", null)
+          .order("year", { ascending: false }),
       supabase.auth.getUser(),
     ]);
 

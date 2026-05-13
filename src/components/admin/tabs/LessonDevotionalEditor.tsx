@@ -19,6 +19,7 @@ type Lesson = {
 type Devotional = {
   id: string;
   lesson_id: string;
+  church_id?: string | null;
   day_number: number;
   title: string;
   bible_text: string;
@@ -42,9 +43,10 @@ const DAY_LABELS = ["", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sába
 type Props = {
   lesson: Lesson;
   onBack: () => void;
+  churchId?: string | null;
 };
 
-export default function LessonDevotionalEditor({ lesson, onBack }: Props) {
+export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Props) {
   const { toast } = useToast();
   const [devotionals, setDevotionals] = useState<Devotional[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,7 +72,7 @@ export default function LessonDevotionalEditor({ lesson, onBack }: Props) {
     fetchDevotionals();
     fetchEventReleases();
     fetchDevotionalMode();
-  }, [lesson.id]);
+  }, [lesson.id, churchId]);
 
   async function fetchDevotionalMode() {
     const { data } = await supabase
@@ -95,6 +97,7 @@ export default function LessonDevotionalEditor({ lesson, onBack }: Props) {
       .from("devotional_content")
       .select("*")
       .eq("lesson_id", lesson.id)
+      .or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null")
       .order("day_number");
     setDevotionals((data ?? []) as Devotional[]);
     setLoading(false);
@@ -105,6 +108,7 @@ export default function LessonDevotionalEditor({ lesson, onBack }: Props) {
       .from("events")
       .select("id, event_date, area, released_devotional_days")
       .eq("linked_lesson_id", lesson.id)
+      .or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null")
       .order("event_date");
 
     if (!data) { setEventReleases([]); return; }
@@ -158,12 +162,9 @@ export default function LessonDevotionalEditor({ lesson, onBack }: Props) {
       toast({ title: "Máximo de 6 devocionais por lição", variant: "destructive" });
       return;
     }
-    const { data: profile } = await supabase.from("profiles").select("church_id").eq("user_id", (await supabase.auth.getUser()).data.user?.id).single();
-    const churchId = profile?.church_id;
-
     const { error } = await supabase.from("devotional_content").insert({
       lesson_id: lesson.id,
-      church_id: churchId,
+      church_id: churchId ?? null,
       day_number: nextDay,
       title: `Dia ${nextDay} — ${DAY_LABELS[nextDay] || ""}`,
       bible_text: "",
@@ -204,12 +205,9 @@ export default function LessonDevotionalEditor({ lesson, onBack }: Props) {
   async function handleSave() {
     if (!editing) return;
     setSaving(true);
-    const { data: profile } = await supabase.from("profiles").select("church_id").eq("user_id", (await supabase.auth.getUser()).data.user?.id).single();
-    const churchId = profile?.church_id;
-
     await supabase.from("devotional_content").update({
       title: form.title,
-      church_id: churchId,
+      church_id: churchId ?? null,
       bible_text: form.bible_text,
       bible_reference: form.bible_reference,
       reflection: form.reflection,

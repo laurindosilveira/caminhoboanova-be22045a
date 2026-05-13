@@ -15,10 +15,16 @@ type Turma = {
   year: number;
   description: string | null;
   is_active: boolean;
+  church_id?: string | null;
   member_count?: number;
 };
 
-export default function LeaderTurmaManagement() {
+type Props = {
+  defaultArea?: string;
+  defaultChurchId?: string | null;
+};
+
+export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: Props) {
   const { profile } = useAuth();
   const { effectiveArea } = useAreaSwitch();
   const { toast } = useToast();
@@ -45,7 +51,7 @@ export default function LeaderTurmaManagement() {
 
   useEffect(() => {
     fetchTurma();
-  }, [profile?.turma_id]);
+  }, [profile?.turma_id, defaultArea, defaultChurchId]);
 
   async function fetchTurma() {
     setLoading(true);
@@ -53,7 +59,11 @@ export default function LeaderTurmaManagement() {
     if (profile?.turma_id) {
       const [{ data: turmaData }, { data: allTurmas }] = await Promise.all([
         supabase.from("turmas").select("*").eq("id", profile.turma_id).single(),
-        supabase.from("turmas").select("*").eq("is_active", false).order("year", { ascending: false }),
+        (supabase.from as any)("turmas")
+          .select("*")
+          .eq("is_active", false)
+          .eq("church_id", defaultChurchId ?? profile?.church_id ?? "")
+          .order("year", { ascending: false }),
       ]);
 
       if (turmaData) {
@@ -61,9 +71,11 @@ export default function LeaderTurmaManagement() {
         setTurma({ ...turmaData, member_count: profiles?.length ?? 0 });
       }
 
-      const myArea = effectiveArea || profile?.area;
+      const myArea = defaultArea || effectiveArea || profile?.area;
       const filtered = (allTurmas ?? []).filter(t => t.area === myArea);
-      const { data: allProfiles } = await supabase.from("profiles").select("turma_id");
+      const { data: allProfiles } = await (supabase.from as any)("profiles")
+        .select("turma_id")
+        .eq("church_id", defaultChurchId ?? profile?.church_id ?? "");
       const countMap: Record<string, number> = {};
       (allProfiles ?? []).forEach(p => {
         if (p.turma_id) countMap[p.turma_id] = (countMap[p.turma_id] ?? 0) + 1;
@@ -82,7 +94,8 @@ export default function LeaderTurmaManagement() {
     setCreating(true);
 
     const { data: authUser } = await supabase.auth.getUser();
-    const myArea = effectiveArea || profile?.area || null;
+    const myArea = defaultArea || effectiveArea || profile?.area || null;
+    const churchId = defaultChurchId ?? profile?.church_id ?? null;
 
     const { data: newTurma, error } = await supabase
       .from("turmas")
@@ -91,6 +104,7 @@ export default function LeaderTurmaManagement() {
         area: myArea,
         year: new Date().getFullYear(),
         description: createForm.description.trim() || null,
+        church_id: churchId,
         created_by: authUser.user?.id,
       })
       .select("id")
@@ -171,6 +185,7 @@ export default function LeaderTurmaManagement() {
       year: turma.year,
       description: `Grupo confirmado em ${new Date().toLocaleDateString("pt-BR")}. ${secondYearUsers.length} confirmando(s).`,
       is_active: false,
+      church_id: turma.church_id ?? defaultChurchId ?? profile?.church_id ?? null,
       created_by: user.user?.id,
     }).select("id").single();
 
@@ -264,7 +279,7 @@ export default function LeaderTurmaManagement() {
             <GraduationCap className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h2 className="font-montserrat font-black text-foreground text-base">Minha Sala</h2>
+            <h2 className="font-montserrat font-black text-foreground text-base">CAMINHO</h2>
             <p className="text-muted-foreground text-xs font-inter">Você ainda não tem uma turma vinculada</p>
           </div>
         </div>
@@ -296,7 +311,7 @@ export default function LeaderTurmaManagement() {
             <div className="space-y-3">
               <div className="bg-muted/50 rounded-xl px-3 py-2">
                 <p className="text-muted-foreground font-inter text-xs">
-                  Área: <span className="font-medium text-foreground">{effectiveArea || profile?.area || "—"}</span>
+                  Área: <span className="font-medium text-foreground">{defaultArea || effectiveArea || profile?.area || "—"}</span>
                   {" · "}Ano: <span className="font-medium text-foreground">{new Date().getFullYear()}</span>
                 </p>
               </div>
@@ -351,7 +366,7 @@ export default function LeaderTurmaManagement() {
           <GraduationCap className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <h2 className="font-montserrat font-black text-foreground text-base">Minha Sala</h2>
+          <h2 className="font-montserrat font-black text-foreground text-base">CAMINHO</h2>
           <p className="text-muted-foreground text-xs font-inter">Confirmação e reinício de jornada</p>
         </div>
       </div>

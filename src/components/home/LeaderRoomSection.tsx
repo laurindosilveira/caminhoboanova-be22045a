@@ -20,7 +20,7 @@ import LeaderWaitingRoom from "@/components/home/LeaderWaitingRoom";
 import { AREA_COMMUNITIES, ALL_COMMUNITIES, getCommunitiesForArea } from "@/config/areas";
 
 type Activity = {
-  id: string; type: string; title: string; subtitle: string | null; order_num: number; points: number;
+  id: string; type: string; title: string; subtitle: string | null; order_num: number; points: number; church_id?: string | null;
 };
 type Participant = {
   user_id: string; full_name: string; community: string; area: string;
@@ -30,9 +30,10 @@ type Participant = {
   completed_devotional_count?: number;
   completed_event_count?: number;
   faith_points?: number;
+  church_id?: string | null;
 };
 type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
-type Turma = { id: string; name: string; area: string | null };
+type Turma = { id: string; name: string; area: string | null; church_id?: string | null };
 
 type SubTab = "visao" | "alunos" | "encontros" | "roteiros" | "comunicacao" | "push" | "gerencia" | "relatorios" | "guia";
 
@@ -55,62 +56,13 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
 
   const [expanded, setExpanded] = useState(asTab);
   const [activeSubTab, setActiveSubTab] = useState<SubTab>("visao");
+  const [isSubTabMenuOpen, setIsSubTabMenuOpen] = useState(false);
   const [highlightedParticipant, setHighlightedParticipant] = useState<Participant | null>(null);
-  const tabsContainerRef = useRef<HTMLDivElement>(null);
-  const isProgrammaticScroll = useRef(false);
-  const scrollTimeout = useRef<ReturnType<typeof setTimeout>>();
 
   const scrollToTab = useCallback((tabId: SubTab) => {
     setActiveSubTab(tabId);
-    isProgrammaticScroll.current = true;
-    requestAnimationFrame(() => {
-      const container = tabsContainerRef.current;
-      if (!container) return;
-      const idx = SUB_TABS.findIndex(t => t.id === tabId);
-      const btn = container.children[idx] as HTMLElement | undefined;
-      if (!btn) return;
-      const scrollLeft = btn.offsetLeft - container.offsetWidth / 2 + btn.offsetWidth / 2;
-      container.scrollTo({ left: Math.max(0, scrollLeft), behavior: "smooth" });
-      // Release lock after scroll animation completes
-      clearTimeout(scrollTimeout.current);
-      scrollTimeout.current = setTimeout(() => {
-        isProgrammaticScroll.current = false;
-      }, 400);
-    });
+    setIsSubTabMenuOpen(false);
   }, []);
-
-  const handleTabsScroll = useCallback(() => {
-    if (isProgrammaticScroll.current) return;
-    const container = tabsContainerRef.current;
-    if (!container) return;
-    // Debounce to avoid excessive updates
-    clearTimeout(scrollTimeout.current);
-    scrollTimeout.current = setTimeout(() => {
-      const ctr = tabsContainerRef.current;
-      if (!ctr) return;
-      const centerX = ctr.scrollLeft + ctr.offsetWidth / 2;
-      let closestTab: SubTab = SUB_TABS[0].id;
-      let closestDist = Infinity;
-      Array.from(ctr.children).forEach((child, i) => {
-        const el = child as HTMLElement;
-        const elCenter = el.offsetLeft + el.offsetWidth / 2;
-        const dist = Math.abs(elCenter - centerX);
-        if (dist < closestDist) {
-          closestDist = dist;
-          closestTab = SUB_TABS[i].id;
-        }
-      });
-      setActiveSubTab(closestTab);
-    }, 50);
-  }, []);
-
-  // Attach passive scroll listener for better scroll performance
-  useEffect(() => {
-    const container = tabsContainerRef.current;
-    if (!container || !expanded) return;
-    container.addEventListener("scroll", handleTabsScroll, { passive: true });
-    return () => container.removeEventListener("scroll", handleTabsScroll);
-  }, [expanded, handleTabsScroll]);
 
   // Swipe gesture support for navigating between sub-tabs
   const touchStart = useRef<{ x: number; y: number } | null>(null);
@@ -162,31 +114,35 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
   const [waitingCount, setWaitingCount] = useState(0);
 
   const turmaArea = effectiveArea || profile?.area || "";
+  const churchId = profile?.church_id ?? null;
 
   // Fetch waiting room count for the leader's area
   useEffect(() => {
     if (!canView || !turmaArea) return;
     async function fetchWaitingCount() {
-      const { data, error } = await supabase
+      let waitingQuery = supabase
         .from("profiles")
-        .select("user_id, area, enrollment_status")
+        .select("user_id, area, enrollment_status, church_id")
         .is("turma_id", null)
         .eq("enrollment_status", "pending");
+      if (churchId) waitingQuery = waitingQuery.eq("church_id", churchId);
+      const { data, error } = await waitingQuery;
       if (!error && data) {
         const myId = (await supabase.auth.getUser()).data.user?.id;
-        const filtered = data.filter(p => p.user_id !== myId && p.area === turmaArea);
+        const filtered = data.filter((p: any) => p.user_id !== myId && p.area === turmaArea && (!churchId || p.church_id === churchId));
         setWaitingCount(filtered.length);
       }
     }
     fetchWaitingCount();
-  }, [canView, turmaArea, expanded]);
+  }, [canView, turmaArea, expanded, churchId]);
 
   const fetchPlans = useCallback(async (ids: string[]) => {
     if (ids.length === 0) return;
     const [{ data: plansData }, { data: assessData }] = await Promise.all([
-      supabase.from("discipleship_plans").select("user_id, health_status, is_priority").in("user_id", ids),
+      supabase.from("discipleship_plans").select("user_id, health_status, is_priority").in("user_id", ids).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
       supabase.from("spiritual_assessments").select("user_id, needs_pastor")
         .in("user_id", ids)
+        .or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null")
         .eq("month", new Date().getMonth() + 1)
         .eq("year", new Date().getFullYear()),
     ]);
@@ -199,7 +155,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
       map[a.user_id].needs_pastor = a.needs_pastor;
     });
     setPlans(map);
-  }, []);
+  }, [churchId]);
 
   async function fetchData() {
     // Admins can view any area even without a turma_id
@@ -207,7 +163,8 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
     if (!profile?.turma_id && !isAdmin) return;
     setLoading(true);
 
-    let profilesQuery = supabase.from("profiles").select("user_id, full_name, community, area, birth_date, phone, turma_id, confirmation_year, avatar_url, father_name, mother_name, father_phone, mother_phone, address");
+    let profilesQuery = supabase.from("profiles").select("user_id, full_name, community, area, birth_date, phone, turma_id, confirmation_year, avatar_url, father_name, mother_name, father_phone, mother_phone, address, church_id");
+    if (churchId) profilesQuery = profilesQuery.eq("church_id", churchId);
     
     if (isAdmin) {
       // Admin: fetch all profiles from the effective area
@@ -223,10 +180,12 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
       userResult,
       { data: turmasData },
     ] = await Promise.all([
-      supabase.from("activities").select("*").order("order_num"),
+      supabase.from("activities").select("*").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null").order("order_num"),
       profilesQuery,
       supabase.auth.getUser(),
-      supabase.from("turmas").select("id, name, area").eq("is_active", true),
+      churchId
+        ? supabase.from("turmas").select("id, name, area, church_id").eq("is_active", true).eq("church_id", churchId)
+        : supabase.from("turmas").select("id, name, area, church_id").eq("is_active", true).is("church_id", null),
     ]);
 
     const myId = userResult.data.user?.id ?? "";
@@ -242,10 +201,10 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
       rankingResponses,
     ] = userIds.length > 0
       ? await Promise.all([
-          supabase.from("user_progress").select("user_id, activity_id").in("user_id", userIds),
-          supabase.from("lesson_responses").select("user_id, lesson_id").in("user_id", userIds),
-          supabase.from("devotional_progress").select("user_id, devotional_id, completed_at").in("user_id", userIds),
-          supabase.from("attendance").select("user_id, status").in("user_id", userIds).eq("status", "presente"),
+          supabase.from("user_progress").select("user_id, activity_id").in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
+          supabase.from("lesson_responses").select("user_id, lesson_id").in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
+          supabase.from("devotional_progress").select("user_id, devotional_id, completed_at").in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
+          supabase.from("attendance").select("user_id, status").in("user_id", userIds).eq("status", "presente").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
           Promise.all(
             communitiesInScope.map((community) =>
               supabase.rpc("get_community_ranking" as any, { _community: community as any })
@@ -307,7 +266,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
       setDataLoaded(false);
       fetchData();
     }
-  }, [expanded, canView, turmaArea]);
+  }, [expanded, canView, turmaArea, churchId]);
 
   useEffect(() => {
     if (expanded && !dataLoaded && canView) {
@@ -320,7 +279,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
   const communities = getCommunitiesForArea(turmaArea ?? "");
 
   return (
-    <div className={asTab ? "px-5" : "mx-5"}>
+    <div className={asTab ? "" : "mx-5"}>
       {/* Collapsible header - hidden in tab mode */}
       {!asTab && (
         <button
@@ -337,7 +296,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
               )}
             </div>
             <div className="text-left">
-              <p className="font-montserrat font-bold text-foreground text-sm">Sala do Discipulador</p>
+              <p className="font-montserrat font-bold text-foreground text-sm">SALA DO LIDER</p>
               <p className="text-muted-foreground text-xs font-inter">
                 {waitingCount > 0 && !expanded
                   ? `${waitingCount} pessoa${waitingCount !== 1 ? "s" : ""} na sala de espera`
@@ -364,56 +323,71 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
 
       {expanded && (
         <div className={`${asTab ? "mt-2" : "mt-3"} animate-in slide-in-from-top-2 duration-200`}>
-          {/* Sub-tab navigation */}
-          <div className="relative">
-            <div className="flex gap-1.5 overflow-x-auto pb-1 mb-1 scrollbar-hide" ref={tabsContainerRef}>
-              {SUB_TABS.map(tab => {
-                const Icon = tab.icon;
-                const isActive = activeSubTab === tab.id;
-                const showBadge = tab.id === "alunos" && waitingCount > 0;
-                return (
+          {/* Sub-tab selector */}
+          <div className="relative pb-4">
+            {(() => {
+              const currentTab = SUB_TABS.find(tab => tab.id === activeSubTab) ?? SUB_TABS[0];
+              const CurrentIcon = currentTab.icon;
+
+              return (
+                <>
                   <button
-                    key={tab.id}
-                    onClick={() => scrollToTab(tab.id)}
-                    className={`relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-inter font-semibold whitespace-nowrap transition-all duration-200 ${
-                      isActive
-                        ? "bg-primary text-primary-foreground shadow-sm scale-[1.02]"
-                        : "bg-card border border-border text-muted-foreground hover:bg-muted/50 hover:scale-[1.01]"
-                    }`}
+                    type="button"
+                    onClick={() => setIsSubTabMenuOpen(prev => !prev)}
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-left shadow-sm transition-colors hover:bg-muted/50"
+                    aria-expanded={isSubTabMenuOpen}
                   >
-                    <Icon className={`w-4 h-4 transition-transform duration-200 ${isActive ? "scale-110" : ""}`} />
-                    {tab.label}
-                    {showBadge && (
-                      <span className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${
-                        isActive ? "bg-primary-foreground text-primary" : "bg-destructive text-destructive-foreground"
-                      }`}>
-                        {waitingCount}
-                      </span>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <CurrentIcon className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-inter text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Subaba atual</p>
+                        <p className="truncate font-montserrat text-sm font-black text-foreground">{currentTab.label}</p>
+                      </div>
+                    </div>
+                    {isSubTabMenuOpen ? (
+                      <ChevronUp className="h-5 w-5 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
                     )}
                   </button>
-                );
-              })}
-            </div>
 
-            {/* Scroll position indicator */}
-            <div className="flex justify-center gap-1 pt-1 pb-2">
-              {SUB_TABS.map((tab, i) => (
-                <button
-                  key={tab.id}
-                  onClick={() => scrollToTab(tab.id)}
-                  className="p-0.5"
-                  aria-label={tab.label}
-                >
-                  <div
-                    className={`rounded-full transition-all duration-300 ${
-                      activeSubTab === tab.id
-                        ? "w-5 h-1.5 bg-primary"
-                        : "w-1.5 h-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50"
-                    }`}
-                  />
-                </button>
-              ))}
-            </div>
+                  {isSubTabMenuOpen && (
+                    <div className="absolute left-0 right-0 top-[calc(100%-0.75rem)] z-30 max-h-72 overflow-y-auto rounded-2xl border border-border bg-card p-2 shadow-2xl">
+                      {SUB_TABS.map(tab => {
+                        const Icon = tab.icon;
+                        const isActive = activeSubTab === tab.id;
+                        const showBadge = tab.id === "alunos" && waitingCount > 0;
+
+                        return (
+                          <button
+                            type="button"
+                            key={tab.id}
+                            onClick={() => scrollToTab(tab.id)}
+                            className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
+                              isActive
+                                ? "bg-primary text-primary-foreground"
+                                : "text-foreground hover:bg-muted"
+                            }`}
+                          >
+                            <Icon className="h-5 w-5 shrink-0" />
+                            <span className="min-w-0 flex-1 font-inter text-sm font-semibold">{tab.label}</span>
+                            {showBadge && (
+                              <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
+                                isActive ? "bg-primary-foreground text-primary" : "bg-destructive text-destructive-foreground"
+                              }`}>
+                                {waitingCount}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
 
           {/* Content - swipe enabled */}
@@ -479,6 +453,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                   {waitingCount > 0 && (
                     <LeaderWaitingRoom
                       areaFilter={turmaArea}
+                      churchId={churchId}
                       onAssigned={() => setWaitingCount(prev => Math.max(0, prev - 1))}
                     />
                   )}
@@ -492,6 +467,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                   activities={activities}
                   communities={communities}
                   adminArea={turmaArea}
+                  churchId={churchId}
                   initialParticipant={highlightedParticipant}
                   onClearInitial={() => setHighlightedParticipant(null)}
                 />
@@ -502,12 +478,12 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
               )}
 
               {activeSubTab === "comunicacao" && (
-                <MessagesTab />
+                <MessagesTab churchId={churchId} />
               )}
 
               {activeSubTab === "push" && (
                 <div className="space-y-4">
-                  <AdminPushTab turmas={turmas} />
+                  <AdminPushTab turmas={turmas} churchId={churchId} />
                   <div className="border-t border-border pt-4">
                     <PushStatusList adminArea={turmaArea} />
                   </div>
@@ -519,7 +495,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
               )}
 
               {activeSubTab === "gerencia" && (
-                <LeaderTurmaManagement />
+                <LeaderTurmaManagement defaultArea={turmaArea} defaultChurchId={churchId} />
               )}
 
               {activeSubTab === "guia" && (

@@ -49,9 +49,10 @@ function getDefaultContent(lessonNum: number): LessonContent {
 type Props = {
   lesson: Lesson;
   onBack: () => void;
+  churchId?: string | null;
 };
 
-export default function LessonContentEditor({ lesson, onBack }: Props) {
+export default function LessonContentEditor({ lesson, onBack, churchId }: Props) {
   const defaults = getDefaultContent(lesson.order_num);
   const [content, setContent] = useState<LessonContent>(defaults);
   const [saving, setSaving] = useState(false);
@@ -61,15 +62,23 @@ export default function LessonContentEditor({ lesson, onBack }: Props) {
 
   useEffect(() => {
     loadContent();
-  }, [lesson.id]);
+  }, [lesson.id, churchId]);
 
   async function loadContent() {
     setLoading(true);
-    const { data } = await supabase
+    let contentQuery = supabase
+      .from("lesson_content")
+      .select("*")
+      .eq("lesson_id", lesson.id);
+    contentQuery = churchId ? contentQuery.eq("church_id", churchId) : contentQuery.is("church_id", null);
+    const { data: churchContent } = await contentQuery.maybeSingle();
+    const { data: globalContent } = churchContent ? { data: null } : await supabase
       .from("lesson_content")
       .select("*")
       .eq("lesson_id", lesson.id)
+      .is("church_id", null)
       .maybeSingle();
+    const data = churchContent ?? globalContent;
 
     if (data) {
       setIsPublished(true);
@@ -91,12 +100,10 @@ export default function LessonContentEditor({ lesson, onBack }: Props) {
 
   async function handleSave() {
     setSaving(true);
-    const { data: profile } = await supabase.from("profiles").select("church_id").eq("user_id", (await supabase.auth.getUser()).data.user?.id).single();
-    const churchId = profile?.church_id;
 
     await supabase.from("lesson_content").upsert({
       lesson_id: lesson.id,
-      church_id: churchId,
+      church_id: churchId ?? null,
       greeting: content.greeting,
       icebreaker: content.icebreaker,
       summary: content.summary,
@@ -107,7 +114,7 @@ export default function LessonContentEditor({ lesson, onBack }: Props) {
       video_link: content.video_link,
       audio_link: content.audio_link,
       pdf_link: content.pdf_link,
-    }, { onConflict: "lesson_id" });
+    }, { onConflict: "lesson_id,church_id" });
     setSaving(false);
     setSaved(true);
     setIsPublished(true);

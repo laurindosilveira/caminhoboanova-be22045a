@@ -7,17 +7,19 @@ type AreaRow = {
   id: string;
   name: string;
   description: string | null;
+  church_id?: string | null;
 };
 
 type CommunityRow = {
   id: string;
   name: string;
   area_id: string;
+  church_id?: string | null;
 };
 
 type FormState = { name: string; description: string };
 
-export default function AdminAreasTab() {
+export default function AdminAreasTab({ churchId }: { churchId?: string | null }) {
   const { isSuper } = useAuth();
   const [areas, setAreas] = useState<AreaRow[]>([]);
   const [communities, setCommunities] = useState<CommunityRow[]>([]);
@@ -38,13 +40,20 @@ export default function AdminAreasTab() {
 
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [churchId]);
 
   async function fetchData() {
     setLoading(true);
+    const applyChurchScope = (query: any) => {
+      if (churchId) return query.eq("church_id", churchId);
+      return query.is("church_id", null);
+    };
+
+    const areasQuery = applyChurchScope(supabase.from("areas").select("id, name, description, church_id").order("name"));
+    const communitiesQuery = applyChurchScope(supabase.from("communities").select("id, name, area_id, church_id").order("name"));
     const [{ data: areasData, error: areasErr }, { data: commData, error: commErr }] = await Promise.all([
-      supabase.from("areas").select("id, name, description").order("name"),
-      supabase.from("communities").select("id, name, area_id").order("name"),
+      areasQuery,
+      communitiesQuery,
     ]);
     if (areasErr) setError(`Erro ao carregar áreas: ${areasErr.message}`);
     if (commErr) setError(`Erro ao carregar comunidades: ${commErr.message}`);
@@ -77,8 +86,8 @@ export default function AdminAreasTab() {
     setSavingArea(true);
     setError(null);
     const { error: e } = editingAreaId
-      ? await supabase.from("areas").update({ name: areaForm.name.trim(), description: areaForm.description.trim() || null }).eq("id", editingAreaId)
-      : await supabase.from("areas").insert({ name: areaForm.name.trim(), description: areaForm.description.trim() || null });
+      ? await supabase.from("areas").update({ name: areaForm.name.trim(), description: areaForm.description.trim() || null, church_id: churchId ?? null } as any).eq("id", editingAreaId)
+      : await supabase.from("areas").insert({ name: areaForm.name.trim(), description: areaForm.description.trim() || null, church_id: churchId ?? null } as any);
     if (e) { setError(e.message); setSavingArea(false); return; }
     setSavingArea(false);
     setShowAreaForm(false);
@@ -123,8 +132,8 @@ export default function AdminAreasTab() {
     setSavingCommunity(true);
     setError(null);
     const { error: e } = editingCommunityId
-      ? await supabase.from("communities").update({ name: communityForm.name.trim(), area_id: communityForm.area_id }).eq("id", editingCommunityId)
-      : await supabase.from("communities").insert({ name: communityForm.name.trim(), area_id: communityForm.area_id });
+      ? await supabase.from("communities").update({ name: communityForm.name.trim(), area_id: communityForm.area_id, church_id: churchId ?? null } as any).eq("id", editingCommunityId)
+      : await supabase.from("communities").insert({ name: communityForm.name.trim(), area_id: communityForm.area_id, church_id: churchId ?? null } as any);
     if (e) { setError(e.message); setSavingCommunity(false); return; }
     setSavingCommunity(false);
     setShowCommunityFormFor(null);

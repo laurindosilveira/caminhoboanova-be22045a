@@ -19,7 +19,7 @@ const ALL_TABS: TabDef[] = [
 
 const LIDER_TAB_DEFS: TabDef[] = [
   { id: "overview", label: "Painel", icon: BarChart3 },
-  { id: "turma", label: "Minha Sala", icon: GraduationCap },
+  { id: "turma", label: "CAMINHO", icon: GraduationCap },
   { id: "agenda", label: "Encontros", icon: CalendarDays },
   { id: "avisos", label: "Avisos", icon: MessageSquare },
   { id: "contatos", label: "Contatos", icon: Phone },
