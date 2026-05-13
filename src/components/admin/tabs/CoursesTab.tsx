@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useChurch } from "@/hooks/useChurch";
 import { GraduationCap, ChevronDown, ChevronRight, BookOpen, Tag, Edit3, FileText, Pencil } from "lucide-react";
 import LessonContentEditor from "@/components/admin/tabs/LessonContentEditor";
 import LessonDevotionalEditor from "@/components/admin/tabs/LessonDevotionalEditor";
@@ -29,6 +30,7 @@ type EditMode = { lesson: Lesson; mode: "study" | "devotionals" | "leader-guide"
 
 export default function CoursesTab() {
   const { role } = useAuth();
+  const { churchId } = useChurch();
   const isLider = role === "lider";
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,16 +40,14 @@ export default function CoursesTab() {
   const [devotionalCounts, setDevotionalCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    fetchCourses();
-  }, []);
+    if (churchId) {
+      fetchCourses();
+    }
+  }, [churchId]);
 
   async function fetchCourses() {
+    if (!churchId) return;
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data: profile } = await supabase.from("profiles").select("church_id").eq("user_id", user.id).single();
-    const churchId = profile?.church_id;
 
     const [{ data: coursesData }, { data: lessonsData }, { data: contentData }, { data: devData }] = await Promise.all([
       supabase.from("courses").select("*").or(`church_id.is.null,church_id.eq.${churchId}`).order("order_num"),
