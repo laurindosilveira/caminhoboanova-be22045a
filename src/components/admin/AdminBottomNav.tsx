@@ -1,5 +1,6 @@
 import { BarChart3, BookOpen, Shield, Megaphone, Settings, AlertTriangle, Crown, GraduationCap, MessageSquare, CalendarDays, Phone, MessageCircle, Music } from "lucide-react";
-// Force update: SALA DO DISCIPULADOR Scroll v4 - Cache Busting 2024-05-13
+// Build V10: SALA DO DISCIPULADOR - Scroll Forçado
+
 
 
 export type AdminTab = "overview" | "alerts" | "courses" | "leaders" | "push" | "users" | "settings" | "turma" | "avisos" | "agenda" | "contatos" | "whatsapp" | "worship";
@@ -38,7 +39,7 @@ export default function AdminBottomNav({ active, onChange, userRole }: Props) {
       aria-label="Navegação do painel administrativo"
       role="tablist"
     >
-      <div className="max-w-2xl mx-auto flex overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap px-4 py-1">
+      <div className="max-w-2xl mx-auto flex overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap px-4 py-1" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = active === tab.id;
