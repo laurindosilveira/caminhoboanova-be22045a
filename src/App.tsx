@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect } from "react";
-// Build: 20240513-sala-do-discipulador-v4
+// Build V10: SALA DO DISCIPULADOR - 2024-05-13
+
 
 import { Toaster } from "@/components/ui/toaster";
 import OfflineBanner from "@/components/home/OfflineBanner";
@@ -133,8 +134,9 @@ const AppRoutes = () => (
 
 const App = () => {
   useEffect(() => {
-    console.log("App version: SALA DO DISCIPULADOR v4");
+    console.log("App Version: SALA DO DISCIPULADOR V10 - Multi-Church Sync");
   }, []);
+
 
 
   return (
