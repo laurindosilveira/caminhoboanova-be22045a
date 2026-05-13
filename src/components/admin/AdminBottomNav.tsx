@@ -1,5 +1,5 @@
 import { BarChart3, BookOpen, Shield, Megaphone, Settings, AlertTriangle, Crown, GraduationCap, MessageSquare, CalendarDays, Phone, MessageCircle, Music } from "lucide-react";
-// Force update: SALA DO LÍDER Scroll v3 - Cache Busting
+// Force update: SALA DO DISCIPULADOR Scroll v4 - Cache Busting 2024-05-13
 
 
 export type AdminTab = "overview" | "alerts" | "courses" | "leaders" | "push" | "users" | "settings" | "turma" | "avisos" | "agenda" | "contatos" | "whatsapp" | "worship";

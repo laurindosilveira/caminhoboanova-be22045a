@@ -1,4 +1,6 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
+// Build: 20240513-sala-do-discipulador-v4
+
 import { Toaster } from "@/components/ui/toaster";
 import OfflineBanner from "@/components/home/OfflineBanner";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -130,8 +132,10 @@ const AppRoutes = () => (
 );
 
 const App = () => {
-  const commitSha = import.meta.env.VITE_COMMIT_SHA || "dev";
-  const branchName = import.meta.env.VITE_BRANCH_NAME || "main";
+  useEffect(() => {
+    console.log("App version: SALA DO DISCIPULADOR v4");
+  }, []);
+
 
   return (
     <QueryClientProvider client={queryClient}>
