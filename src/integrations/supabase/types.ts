@@ -1385,7 +1385,7 @@ export type Database = {
           {
             foreignKeyName: "leader_guide_lesson_id_fkey"
             columns: ["lesson_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "lessons"
             referencedColumns: ["id"]
           },
@@ -2761,6 +2761,88 @@ export type Database = {
             columns: ["church_id"]
             isOneToOne: false
             referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turma_lesson_content: {
+        Row: {
+          audio_link: string | null
+          bible_texts: string[] | null
+          church_id: string | null
+          created_at: string
+          created_by: string | null
+          greeting: string | null
+          icebreaker: string | null
+          id: string
+          lesson_id: string
+          pdf_link: string | null
+          practice: string | null
+          prayer_prompt: string | null
+          questions: string[] | null
+          summary: string | null
+          turma_id: string
+          updated_at: string
+          video_link: string | null
+        }
+        Insert: {
+          audio_link?: string | null
+          bible_texts?: string[] | null
+          church_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          greeting?: string | null
+          icebreaker?: string | null
+          id?: string
+          lesson_id: string
+          pdf_link?: string | null
+          practice?: string | null
+          prayer_prompt?: string | null
+          questions?: string[] | null
+          summary?: string | null
+          turma_id: string
+          updated_at?: string
+          video_link?: string | null
+        }
+        Update: {
+          audio_link?: string | null
+          bible_texts?: string[] | null
+          church_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          greeting?: string | null
+          icebreaker?: string | null
+          id?: string
+          lesson_id?: string
+          pdf_link?: string | null
+          practice?: string | null
+          prayer_prompt?: string | null
+          questions?: string[] | null
+          summary?: string | null
+          turma_id?: string
+          updated_at?: string
+          video_link?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turma_lesson_content_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turma_lesson_content_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turma_lesson_content_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
             referencedColumns: ["id"]
           },
         ]
