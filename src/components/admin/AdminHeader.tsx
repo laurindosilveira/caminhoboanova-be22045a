@@ -1,6 +1,7 @@
-import { LogOut, ChevronLeft, RefreshCw } from "lucide-react";
-// Cache bust v5: Force renaming to DISCIPULADOR 2024-05-13_1425
+import { LogOut, ChevronLeft, RefreshCw, Zap } from "lucide-react";
+// Cache bust v6: Added Force Refresh for Admin 2024-05-13
 import TurmaReportPDF from "./TurmaReportPDF";
+import { useAuth } from "@/contexts/AuthContext";
 
 type Stats = {
   total: number;
@@ -23,6 +24,31 @@ type Props = {
 };
 
 export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBackToUser, selectedCommunity, onChangeCommunity, participants, activities, turmaLabel }: Props) {
+  const { role } = useAuth();
+  
+  const handleForceRefresh = async () => {
+    if (window.confirm("Isso irá forçar a limpeza do cache e recarregar o aplicativo. Deseja continuar?")) {
+      // Unregister service workers
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const registration of registrations) {
+          await registration.unregister();
+        }
+      }
+      
+      // Clear caches
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        for (const cacheName of cacheNames) {
+          await caches.delete(cacheName);
+        }
+      }
+      
+      // Force reload ignoring cache
+      window.location.reload();
+    }
+  };
+
   return (
     <header className="px-4 pt-8 pb-5" style={{ background: "var(--gradient-hero)" }}>
       <div className="max-w-2xl mx-auto">
@@ -47,6 +73,15 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {role === "admin" && (
+              <button
+                onClick={handleForceRefresh}
+                className="w-9 h-9 rounded-xl bg-amber-500/20 flex items-center justify-center border border-amber-500/30"
+                title="Limpar Cache e Recarregar"
+              >
+                <Zap className="w-4.5 h-4.5 text-amber-400" />
+              </button>
+            )}
             {participants && activities && participants.length > 0 && (
               <TurmaReportPDF
                 participants={participants}
