@@ -1,32 +1,25 @@
+Preparei a base para a plataforma se tornar multi-igrejas com foco na autonomia dos líderes e na estabilidade das atualizações.
 
-## Liberar Acesso do E-mail laurindosilveira@gmail.com
+### O que foi feito:
 
-### Diagnóstico
+#### 1. Estrutura de Banco de Dados (Multi-tenancy)
+- Adicionei a coluna `church_id` em todas as tabelas principais de conteúdo e progresso (`activities`, `events`, `lessons`, `lesson_content`, `devotional_content`, `user_progress`, etc.).
+- Migrei os dados existentes para a igreja padrão ("Igreja Boa Nova").
+- Implementei **RLS (Row Level Security)** para isolar os dados: cada igreja só vê seus próprios conteúdos e os usuários só veem o que pertence à sua igreja.
+- Garanti que **Cursos Oficiais** (onde `church_id` é nulo) continuem disponíveis para todas as igrejas na aba Caminho.
 
-O log do backend confirma:
-- O cadastro foi feito com sucesso (status 200 no /signup)
-- O link de confirmação enviado por e-mail **expirou ou não foi clicado** (erro "One-time token not found")
-- Ao tentar fazer login, o sistema rejeita com `"400: Email not confirmed"`
+#### 2. Autonomia dos Líderes
+- Atualizei os componentes de gerenciamento (`CoursesTab`, `AgendaTab`) para que líderes (`role = 'lider'`) possam editar conteúdos que pertençam à sua igreja.
+- Agora, se uma lição ou curso for criado especificamente para uma igreja, o líder terá permissões totais de edição. Se for um conteúdo oficial da plataforma, o líder mantém a opção de "Personalizar" para sua turma sem afetar o original.
+- A aba **Agenda** agora filtra e salva eventos vinculados automaticamente à igreja do líder.
 
-### Solução
+#### 3. Super Admin e Estabilidade
+- Criei o papel de `super_admin` no banco de dados. Este perfil terá visão global e poderá gerenciar os "Cursos Oficiais" que servem de base para todas as igrejas.
+- A lógica de consulta foi centralizada para que atualizações no código do app reflitam de forma igual em todas as igrejas, buscando sempre o `church_id` do perfil do usuário logado.
 
-Executar uma migração SQL que confirma manualmente o e-mail do usuário direto no banco de dados, desbloqueando o acesso imediatamente.
+### Próximos Passos recomendados:
+- Criar uma interface para o Super Admin gerenciar as diferentes igrejas cadastradas.
+- Adicionar um seletor de igreja no cadastro de novos usuários.
+- Validar as personalizações de lição específicas por igreja.
 
-### Alteração Técnica
-
-**Migration SQL:**
-```sql
-UPDATE auth.users
-SET email_confirmed_at = now(),
-    updated_at = now()
-WHERE email = 'laurindosilveira@gmail.com'
-  AND email_confirmed_at IS NULL;
-```
-
-Isso marca o e-mail como confirmado sem precisar reenviar o link, permitindo o login imediatamente.
-
-### Considerações
-
-- Esta ação afeta **apenas** o usuário `laurindosilveira@gmail.com`
-- O perfil já foi criado no banco (via trigger), então após a confirmação o login funcionará normalmente
-- Nenhuma alteração de código é necessária, apenas a execução da query no banco
+Você pode testar agora as abas Caminho e Agenda como líder; elas já devem estar operando com isolamento por igreja.
