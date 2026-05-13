@@ -9,7 +9,7 @@ interface BottomNavProps {
 
 const tabs = [
   { tab: "jornada" as Tab, icon: Home, label: "Jornada" },
-  { tab: "discipulado" as Tab, icon: Heart, label: "Caminho" },
+  { tab: "discipulado" as Tab, icon: Heart, label: "Sala do Discipulador" },
   { tab: "adoracao" as Tab, icon: Music, label: "Adoração" },
   { tab: "conquistas" as Tab, icon: Trophy, label: "Ranking" },
   { tab: "comunidade" as Tab, icon: Users, label: "Comunidade" },
@@ -24,7 +24,7 @@ export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
       aria-label="Navegação principal"
       role="tablist"
     >
-      <div className="grid grid-cols-7 py-1.5">
+      <div className="flex overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap px-2 py-1.5" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
         {tabs.map(({ tab, icon: Icon, label }) => {
           const isActive = activeTab === tab;
           const isPrimary = tab === "discipulado" || tab === "adoracao" || tab === "conquistas";
@@ -35,7 +35,7 @@ export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
               aria-selected={isActive}
               aria-label={label}
               onClick={() => onChange(tab)}
-              className={`flex flex-col items-center gap-0.5 py-1.5 px-0.5 rounded-xl transition-all active:scale-95 ${
+              className={`flex-none w-[80px] flex flex-col items-center gap-0.5 py-1.5 px-0.5 rounded-xl transition-all active:scale-95 ${
                 isActive ? (isPrimary ? "text-primary" : "text-secondary") : "text-muted-foreground"
               }`}
             >
