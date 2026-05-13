@@ -14,6 +14,7 @@ type Lesson = {
   title: string;
   objective: string | null;
   topics: string[] | null;
+  church_id: string | null;
 };
 
 type Course = {
