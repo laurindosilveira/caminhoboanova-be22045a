@@ -125,7 +125,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).eq("month", month).eq("year", year).maybeSingle(),
       supabase.from("discipleship_plans").select("objectives,challenges,recommendations,next_steps,health_status").eq("user_id", user.id).maybeSingle(),
       supabase.from("courses").select("*").order("order_num"),
-      supabase.from("lessons").select("id, title, order_num, objective, topics, course_id").order("order_num"),
+      supabase.from("lessons").select("id, title, order_num, objective, topics, course_id, church_id").order("order_num"),
       supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
       supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false }).limit(10),
       supabase.from("attendance").select("event_id, status").eq("user_id", user.id),
@@ -383,7 +383,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     if (selectedLessonMode === "edit-devotionals" && isLeaderOrAdmin) {
       return (
         <div className="px-5 pt-5 pb-6">
-          <LessonDevotionalEditor lesson={selectedLesson} onBack={() => setSelectedLessonMode("choice")} />
+          <LessonDevotionalEditor lesson={selectedLesson} onBack={() => setSelectedLessonMode("choice")} churchId={profile?.church_id} />
         </div>
       );
     }

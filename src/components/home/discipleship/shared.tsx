@@ -14,7 +14,7 @@ export type Plan = {
 };
 export type Activity = { id: string; type: string; title: string; points: number };
 export type Progress = { activity_id: string };
-export type Lesson = { id: string; title: string; order_num: number; objective: string | null; topics: string[] | null; course_id: string };
+export type Lesson = { id: string; title: string; order_num: number; objective: string | null; topics: string[] | null; course_id: string; church_id: string | null };
 export type Course = { id: string; order_num: number; title: string; subtitle: string | null; lessons: Lesson[] };
 export type AttendanceRecord = { event_id: string; status: string };
 export type EventRecord = { id: string; title: string; event_date: string; type: string };

@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import {
-  ChevronLeft, Save, Plus, Trash2, BookOpen, Heart, Pen, Edit3, CalendarDays, AlertTriangle
+  ChevronLeft, Save, Plus, Trash2, BookOpen, Heart, Pen, Edit3, CalendarDays, AlertTriangle, Globe, Lock
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -14,6 +15,7 @@ type Lesson = {
   objective: string | null;
   topics: string[] | null;
   course_id: string;
+  church_id: string | null;
 };
 
 type Devotional = {
@@ -38,7 +40,7 @@ type EventRelease = {
   intervalDays: number | null;
 };
 
-const DAY_LABELS = ["", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+const DAY_LABELS = ["", "Dia 1", "Dia 2", "Dia 3", "Dia 4", "Dia 5", "Dia 6", "Dia 7", "Dia 8", "Dia 9", "Dia 10", "Dia 11", "Dia 12"];
 
 type Props = {
   lesson: Lesson;
@@ -48,6 +50,13 @@ type Props = {
 
 export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Props) {
   const { toast } = useToast();
+  const { profile, isSuper } = useAuth();
+  
+  // A leader can only edit global lesson properties (like mode) if they are a super admin.
+  // Otherwise, they can only edit properties of lessons that belong to their church.
+  const isGlobalLesson = !lesson.church_id;
+  const canEditLessonProps = isSuper || (lesson.church_id === profile?.church_id);
+  
   const [devotionals, setDevotionals] = useState<Devotional[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Devotional | null>(null);
@@ -84,6 +93,10 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
   }
 
   async function saveDevotionalMode(mode: "10_days" | "5_days") {
+    if (!canEditLessonProps) {
+      toast({ title: "Acesso Restrito", description: "Apenas Super Admins podem alterar o modo de devocionais globais.", variant: "destructive" });
+      return;
+    }
     setSavingMode(true);
     setDevotionalMode(mode);
     await supabase.from("lessons").update({ devotional_mode: mode } as any).eq("id", lesson.id);
@@ -155,11 +168,14 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
   }
 
   async function handleAddDay() {
+    // Anyone (leaders/admins) can add a devotional day for their church.
+    // Super admins can add global ones (churchId will be null).
+
     const nextDay = devotionals.length > 0
       ? Math.max(...devotionals.map(d => d.day_number)) + 1
       : 1;
-    if (nextDay > 6) {
-      toast({ title: "Máximo de 6 devocionais por lição", variant: "destructive" });
+    if (nextDay > 12) {
+      toast({ title: "Limite atingido", description: "Máximo de 12 devocionais por lição.", variant: "destructive" });
       return;
     }
     const { error } = await supabase.from("devotional_content").insert({
@@ -182,6 +198,14 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
   }
 
   async function handleDelete(id: string) {
+    const dev = devotionals.find(d => d.id === id);
+    if (!dev) return;
+
+    const isGlobalDev = !dev.church_id;
+    if (isGlobalDev && !isSuper) {
+      toast({ title: "Erro", description: "Líderes não podem excluir devocionais globais.", variant: "destructive" });
+      return;
+    }
     if (!confirm("Excluir este devocional?")) return;
     await supabase.from("devotional_content").delete().eq("id", id);
     setEditing(null);
@@ -190,6 +214,14 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
   }
 
   function openEdit(dev: Devotional) {
+    // If the devotional is global and the user is a leader, we should probably inform them.
+    const isGlobalDev = !dev.church_id;
+    if (isGlobalDev && !isSuper) {
+       // We let them open it to VIEW, but handleSave will block it.
+       // Actually, let's show a toast.
+       toast({ title: "Visualização apenas", description: "Este devocional é global. Você não pode editá-lo diretamente.", variant: "default" });
+    }
+    
     setEditing(dev);
     setForm({
       title: dev.title,
@@ -204,6 +236,11 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
 
   async function handleSave() {
     if (!editing) return;
+    const isGlobalDev = !editing.church_id;
+    if (isGlobalDev && !isSuper) {
+      toast({ title: "Erro de Permissão", description: "Líderes não podem editar devocionais globais. Crie um novo para sua igreja.", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     await supabase.from("devotional_content").update({
       title: form.title,
@@ -452,26 +489,37 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
 
       {/* List */}
       <div className="space-y-2">
-        {devotionals.map((dev) => (
-          <button key={dev.id} onClick={() => openEdit(dev)}
-            className="w-full flex items-center gap-3 p-4 bg-card rounded-2xl border border-border shadow-sm text-left hover:bg-muted/30 transition-colors">
-            <div className="w-10 h-10 rounded-xl bg-brand-green/10 flex items-center justify-center flex-shrink-0">
-              <span className="font-montserrat font-bold text-brand-green text-sm">{dev.day_number}</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-montserrat font-bold text-foreground text-sm">{dev.title || `Dia ${dev.day_number}`}</p>
-              <p className="text-muted-foreground font-inter text-[10px] truncate">
-                {dev.bible_reference ? `✝️ ${dev.bible_reference}` : "Sem texto bíblico"}
-                {dev.reflection ? " · 📖 Reflexão" : ""}
-              </p>
-            </div>
-            <Edit3 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-          </button>
-        ))}
+        {devotionals.map((dev) => {
+          const isGlobal = !dev.church_id;
+          return (
+            <button key={dev.id} onClick={() => openEdit(dev)}
+              className="w-full flex items-center gap-3 p-4 bg-card rounded-2xl border border-border shadow-sm text-left hover:bg-muted/30 transition-colors">
+              <div className="w-10 h-10 rounded-xl bg-brand-green/10 flex items-center justify-center flex-shrink-0 relative">
+                <span className="font-montserrat font-bold text-brand-green text-sm">{dev.day_number}</span>
+                {isGlobal && (
+                  <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center text-[10px]" title="Global">
+                    <Globe className="w-2.5 h-2.5 text-white" />
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="font-montserrat font-bold text-foreground text-sm">{dev.title || `Dia ${dev.day_number}`}</p>
+                  {isGlobal && <Lock className="w-3 h-3 text-amber-500" />}
+                </div>
+                <p className="text-muted-foreground font-inter text-[10px] truncate">
+                  {dev.bible_reference ? `✝️ ${dev.bible_reference}` : "Sem texto bíblico"}
+                  {dev.reflection ? " · 📖 Reflexão" : ""}
+                </p>
+              </div>
+              <Edit3 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+            </button>
+          );
+        })}
       </div>
 
       {/* Add button */}
-      {devotionals.length < 6 && (
+      {devotionals.length < 12 && (
         <button onClick={handleAddDay}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-brand-green/40 text-brand-green font-inter text-sm font-medium hover:bg-brand-green/5 transition-colors">
           <Plus className="w-4 h-4" /> Adicionar Dia {devotionals.length + 1}
