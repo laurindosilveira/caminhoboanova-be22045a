@@ -269,7 +269,7 @@ export default function Index() {
         {activeTab === "perfil" && (
           <div key={`perfil-${currentArea}`} className="pt-5 pb-4 space-y-4">
             <div className="px-5">
-              <h2 className="font-montserrat font-black text-foreground text-xl">👤 Perfil</h2>
+              <h2 className="font-montserrat font-black text-foreground text-xl">👤 Perfil do Discipulador</h2>
             </div>
 
             <WhatsAppBlockedBanner
