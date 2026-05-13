@@ -73,6 +73,9 @@ export function useUserStats(currentArea?: string): UserStats {
 
       console.log("useUserStats: Fetching stats for user", user.id, "area", currentArea);
 
+      const { data: profile } = await supabase.from("profiles").select("church_id").eq("user_id", user.id).single();
+      const churchId = profile?.church_id;
+
       const [
         { data: activities, error: actErr },
         { data: progress, error: progErr },
@@ -87,18 +90,18 @@ export function useUserStats(currentArea?: string): UserStats {
         { data: gameConfig },
         { data: customEventTypesData },
       ] = await Promise.all([
-        supabase.from("activities").select("id, type, title, subtitle, order_num, points").order("order_num"),
-        supabase.from("user_progress").select("activity_id, completed_at").eq("user_id", user.id),
-        supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery, awarded_points").eq("user_id", user.id),
-        supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
-        supabase.from("attendance").select("event_id, status").eq("user_id", user.id),
-        supabase.from("worship_attendance").select("id, status").eq("user_id", user.id).eq("status", "aprovado"),
-        supabase.from("achievement_unlocks").select("achievement_key, bonus_points").eq("user_id", user.id),
-        supabase.from("courses").select("id"),
-        supabase.from("lessons").select("id, course_id"),
+        supabase.from("activities").select("id, type, title, subtitle, order_num, points, church_id").or(`church_id.is.null,church_id.eq.${churchId}`).order("order_num"),
+        supabase.from("user_progress").select("activity_id, completed_at, church_id").eq("user_id", user.id).eq("church_id", churchId),
+        supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery, awarded_points, church_id").eq("user_id", user.id).eq("church_id", churchId),
+        supabase.from("lesson_responses").select("lesson_id, church_id").eq("user_id", user.id).eq("church_id", churchId),
+        supabase.from("attendance").select("event_id, status, church_id").eq("user_id", user.id).eq("church_id", churchId),
+        supabase.from("worship_attendance").select("id, status, church_id").eq("user_id", user.id).eq("status", "aprovado").eq("church_id", churchId),
+        supabase.from("achievement_unlocks").select("achievement_key, bonus_points, church_id").eq("user_id", user.id).eq("church_id", churchId),
+        supabase.from("courses").select("id, church_id").or(`church_id.is.null,church_id.eq.${churchId}`),
+        supabase.from("lessons").select("id, course_id, church_id").or(`church_id.is.null,church_id.eq.${churchId}`),
         supabase.from("challenge_participants").select("id, completed").eq("user_id", user.id).eq("completed", true),
         (supabase as any).rpc("get_game_config"),
-        supabase.from("custom_event_types").select("value, gives_points, points, area"),
+        supabase.from("custom_event_types").select("value, gives_points, points, area, church_id").or(`church_id.is.null,church_id.eq.${churchId}`),
       ]);
 
       // Carrega configuração dinâmica com fallback nos defaults
