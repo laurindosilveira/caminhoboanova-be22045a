@@ -264,7 +264,7 @@ export default function LeaderTurmaManagement() {
             <GraduationCap className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h2 className="font-montserrat font-black text-foreground text-base">Minha Turma</h2>
+            <h2 className="font-montserrat font-black text-foreground text-base">Minha Sala</h2>
             <p className="text-muted-foreground text-xs font-inter">Você ainda não tem uma turma vinculada</p>
           </div>
         </div>
@@ -351,7 +351,7 @@ export default function LeaderTurmaManagement() {
           <GraduationCap className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <h2 className="font-montserrat font-black text-foreground text-base">Minha Turma</h2>
+          <h2 className="font-montserrat font-black text-foreground text-base">Minha Sala</h2>
           <p className="text-muted-foreground text-xs font-inter">Confirmação e reinício de jornada</p>
         </div>
       </div>

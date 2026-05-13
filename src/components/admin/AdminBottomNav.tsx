@@ -1,14 +1,12 @@
 import { BarChart3, BookOpen, Shield, Megaphone, Settings, AlertTriangle, Crown, GraduationCap, MessageSquare, CalendarDays, Phone, MessageCircle, Music } from "lucide-react";
-// Build V10: SALA DO DISCIPULADOR - Scroll Forçado
-
-
+// Build V11: SALA DO DISCIPULADOR - Scroll Forçado e Labels Atualizados
 
 export type AdminTab = "overview" | "alerts" | "courses" | "leaders" | "push" | "users" | "settings" | "turma" | "avisos" | "agenda" | "contatos" | "whatsapp" | "worship";
 
 type TabDef = { id: AdminTab; label: string; icon: typeof BarChart3 };
 
 const ALL_TABS: TabDef[] = [
-  { id: "overview", label: "Visão", icon: BarChart3 },
+  { id: "overview", label: "Painel", icon: BarChart3 },
   { id: "alerts", label: "Alertas", icon: AlertTriangle },
   { id: "courses", label: "Cursos", icon: BookOpen },
   { id: "worship", label: "Louvor", icon: Music },
@@ -20,8 +18,8 @@ const ALL_TABS: TabDef[] = [
 ];
 
 const LIDER_TAB_DEFS: TabDef[] = [
-  { id: "overview", label: "Visão", icon: BarChart3 },
-  { id: "turma", label: "Discípulos", icon: GraduationCap },
+  { id: "overview", label: "Painel", icon: BarChart3 },
+  { id: "turma", label: "Minha Sala", icon: GraduationCap },
   { id: "agenda", label: "Encontros", icon: CalendarDays },
   { id: "avisos", label: "Avisos", icon: MessageSquare },
   { id: "contatos", label: "Contatos", icon: Phone },
@@ -39,7 +37,12 @@ export default function AdminBottomNav({ active, onChange, userRole }: Props) {
       aria-label="Navegação do painel administrativo"
       role="tablist"
     >
-      <div className="max-w-2xl mx-auto flex overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap px-4 py-1" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
+      <div className="max-w-2xl mx-auto flex overflow-x-auto scroll-smooth whitespace-nowrap px-4 py-1 no-scrollbar" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <style dangerouslySetInnerHTML={{ __html: `
+          .no-scrollbar::-webkit-scrollbar {
+            display: none;
+          }
+        `}} />
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = active === tab.id;
@@ -50,7 +53,7 @@ export default function AdminBottomNav({ active, onChange, userRole }: Props) {
               aria-selected={isActive}
               aria-label={tab.label}
               onClick={() => onChange(tab.id)}
-              className="flex-none w-[80px] flex flex-col items-center justify-center py-2.5 gap-1 transition-all active:scale-90"
+              className="flex-none min-w-[70px] flex flex-col items-center justify-center py-2.5 px-2 gap-1 transition-all active:scale-90"
             >
               <Icon
                 className={`w-5 h-5 transition-colors ${isActive ? "text-primary fill-primary/10" : "text-muted-foreground"}`}
