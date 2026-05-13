@@ -54,8 +54,9 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
   
   // A leader can only edit if the lesson belongs to their church.
   // Global lessons (church_id null) are read-only for leaders.
+  // A leader can only edit the lesson properties (like mode) if the lesson belongs to their church.
   const isGlobalLesson = !lesson.church_id;
-  const canEditLesson = isSuper || (lesson.church_id === profile?.church_id);
+  const canEditLessonProps = isSuper || (lesson.church_id === profile?.church_id);
   
   const [devotionals, setDevotionals] = useState<Devotional[]>([]);
   const [loading, setLoading] = useState(true);
