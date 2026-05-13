@@ -27,6 +27,7 @@ type Activity = {
   id: string; title: string; type: string; order_num: number; points: number; subtitle: string | null;
 };
 type AttendanceStatus = "presente" | "faltou" | "justificou";
+type AttendanceSource = "user" | "leader" | "both";
 type Evaluation = {
   participation_score: number | null;
   understanding_score: number | null;
@@ -96,7 +97,7 @@ export default function AttendanceTab({ participants, activities, communities, i
   const [savingWorship, setSavingWorship] = useState<string | null>(null);
 
   // Pending event attendance requests
-  type PendingAttendance = { id: string; event_id: string; user_id: string; status: string; justification: string | null; created_at: string; full_name?: string; community?: string; event_title?: string; event_date?: string };
+  type PendingAttendance = { id: string; event_id: string; user_id: string; status: string; justification: string | null; created_at: string; confirmation_source?: AttendanceSource | null; full_name?: string; community?: string; event_title?: string; event_date?: string };
   const [pendingAttendance, setPendingAttendance] = useState<PendingAttendance[]>([]);
   const [savingAttendanceApproval, setSavingAttendanceApproval] = useState<string | null>(null);
 
@@ -198,7 +199,7 @@ export default function AttendanceTab({ participants, activities, communities, i
     if (participantIds.length === 0) return;
     const { data } = await supabase
       .from("attendance")
-      .select("id, event_id, user_id, status, justification, created_at")
+      .select("id, event_id, user_id, status, justification, created_at, confirmation_source")
       .in("user_id", participantIds)
       .in("status", ["pendente_presente", "pendente_falta"])
       .or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null")
@@ -222,7 +223,13 @@ export default function AttendanceTab({ participants, activities, communities, i
       const result = await supabase.from("attendance").delete().eq("id", id);
       error = result.error;
     } else {
-      const result = await supabase.from("attendance").update({ status: action }).eq("id", id);
+      const { data: { user } } = await supabase.auth.getUser();
+      const result = await supabase.from("attendance").update({
+        status: action,
+        confirmation_source: "both",
+        confirmed_by: user?.id ?? null,
+        leader_confirmed_at: new Date().toISOString(),
+      } as any).eq("id", id);
       error = result.error;
     }
     if (error) {
@@ -484,8 +491,17 @@ export default function AttendanceTab({ participants, activities, communities, i
         return { ...prev, [eventId]: updated };
       });
     } else {
+      const { data: { user } } = await supabase.auth.getUser();
+      const confirmationSource: AttendanceSource =
+        String(current).startsWith("pendente_") ? "both" : "leader";
       const { error } = await supabase.from("attendance").upsert({
-        event_id: eventId, user_id: userId, status, church_id: churchId ?? null,
+        event_id: eventId,
+        user_id: userId,
+        status,
+        church_id: churchId ?? null,
+        confirmation_source: confirmationSource,
+        confirmed_by: user?.id ?? null,
+        leader_confirmed_at: new Date().toISOString(),
       }, { onConflict: "event_id,user_id" });
       if (error) {
         toast({ title: "Erro ao salvar presença", description: error.message, variant: "destructive" });

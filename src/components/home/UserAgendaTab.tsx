@@ -33,7 +33,13 @@ type Event = {
 };
 
 type LessonContentInfo = { lesson_id: string; summary: string; bible_texts: string[]; prayer_prompt: string };
-type AttendanceRecord = { event_id: string; status: string };
+type AttendanceRecord = {
+  event_id: string;
+  status: string;
+  confirmation_source?: "user" | "leader" | "both" | null;
+  user_requested_at?: string | null;
+  leader_confirmed_at?: string | null;
+};
 type LessonInfo = { id: string; title: string; order_num: number; course_title: string; course_order: number };
 
 // Static fallback map for rendering (includes pastoral type)
@@ -203,7 +209,7 @@ export default function UserAgendaTab() {
       const [{ data: eventsData }, attResult, { data: coursesData }, { data: lessonsData }, { data: lessonContentData }] = await Promise.all([
         supabase.from("events").select("*").order("event_date"),
         user
-          ? supabase.from("attendance").select("event_id, status").eq("user_id", user.id)
+          ? supabase.from("attendance").select("event_id, status, confirmation_source, user_requested_at, leader_confirmed_at").eq("user_id", user.id)
           : Promise.resolve({ data: [] }),
         supabase.from("courses").select("id, title, order_num").order("order_num"),
         supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
@@ -283,6 +289,31 @@ export default function UserAgendaTab() {
     return () => { supabase.removeChannel(channel); };
   }, [profile, currentArea]);
 
+  useEffect(() => {
+    if (!profile?.user_id) return;
+
+    const channel = supabase
+      .channel(`user-attendance-realtime:${profile.user_id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "attendance", filter: `user_id=eq.${profile.user_id}` },
+        (payload: any) => {
+          setAttendanceRecords(prev => {
+            const oldRecord = payload.old as AttendanceRecord | undefined;
+            const newRecord = payload.new as AttendanceRecord | undefined;
+            const eventId = newRecord?.event_id ?? oldRecord?.event_id;
+            if (!eventId) return prev;
+
+            const filtered = prev.filter(a => a.event_id !== eventId);
+            return payload.eventType === "DELETE" || !newRecord ? filtered : [...filtered, newRecord];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [profile?.user_id]);
+
   const now = new Date();
 
   const FILTER_GROUPS = [
@@ -314,21 +345,37 @@ export default function UserAgendaTab() {
   async function handleCheckIn(eventId: string, status: "pendente_presente" | "pendente_falta", justification?: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const payload: any = { status };
-    if (justification) payload.justification = justification;
     const existing = attendanceRecords.find(a => a.event_id === eventId);
+    const finalStatuses = new Set(["presente", "faltou", "justificou"]);
+
+    if (existing && finalStatuses.has(existing.status)) {
+      toast.success(
+        existing.status === "presente"
+          ? "Sua presença já foi confirmada para este evento."
+          : "Este evento já possui um registro final de presença."
+      );
+      return;
+    }
+
+    const requestedAt = new Date().toISOString();
+    const payload: any = {
+      status,
+      confirmation_source: "user",
+      user_requested_at: requestedAt,
+    };
+    if (justification) payload.justification = justification;
     let error = null;
     if (existing) {
       const result = await supabase
         .from("attendance")
-        .update(payload)
+        .update(payload as any)
         .eq("event_id", eventId)
         .eq("user_id", user.id);
       error = result.error;
     } else {
       const result = await supabase
         .from("attendance")
-        .insert({ event_id: eventId, user_id: user.id, ...payload });
+        .insert({ event_id: eventId, user_id: user.id, church_id: (profile as any)?.church_id ?? null, ...payload } as any);
       error = result.error;
     }
     if (error) {
@@ -338,7 +385,7 @@ export default function UserAgendaTab() {
     }
     setAttendanceRecords(prev => {
       const filtered = prev.filter(a => a.event_id !== eventId);
-      return [...filtered, { event_id: eventId, status }];
+      return [...filtered, { event_id: eventId, status, confirmation_source: "user", user_requested_at: requestedAt }];
     });
     toast.success(status === "pendente_presente" ? "Presença enviada para aprovação!" : "Justificativa enviada para aprovação!");
   }
@@ -563,7 +610,13 @@ export default function UserAgendaTab() {
       const result = await supabase.from("attendance").delete().eq("id", id);
       error = result.error;
     } else {
-      const result = await supabase.from("attendance").update({ status: action }).eq("id", id);
+      const { data: { user } } = await supabase.auth.getUser();
+      const result = await supabase.from("attendance").update({
+        status: action,
+        confirmation_source: "both",
+        confirmed_by: user?.id ?? null,
+        leader_confirmed_at: new Date().toISOString(),
+      } as any).eq("id", id);
       error = result.error;
     }
     if (error) {
