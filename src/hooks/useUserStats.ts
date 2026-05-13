@@ -89,7 +89,8 @@ export function useUserStats(currentArea?: string): UserStats {
         { data: challengeData },
         { data: gameConfig },
         { data: customEventTypesData },
-      ] = await Promise.all([
+      console.log("useUserStats: Starting Promise.all for churchId", churchId);
+      const results = await Promise.allSettled([
         supabase.from("activities").select("id, type, title, subtitle, order_num, points, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null').order("order_num"),
         supabase.from("user_progress").select("activity_id, completed_at, church_id").eq("user_id", user.id).eq("church_id", churchId),
         supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery, awarded_points, church_id").eq("user_id", user.id).eq("church_id", churchId),
@@ -103,6 +104,17 @@ export function useUserStats(currentArea?: string): UserStats {
         (supabase as any).rpc("get_game_config"),
         supabase.from("custom_event_types").select("value, gives_points, points, area, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
       ]);
+      console.log("useUserStats: Promise.allSettled finished");
+
+      const [
+        activitiesRes, progressRes, devProgressRes, lessonResponsesRes, attendanceRes, 
+        worshipDataRes, achievementUnlocksRes, coursesDataRes, lessonsDataRes, 
+        challengeDataRes, gameConfigRes, customEventTypesDataRes
+      ] = results.map(r => r.status === 'fulfilled' ? r.value : { data: null, error: (r as any).reason });
+
+      if (results.some(r => r.status === 'rejected')) {
+        console.error("useUserStats: Some queries failed", results.filter(r => r.status === 'rejected'));
+      }
 
       // Carrega configuração dinâmica com fallback nos defaults
       const cfgMap = new Map<string, number>((gameConfig ?? []).map((r: any) => [r.key, Number(r.value)]));
@@ -123,13 +135,26 @@ export function useUserStats(currentArea?: string): UserStats {
         cfgMap.get("level_5_threshold") ?? 200,
       ];
 
+      const activities = activitiesRes.data ?? [];
+      const progress = progressRes.data ?? [];
+      const devProgress = devProgressRes.data ?? [];
+      const lessonResponses = lessonResponsesRes.data ?? [];
+      const attendance = attendanceRes.data ?? [];
+      const worshipData = worshipDataRes.data ?? [];
+      const achievementUnlocks = achievementUnlocksRes.data ?? [];
+      const coursesData = coursesDataRes.data ?? [];
+      const lessonsData = lessonsDataRes.data ?? [];
+      const challengeData = challengeDataRes.data ?? [];
+      const gameConfig = gameConfigRes.data ?? [];
+      const customEventTypesData = customEventTypesDataRes.data ?? [];
+
       const acts = activities ?? [];
       const prog = progress ?? [];
       const devProg = devProgress ?? [];
-      const completedIds = new Set(prog.map(p => p.activity_id));
+      const completedIds = new Set(prog.map((p: any) => p.activity_id));
       const allDates = [
-        ...prog.map(p => p.completed_at),
-        ...devProg.map(p => p.completed_at),
+        ...prog.map((p: any) => p.completed_at),
+        ...devProg.map((p: any) => p.completed_at),
       ];
 
       // Pontos de atividades legadas
