@@ -93,6 +93,10 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
   }
 
   async function saveDevotionalMode(mode: "10_days" | "5_days") {
+    if (!canEditLesson) {
+      toast({ title: "Acesso Restrito", description: "Apenas Super Admins podem alterar o modo de devocionais globais.", variant: "destructive" });
+      return;
+    }
     setSavingMode(true);
     setDevotionalMode(mode);
     await supabase.from("lessons").update({ devotional_mode: mode } as any).eq("id", lesson.id);
