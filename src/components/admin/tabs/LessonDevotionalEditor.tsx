@@ -15,6 +15,7 @@ type Lesson = {
   objective: string | null;
   topics: string[] | null;
   course_id: string;
+  church_id: string | null;
 };
 
 type Devotional = {
