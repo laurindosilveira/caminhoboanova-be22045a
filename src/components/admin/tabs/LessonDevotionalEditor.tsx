@@ -49,6 +49,13 @@ type Props = {
 
 export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Props) {
   const { toast } = useToast();
+  const { profile, isSuper } = useAuth();
+  
+  // A leader can only edit if the lesson belongs to their church.
+  // Global lessons (church_id null) are read-only for leaders.
+  const isGlobalLesson = !lesson.church_id;
+  const canEditLesson = isSuper || (lesson.church_id === profile?.church_id);
+  
   const [devotionals, setDevotionals] = useState<Devotional[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Devotional | null>(null);
