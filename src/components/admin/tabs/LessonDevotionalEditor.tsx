@@ -164,11 +164,16 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
   }
 
   async function handleAddDay() {
+    if (!canEditLesson) {
+      toast({ title: "Acesso Restrito", description: "Apenas Super Admins podem adicionar devocionais a lições globais.", variant: "destructive" });
+      return;
+    }
+
     const nextDay = devotionals.length > 0
       ? Math.max(...devotionals.map(d => d.day_number)) + 1
       : 1;
-    if (nextDay > 6) {
-      toast({ title: "Máximo de 6 devocionais por lição", variant: "destructive" });
+    if (nextDay > 12) {
+      toast({ title: "Limite atingido", description: "Máximo de 12 devocionais por lição.", variant: "destructive" });
       return;
     }
     const { error } = await supabase.from("devotional_content").insert({
