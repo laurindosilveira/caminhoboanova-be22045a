@@ -272,41 +272,29 @@ export type Database = {
       attendance: {
         Row: {
           church_id: string | null
-          confirmation_source: string | null
-          confirmed_by: string | null
           created_at: string
           event_id: string
           id: string
           justification: string | null
-          leader_confirmed_at: string | null
           status: string
-          user_requested_at: string | null
           user_id: string
         }
         Insert: {
           church_id?: string | null
-          confirmation_source?: string | null
-          confirmed_by?: string | null
           created_at?: string
           event_id: string
           id?: string
           justification?: string | null
-          leader_confirmed_at?: string | null
           status?: string
-          user_requested_at?: string | null
           user_id: string
         }
         Update: {
           church_id?: string | null
-          confirmation_source?: string | null
-          confirmed_by?: string | null
           created_at?: string
           event_id?: string
           id?: string
           justification?: string | null
-          leader_confirmed_at?: string | null
           status?: string
-          user_requested_at?: string | null
           user_id?: string
         }
         Relationships: [
