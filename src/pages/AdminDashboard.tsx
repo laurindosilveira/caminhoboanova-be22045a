@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
+// Cache bust: v2-sala-do-lider-force-reload-1349
+
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
