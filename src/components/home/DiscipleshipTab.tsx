@@ -383,7 +383,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     if (selectedLessonMode === "edit-devotionals" && isLeaderOrAdmin) {
       return (
         <div className="px-5 pt-5 pb-6">
-          <LessonDevotionalEditor lesson={selectedLesson} onBack={() => setSelectedLessonMode("choice")} />
+          <LessonDevotionalEditor lesson={selectedLesson} onBack={() => setSelectedLessonMode("choice")} churchId={profile?.church_id} />
         </div>
       );
     }
