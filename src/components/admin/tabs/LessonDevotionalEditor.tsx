@@ -208,6 +208,14 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
   }
 
   function openEdit(dev: Devotional) {
+    // If the devotional is global and the user is a leader, we should probably inform them.
+    const isGlobalDev = !dev.church_id;
+    if (isGlobalDev && !isSuper) {
+       // We let them open it to VIEW, but handleSave will block it.
+       // Actually, let's show a toast.
+       toast({ title: "Visualização apenas", description: "Este devocional é global. Você não pode editá-lo diretamente.", variant: "default" });
+    }
+    
     setEditing(dev);
     setForm({
       title: dev.title,
