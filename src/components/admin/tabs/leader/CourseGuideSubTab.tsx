@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { BookOpen, ChevronRight, ChevronLeft, FileText, MessageCircle, Target, Heart, Pen, Play, Phone, Save } from "lucide-react";
+import { BookOpen, ChevronRight, ChevronLeft, FileText, MessageCircle, Target, Heart, Pen, Play, Phone, Save, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -72,9 +72,15 @@ export default function CourseGuideSubTab() {
   async function selectLesson(lesson: Lesson) {
     setSelectedLesson(lesson);
     setLoading(true);
+    const area = effectiveArea || profile?.area;
     const [{ data: guideData }, { data: notesData }] = await Promise.all([
       supabase.from("leader_guide").select("*").eq("lesson_id", lesson.id).maybeSingle(),
-      supabase.from("leader_meeting_notes").select("*").eq("lesson_id", lesson.id).eq("leader_id", profile?.user_id ?? "").maybeSingle(),
+      supabase.from("leader_meeting_notes")
+        .select("*")
+        .eq("lesson_id", lesson.id)
+        .eq("church_id", profile?.church_id ?? "")
+        .eq("area", area as any)
+        .maybeSingle(),
     ]);
     setContent(guideData ? {
       greeting: guideData.greeting || "",
@@ -101,13 +107,19 @@ export default function CourseGuideSubTab() {
     const { error } = await supabase.from("leader_meeting_notes").upsert({
       leader_id: profile.user_id,
       lesson_id: selectedLesson.id,
-      ...notes,
-    }, { onConflict: "leader_id,lesson_id" });
+      church_id: profile.church_id || null,
+      area: (effectiveArea || profile.area) as any,
+      participation_notes: notes.participation_notes,
+      questions_notes: notes.questions_notes,
+      pastoral_care_notes: notes.pastoral_care_notes,
+      follow_up_notes: notes.follow_up_notes,
+      spiritual_notes: notes.spiritual_notes,
+    }, { onConflict: "lesson_id,church_id,area" });
     setSavingNotes(false);
     if (error) {
       toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "✅ Anotações salvas!" });
+      toast({ title: "✅ Anotações salvas para todos os líderes!" });
     }
   }
 
@@ -143,12 +155,26 @@ export default function CourseGuideSubTab() {
         </div>
 
         {/* Content sections */}
-        {content.greeting && <Section icon={<Play className="w-4 h-4 text-secondary" />} title="🙌 Saudação e Oração Inicial"><p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.greeting}</p></Section>}
-        {content.icebreaker && <Section icon={<MessageCircle className="w-4 h-4 text-accent" />} title="🧊 Quebra-gelo"><p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.icebreaker}</p></Section>}
-        {content.summary && <Section icon={<FileText className="w-4 h-4 text-primary" />} title="📖 Orientações do Encontro"><p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.summary}</p></Section>}
+        {content.greeting && (
+          <Section icon={<Target className="w-4 h-4 text-primary" />} title="🎯 Objetivos e Foco Pedagógico">
+            <p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.greeting}</p>
+          </Section>
+        )}
+        
+        {content.summary && (
+          <Section icon={<BookOpen className="w-4 h-4 text-secondary" />} title="✝️ Pontos Teológicos Essenciais">
+            <p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.summary}</p>
+          </Section>
+        )}
+
+        {content.icebreaker && (
+          <Section icon={<Clock className="w-4 h-4 text-accent" />} title="⏱️ Sugestão de Tempo">
+            <p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.icebreaker}</p>
+          </Section>
+        )}
 
         {content.bible_texts.length > 0 && (
-          <Section icon={<BookOpen className="w-4 h-4 text-brand-green" />} title="📜 Textos Bíblicos">
+          <Section icon={<FileText className="w-4 h-4 text-brand-green" />} title="📜 Textos Bíblicos">
             <div className="flex flex-wrap gap-2">
               {content.bible_texts.map(text => (
                 <button key={text} onClick={() => setBibleRef(text)}
@@ -162,20 +188,29 @@ export default function CourseGuideSubTab() {
         )}
 
         {content.questions.length > 0 && (
-          <Section icon={<Pen className="w-4 h-4 text-secondary" />} title="💬 Perguntas para Diálogo">
+          <Section icon={<Pen className="w-4 h-4 text-secondary" />} title="💬 Orientações para o Diálogo">
             <div className="space-y-2.5">
               {content.questions.map((q, i) => (
                 <div key={i} className="flex gap-3">
                   <span className="flex-shrink-0 w-6 h-6 rounded-full bg-secondary/15 flex items-center justify-center font-montserrat font-bold text-secondary text-xs">{i + 1}</span>
-                  <p className="text-foreground font-inter text-sm leading-relaxed pt-0.5">{q}</p>
+                  <p className="text-foreground font-inter text-sm leading-relaxed pt-0.5 whitespace-pre-wrap">{q}</p>
                 </div>
               ))}
             </div>
           </Section>
         )}
 
-        {content.practice && <Section icon={<Target className="w-4 h-4 text-brand-green" />} title="💬 Orientações e Conexão 3M"><p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.practice}</p></Section>}
-        {content.prayer_prompt && <Section icon={<Heart className="w-4 h-4 text-destructive" />} title="🙏 Postura Espiritual e Oração"><p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.prayer_prompt}</p></Section>}
+        {content.practice && (
+          <Section icon={<Target className="w-4 h-4 text-brand-green" />} title="❓ Dúvidas Frequentes + Conexão 3M">
+            <p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.practice}</p>
+          </Section>
+        )}
+
+        {content.prayer_prompt && (
+          <Section icon={<Heart className="w-4 h-4 text-destructive" />} title="🙏 Postura Espiritual do Líder">
+            <p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.prayer_prompt}</p>
+          </Section>
+        )}
 
         {/* ===== LEADER NOTES ===== */}
         <div className="bg-card rounded-2xl border-2 border-primary/20 overflow-hidden shadow-sm">
@@ -184,10 +219,10 @@ export default function CourseGuideSubTab() {
             <p className="font-montserrat font-bold text-foreground text-sm">📝 Anotações do Líder</p>
           </div>
           <div className="p-4 space-y-4">
-            <NoteField label="Participação do grupo" value={notes.participation_notes} onChange={v => setNotes(n => ({ ...n, participation_notes: v }))} />
-            <NoteField label="Perguntas importantes que surgiram" value={notes.questions_notes} onChange={v => setNotes(n => ({ ...n, questions_notes: v }))} />
-            <NoteField label="Quem precisa de cuidado pastoral" value={notes.pastoral_care_notes} onChange={v => setNotes(n => ({ ...n, pastoral_care_notes: v }))} />
-            <NoteField label="Pontos para retomar no próximo encontro" value={notes.follow_up_notes} onChange={v => setNotes(n => ({ ...n, follow_up_notes: v }))} />
+            <NoteField label="Participações importantes" value={notes.participation_notes} onChange={v => setNotes(n => ({ ...n, participation_notes: v }))} />
+            <NoteField label="Dúvidas levantadas" value={notes.questions_notes} onChange={v => setNotes(n => ({ ...n, questions_notes: v }))} />
+            <NoteField label="Adolescentes que precisam de atenção pastoral" value={notes.pastoral_care_notes} onChange={v => setNotes(n => ({ ...n, pastoral_care_notes: v }))} />
+            <NoteField label="Aplicações importantes para próximos encontros" value={notes.follow_up_notes} onChange={v => setNotes(n => ({ ...n, follow_up_notes: v }))} />
             <NoteField label="Observações espirituais" value={notes.spiritual_notes} onChange={v => setNotes(n => ({ ...n, spiritual_notes: v }))} />
 
             <Button onClick={handleSaveNotes} disabled={savingNotes} className="w-full rounded-2xl h-11 font-montserrat font-bold">

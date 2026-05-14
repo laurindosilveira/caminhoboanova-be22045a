@@ -1393,6 +1393,7 @@ export type Database = {
       }
       leader_meeting_notes: {
         Row: {
+          area: Database["public"]["Enums"]["area_name"] | null
           church_id: string | null
           created_at: string
           follow_up_notes: string | null
@@ -1406,6 +1407,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          area?: Database["public"]["Enums"]["area_name"] | null
           church_id?: string | null
           created_at?: string
           follow_up_notes?: string | null
@@ -1419,6 +1421,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          area?: Database["public"]["Enums"]["area_name"] | null
           church_id?: string | null
           created_at?: string
           follow_up_notes?: string | null
