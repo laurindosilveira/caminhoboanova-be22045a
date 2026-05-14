@@ -219,10 +219,10 @@ export default function CourseGuideSubTab() {
             <p className="font-montserrat font-bold text-foreground text-sm">📝 Anotações do Líder</p>
           </div>
           <div className="p-4 space-y-4">
-            <NoteField label="Participação do grupo" value={notes.participation_notes} onChange={v => setNotes(n => ({ ...n, participation_notes: v }))} />
-            <NoteField label="Perguntas importantes que surgiram" value={notes.questions_notes} onChange={v => setNotes(n => ({ ...n, questions_notes: v }))} />
-            <NoteField label="Quem precisa de cuidado pastoral" value={notes.pastoral_care_notes} onChange={v => setNotes(n => ({ ...n, pastoral_care_notes: v }))} />
-            <NoteField label="Pontos para retomar no próximo encontro" value={notes.follow_up_notes} onChange={v => setNotes(n => ({ ...n, follow_up_notes: v }))} />
+            <NoteField label="Participações importantes" value={notes.participation_notes} onChange={v => setNotes(n => ({ ...n, participation_notes: v }))} />
+            <NoteField label="Dúvidas levantadas" value={notes.questions_notes} onChange={v => setNotes(n => ({ ...n, questions_notes: v }))} />
+            <NoteField label="Adolescentes que precisam de atenção pastoral" value={notes.pastoral_care_notes} onChange={v => setNotes(n => ({ ...n, pastoral_care_notes: v }))} />
+            <NoteField label="Aplicações importantes para próximos encontros" value={notes.follow_up_notes} onChange={v => setNotes(n => ({ ...n, follow_up_notes: v }))} />
             <NoteField label="Observações espirituais" value={notes.spiritual_notes} onChange={v => setNotes(n => ({ ...n, spiritual_notes: v }))} />
 
             <Button onClick={handleSaveNotes} disabled={savingNotes} className="w-full rounded-2xl h-11 font-montserrat font-bold">
