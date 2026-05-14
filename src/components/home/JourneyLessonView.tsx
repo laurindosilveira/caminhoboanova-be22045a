@@ -689,7 +689,83 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
         )}
       </div>
 
-      {/* 1. Saudação do Líder */}
+      {/* 🚀 Seção do Líder (Exclusiva) */}
+      {isLeaderOrAdmin && (
+        <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl overflow-hidden shadow-sm">
+          <button 
+            onClick={() => setShowLeaderScript(!showLeaderScript)}
+            className="w-full px-4 py-3 bg-amber-100 flex items-center justify-between hover:bg-amber-200/50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-amber-700" />
+              <p className="font-montserrat font-bold text-amber-900 text-sm italic">📖 Roteiro do Líder</p>
+            </div>
+            {showLeaderScript ? <ChevronUp className="w-5 h-5 text-amber-700" /> : <ChevronDown className="w-5 h-5 text-amber-700" />}
+          </button>
+          
+          <AnimatePresence>
+            {showLeaderScript && (
+              <motion.div 
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="p-4 space-y-4">
+                  {!leaderGuide ? (
+                    <p className="text-amber-800/60 font-inter text-xs italic">Nenhum roteiro detalhado cadastrado para esta lição.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {leaderGuide.greeting && <LeaderSection title="🎯 Objetivos e Foco Pedagógico" content={leaderGuide.greeting} icon={<Target className="w-4 h-4 text-amber-700" />} />}
+                      {leaderGuide.summary && <LeaderSection title="✝️ Pontos Teológicos Essenciais" content={leaderGuide.summary} icon={<BookOpen className="w-4 h-4 text-amber-700" />} />}
+                      {leaderGuide.icebreaker && <LeaderSection title="⏱️ Sugestão de Tempo" content={leaderGuide.icebreaker} icon={<Clock className="w-4 h-4 text-amber-700" />} />}
+                      
+                      {leaderGuide.questions && leaderGuide.questions.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="font-montserrat font-bold text-amber-900 text-xs flex items-center gap-2">
+                            <Pen className="w-3.5 h-3.5" /> 💬 Orientações para o Diálogo
+                          </p>
+                          <div className="space-y-2">
+                            {leaderGuide.questions.map((q: string, i: number) => (
+                              <div key={i} className="flex gap-2 p-2.5 bg-white/50 rounded-xl border border-amber-200/50">
+                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-700 text-white flex items-center justify-center font-montserrat font-bold text-[10px]">{i + 1}</span>
+                                <p className="text-amber-900 font-inter text-xs leading-relaxed whitespace-pre-wrap">{q}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {leaderGuide.practice && <LeaderSection title="❓ Dúvidas Frequentes + Conexão 3M" content={leaderGuide.practice} icon={<Target className="w-4 h-4 text-amber-700" />} />}
+                      {leaderGuide.prayer_prompt && <LeaderSection title="🙏 Postura Espiritual do Líder" content={leaderGuide.prayer_prompt} icon={<Heart className="w-4 h-4 text-amber-700" />} />}
+                    </div>
+                  )}
+
+                  {/* Anotações do Líder */}
+                  <div className="mt-6 pt-6 border-t border-amber-200">
+                    <p className="font-montserrat font-bold text-amber-900 text-sm mb-4 font-black">📝 Espaço para Anotações (Compartilhado)</p>
+                    <div className="space-y-3">
+                      <NoteField label="Participações importantes:" value={leaderNotes.participation_notes} onChange={v => setLeaderNotes((prev: any) => ({ ...prev, participation_notes: v }))} />
+                      <NoteField label="Dúvidas levantadas:" value={leaderNotes.questions_notes} onChange={v => setLeaderNotes((prev: any) => ({ ...prev, questions_notes: v }))} />
+                      <NoteField label="Adolescentes que precisam de atenção pastoral:" value={leaderNotes.pastoral_care_notes} onChange={v => setLeaderNotes((prev: any) => ({ ...prev, pastoral_care_notes: v }))} />
+                      <NoteField label="Aplicações importantes para próximos encontros:" value={leaderNotes.follow_up_notes} onChange={v => setLeaderNotes((prev: any) => ({ ...prev, follow_up_notes: v }))} />
+                      
+                      <button 
+                        onClick={handleSaveLeaderNotes}
+                        disabled={savingLeaderNotes}
+                        className="w-full py-3 bg-amber-700 hover:bg-amber-800 text-white rounded-xl font-montserrat font-bold text-xs transition-colors disabled:opacity-50"
+                      >
+                        {savingLeaderNotes ? "Salvando..." : "Salvar Anotações para a Área"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
       <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
         <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
           <Heart className="w-4 h-4 text-primary" />
