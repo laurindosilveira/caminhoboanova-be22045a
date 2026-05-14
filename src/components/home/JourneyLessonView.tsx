@@ -68,6 +68,8 @@ type Props = {
 };
 
 export default function JourneyLessonView({ lesson, onBack, isAdmin = false, targetUserId, isLateAccess = false, overrideId = null, awardedPoints = null }: Props) {
+  const { profile, role } = useAuth();
+  const { effectiveArea } = useAreaSwitch();
   const [content, setContent] = useState<LessonContent>(getDefaultContent(lesson.order_num));
   const [responses, setResponses] = useState<Response>({});
   const [bibleRef, setBibleRef] = useState<string | null>(null);
@@ -78,7 +80,47 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
   const [audioListened, setAudioListened] = useState(false);
   const [saveAttempted, setSaveAttempted] = useState(false);
   const [showCompletionAnim, setShowCompletionAnim] = useState(false);
+  const [leaderGuide, setLeaderGuide] = useState<any>(null);
+  const [leaderNotes, setLeaderNotes] = useState<any>({
+    participation_notes: "",
+    questions_notes: "",
+    pastoral_care_notes: "",
+    follow_up_notes: "",
+  });
+  const [savingLeaderNotes, setSavingLeaderNotes] = useState(false);
+  const [showLeaderScript, setShowLeaderScript] = useState(false);
   const hasLoadedResponses = useRef(false);
+
+  const isLeaderOrAdmin = role === "admin" || role === "lider";
+
+  // Load leader guide and notes
+  useEffect(() => {
+    if (!isLeaderOrAdmin || !contentLoaded) return;
+
+    async function loadLeaderData() {
+      const area = effectiveArea || profile?.area;
+      const [{ data: guideData }, { data: notesData }] = await Promise.all([
+        supabase.from("leader_guide").select("*").eq("lesson_id", lesson.id).maybeSingle(),
+        supabase.from("leader_meeting_notes")
+          .select("*")
+          .eq("lesson_id", lesson.id)
+          .eq("church_id", profile?.church_id ?? "")
+          .eq("area", area as any)
+          .maybeSingle(),
+      ]);
+
+      if (guideData) setLeaderGuide(guideData);
+      if (notesData) {
+        setLeaderNotes({
+          participation_notes: notesData.participation_notes || "",
+          questions_notes: notesData.questions_notes || "",
+          pastoral_care_notes: notesData.pastoral_care_notes || "",
+          follow_up_notes: notesData.follow_up_notes || "",
+        });
+      }
+    }
+    loadLeaderData();
+  }, [lesson.id, isLeaderOrAdmin, contentLoaded, effectiveArea, profile?.church_id, profile?.area]);
 
   // Load lesson content from DB — checks turma override first, then global content
   useEffect(() => {
