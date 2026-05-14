@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import {
   ChevronLeft, BookOpen, MessageCircle, Target,
-  Pen, Heart, CheckCircle2, Save, Play, Link, Volume2, Download, FileText, Share2, AlertCircle, Clock, ChevronDown, ChevronUp
+  Pen, Heart, CheckCircle2, Save, Play, Link, Volume2, Download, FileText, Share2, AlertCircle, Clock, ChevronDown, ChevronUp, Edit3
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -667,6 +667,24 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     );
   }
 
+  if (showLeaderGuideEditor && leaderGuide) {
+    return (
+      <div className="space-y-4">
+        <LeaderGuideEditor 
+          lesson={lesson} 
+          onBack={() => {
+            setShowLeaderGuideEditor(false);
+            // Reload leader data after edit
+            const area = effectiveArea || profile?.area;
+            supabase.from("leader_guide").select("*").eq("lesson_id", lesson.id).maybeSingle().then(({ data }) => {
+              if (data) setLeaderGuide(data);
+            });
+          }} 
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Back */}
@@ -700,9 +718,21 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
               <BookOpen className="w-5 h-5 text-amber-700" />
               <p className="font-montserrat font-bold text-amber-900 text-sm italic">📖 Roteiro do Líder</p>
             </div>
-            {showLeaderScript ? <ChevronUp className="w-5 h-5 text-amber-700" /> : <ChevronDown className="w-5 h-5 text-amber-700" />}
+            <div className="flex items-center gap-2">
+              {showLeaderScript ? <ChevronUp className="w-5 h-5 text-amber-700" /> : <ChevronDown className="w-5 h-5 text-amber-700" />}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowLeaderGuideEditor(true);
+                }}
+                className="p-1.5 rounded-lg bg-amber-200/50 text-amber-700 hover:bg-amber-300 transition-colors"
+                title="Editar Roteiro"
+              >
+                <Edit3 className="w-4 h-4" />
+              </button>
+            </div>
           </button>
-          
+
           <AnimatePresence>
             {showLeaderScript && (
               <motion.div 
