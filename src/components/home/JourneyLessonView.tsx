@@ -3,6 +3,7 @@ import BibleModal from "./BibleModal";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
+import LeaderGuideEditor from "@/components/admin/tabs/LeaderGuideEditor";
 import {
   ChevronLeft, BookOpen, MessageCircle, Target,
   Pen, Heart, CheckCircle2, Save, Play, Link, Volume2, Download, FileText, Share2, AlertCircle, Clock, ChevronDown, ChevronUp, Edit3
