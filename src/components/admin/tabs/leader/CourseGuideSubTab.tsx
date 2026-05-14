@@ -107,9 +107,13 @@ export default function CourseGuideSubTab() {
     const { error } = await supabase.from("leader_meeting_notes").upsert({
       leader_id: profile.user_id,
       lesson_id: selectedLesson.id,
-      church_id: profile.church_id,
-      area: effectiveArea || profile.area,
-      ...notes,
+      church_id: profile.church_id || null,
+      area: (effectiveArea || profile.area) as any,
+      participation_notes: notes.participation_notes,
+      questions_notes: notes.questions_notes,
+      pastoral_care_notes: notes.pastoral_care_notes,
+      follow_up_notes: notes.follow_up_notes,
+      spiritual_notes: notes.spiritual_notes,
     }, { onConflict: "lesson_id,church_id,area" });
     setSavingNotes(false);
     if (error) {
