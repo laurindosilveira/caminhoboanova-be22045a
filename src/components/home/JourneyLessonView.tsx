@@ -303,23 +303,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
         duration: 5000,
       });
       return;
-  async function handleSaveLeaderNotes() {
-    if (!profile?.user_id || !profile?.church_id) return;
-    setSavingLeaderNotes(true);
-    const { error } = await supabase.from("leader_meeting_notes").upsert({
-      leader_id: profile.user_id,
-      lesson_id: lesson.id,
-      church_id: profile.church_id,
-      area: (effectiveArea || profile.area) as any,
-      ...leaderNotes,
-    }, { onConflict: "lesson_id,church_id,area" });
-    setSavingLeaderNotes(false);
-    if (error) {
-      toast.error("Erro ao salvar anotações: " + error.message);
-    } else {
-      toast.success("✅ Anotações do líder salvas para a área!");
     }
-  }
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSaving(false); return; }
