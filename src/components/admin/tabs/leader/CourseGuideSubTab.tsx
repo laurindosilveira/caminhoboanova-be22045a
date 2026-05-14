@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { BookOpen, ChevronRight, ChevronLeft, FileText, MessageCircle, Target, Heart, Pen, Play, Phone, Save } from "lucide-react";
+import { BookOpen, ChevronRight, ChevronLeft, FileText, MessageCircle, Target, Heart, Pen, Play, Phone, Save, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
