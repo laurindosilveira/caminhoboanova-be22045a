@@ -107,13 +107,15 @@ export default function CourseGuideSubTab() {
     const { error } = await supabase.from("leader_meeting_notes").upsert({
       leader_id: profile.user_id,
       lesson_id: selectedLesson.id,
+      church_id: profile.church_id,
+      area: effectiveArea || profile.area,
       ...notes,
-    }, { onConflict: "leader_id,lesson_id" });
+    }, { onConflict: "lesson_id,church_id,area" });
     setSavingNotes(false);
     if (error) {
       toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "✅ Anotações salvas!" });
+      toast({ title: "✅ Anotações salvas para todos os líderes!" });
     }
   }
 
