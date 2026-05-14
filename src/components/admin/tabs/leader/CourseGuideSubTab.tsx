@@ -72,9 +72,15 @@ export default function CourseGuideSubTab() {
   async function selectLesson(lesson: Lesson) {
     setSelectedLesson(lesson);
     setLoading(true);
+    const area = effectiveArea || profile?.area;
     const [{ data: guideData }, { data: notesData }] = await Promise.all([
       supabase.from("leader_guide").select("*").eq("lesson_id", lesson.id).maybeSingle(),
-      supabase.from("leader_meeting_notes").select("*").eq("lesson_id", lesson.id).eq("leader_id", profile?.user_id ?? "").maybeSingle(),
+      supabase.from("leader_meeting_notes")
+        .select("*")
+        .eq("lesson_id", lesson.id)
+        .eq("church_id", profile?.church_id ?? "")
+        .eq("area", area as any)
+        .maybeSingle(),
     ]);
     setContent(guideData ? {
       greeting: guideData.greeting || "",
