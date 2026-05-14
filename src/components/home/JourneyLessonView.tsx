@@ -82,6 +82,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
   const [saveAttempted, setSaveAttempted] = useState(false);
   const [showCompletionAnim, setShowCompletionAnim] = useState(false);
   const [leaderGuide, setLeaderGuide] = useState<any>(null);
+  const [showLeaderGuideEditor, setShowLeaderGuideEditor] = useState(false);
   const [leaderNotes, setLeaderNotes] = useState<any>({
     participation_notes: "",
     questions_notes: "",
