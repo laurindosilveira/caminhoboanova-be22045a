@@ -1041,3 +1041,31 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     </div>
   );
 }
+
+function LeaderSection({ icon, title, content }: { icon: React.ReactNode; title: string; content: string }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="font-montserrat font-bold text-amber-900 text-xs flex items-center gap-2">
+        {icon} {title}
+      </p>
+      <div className="p-2.5 bg-white/50 rounded-xl border border-amber-200/50">
+        <p className="text-amber-900 font-inter text-xs leading-relaxed whitespace-pre-wrap">{content}</p>
+      </div>
+    </div>
+  );
+}
+
+function NoteField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="space-y-1">
+      <label className="font-inter text-[10px] font-bold text-amber-800/80 uppercase tracking-tight">{label}</label>
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        rows={2}
+        className="w-full px-3 py-2 rounded-xl border border-amber-200 bg-white text-amber-900 font-inter text-xs focus:outline-none focus:ring-2 focus:ring-amber-600 resize-none"
+        placeholder="Escreva aqui..."
+      />
+    </div>
+  );
+}
