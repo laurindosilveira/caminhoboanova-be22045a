@@ -155,12 +155,26 @@ export default function CourseGuideSubTab() {
         </div>
 
         {/* Content sections */}
-        {content.greeting && <Section icon={<Play className="w-4 h-4 text-secondary" />} title="🙌 Saudação e Oração Inicial"><p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.greeting}</p></Section>}
-        {content.icebreaker && <Section icon={<MessageCircle className="w-4 h-4 text-accent" />} title="🧊 Quebra-gelo"><p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.icebreaker}</p></Section>}
-        {content.summary && <Section icon={<FileText className="w-4 h-4 text-primary" />} title="📖 Orientações do Encontro"><p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.summary}</p></Section>}
+        {content.greeting && (
+          <Section icon={<Target className="w-4 h-4 text-primary" />} title="🎯 Objetivos e Foco Pedagógico">
+            <p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.greeting}</p>
+          </Section>
+        )}
+        
+        {content.summary && (
+          <Section icon={<BookOpen className="w-4 h-4 text-secondary" />} title="✝️ Pontos Teológicos Essenciais">
+            <p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.summary}</p>
+          </Section>
+        )}
+
+        {content.icebreaker && (
+          <Section icon={<Clock className="w-4 h-4 text-accent" />} title="⏱️ Sugestão de Tempo">
+            <p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.icebreaker}</p>
+          </Section>
+        )}
 
         {content.bible_texts.length > 0 && (
-          <Section icon={<BookOpen className="w-4 h-4 text-brand-green" />} title="📜 Textos Bíblicos">
+          <Section icon={<FileText className="w-4 h-4 text-brand-green" />} title="📜 Textos Bíblicos">
             <div className="flex flex-wrap gap-2">
               {content.bible_texts.map(text => (
                 <button key={text} onClick={() => setBibleRef(text)}
@@ -174,20 +188,29 @@ export default function CourseGuideSubTab() {
         )}
 
         {content.questions.length > 0 && (
-          <Section icon={<Pen className="w-4 h-4 text-secondary" />} title="💬 Perguntas para Diálogo">
+          <Section icon={<Pen className="w-4 h-4 text-secondary" />} title="💬 Orientações para o Diálogo">
             <div className="space-y-2.5">
               {content.questions.map((q, i) => (
                 <div key={i} className="flex gap-3">
                   <span className="flex-shrink-0 w-6 h-6 rounded-full bg-secondary/15 flex items-center justify-center font-montserrat font-bold text-secondary text-xs">{i + 1}</span>
-                  <p className="text-foreground font-inter text-sm leading-relaxed pt-0.5">{q}</p>
+                  <p className="text-foreground font-inter text-sm leading-relaxed pt-0.5 whitespace-pre-wrap">{q}</p>
                 </div>
               ))}
             </div>
           </Section>
         )}
 
-        {content.practice && <Section icon={<Target className="w-4 h-4 text-brand-green" />} title="💬 Orientações e Conexão 3M"><p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.practice}</p></Section>}
-        {content.prayer_prompt && <Section icon={<Heart className="w-4 h-4 text-destructive" />} title="🙏 Postura Espiritual e Oração"><p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.prayer_prompt}</p></Section>}
+        {content.practice && (
+          <Section icon={<Target className="w-4 h-4 text-brand-green" />} title="❓ Dúvidas Frequentes + Conexão 3M">
+            <p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.practice}</p>
+          </Section>
+        )}
+
+        {content.prayer_prompt && (
+          <Section icon={<Heart className="w-4 h-4 text-destructive" />} title="🙏 Postura Espiritual do Líder">
+            <p className="text-foreground font-inter text-sm leading-relaxed whitespace-pre-wrap">{content.prayer_prompt}</p>
+          </Section>
+        )}
 
         {/* ===== LEADER NOTES ===== */}
         <div className="bg-card rounded-2xl border-2 border-primary/20 overflow-hidden shadow-sm">
