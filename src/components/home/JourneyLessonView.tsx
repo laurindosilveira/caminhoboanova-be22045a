@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import BibleModal from "./BibleModal";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import {
   ChevronLeft, BookOpen, MessageCircle, Target,
-  Pen, Heart, CheckCircle2, Save, Play, Link, Volume2, Download, FileText, Share2, AlertCircle
+  Pen, Heart, CheckCircle2, Save, Play, Link, Volume2, Download, FileText, Share2, AlertCircle, Clock
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
