@@ -48,6 +48,13 @@ export default function MinhaIgreja() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [branding, setBranding] = useState({
+    name: "",
+    logo_url: "",
+    primary_color: "#1a1a2e",
+    secondary_color: "#e94560"
+  });
+  const [savingBranding, setSavingBranding] = useState(false);
 
   const fetchSubscription = useCallback(async () => {
     if (!user) return;
