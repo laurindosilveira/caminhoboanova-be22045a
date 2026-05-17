@@ -236,14 +236,18 @@ export default function Register() {
 
     setLoading(true);
 
-    // Check member limit before sign up
-    const { data: countData } = await supabase.rpc("get_church_member_count", { p_church_id: churchId as any });
-    const { data: subData } = await (supabase.from as any)("church_subscriptions").select("member_limit").eq("church_id", churchId).single();
-    
-    if (subData?.member_limit && (countData || 0) >= subData.member_limit) {
-       setError(`Desculpe, esta igreja atingiu o limite de membros do plano atual (${subData.member_limit}). Entre em contato com a liderança.`);
-       setLoading(false);
-       return;
+    try {
+      // Check member limit before sign up
+      const { data: statsArray } = await supabase.rpc("get_church_user_stats", { p_church_id: churchId as any });
+      const stats = statsArray && statsArray[0];
+      
+      if (stats && stats.member_limit && stats.total_users >= stats.member_limit) {
+         setError(`Limite excedido: Esta igreja já possui ${stats.total_users} usuários (limite do plano: ${stats.member_limit}). Entre em contato com a liderança para upgrade.`);
+         setLoading(false);
+         return;
+      }
+    } catch (limitErr) {
+      console.error("Error checking member limit:", limitErr);
     }
 
     const { data: authData, error: authError } = await supabase.auth.signUp({
