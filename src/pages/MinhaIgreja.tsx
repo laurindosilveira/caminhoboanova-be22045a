@@ -25,6 +25,7 @@ interface SubData {
   product_id: string | null;
   subscription_status: string | null;
   subscription_end: string | null;
+  cancel_at_period_end: boolean;
   invoices: Invoice[];
 }
 
@@ -157,10 +158,15 @@ export default function MinhaIgreja() {
                 Assinatura
               </CardTitle>
               {subData?.subscribed ? (
-                <Badge className={`${subData.subscription_status === 'active' ? 'bg-[hsl(var(--brand-green))]/15 text-[hsl(var(--brand-green))] border-[hsl(var(--brand-green))]/30' : 'bg-warning/15 text-warning border-warning/30'} font-semibold`}>
-                  {subData.subscription_status === 'active' ? <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> : <Clock className="w-3.5 h-3.5 mr-1" />}
-                  {subData.subscription_status === 'active' ? 'Ativa' : 'Pendente'}
-                </Badge>
+                <div className="flex flex-col items-end gap-1">
+                  <Badge className={`${subData.subscription_status === 'active' ? 'bg-[hsl(var(--brand-green))]/15 text-[hsl(var(--brand-green))] border-[hsl(var(--brand-green))]/30' : 'bg-warning/15 text-warning border-warning/30'} font-semibold`}>
+                    {subData.subscription_status === 'active' ? <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> : <Clock className="w-3.5 h-3.5 mr-1" />}
+                    {subData.subscription_status === 'active' ? 'Ativa' : 'Pendente'}
+                  </Badge>
+                  {subData.cancel_at_period_end && (
+                    <Badge variant="outline" className="text-[10px] text-destructive border-destructive/30">Cancela em breve</Badge>
+                  )}
+                </div>
               ) : (
                 <Badge variant="destructive" className="font-semibold">
                   <XCircle className="w-3.5 h-3.5 mr-1" /> Inativa
@@ -197,7 +203,7 @@ export default function MinhaIgreja() {
                   {subData.subscription_end && (
                     <p className="text-muted-foreground text-[11px] font-inter flex items-center gap-1.5">
                       <Calendar className="w-3.5 h-3.5" />
-                      Próxima renovação: {formatDate(subData.subscription_end)}
+                      {subData.cancel_at_period_end ? 'Encerra em:' : 'Próxima renovação:'} {formatDate(subData.subscription_end)}
                     </p>
                   )}
                   <Button onClick={handleManageSubscription} disabled={portalLoading} variant="outline" className="w-full h-11 rounded-xl">
