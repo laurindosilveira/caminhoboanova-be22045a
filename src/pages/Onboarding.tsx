@@ -43,14 +43,14 @@ interface QuestionnaireInfo {
   preferences: string;
 }
 
-type StepKey = "church" | "pastor" | "community" | "questionnaire" | "recommendation";
+type StepKey = "church" | "pastor" | "community" | "questionnaire" | "plans";
 
 const STEPS: { key: StepKey; label: string; icon: typeof Church }[] = [
   { key: "church", label: "Igreja", icon: Church },
   { key: "pastor", label: "Pastor", icon: User },
   { key: "community", label: "Comunidade", icon: Users },
   { key: "questionnaire", label: "Questionário", icon: ClipboardList },
-  { key: "recommendation", label: "Recomendação", icon: Star },
+  { key: "plans", label: "Escolher Plano", icon: CreditCard },
 ];
 
 const slideVariants = {
