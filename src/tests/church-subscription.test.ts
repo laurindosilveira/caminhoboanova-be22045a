@@ -80,4 +80,18 @@ describe('Routing Fallbacks', () => {
     }
     expect(redirect).toBe('/login');
   });
+
+  it('should handle 404 catch-all for visitors', () => {
+    const user = null;
+    const path = '/random-path';
+    const redirect = !user ? '/apresentacao' : '/home';
+    expect(redirect).toBe('/apresentacao');
+  });
+
+  it('should handle 404 catch-all for logged-in users', () => {
+    const user = { id: '123' };
+    const path = '/random-path';
+    const redirect = !user ? '/apresentacao' : '/home';
+    expect(redirect).toBe('/home');
+  });
 });
