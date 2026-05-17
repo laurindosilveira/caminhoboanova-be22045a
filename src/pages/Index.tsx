@@ -1,7 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { ShieldCheck, Loader2 } from "lucide-react";
+import { ShieldCheck, Loader2, Church } from "lucide-react";
 import { motion } from "framer-motion";
 
 import HeroHeader from "@/components/home/HeroHeader";
@@ -325,6 +325,27 @@ export default function Index() {
                         </p>
                         <p className="text-muted-foreground text-xs font-inter">
                           {role === "admin" ? "Gerenciar participantes e conteúdo" : "Gerenciar cursos e usuários"}
+                        </p>
+                      </div>
+                      <span className="ml-auto text-muted-foreground text-xs">→</span>
+                    </button>
+                  </div>
+                {/* My Church Link for Admins */}
+                {(role === "admin" || role === "lider") && (
+                  <div className="px-5 mt-3">
+                    <button
+                      onClick={() => navigate("/minha-igreja")}
+                      className="w-full flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-green/10">
+                        <Church className="w-5 h-5 text-brand-green" />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-montserrat font-bold text-foreground text-sm">
+                          Minha Igreja
+                        </p>
+                        <p className="text-muted-foreground text-xs font-inter">
+                          Assinatura, faturas e dados da instituição
                         </p>
                       </div>
                       <span className="ml-auto text-muted-foreground text-xs">→</span>

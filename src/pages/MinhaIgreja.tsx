@@ -83,9 +83,16 @@ export default function MinhaIgreja() {
   }, [user, profile?.church_id]);
 
   useEffect(() => {
-    if (!authLoading && user) fetchSubscription();
+    if (!authLoading && user) {
+      // Check if user has permission (admin or lider)
+      if (role !== "admin" && role !== "lider") {
+        navigate("/");
+        return;
+      }
+      fetchSubscription();
+    }
     if (!authLoading && !user) navigate("/login");
-  }, [authLoading, user, fetchSubscription, navigate]);
+  }, [authLoading, user, role, fetchSubscription, navigate]);
 
   const planKey = subData?.product_id ? getPlanByProductId(subData.product_id) : null;
   const planInfo = planKey ? STRIPE_PLANS[planKey] : null;
@@ -327,19 +334,26 @@ export default function MinhaIgreja() {
               <div className="divide-y divide-border">
                 {auditLogs.map((log) => (
                   <div key={log.id} className="px-4 py-3 flex items-start justify-between gap-3 bg-card/50">
-                    <div>
-                      <p className="text-[11px] font-bold text-foreground uppercase tracking-wider">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-bold text-foreground uppercase tracking-wider truncate">
                         {log.action === 'trial_alert_shown' && 'Aviso de vencimento exibido'}
                         {log.action === 'portal_opened' && 'Portal do cliente acessado'}
                         {log.action === 'portal_opened_for_cancel' && 'Portal acessado para cancelar'}
                         {log.action === 'alert_snoozed' && 'Banner sonecado por 24h'}
-                        {!['trial_alert_shown', 'portal_opened', 'portal_opened_for_cancel', 'alert_snoozed'].includes(log.action) && log.action}
+                        {log.action === 'subscription_created' && 'Assinatura criada'}
+                        {log.action === 'subscription_updated' && 'Assinatura atualizada'}
+                        {log.action === 'invoice_paid' && 'Fatura paga com sucesso'}
+                        {log.action === 'payment_failed' && 'Falha no pagamento'}
+                        {!['trial_alert_shown', 'portal_opened', 'portal_opened_for_cancel', 'alert_snoozed', 'subscription_created', 'subscription_updated', 'invoice_paid', 'payment_failed'].includes(log.action) && log.action}
                       </p>
                       <p className="text-[10px] text-muted-foreground font-inter">
                         {new Date(log.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
-                    <Badge variant="outline" className="text-[9px] bg-muted/30">AUDITORIA</Badge>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge variant="outline" className="text-[8px] bg-muted/30 px-1.5 h-4">AUDITORIA</Badge>
+                      {log.details?.plan && <span className="text-[9px] text-primary font-bold">{log.details.plan}</span>}
+                    </div>
                   </div>
                 ))}
               </div>
