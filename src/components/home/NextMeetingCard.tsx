@@ -41,11 +41,14 @@ export default function NextMeetingCard({ onNavigateToAgenda }: { onNavigateToAg
           <CalendarDays className="w-5 h-5 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-montserrat font-bold text-foreground text-sm truncate">
-            📅 Próximo encontro: {dayLabel} {timeLabel}
+          <p className="text-primary text-[10px] font-inter font-bold uppercase tracking-wide">
+            Próximo evento
           </p>
-          <p className="text-muted-foreground text-xs font-inter truncate">
-            {event.title}{event.location ? ` · ${event.location}` : ""} · {dateLabel}
+          <p className="font-montserrat font-black text-foreground text-sm leading-tight truncate">
+            {event.title}
+          </p>
+          <p className="text-muted-foreground text-xs font-inter truncate mt-0.5">
+            {dayLabel} às {timeLabel} · {dateLabel}{event.location ? ` · ${event.location}` : ""}
           </p>
         </div>
         <span className="text-primary text-xs font-inter font-bold flex-shrink-0">Ver →</span>
