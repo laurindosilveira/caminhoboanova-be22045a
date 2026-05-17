@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 
 interface Props {
   children: ReactNode;
+  fallback?: ReactNode;
 }
 
 interface State {
