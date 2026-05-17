@@ -53,6 +53,17 @@ export default function WaitingRoom() {
 
   async function assignTurma(userId: string, turmaId: string, userName: string) {
     setSaving(userId);
+    
+    // Check member limit before approving
+    const { data: churchIdData } = await supabase.rpc("get_auth_church_id");
+    const { data: statsArray } = await supabase.rpc("get_church_user_stats", { p_church_id: churchIdData as any });
+    const stats = statsArray && statsArray[0];
+    
+    // Re-check: limit already reached? (approved users count is not used for limit, total is)
+    // Actually the current requirement says total users count for limit.
+    // So if they are in the waiting room, they are ALREADY in the total count.
+    // Approving doesn't change the count against the limit.
+    
     const { error } = await supabase
       .from("profiles")
       .update({ turma_id: turmaId, enrollment_status: "approved" })

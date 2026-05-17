@@ -45,11 +45,18 @@ interface AuditLog {
   details: any;
 }
 
+interface UserStats {
+  total_users: number;
+  active_users: number;
+  pending_users: number;
+  member_limit: number | null;
+}
+
 export default function MinhaIgreja() {
   const { user, profile, role, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [subData, setSubData] = useState<SubData | null>(null);
-  const [memberStats, setMemberStats] = useState<{ current: number; limit: number | null } | null>(null);
+  const [memberStats, setMemberStats] = useState<UserStats | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [portalLoading, setPortalLoading] = useState(false);
@@ -62,19 +69,19 @@ export default function MinhaIgreja() {
   const [savingBranding, setSavingBranding] = useState(false);
 
   const fetchSubscription = useCallback(async () => {
-    if (!user) return;
+    if (!user || !profile?.church_id) return;
     setLoading(true);
     try {
       const [
         { data: sData, error: sError }, 
-        { data: mCount, error: mError },
+        { data: uStats, error: mError },
         { data: aLogs, error: aError },
         { data: cData, error: cError }
       ] = await Promise.all([
         supabase.functions.invoke("check-subscription"),
-        supabase.rpc("get_church_member_count", { p_church_id: profile?.church_id as any }),
+        supabase.rpc("get_church_user_stats", { p_church_id: profile.church_id }),
         supabase.from('church_audit_logs').select('*').order('created_at', { ascending: false }).limit(10),
-        supabase.from('churches').select('*').eq('id', profile?.church_id).single()
+        supabase.from('churches').select('*').eq('id', profile.church_id).single()
       ]);
 
       if (sError) throw sError;
@@ -90,16 +97,9 @@ export default function MinhaIgreja() {
         });
       }
 
-      const { data: churchSub } = await supabase
-        .from("church_subscriptions")
-        .select("member_limit")
-        .eq("church_id", profile?.church_id)
-        .single();
-      
-      setMemberStats({
-        current: mCount || 0,
-        limit: churchSub?.member_limit || null
-      });
+      if (uStats) {
+        setMemberStats(uStats[0] || null);
+      }
     } catch (err: any) {
       console.error("Error checking subscription:", err);
       toast({ title: "Erro", description: "Não foi possível verificar a assinatura.", variant: "destructive" });
@@ -298,16 +298,36 @@ export default function MinhaIgreja() {
                 </div>
 
                 {memberStats && (
-                  <div className="space-y-2 pt-2">
-                    <div className="flex justify-between text-[11px] font-inter uppercase font-bold tracking-wider">
-                      <span className="text-muted-foreground">Uso de Membros</span>
-                      <span className="text-foreground">{memberStats.current} / {memberStats.limit || '∞'}</span>
+                  <div className="space-y-4 pt-2">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="bg-card border border-border/50 p-2 rounded-xl text-center">
+                        <p className="text-[9px] text-muted-foreground uppercase font-bold">Ativos</p>
+                        <p className="text-sm font-black text-brand-green">{memberStats.active_users}</p>
+                      </div>
+                      <div className="bg-card border border-border/50 p-2 rounded-xl text-center">
+                        <p className="text-[9px] text-muted-foreground uppercase font-bold">Pendentes</p>
+                        <p className="text-sm font-black text-warning">{memberStats.pending_users}</p>
+                      </div>
+                      <div className="bg-card border border-border/50 p-2 rounded-xl text-center">
+                        <p className="text-[9px] text-muted-foreground uppercase font-bold">Total</p>
+                        <p className="text-sm font-black text-foreground">{memberStats.total_users}</p>
+                      </div>
                     </div>
-                    <div className="h-2.5 bg-muted rounded-full overflow-hidden border border-border/50">
-                      <div 
-                        className={`h-full transition-all duration-500 ${memberStats.limit && memberStats.current / memberStats.limit > 0.9 ? 'bg-destructive' : 'bg-primary'}`} 
-                        style={{ width: `${memberStats.limit ? Math.min(100, (memberStats.current / memberStats.limit) * 100) : 100}%` }} 
-                      />
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-[11px] font-inter uppercase font-bold tracking-wider">
+                        <span className="text-muted-foreground">Uso de Membros (Total)</span>
+                        <span className="text-foreground">{memberStats.total_users} / {memberStats.member_limit || '∞'}</span>
+                      </div>
+                      <div className="h-2.5 bg-muted rounded-full overflow-hidden border border-border/50">
+                        <div 
+                          className={`h-full transition-all duration-500 ${memberStats.member_limit && memberStats.total_users / memberStats.member_limit > 0.9 ? 'bg-destructive' : 'bg-primary'}`} 
+                          style={{ width: `${memberStats.member_limit ? Math.min(100, (memberStats.total_users / memberStats.member_limit) * 100) : 100}%` }} 
+                        />
+                      </div>
+                      <p className="text-[9px] text-muted-foreground leading-tight italic">
+                        * O limite do plano considera usuários ativos e pendentes para garantir a segurança da plataforma.
+                      </p>
                     </div>
                   </div>
                 )}
