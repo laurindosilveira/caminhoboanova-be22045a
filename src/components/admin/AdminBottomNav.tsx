@@ -1,7 +1,7 @@
-import { BarChart3, BookOpen, Shield, Megaphone, Settings, AlertTriangle, Crown, GraduationCap, MessageSquare, CalendarDays, Phone, MessageCircle, Music } from "lucide-react";
+import { BarChart3, BookOpen, Shield, Megaphone, Settings, AlertTriangle, Crown, GraduationCap, MessageSquare, CalendarDays, Phone, MessageCircle, Music, Globe } from "lucide-react";
 // Build V11: SALA DO DISCIPULADOR - Scroll Forçado e Labels Atualizados
 
-export type AdminTab = "overview" | "alerts" | "courses" | "leaders" | "push" | "users" | "settings" | "turma" | "avisos" | "agenda" | "contatos" | "whatsapp" | "worship";
+export type AdminTab = "overview" | "alerts" | "courses" | "leaders" | "push" | "users" | "settings" | "turma" | "avisos" | "agenda" | "contatos" | "whatsapp" | "worship" | "admin_global";
 
 type TabDef = { id: AdminTab; label: string; icon: typeof BarChart3 };
 
@@ -26,10 +26,13 @@ const LIDER_TAB_DEFS: TabDef[] = [
   { id: "courses", label: "Cursos", icon: BookOpen },
 ];
 
-type Props = { active: AdminTab; onChange: (tab: AdminTab) => void; userRole?: "admin" | "lider" | null };
+type Props = { active: AdminTab; onChange: (tab: AdminTab) => void; userRole?: "admin" | "lider" | null; isSuper?: boolean };
 
-export default function AdminBottomNav({ active, onChange, userRole }: Props) {
-  const tabs = userRole === "lider" ? LIDER_TAB_DEFS : ALL_TABS;
+export default function AdminBottomNav({ active, onChange, userRole, isSuper }: Props) {
+  let tabs = userRole === "lider" ? LIDER_TAB_DEFS : [...ALL_TABS];
+  if (isSuper && userRole !== "lider") {
+    tabs.unshift({ id: "admin_global", label: "Global", icon: Globe });
+  }
 
   return (
     <nav

@@ -402,7 +402,7 @@ export default function AdminDashboard() {
         )}
       </main>
 
-      <AdminBottomNav active={activeTab} onChange={setActiveTab} userRole={role as "admin" | "lider" | null} />
+      <AdminBottomNav active={activeTab} onChange={setActiveTab} userRole={role as "admin" | "lider" | null} isSuper={isSuper} />
     </div>
   );
 }
