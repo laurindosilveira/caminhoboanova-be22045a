@@ -296,7 +296,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
               )}
             </div>
             <div className="text-left">
-              <p className="font-montserrat font-bold text-foreground text-sm">CAMINHO DO DISCIPULADO</p>
+              <p className="font-montserrat font-bold text-foreground text-sm">Caminho do Discipulado</p>
               <p className="text-muted-foreground text-xs font-inter">
                 {waitingCount > 0 && !expanded
                   ? `${waitingCount} pessoa${waitingCount !== 1 ? "s" : ""} na sala de espera`

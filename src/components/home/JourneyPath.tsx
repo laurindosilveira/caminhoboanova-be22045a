@@ -168,7 +168,7 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
       {/* Header + overall progress */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="font-montserrat font-black text-foreground text-xl">🛤️ CAMINHO DO DISCIPULADO</h2>
+          <h2 className="font-montserrat font-black text-foreground text-xl">🛤️ Caminho do Discipulado</h2>
           <span className="text-muted-foreground text-xs font-inter bg-muted rounded-full px-3 py-1">
             {overallPct}% completo
           </span>

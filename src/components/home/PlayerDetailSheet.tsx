@@ -882,11 +882,11 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
       {/* Category modal — inline overlay, no portal, so clicks don't leak to backdrop */}
       {categoryModal && (
         <div
-          className="absolute inset-0 z-10 bg-black/50 rounded-t-2xl flex flex-col justify-end"
+          className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 p-4"
           onClick={(e) => { e.stopPropagation(); setCategoryModal(null); }}
         >
           <div
-            className="bg-card rounded-t-2xl max-h-[80%] flex flex-col"
+            className="flex max-h-[78vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-card shadow-2xl animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-4 border-b border-border flex-shrink-0">
@@ -920,7 +920,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="overflow-y-auto p-4 space-y-2">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pr-3 space-y-2 [scrollbar-gutter:stable]">
               {categoryItems.length === 0 ? (
                 <p className="text-center text-muted-foreground font-inter text-sm py-8">Nenhuma atividade nesta categoria.</p>
               ) : categoryModal === "devotional" && !selectedDevotionalLessonGroup ? (
@@ -992,10 +992,10 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
       {/* Detail modal — inline overlay, no portal */}
       {detailModal && (
         <div
-          className="absolute inset-0 z-20 bg-black/50 rounded-t-2xl flex flex-col justify-end"
+          className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 p-4"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="bg-card rounded-t-2xl max-h-[85%] flex flex-col">
+          <div className="flex max-h-[82vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-card shadow-2xl animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between p-4 border-b border-border flex-shrink-0">
               <div className="flex items-center gap-2">
                 {previousCategoryModal && (
@@ -1017,7 +1017,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="overflow-y-auto p-4 space-y-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pr-3 space-y-4 [scrollbar-gutter:stable]">
             <div className="rounded-2xl border border-border bg-muted/20 p-4">
               <p className="font-montserrat font-bold text-foreground text-sm">{detailModal?.title}</p>
               <p className="text-muted-foreground font-inter text-xs mt-1">
