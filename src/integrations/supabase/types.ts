@@ -1673,6 +1673,47 @@ export type Database = {
           },
         ]
       }
+      login_audit_logs: {
+        Row: {
+          church_id: string | null
+          created_at: string
+          details: Json | null
+          email: string | null
+          id: string
+          ip_address: string | null
+          method: string
+          status: string
+        }
+        Insert: {
+          church_id?: string | null
+          created_at?: string
+          details?: Json | null
+          email?: string | null
+          id?: string
+          ip_address?: string | null
+          method: string
+          status: string
+        }
+        Update: {
+          church_id?: string | null
+          created_at?: string
+          details?: Json | null
+          email?: string | null
+          id?: string
+          ip_address?: string | null
+          method?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "login_audit_logs_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meeting_evaluations: {
         Row: {
           admin_id: string
@@ -3610,6 +3651,16 @@ export type Database = {
         | { Args: { _user_id?: string }; Returns: boolean }
       log_church_audit: {
         Args: { p_action: string; p_church_id: string; p_details?: Json }
+        Returns: undefined
+      }
+      log_login_event: {
+        Args: {
+          p_church_id?: string
+          p_details?: Json
+          p_email: string
+          p_method: string
+          p_status: string
+        }
         Returns: undefined
       }
       log_system_access_attempt: {
