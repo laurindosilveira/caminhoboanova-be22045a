@@ -628,6 +628,34 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
           )}
         </div>
       )}
+      {/* Profession of Faith Records */}
+      {professionRecords.length > 0 && (
+        <div className="mt-4">
+          <div className="flex items-center gap-2 mb-3">
+            <CheckCircle2 className="w-5 h-5 text-brand-green" />
+            <h3 className="font-montserrat font-bold text-foreground text-sm">Histórico: Professaram a Fé</h3>
+          </div>
+          <Card className="border-border">
+            <CardContent className="p-0 overflow-hidden">
+              <div className="divide-y divide-border">
+                {professionRecords.map((record) => (
+                  <div key={record.id} className="px-4 py-3 flex items-center justify-between gap-3 bg-card/50">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-foreground truncate">{record.full_name}</p>
+                      <p className="text-[10px] text-muted-foreground font-inter">
+                        {record.turma_name} · {new Date(record.professed_at).toLocaleDateString('pt-BR')}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="text-[8px] bg-brand-green/10 text-brand-green border-brand-green/20">
+                      ARQUIVADO
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
