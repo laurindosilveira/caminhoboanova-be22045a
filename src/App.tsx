@@ -28,6 +28,7 @@ const AdminSistema = lazy(() => import("./pages/AdminSistema"));
 const AreaMembros = lazy(() => import("./pages/AreaMembros"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 import AdminSistemaPasswordGate from "./components/auth/AdminSistemaPasswordGate";
+import { PlanGate } from "./components/auth/PlanGate";
 
 const queryClient = new QueryClient();
 
@@ -148,7 +149,7 @@ const AppRoutes = () => (
       <Route path="/instalar" element={<Install />} />
       <Route path="/apresentacao" element={<Apresentacao />} />
       <Route path="/area-membros" element={<PublicRoute><AreaMembros /></PublicRoute>} />
-      <Route path="/exportar-dados" element={<ProtectedRoute><ExportData /></ProtectedRoute>} />
+      <Route path="/exportar-dados" element={<ProtectedRoute><PlanGate feature="advancedExport"><ExportData /></PlanGate></ProtectedRoute>} />
       <Route path="/minha-igreja" element={<ProtectedRoute><MinhaIgreja /></ProtectedRoute>} />
       <Route path="/onboarding" element={<Onboarding />} />
       <Route
