@@ -374,6 +374,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
   // ── Has turma: show full management ─────────────────────────────────────────
   return (
     <div className="space-y-4">
+
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
