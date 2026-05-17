@@ -135,6 +135,7 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
           ))}
         </div>
       </div>
-    </header>
+      </header>
+    </>
   );
 }
