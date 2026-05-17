@@ -2481,6 +2481,7 @@ export type Database = {
           details: Json | null
           full_name: string
           id: string
+          performed_by: string | null
           professed_at: string | null
           turma_id: string | null
           turma_name: string | null
@@ -2491,6 +2492,7 @@ export type Database = {
           details?: Json | null
           full_name: string
           id?: string
+          performed_by?: string | null
           professed_at?: string | null
           turma_id?: string | null
           turma_name?: string | null
@@ -2501,6 +2503,7 @@ export type Database = {
           details?: Json | null
           full_name?: string
           id?: string
+          performed_by?: string | null
           professed_at?: string | null
           turma_id?: string | null
           turma_name?: string | null
@@ -3812,10 +3815,19 @@ export type Database = {
         Args: { p_status: string }
         Returns: undefined
       }
-      process_profession_of_faith: {
-        Args: { p_turma_id?: string; p_user_id: string }
-        Returns: undefined
-      }
+      process_profession_of_faith:
+        | {
+            Args: { p_turma_id?: string; p_user_id: string }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_performed_by?: string
+              p_turma_id?: string
+              p_user_id: string
+            }
+            Returns: undefined
+          }
       secure_extend_trial: {
         Args: { p_church_subscription_id: string; p_days: number }
         Returns: undefined

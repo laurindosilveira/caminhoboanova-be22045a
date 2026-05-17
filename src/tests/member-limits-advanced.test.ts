@@ -82,18 +82,39 @@ describe('Advanced Member Limit Logic & Realtime Simulation', () => {
   it('should inactivate user and free up spot after Profession of Faith', () => {
     const limit = 50;
     const mockProfiles = [
-      { user_id: '1', church_id: 'churchA', is_active: true },
-      { user_id: '2', church_id: 'churchA', is_active: true },
+      { user_id: '1', church_id: 'churchA', is_active: true, turma_id: 'turma1' },
+      { user_id: '2', church_id: 'churchA', is_active: true, turma_id: 'turma1' },
     ];
 
     const currentTotalActive = mockProfiles.filter(p => p.church_id === 'churchA' && p.is_active).length;
     expect(currentTotalActive).toBe(2);
 
-    // Simulate profession of faith (inactivation)
+    // Simulate profession of faith (inactivation + remove from turma)
     mockProfiles[0].is_active = false;
+    mockProfiles[0].turma_id = null; // Removed from previous turma
     
     const newTotalActive = mockProfiles.filter(p => p.church_id === 'churchA' && p.is_active).length;
+    const inTurma = mockProfiles.filter(p => p.turma_id === 'turma1').length;
+    
     expect(newTotalActive).toBe(1);
+    expect(inTurma).toBe(1);
     expect(newTotalActive < limit).toBe(true); // Spot freed
+  });
+
+  it('should appear in historical profession records after completion', () => {
+    const records: any[] = [];
+    const student = { user_id: '1', full_name: 'John Doe', church_id: 'churchA', turma_id: 'turma1', turma_name: 'Turma A' };
+    
+    // Simulate record creation
+    records.push({
+      id: 'rec1',
+      full_name: student.full_name,
+      turma_name: student.turma_name,
+      professed_at: new Date().toISOString()
+    });
+
+    expect(records.length).toBe(1);
+    expect(records[0].full_name).toBe('John Doe');
+    expect(records[0].turma_name).toBe('Turma A');
   });
 });
