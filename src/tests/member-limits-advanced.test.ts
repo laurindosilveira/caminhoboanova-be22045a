@@ -78,4 +78,22 @@ describe('Advanced Member Limit Logic & Realtime Simulation', () => {
     const currentTotal = 9999;
     expect(simulateMemberLimitCheck(currentTotal, limit)).toBe(true);
   });
+
+  it('should inactivate user and free up spot after Profession of Faith', () => {
+    const limit = 50;
+    const mockProfiles = [
+      { user_id: '1', church_id: 'churchA', is_active: true },
+      { user_id: '2', church_id: 'churchA', is_active: true },
+    ];
+
+    const currentTotalActive = mockProfiles.filter(p => p.church_id === 'churchA' && p.is_active).length;
+    expect(currentTotalActive).toBe(2);
+
+    // Simulate profession of faith (inactivation)
+    mockProfiles[0].is_active = false;
+    
+    const newTotalActive = mockProfiles.filter(p => p.church_id === 'churchA' && p.is_active).length;
+    expect(newTotalActive).toBe(1);
+    expect(newTotalActive < limit).toBe(true); // Spot freed
+  });
 });
