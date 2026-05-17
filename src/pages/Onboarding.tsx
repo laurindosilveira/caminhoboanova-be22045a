@@ -200,7 +200,14 @@ export default function Onboarding() {
   const planInfo = STRIPE_PLANS[recommendedPlan];
   const planDetail = PLAN_DETAILS[recommendedPlan];
 
-  const handleCheckout = useCallback(async (selectedPlan: "comunidade" | "crescimento" | "pastoral") => {
+  const handleConfirmPlan = (planKey: "comunidade" | "crescimento" | "pastoral") => {
+    setSelectedPlanKey(planKey);
+    setShowPlanSummary(true);
+  };
+
+  const handleCheckout = useCallback(async () => {
+    if (!selectedPlanKey) return;
+    const selectedPlan = selectedPlanKey;
     const planInfo = STRIPE_PLANS[selectedPlan];
     const priceId = planInfo.price_id;
     setCheckoutLoading(true);
