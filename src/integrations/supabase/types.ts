@@ -3462,6 +3462,10 @@ export type Database = {
         }[]
       }
       get_auth_church_id: { Args: never; Returns: string }
+      get_church_member_count: {
+        Args: { p_church_id: string }
+        Returns: number
+      }
       get_community_area: {
         Args: { _community: Database["public"]["Enums"]["community_name"] }
         Returns: Database["public"]["Enums"]["area_name"]
