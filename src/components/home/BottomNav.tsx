@@ -1,6 +1,8 @@
-import { Home, Trophy, Calendar, Users, User, Heart, Music, ChevronDown, ChevronUp } from "lucide-react";
+import { Home, Trophy, Calendar, Users, User, Heart, Music, ChevronDown, ChevronUp, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 export type Tab = "jornada" | "conquistas" | "agenda" | "comunidade" | "perfil" | "discipulado" | "adoracao";
 
@@ -20,6 +22,8 @@ const tabs = [
 ];
 
 export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const handleTabClick = (tab: Tab) => {
