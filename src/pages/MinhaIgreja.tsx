@@ -247,8 +247,16 @@ export default function MinhaIgreja() {
         </button>
       </div>
 
-      {/* Subscription Status */}
-      <div className="px-5 mb-6 space-y-4">
+      {/* Content Tabs */}
+      <div className="px-5 mb-6">
+        <Tabs defaultValue="status" className="w-full">
+          <TabsList className="grid grid-cols-2 mb-4">
+            <TabsTrigger value="status">Plano & Status</TabsTrigger>
+            <TabsTrigger value="branding">Customização</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="status" className="space-y-4">
+            {/* Subscription Status */}
         {subData?.subscribed && subData.subscription_status === 'trial' && subData.subscription_end && (
           <div className="bg-primary/10 border border-primary/30 rounded-2xl p-4 flex items-start gap-3 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-1">
