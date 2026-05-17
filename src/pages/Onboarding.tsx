@@ -261,7 +261,7 @@ export default function Onboarding() {
     } finally {
       setCheckoutLoading(false);
     }
-  }, [church, pastor, community, questionnaire]);
+  }, [church, pastor, community, questionnaire, selectedPlanKey]);
 
   // ─── Field helpers ─────────────────────────────────────
   const inputClass = "bg-card border-border focus:border-primary";
