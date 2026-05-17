@@ -519,7 +519,7 @@ function TurmaSelector({
               <p className="text-primary-foreground/60 font-inter text-xs">
                 {isSuper ? "Super Administrador" : "DISCIPULADOR"}
               </p>
-              <h1 className="font-montserrat font-black text-primary-foreground text-lg uppercase tracking-tight">SALA DO LIDER</h1>
+              <h1 className="font-montserrat font-black text-primary-foreground text-lg uppercase tracking-tight">CAMINHO DO DISCIPULADO</h1>
               {selectedChurchName && (
                 <p className="text-primary-foreground/70 font-inter text-[11px] mt-0.5">{selectedChurchName}</p>
               )}
