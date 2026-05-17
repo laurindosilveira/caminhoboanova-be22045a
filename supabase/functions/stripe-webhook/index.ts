@@ -12,14 +12,12 @@ const log = (step: string, details?: unknown) => {
 };
 
 const planMemberLimit = (plan: string): number | null => {
-  if (plan === "comunidade") return 100;
-  if (plan === "crescimento") return 250;
+  if (plan?.toLowerCase().includes("comunidade")) return 100;
+  if (plan?.toLowerCase().includes("crescimento")) return 250;
   return null; // pastoral = unlimited
 };
 
-// Map a Stripe price/product to one of our plans (fallback to stored recommended_plan).
 const stripeStatusToInternal = (status: string): string => {
-  // Stripe statuses: trialing, active, past_due, canceled, unpaid, incomplete, incomplete_expired, paused
   switch (status) {
     case "trialing": return "trial";
     case "active": return "active";
@@ -50,7 +48,6 @@ serve(async (req) => {
 
   let event: Stripe.Event;
   try {
-    // In Deno, constructEventAsync is REQUIRED (uses Web Crypto API).
     event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -65,21 +62,38 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
   );
 
+  // 0. Idempotency Check
+  const { data: existingLog } = await supabaseAdmin
+    .from("stripe_webhook_logs")
+    .select("id")
+    .eq("event_id", event.id)
+    .single();
+
+  if (existingLog) {
+    log("Duplicate event ignored", { eventId: event.id });
+    return new Response(JSON.stringify({ received: true, duplicate: true }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200,
+    });
+  }
+
+  let churchSubId: string | null = null;
+
   try {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
-        const subscriptionId = session.metadata?.subscriptionId;
+        churchSubId = session.metadata?.subscriptionId as string;
 
-        if (!subscriptionId) {
-          log("No subscriptionId in metadata, skipping provisioning");
+        if (!churchSubId) {
+          log("No subscriptionId in metadata");
           break;
         }
 
         const { data: subData, error: subError } = await supabaseAdmin
           .from("church_subscriptions")
           .select("*")
-          .eq("id", subscriptionId)
+          .eq("id", churchSubId)
           .single();
 
         if (subError || !subData) {
@@ -87,7 +101,7 @@ serve(async (req) => {
           break;
         }
 
-        // 1. Create or reuse the Church
+        // 1. Provision Church
         let churchId = (subData as any).church_id as string | null;
         if (!churchId) {
           const baseSlug = subData.church_name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "");
@@ -106,20 +120,27 @@ serve(async (req) => {
           churchId = churchData?.id ?? null;
         }
 
-        // 2. Determine status from subscription (trialing vs active)
-        let internalStatus = "active";
-        let trialEndsAt: string | null = null;
-        if (session.subscription) {
-          try {
-            const sub = await stripe.subscriptions.retrieve(session.subscription as string);
-            internalStatus = stripeStatusToInternal(sub.status);
-            trialEndsAt = sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null;
-          } catch (e) {
-            log("Could not retrieve subscription", { e: String(e) });
+        // 2. Provision Admin Profile (Pastor)
+        if (subData.pastor_email && churchId) {
+          const { data: userData } = await supabaseAdmin.auth.admin.getUserByEmail(subData.pastor_email);
+          if (userData?.user) {
+            await supabaseAdmin.from("profiles").update({ 
+              church_id: churchId, role: "admin", enrollment_status: "approved" 
+            }).eq("user_id", userData.user.id);
+            await supabaseAdmin.from("user_roles").upsert({ 
+              user_id: userData.user.id, role: "admin", church_id: churchId 
+            }, { onConflict: "user_id,role" });
           }
         }
 
-        const memberLimit = planMemberLimit(subData.recommended_plan);
+        // 3. Update Status
+        let internalStatus = "active";
+        let trialEndsAt: string | null = null;
+        if (session.subscription) {
+          const sub = await stripe.subscriptions.retrieve(session.subscription as string);
+          internalStatus = stripeStatusToInternal(sub.status);
+          trialEndsAt = sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null;
+        }
 
         await supabaseAdmin
           .from("church_subscriptions")
@@ -128,107 +149,112 @@ serve(async (req) => {
             stripe_subscription_id: session.subscription as string,
             subscription_status: internalStatus,
             church_id: churchId,
-            member_limit: memberLimit,
+            member_limit: planMemberLimit(subData.recommended_plan),
             trial_ends_at: trialEndsAt,
+            last_webhook_event_id: event.id
           })
-          .eq("id", subscriptionId);
-
-        log("Church activated", { name: subData.church_name, status: internalStatus });
-
-        // 3. Provision Admin Profile (Pastor) if user already exists
-        if (subData.pastor_email) {
-          log("Looking for pastor user", { email: subData.pastor_email });
-          const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserByEmail(subData.pastor_email);
-          
-          if (userData?.user && !userError) {
-            log("Found existing pastor user, provisioning admin role", { userId: userData.user.id });
-            
-            // Link profile to church and set role
-            const { error: profileError } = await supabaseAdmin
-              .from("profiles")
-              .update({ 
-                church_id: churchId,
-                role: "admin",
-                enrollment_status: "approved"
-              })
-              .eq("user_id", userData.user.id);
-
-            if (profileError) log("Error updating profile", { profileError });
-
-            // Ensure role is in user_roles table
-            const { error: roleError } = await supabaseAdmin
-              .from("user_roles")
-              .upsert({ 
-                user_id: userData.user.id, 
-                role: "admin",
-                church_id: churchId
-              }, { onConflict: "user_id,role" });
-            
-            if (roleError) log("Error updating user_roles", { roleError });
-          } else {
-            log("Pastor user not found yet or error", { error: userError?.message });
-          }
-        }
+          .eq("id", churchSubId);
         break;
       }
 
       case "customer.subscription.created":
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
-        const internalStatus = stripeStatusToInternal(subscription.status);
-        const { error } = await supabaseAdmin
+        const status = stripeStatusToInternal(subscription.status);
+        
+        // Find church_subscription by stripe id
+        const { data: sub } = await supabaseAdmin
           .from("church_subscriptions")
-          .update({
-            subscription_status: internalStatus,
-            trial_ends_at: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
-          })
-          .eq("stripe_subscription_id", subscription.id);
-        if (error) log("Update error", { error });
-        log("Subscription updated", { id: subscription.id, status: internalStatus });
+          .select("id, recommended_plan")
+          .eq("stripe_subscription_id", subscription.id)
+          .single();
+
+        if (sub) {
+          churchSubId = sub.id;
+          await supabaseAdmin
+            .from("church_subscriptions")
+            .update({
+              subscription_status: status,
+              trial_ends_at: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+              member_limit: planMemberLimit(sub.recommended_plan),
+              last_webhook_event_id: event.id
+            })
+            .eq("id", sub.id);
+        }
         break;
       }
 
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
-        await supabaseAdmin
+        const { data: sub } = await supabaseAdmin
           .from("church_subscriptions")
-          .update({ subscription_status: "canceled" })
-          .eq("stripe_subscription_id", subscription.id);
-        log("Subscription canceled", { id: subscription.id });
+          .select("id")
+          .eq("stripe_subscription_id", subscription.id)
+          .single();
+
+        if (sub) {
+          churchSubId = sub.id;
+          await supabaseAdmin
+            .from("church_subscriptions")
+            .update({ subscription_status: "canceled", last_webhook_event_id: event.id })
+            .eq("id", sub.id);
+        }
         break;
       }
 
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
-        const subId = (invoice as any).subscription as string | null;
+        const subId = invoice.subscription as string;
         if (subId) {
-          await supabaseAdmin
+          const { data: sub } = await supabaseAdmin
             .from("church_subscriptions")
-            .update({ subscription_status: "past_due" })
-            .eq("stripe_subscription_id", subId);
-          log("Payment failed -> past_due", { subId });
+            .select("id")
+            .eq("stripe_subscription_id", subId)
+            .single();
+          if (sub) {
+            churchSubId = sub.id;
+            await supabaseAdmin
+              .from("church_subscriptions")
+              .update({ subscription_status: "past_due", last_webhook_event_id: event.id })
+              .eq("id", sub.id);
+          }
         }
         break;
       }
 
       case "invoice.payment_succeeded": {
         const invoice = event.data.object as Stripe.Invoice;
-        const subId = (invoice as any).subscription as string | null;
+        const subId = invoice.subscription as string;
         if (subId) {
-          // Re-activate if it was past_due
-          await supabaseAdmin
+          const { data: sub } = await supabaseAdmin
             .from("church_subscriptions")
-            .update({ subscription_status: "active" })
+            .select("id")
             .eq("stripe_subscription_id", subId)
-            .in("subscription_status", ["past_due", "unpaid"]);
-          log("Payment succeeded", { subId });
+            .single();
+          if (sub) {
+            churchSubId = sub.id;
+            await supabaseAdmin
+              .from("church_subscriptions")
+              .update({ 
+                subscription_status: "active", 
+                last_webhook_event_id: event.id 
+              })
+              .eq("id", sub.id)
+              .in("subscription_status", ["past_due", "unpaid"]);
+          }
         }
         break;
       }
-
-      default:
-        log("Unhandled event type", { type: event.type });
     }
+
+    // 4. Log Audit
+    await supabaseAdmin.from("stripe_webhook_logs").insert({
+      event_id: event.id,
+      event_type: event.type,
+      payload: event,
+      church_subscription_id: churchSubId,
+      status: "processed"
+    });
 
     return new Response(JSON.stringify({ received: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -237,6 +263,17 @@ serve(async (req) => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log("ERROR processing webhook", { error: msg });
+    
+    // Log failure
+    await supabaseAdmin.from("stripe_webhook_logs").insert({
+      event_id: event.id,
+      event_type: event.type,
+      payload: event,
+      church_subscription_id: churchSubId,
+      status: "failed",
+      error_message: msg
+    }).select();
+
     return new Response(JSON.stringify({ error: msg }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
