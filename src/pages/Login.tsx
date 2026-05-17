@@ -125,6 +125,15 @@ export default function Login() {
 
     if (authError) {
       const msg = authError.message?.toLowerCase() || "";
+      
+      // Log failure
+      await supabase.rpc('log_login_event', {
+        p_email: email,
+        p_method: 'password',
+        p_status: 'failure',
+        p_details: { error: authError.message }
+      });
+
       if (msg.includes("invalid login credentials")) {
         setError("Email ou senha incorretos. Verifique seus dados e tente novamente.");
       } else if (msg.includes("email not confirmed")) {
