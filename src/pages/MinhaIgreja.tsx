@@ -249,42 +249,76 @@ export default function MinhaIgreja() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="font-montserrat text-lg flex items-center gap-2">
-                    <CreditCard className="w-5 h-5 text-primary" />
-                    Assinatura
+                    <ShieldCheck className="w-5 h-5 text-primary" />
+                    Plano Ativo
                   </CardTitle>
                   <Badge variant={subData?.subscription_status === 'active' ? 'default' : 'secondary'} className="font-semibold">
                     {subData?.subscription_status === 'active' ? 'Ativa' : 'Pendente'}
                   </Badge>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-muted/30 border border-border">
+              <CardContent className="space-y-5">
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/30 border border-border">
                   <div className="flex items-center gap-3">
-                    <Church className="w-5 h-5 text-primary" />
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <Church className="w-5 h-5 text-primary" />
+                    </div>
                     <div>
                       <p className="text-[10px] text-muted-foreground uppercase font-bold leading-none mb-1">Plano Atual</p>
                       <p className="font-montserrat font-bold text-base text-foreground">{planInfo?.name || "Personalizado"}</p>
                     </div>
                   </div>
+                  <div className="text-right">
+                    <p className="font-montserrat font-bold text-lg text-primary leading-none">{planInfo?.price || "--"}</p>
+                    <p className="text-[9px] text-muted-foreground font-inter uppercase font-bold tracking-wider">{planInfo?.period || ""}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2.5">
+                  {activeFeatures.map((feat, i) => (
+                    <div key={i} className="flex items-center justify-between px-3 py-2 rounded-xl bg-card border border-border/50">
+                      <div className="flex items-center gap-2">
+                        {feat.active ? (
+                          <CheckCircle2 className="w-4 h-4 text-brand-green" />
+                        ) : (
+                          <XCircle className="w-4 h-4 text-muted-foreground/30" />
+                        )}
+                        <span className={`text-xs font-inter ${feat.active ? 'text-foreground font-medium' : 'text-muted-foreground/50'}`}>
+                          {feat.label}
+                        </span>
+                      </div>
+                      {feat.value && (
+                        <Badge variant="secondary" className="text-[9px] font-bold">{feat.value}</Badge>
+                      )}
+                      {!feat.active && (
+                        <Zap className="w-3.5 h-3.5 text-primary/40" />
+                      )}
+                    </div>
+                  ))}
                 </div>
 
                 {memberStats && (
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs font-inter">
-                      <span className="text-muted-foreground">Membros utilizados</span>
-                      <span className="font-bold">{memberStats.current} / {memberStats.limit || '∞'}</span>
+                  <div className="space-y-2 pt-2">
+                    <div className="flex justify-between text-[11px] font-inter uppercase font-bold tracking-wider">
+                      <span className="text-muted-foreground">Uso de Membros</span>
+                      <span className="text-foreground">{memberStats.current} / {memberStats.limit || '∞'}</span>
                     </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div className="h-full bg-primary" style={{ width: `${memberStats.limit ? Math.min(100, (memberStats.current / memberStats.limit) * 100) : 100}%` }} />
+                    <div className="h-2.5 bg-muted rounded-full overflow-hidden border border-border/50">
+                      <div 
+                        className={`h-full transition-all duration-500 ${memberStats.limit && memberStats.current / memberStats.limit > 0.9 ? 'bg-destructive' : 'bg-primary'}`} 
+                        style={{ width: `${memberStats.limit ? Math.min(100, (memberStats.current / memberStats.limit) * 100) : 100}%` }} 
+                      />
                     </div>
                   </div>
                 )}
 
                 {!isMembro && (
-                  <Button onClick={() => handleManageSubscription()} disabled={portalLoading} variant="outline" className="w-full h-11 rounded-xl">
-                    {portalLoading ? "Abrindo..." : "Gerenciar Assinatura"}
-                    <ExternalLink className="w-4 h-4 ml-2" />
-                  </Button>
+                  <div className="pt-2">
+                    <Button onClick={() => handleManageSubscription()} disabled={portalLoading} variant="default" className="w-full h-11 rounded-xl shadow-md font-bold">
+                      {portalLoading ? "Processando..." : "Gerenciar no Stripe"}
+                      <ExternalLink className="w-4 h-4 ml-2" />
+                    </Button>
+                  </div>
                 )}
               </CardContent>
             </Card>
