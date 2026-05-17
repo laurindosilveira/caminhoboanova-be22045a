@@ -229,7 +229,7 @@ export default function Apresentacao() {
             <a href="#funcionalidades" className="hover:text-primary transition-colors">Funcionalidades</a>
             <a href="#beneficios" className="hover:text-primary transition-colors">Benefícios</a>
             <a href="#planos" className="hover:text-primary transition-colors">Planos</a>
-            <a href="/area-membros" className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white bg-primary hover:bg-primary/90 transition-all">Área de membros</a>
+            <a href="/login" className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white bg-primary hover:bg-primary/90 transition-all">Entrar</a>
           </div>
           <div className="flex items-center gap-3">
             <a href="#planos" className="hidden sm:inline-flex px-5 py-2.5 rounded-full text-primary-foreground text-sm font-semibold hover:shadow-lg transition-all" style={{ background: "var(--gradient-hero)" }}>
@@ -266,7 +266,7 @@ export default function Apresentacao() {
                   { href: "#como-funciona", icon: Calendar, label: "Como funciona" },
                   { href: "#planos", icon: Star, label: "Planos" },
                   { href: "#faq", icon: MessageCircle, label: "Perguntas frequentes" },
-                  { href: "/area-membros", icon: Shield, label: "Área de membros" },
+                  { href: "/login", icon: Shield, label: "Entrar no App" },
                   { href: WHATSAPP_LINK, icon: Smartphone, label: "Contato", external: true },
                 ].map((item) => (
                   <a
