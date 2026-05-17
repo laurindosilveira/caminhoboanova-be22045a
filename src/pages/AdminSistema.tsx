@@ -211,6 +211,7 @@ export default function AdminSistema() {
           <TabsList className="h-auto flex-wrap justify-start gap-2 rounded-2xl bg-muted/60 p-2">
             <TabsTrigger value="igrejas" className="rounded-xl px-4 py-2">Igrejas</TabsTrigger>
             <TabsTrigger value="atualizacoes" className="rounded-xl px-4 py-2">Atualizacoes do app</TabsTrigger>
+            <TabsTrigger value="webhook-logs" className="rounded-xl px-4 py-2">Webhook Logs</TabsTrigger>
             <TabsTrigger value="backup" className="rounded-xl px-4 py-2">Backup e migracao</TabsTrigger>
           </TabsList>
 
