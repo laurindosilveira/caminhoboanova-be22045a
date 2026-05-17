@@ -37,7 +37,7 @@ interface AuditLog {
 }
 
 export default function MinhaIgreja() {
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, role, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [subData, setSubData] = useState<SubData | null>(null);
   const [memberStats, setMemberStats] = useState<{ current: number; limit: number | null } | null>(null);
@@ -147,7 +147,7 @@ export default function MinhaIgreja() {
         </button>
         <div>
           <h1 className="font-montserrat font-black text-xl text-foreground">⛪ {(profile as any)?.churches?.name || profile?.community || "Minha Igreja"}</h1>
-          <p className="text-muted-foreground text-xs font-inter">Informações e gestão da igreja</p>
+          <p className="text-muted-foreground text-[10px] font-inter uppercase font-bold tracking-wider">{role === 'admin' ? 'Administrador' : 'Líder de Área'}</p>
         </div>
         <button onClick={fetchSubscription} aria-label="Atualizar status da assinatura" className="ml-auto w-10 h-10 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors">
           <RefreshCw className="w-4 h-4 text-muted-foreground" />
