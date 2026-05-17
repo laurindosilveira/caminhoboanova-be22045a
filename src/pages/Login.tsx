@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Eye, EyeOff, Mail, Lock, Flame, MessageCircle } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, Flame, MessageCircle, Fingerprint } from "lucide-react";
 import { z } from "zod";
 
 const loginSchema = z.object({
@@ -19,6 +19,48 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  async function handleBiometricLogin() {
+    setError(null);
+    setLoading(true);
+    try {
+      // @ts-ignore - experimental API
+      const { data, error } = await supabase.auth.signInWithPasskey();
+      
+      if (error) {
+        // Only show error if it's not the user cancelling
+        if (error.message?.toLowerCase().includes("cancelled") || error.message?.toLowerCase().includes("user aborted")) {
+          setLoading(false);
+          return;
+        }
+        throw error;
+      }
+
+      if (data?.user) {
+        handlePostLogin(data.user);
+      }
+    } catch (err: any) {
+      console.error("Biometric login error:", err);
+      setError("Erro ao entrar com biometria: " + (err.message || "Tente novamente."));
+      setLoading(false);
+    }
+  }
+
+  async function handlePostLogin(user: any) {
+    // Set app active flag for redirection logic
+    localStorage.setItem('caminho_app_active', 'true');
+    
+    const [{ data: isAdmin }, { data: isLider }] = await Promise.all([
+      supabase.rpc("has_role", { _user_id: user.id, _role: "admin" }),
+      supabase.rpc("has_role", { _user_id: user.id, _role: "lider" }),
+    ]);
+
+    if (isAdmin || isLider) {
+      navigate("/admin");
+    } else {
+      navigate("/home");
+    }
+  }
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -31,18 +73,14 @@ export default function Login() {
 
     setLoading(true);
 
-    // First check if user exists by trying to sign in
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email: parsed.data.email,
       password: parsed.data.password,
     });
 
     if (authError) {
-      // Differentiate error types
       const msg = authError.message?.toLowerCase() || "";
       if (msg.includes("invalid login credentials")) {
-        // Check if user exists by attempting password reset (won't send if no user)
-        // Supabase doesn't differentiate natively, but we can provide better UX
         setError("Email ou senha incorretos. Verifique seus dados e tente novamente.");
       } else if (msg.includes("email not confirmed")) {
         setError("Seu email ainda não foi confirmado. Verifique sua caixa de entrada.");
@@ -55,21 +93,8 @@ export default function Login() {
       return;
     }
 
-    // Auto-redirect based on role
     if (authData.user) {
-      // Set app active flag for redirection logic
-      localStorage.setItem('caminho_app_active', 'true');
-      
-      const [{ data: isAdmin }, { data: isLider }] = await Promise.all([
-        supabase.rpc("has_role", { _user_id: authData.user.id, _role: "admin" }),
-        supabase.rpc("has_role", { _user_id: authData.user.id, _role: "lider" }),
-      ]);
-
-      if (isAdmin || isLider) {
-        navigate("/admin");
-      } else {
-        navigate("/home");
-      }
+      handlePostLogin(authData.user);
     }
   }
 
@@ -160,15 +185,31 @@ export default function Login() {
             )}
 
             {/* Submit */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3.5 rounded-xl font-montserrat font-bold text-primary-foreground text-base transition-all active:scale-95 disabled:opacity-60 shadow-md"
-              style={{ background: "var(--gradient-orange)" }}
-            >
-              {loading ? "Entrando..." : "Entrar na Jornada"}
-            </button>
-          </form>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3.5 rounded-xl font-montserrat font-bold text-primary-foreground text-base transition-all active:scale-95 disabled:opacity-60 shadow-md"
+                style={{ background: "var(--gradient-orange)" }}
+              >
+                {loading ? "Entrando..." : "Entrar na Jornada"}
+              </button>
+
+              <div className="relative flex items-center gap-3 my-4">
+                <div className="h-[1px] flex-1 bg-border"></div>
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">ou</span>
+                <div className="h-[1px] flex-1 bg-border"></div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleBiometricLogin}
+                disabled={loading}
+                className="w-full py-3 rounded-xl border-2 border-primary/20 bg-primary/5 font-montserrat font-bold text-primary text-sm flex items-center justify-center gap-2 hover:bg-primary/10 transition-all active:scale-95 disabled:opacity-50"
+              >
+                <Fingerprint className="w-5 h-5" />
+                Entrar com Biometria
+              </button>
+            </form>
 
           <div className="mt-6 text-center">
             <p className="text-muted-foreground font-inter text-sm">
