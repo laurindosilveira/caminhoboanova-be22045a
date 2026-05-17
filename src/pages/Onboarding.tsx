@@ -479,10 +479,10 @@ export default function Onboarding() {
       </div>
 
       {/* Footer navigation */}
-      {currentStep.key !== "recommendation" && (
+      {currentStep.key !== "plans" && (
         <div className="sticky bottom-0 bg-background border-t border-border">
           <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
-            <Button variant="ghost" onClick={goBack} disabled={step === 0} className="gap-2">
+            <Button variant="ghost" onClick={goBack} disabled={step === 0} className="gap-2 text-sm">
               <ArrowLeft className="w-4 h-4" /> Voltar
             </Button>
             <span className="text-xs text-muted-foreground font-inter">
@@ -491,10 +491,10 @@ export default function Onboarding() {
             <Button
               onClick={goNext}
               disabled={!canNext()}
-              className="gap-2 text-primary-foreground"
+              className="gap-2 text-primary-foreground font-bold"
               style={{ background: "var(--gradient-hero)" }}
             >
-              {step === STEPS.length - 2 ? "Ver recomendação" : "Próximo"} <ArrowRight className="w-4 h-4" />
+              {step === STEPS.length - 2 ? "Escolher plano" : "Próximo"} <ArrowRight className="w-4 h-4" />
             </Button>
           </div>
         </div>
