@@ -6,7 +6,7 @@ import { STRIPE_PLANS, getPlanByProductId, type PlanKey } from "@/lib/stripePlan
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, CreditCard, FileText, ExternalLink, RefreshCw, Church, Download, Calendar, CheckCircle2, XCircle } from "lucide-react";
+import { ArrowLeft, CreditCard, FileText, ExternalLink, RefreshCw, Church, Download, Calendar, CheckCircle2, XCircle, ShieldAlert, Clock } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 interface Invoice {
@@ -23,6 +23,7 @@ interface Invoice {
 interface SubData {
   subscribed: boolean;
   product_id: string | null;
+  subscription_status: string | null;
   subscription_end: string | null;
   invoices: Invoice[];
 }
@@ -33,6 +34,7 @@ export default function MinhaIgreja() {
   const [subData, setSubData] = useState<SubData | null>(null);
   const [memberStats, setMemberStats] = useState<{ current: number; limit: number | null } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   const fetchSubscription = useCallback(async () => {
     if (!user) return;
@@ -40,7 +42,7 @@ export default function MinhaIgreja() {
     try {
       const [{ data: sData, error: sError }, { data: mCount, error: mError }] = await Promise.all([
         supabase.functions.invoke("check-subscription"),
-        supabase.rpc("get_church_member_count", { p_church_id: profile?.church_id })
+        supabase.rpc("get_church_member_count", { p_church_id: profile?.church_id as any })
       ]);
 
       if (sError) throw sError;
