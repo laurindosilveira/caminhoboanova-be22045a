@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
@@ -19,17 +21,26 @@ type Turma = {
   member_count?: number;
 };
 
+interface ProfessionOfFaithRecord {
+  id: string;
+  full_name: string;
+  turma_name: string;
+  professed_at: string;
+}
+
 type Props = {
   defaultArea?: string;
   defaultChurchId?: string | null;
+  onTurmaUpdated?: () => void;
 };
 
-export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: Props) {
+export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, onTurmaUpdated }: Props) {
   const { profile } = useAuth();
   const { effectiveArea } = useAreaSwitch();
   const { toast } = useToast();
   const [turma, setTurma] = useState<Turma | null>(null);
   const [archivedTurmas, setArchivedTurmas] = useState<Turma[]>([]);
+  const [professionRecords, setProfessionRecords] = useState<ProfessionOfFaithRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [archiving, setArchiving] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
@@ -56,14 +67,21 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
   async function fetchTurma() {
     setLoading(true);
 
+    const churchId = defaultChurchId ?? profile?.church_id ?? "";
+
     if (profile?.turma_id) {
-      const [{ data: turmaData }, { data: allTurmas }] = await Promise.all([
+      const [{ data: turmaData }, { data: allTurmas }, { data: records }] = await Promise.all([
         supabase.from("turmas").select("*").eq("id", profile.turma_id).single(),
-        (supabase.from as any)("turmas")
+        supabase.from("turmas")
           .select("*")
           .eq("is_active", false)
-          .eq("church_id", defaultChurchId ?? profile?.church_id ?? "")
+          .eq("church_id", churchId)
           .order("year", { ascending: false }),
+        supabase.from("profession_of_faith_records")
+          .select("*")
+          .eq("church_id", churchId)
+          .order("professed_at", { ascending: false })
+          .limit(20)
       ]);
 
       if (turmaData) {
@@ -71,11 +89,13 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
         setTurma({ ...turmaData, member_count: profiles?.length ?? 0 });
       }
 
+      setProfessionRecords(records || []);
+
       const myArea = defaultArea || effectiveArea || profile?.area;
       const filtered = (allTurmas ?? []).filter(t => t.area === myArea);
-      const { data: allProfiles } = await (supabase.from as any)("profiles")
+      const { data: allProfiles } = await supabase.from("profiles")
         .select("turma_id")
-        .eq("church_id", defaultChurchId ?? profile?.church_id ?? "");
+        .eq("church_id", churchId);
       const countMap: Record<string, number> = {};
       (allProfiles ?? []).forEach(p => {
         if (p.turma_id) countMap[p.turma_id] = (countMap[p.turma_id] ?? 0) + 1;
@@ -84,6 +104,12 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
     } else {
       setTurma(null);
       setArchivedTurmas([]);
+      const { data: records } = await supabase.from("profession_of_faith_records")
+        .select("*")
+        .eq("church_id", churchId)
+        .order("professed_at", { ascending: false })
+        .limit(20);
+      setProfessionRecords(records || []);
     }
 
     setLoading(false);
@@ -116,7 +142,6 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
       return;
     }
 
-    // Link this leader to the newly created turma
     const { error: profileError } = await supabase
       .from("profiles")
       .update({ turma_id: newTurma.id } as any)
@@ -131,8 +156,6 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
     setCreateForm({ name: "", description: "" });
     setShowCreate(false);
     setCreating(false);
-
-    // Reload profile so turma_id is updated
     window.location.reload();
   }
 
@@ -162,52 +185,43 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
     if (!turma) return;
     setArchiving(true);
 
-    const { data: turmaProfiles } = await supabase
-      .from("profiles")
-      .select("user_id, confirmation_year")
-      .eq("turma_id", turma.id);
+    try {
+      const { data: turmaProfiles } = await supabase
+        .from("profiles")
+        .select("user_id, confirmation_year")
+        .eq("turma_id", turma.id);
 
-    const allProfiles = turmaProfiles ?? [];
-    const secondYearUsers = allProfiles.filter(p => (p as any).confirmation_year === 2);
+      const allProfiles = turmaProfiles ?? [];
+      const secondYearUsers = allProfiles.filter(p => (p as any).confirmation_year === 2);
 
-    if (secondYearUsers.length === 0) {
-      toast({ title: "Nenhum aluno do 2º ano", description: "Não há alunos do 2º ano para confirmar nesta turma.", variant: "destructive" });
+      if (secondYearUsers.length === 0) {
+        toast({ title: "Nenhum aluno do 2º ano", description: "Não há alunos do 2º ano para realizar a profissão de fé nesta turma.", variant: "destructive" });
+        setArchiving(false);
+        setConfirmArchive(false);
+        return;
+      }
+
+      for (const student of secondYearUsers) {
+        await supabase.rpc('process_profession_of_faith', { 
+          p_user_id: student.user_id, 
+          p_turma_id: turma.id 
+        });
+      }
+
+      const firstYearCount = allProfiles.length - secondYearUsers.length;
+      toast({
+        title: "Sucesso!",
+        description: `${secondYearUsers.length} aluno(s) realizaram a profissão de fé e foram arquivados (vagas liberadas). ${firstYearCount} aluno(s) do 1º ano permanecem.`
+      });
+
+      fetchTurma();
+      if (onTurmaUpdated) onTurmaUpdated();
       setArchiving(false);
       setConfirmArchive(false);
-      return;
-    }
-
-    const { data: user } = await supabase.auth.getUser();
-    const archiveName = `${turma.name} — CONFIRMADOS`;
-    const { data: newTurma, error: createError } = await supabase.from("turmas").insert({
-      name: archiveName,
-      area: turma.area,
-      year: turma.year,
-      description: `Grupo confirmado em ${new Date().toLocaleDateString("pt-BR")}. ${secondYearUsers.length} confirmando(s).`,
-      is_active: false,
-      church_id: turma.church_id ?? defaultChurchId ?? profile?.church_id ?? null,
-      created_by: user.user?.id,
-    }).select("id").single();
-
-    if (createError || !newTurma) {
-      toast({ title: "Erro ao criar arquivo", description: createError?.message ?? "Erro desconhecido", variant: "destructive" });
+    } catch (err: any) {
+      toast({ title: "Erro ao processar", description: err.message, variant: "destructive" });
       setArchiving(false);
-      setConfirmArchive(false);
-      return;
     }
-
-    await supabase.from("profiles").update({ turma_id: newTurma.id } as any)
-      .in("user_id", secondYearUsers.map(p => p.user_id));
-
-    const firstYearCount = allProfiles.length - secondYearUsers.length;
-    toast({
-      title: "Grupo confirmado!",
-      description: `"${archiveName}" criado com ${secondYearUsers.length} confirmando(s). ${firstYearCount} aluno(s) do 1º ano permanecem.`
-    });
-
-    fetchTurma();
-    setArchiving(false);
-    setConfirmArchive(false);
   }
 
   async function handleResetJourney() {
@@ -360,6 +374,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
   // ── Has turma: show full management ─────────────────────────────────────────
   return (
     <div className="space-y-4">
+
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
@@ -367,7 +382,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
         </div>
         <div>
           <h2 className="font-montserrat font-black text-foreground text-base">CAMINHO</h2>
-          <p className="text-muted-foreground text-xs font-inter">Confirmação e reinício de jornada</p>
+          <p className="text-muted-foreground text-xs font-inter">Profissão de Fé e reinício de jornada</p>
         </div>
       </div>
 
@@ -471,7 +486,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
       <Dialog open={confirmArchive} onOpenChange={setConfirmArchive}>
         <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="font-montserrat font-bold text-foreground text-base">Confirmar grupo</DialogTitle>
+            <DialogTitle className="font-montserrat font-bold text-foreground text-base">Profissão de Fé em Grupo</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex items-center gap-3">
@@ -614,6 +629,34 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
               })}
             </div>
           )}
+        </div>
+      )}
+      {/* Profession of Faith Records */}
+      {professionRecords.length > 0 && (
+        <div className="mt-4">
+          <div className="flex items-center gap-2 mb-3">
+            <CheckCircle2 className="w-5 h-5 text-brand-green" />
+            <h3 className="font-montserrat font-bold text-foreground text-sm">Histórico: Professaram a Fé</h3>
+          </div>
+          <Card className="border-border">
+            <CardContent className="p-0 overflow-hidden">
+              <div className="divide-y divide-border">
+                {professionRecords.map((record) => (
+                  <div key={record.id} className="px-4 py-3 flex items-center justify-between gap-3 bg-card/50">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-foreground truncate">{record.full_name}</p>
+                      <p className="text-[10px] text-muted-foreground font-inter">
+                        {record.turma_name} · {new Date(record.professed_at).toLocaleDateString('pt-BR')}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="text-[8px] bg-brand-green/10 text-brand-green border-brand-green/20">
+                      ARQUIVADO
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

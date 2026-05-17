@@ -46,7 +46,7 @@ const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
   { id: "relatorios", label: "Relatórios", icon: FileText },
   { id: "comunicacao", label: "Avisos", icon: MessageSquare },
   { id: "push", label: "Push", icon: Bell },
-  { id: "gerencia", label: "Confirmação", icon: GraduationCap },
+  { id: "gerencia", label: "Profissão de Fé", icon: GraduationCap },
 ];
 
 export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }) {
