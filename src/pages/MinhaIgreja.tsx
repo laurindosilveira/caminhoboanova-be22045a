@@ -119,12 +119,17 @@ export default function MinhaIgreja() {
         'postgres_changes', 
         { event: '*', schema: 'public', table: 'church_subscriptions', filter: `church_id=eq.${profile.church_id}` }, 
         (payload: any) => {
-          // Idempotency: avoid processing same event ID twice
           const eventId = payload.new?.last_webhook_event_id;
           if (eventId && eventId === lastProcessedEvent) return;
           lastProcessedEvent = eventId;
-          
-          console.log("Subscription update received via realtime");
+          fetchSubscription();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles', filter: `church_id=eq.${profile.church_id}` },
+        () => {
+          console.log("Profile change detected, updating member stats");
           fetchSubscription();
         }
       )
