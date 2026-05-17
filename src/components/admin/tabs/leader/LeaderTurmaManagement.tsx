@@ -59,14 +59,21 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
   async function fetchTurma() {
     setLoading(true);
 
+    const churchId = defaultChurchId ?? profile?.church_id ?? "";
+
     if (profile?.turma_id) {
-      const [{ data: turmaData }, { data: allTurmas }] = await Promise.all([
+      const [{ data: turmaData }, { data: allTurmas }, { data: records }] = await Promise.all([
         supabase.from("turmas").select("*").eq("id", profile.turma_id).single(),
-        (supabase.from as any)("turmas")
+        supabase.from("turmas")
           .select("*")
           .eq("is_active", false)
-          .eq("church_id", defaultChurchId ?? profile?.church_id ?? "")
+          .eq("church_id", churchId)
           .order("year", { ascending: false }),
+        supabase.from("profession_of_faith_records")
+          .select("*")
+          .eq("church_id", churchId)
+          .order("professed_at", { ascending: false })
+          .limit(20)
       ]);
 
       if (turmaData) {
@@ -74,11 +81,13 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
         setTurma({ ...turmaData, member_count: profiles?.length ?? 0 });
       }
 
+      setProfessionRecords(records || []);
+
       const myArea = defaultArea || effectiveArea || profile?.area;
       const filtered = (allTurmas ?? []).filter(t => t.area === myArea);
-      const { data: allProfiles } = await (supabase.from as any)("profiles")
+      const { data: allProfiles } = await supabase.from("profiles")
         .select("turma_id")
-        .eq("church_id", defaultChurchId ?? profile?.church_id ?? "");
+        .eq("church_id", churchId);
       const countMap: Record<string, number> = {};
       (allProfiles ?? []).forEach(p => {
         if (p.turma_id) countMap[p.turma_id] = (countMap[p.turma_id] ?? 0) + 1;
@@ -87,6 +96,12 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
     } else {
       setTurma(null);
       setArchivedTurmas([]);
+      const { data: records } = await supabase.from("profession_of_faith_records")
+        .select("*")
+        .eq("church_id", churchId)
+        .order("professed_at", { ascending: false })
+        .limit(20);
+      setProfessionRecords(records || []);
     }
 
     setLoading(false);
