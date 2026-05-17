@@ -330,6 +330,8 @@ export default function Index() {
                       <span className="ml-auto text-muted-foreground text-xs">→</span>
                     </button>
                   </div>
+                )}
+                
                 {/* My Church Link for Admins */}
                 {(role === "admin" || role === "lider") && (
                   <div className="px-5 mt-3">
