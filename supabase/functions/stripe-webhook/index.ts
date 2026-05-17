@@ -21,9 +21,9 @@ const planMemberLimit = (plan: string): number | null => {
 // Update these IDs based on your actual Stripe products
 const productToPlan = (productId: string): string | null => {
   const map: Record<string, string> = {
-    "prod_RcaX6hD3uXhY": "comunidade", // Exemplo
-    "prod_RcaY7iE4vYiZ": "crescimento",
-    "prod_RcaZ8jF5wZjA": "pastoral"
+    "prod_UAICj5dGzPRA0j": "comunidade",
+    "prod_UAICkTjHwlKsgI": "crescimento",
+    "prod_UAIIHa32ACvV60": "pastoral"
   };
   return map[productId] || null;
 };
