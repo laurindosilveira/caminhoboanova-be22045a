@@ -149,7 +149,7 @@ export default function Onboarding() {
       const trialEndsAt = new Date();
       trialEndsAt.setDate(trialEndsAt.getDate() + 30);
 
-      const { error: insertError } = await supabase.from("church_subscriptions" as any).insert({
+      const { data: subscriptionData, error: insertError } = await supabase.from("church_subscriptions").insert({
         church_name: church.name,
         church_address: church.address,
         church_phone: church.phone,
@@ -167,12 +167,18 @@ export default function Onboarding() {
         recommended_plan: recommendedPlan,
         subscription_status: "pending_checkout",
         trial_ends_at: trialEndsAt.toISOString(),
-      });
+      }).select().single();
 
-      if (insertError) console.error("Erro ao salvar dados da igreja:", insertError);
+      if (insertError) {
+        console.error("Erro ao salvar dados da igreja:", insertError);
+        throw insertError;
+      }
 
       const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: { priceId },
+        body: { 
+          priceId,
+          subscriptionId: (subscriptionData as any)?.id
+        },
       });
       if (error) throw error;
       if (data?.url) window.location.href = data.url;
