@@ -24,15 +24,14 @@ export default function AdminSistemaPasswordGate({ children }: { children: React
       }
 
       setAccessState("checking");
-      const { data: authData } = await supabase.auth.getAuthenticatorAssuranceLevel();
-      const isMFA = authData?.currentLevel === 'aal2';
       
-      const { data: isAuthorized, error } = await supabase.rpc("is_authorized_system_admin_v2");
+      const { data: isAuthorized } = await supabase.rpc("is_authorized_system_admin_v2");
       
       if (isMounted) {
         if (isAuthorized === true) {
           setAccessState("allowed");
-        } else if (user.email?.toLowerCase() === 'laurindosilveira@gmail.com' && !isMFA) {
+        } else if (user.email?.toLowerCase() === 'laurindosilveira@gmail.com') {
+          // If the RPC returned false but the email is correct, it means MFA is missing
           setAccessState("mfa_required");
         } else {
           setAccessState("denied");
