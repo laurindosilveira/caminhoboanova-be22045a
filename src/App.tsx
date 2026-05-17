@@ -109,8 +109,13 @@ function RootRedirect() {
 
 function NotFoundRedirect() {
   const { user, loading } = useAuth();
-  if (loading) return null;
-  return <Navigate to="/apresentacao" replace />;
+  if (loading) return <LoadingFallback />;
+  
+  // For unauthenticated visitors or specific cases, always go to presentation
+  if (!user) return <Navigate to="/apresentacao" replace />;
+  
+  // Fallback for logged in users
+  return <Navigate to="/home" replace />;
 }
 
 const LoadingFallback = () => (

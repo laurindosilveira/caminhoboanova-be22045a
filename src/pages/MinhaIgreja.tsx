@@ -37,7 +37,7 @@ interface AuditLog {
 }
 
 export default function MinhaIgreja() {
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, role, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [subData, setSubData] = useState<SubData | null>(null);
   const [memberStats, setMemberStats] = useState<{ current: number; limit: number | null } | null>(null);
@@ -83,9 +83,16 @@ export default function MinhaIgreja() {
   }, [user, profile?.church_id]);
 
   useEffect(() => {
-    if (!authLoading && user) fetchSubscription();
+    if (!authLoading && user) {
+      // Check if user has permission (admin or lider)
+      if (role !== "admin" && role !== "lider") {
+        navigate("/");
+        return;
+      }
+      fetchSubscription();
+    }
     if (!authLoading && !user) navigate("/login");
-  }, [authLoading, user, fetchSubscription, navigate]);
+  }, [authLoading, user, role, fetchSubscription, navigate]);
 
   const planKey = subData?.product_id ? getPlanByProductId(subData.product_id) : null;
   const planInfo = planKey ? STRIPE_PLANS[planKey] : null;
@@ -140,7 +147,7 @@ export default function MinhaIgreja() {
         </button>
         <div>
           <h1 className="font-montserrat font-black text-xl text-foreground">⛪ {(profile as any)?.churches?.name || profile?.community || "Minha Igreja"}</h1>
-          <p className="text-muted-foreground text-xs font-inter">Informações e gestão da igreja</p>
+          <p className="text-muted-foreground text-[10px] font-inter uppercase font-bold tracking-wider">{role === 'admin' ? 'Administrador' : 'Líder de Área'}</p>
         </div>
         <button onClick={fetchSubscription} aria-label="Atualizar status da assinatura" className="ml-auto w-10 h-10 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors">
           <RefreshCw className="w-4 h-4 text-muted-foreground" />
@@ -150,39 +157,47 @@ export default function MinhaIgreja() {
       {/* Subscription Status */}
       <div className="px-5 mb-6 space-y-4">
         {subData?.subscribed && subData.subscription_status === 'trial' && subData.subscription_end && (
-          <div className="bg-primary/10 border border-primary/30 rounded-2xl p-4 flex items-start gap-3">
+          <div className="bg-primary/10 border border-primary/30 rounded-2xl p-4 flex items-start gap-3 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-1">
+               <Badge variant="outline" className="text-[8px] border-primary/20 bg-primary/5">TRIAL</Badge>
+            </div>
             <Clock className="w-5 h-5 text-primary mt-0.5" />
             <div className="flex-1">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="font-montserrat font-bold text-sm text-primary">Período de Teste</p>
-                  <p className="text-xs text-muted-foreground font-inter">
-                    Seu trial vence em {formatDate(subData.subscription_end)}. 
-                    {Math.ceil((new Date(subData.subscription_end).getTime() - Date.now()) / 86400000) <= 5 && 
-                      " Aproveite para configurar tudo e garantir sua vaga!"}
+                  <p className="font-montserrat font-bold text-sm text-primary">Período de Experiência</p>
+                  <p className="text-xs text-muted-foreground font-inter max-w-[200px]">
+                    Sua igreja está no modo demonstração até {formatDate(subData.subscription_end)}.
                   </p>
                 </div>
-                <div className="text-right">
-                  <span className="text-lg font-black text-primary">
+                <div className="text-right bg-white/40 backdrop-blur-sm px-3 py-1.5 rounded-xl border border-primary/10">
+                  <span className="text-xl font-black text-primary block leading-none">
                     {Math.max(0, Math.ceil((new Date(subData.subscription_end).getTime() - Date.now()) / 86400000))}
                   </span>
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold">dias</p>
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold">dias rest.</p>
                 </div>
               </div>
-              <div className="flex gap-2 mt-3">
+              <div className="flex gap-2 mt-4">
                 <Button 
                   onClick={() => handleManageSubscription('portal_opened_for_cancel')} 
+                  disabled={portalLoading}
                   variant="outline" 
                   size="sm" 
-                  className="h-8 text-[10px] font-bold border-destructive/30 text-destructive hover:bg-destructive/5"
+                  className="h-8 text-[10px] font-bold border-destructive/20 text-destructive hover:bg-destructive hover:text-white transition-all px-4"
                 >
                   Cancelar Trial
                 </Button>
                 <Button 
-                  onClick={() => toast({ title: "Banner ocultado", description: "O aviso aparecerá novamente em 24h." })} 
+                  onClick={() => {
+                    const expiry = new Date();
+                    expiry.setHours(expiry.getHours() + 24);
+                    localStorage.setItem(`snooze_trial_${profile?.church_id}`, expiry.toISOString());
+                    toast({ title: "Aviso ocultado", description: "Lembrete adiado por 24 horas." });
+                    fetchSubscription(); // Refresh to hide if we added logic for it
+                  }} 
                   variant="ghost" 
                   size="sm" 
-                  className="h-8 text-[10px] font-bold text-muted-foreground"
+                  className="h-8 text-[10px] font-bold text-muted-foreground hover:bg-muted"
                 >
                   Sonecar por 24h
                 </Button>
@@ -319,19 +334,26 @@ export default function MinhaIgreja() {
               <div className="divide-y divide-border">
                 {auditLogs.map((log) => (
                   <div key={log.id} className="px-4 py-3 flex items-start justify-between gap-3 bg-card/50">
-                    <div>
-                      <p className="text-[11px] font-bold text-foreground uppercase tracking-wider">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-bold text-foreground uppercase tracking-wider truncate">
                         {log.action === 'trial_alert_shown' && 'Aviso de vencimento exibido'}
                         {log.action === 'portal_opened' && 'Portal do cliente acessado'}
                         {log.action === 'portal_opened_for_cancel' && 'Portal acessado para cancelar'}
                         {log.action === 'alert_snoozed' && 'Banner sonecado por 24h'}
-                        {!['trial_alert_shown', 'portal_opened', 'portal_opened_for_cancel', 'alert_snoozed'].includes(log.action) && log.action}
+                        {log.action === 'subscription_created' && 'Assinatura criada'}
+                        {log.action === 'subscription_updated' && 'Assinatura atualizada'}
+                        {log.action === 'invoice_paid' && 'Fatura paga com sucesso'}
+                        {log.action === 'payment_failed' && 'Falha no pagamento'}
+                        {!['trial_alert_shown', 'portal_opened', 'portal_opened_for_cancel', 'alert_snoozed', 'subscription_created', 'subscription_updated', 'invoice_paid', 'payment_failed'].includes(log.action) && log.action}
                       </p>
                       <p className="text-[10px] text-muted-foreground font-inter">
                         {new Date(log.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
-                    <Badge variant="outline" className="text-[9px] bg-muted/30">AUDITORIA</Badge>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge variant="outline" className="text-[8px] bg-muted/30 px-1.5 h-4">AUDITORIA</Badge>
+                      {log.details?.plan && <span className="text-[9px] text-primary font-bold">{log.details.plan}</span>}
+                    </div>
                   </div>
                 ))}
               </div>
