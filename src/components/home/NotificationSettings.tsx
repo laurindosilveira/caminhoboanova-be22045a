@@ -31,6 +31,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import PushTroubleshootHelp from "@/components/home/PushTroubleshootHelp";
 import MyNotificationLogs from "@/components/home/MyNotificationLogs";
+import PasskeySettings from "@/components/auth/PasskeySettings";
 
 type NotifPrefs = {
   devocional: boolean;
