@@ -11,14 +11,51 @@ const log = (step: string, details?: unknown) => {
   console.log(`[STRIPE-WEBHOOK] ${step}${details ? ` ${JSON.stringify(details)}` : ""}`);
 };
 
+const PLAN_FEATURES: Record<string, any> = {
+  comunidade: {
+    maxMembers: 50,
+    advancedExport: false,
+    multiAreaManagement: false,
+    detailedReports: false,
+    customBranding: false,
+  },
+  crescimento: {
+    maxMembers: 200,
+    advancedExport: true,
+    multiAreaManagement: true,
+    detailedReports: true,
+    customBranding: false,
+  },
+  pastoral: {
+    maxMembers: null,
+    advancedExport: true,
+    multiAreaManagement: true,
+    detailedReports: true,
+    customBranding: true,
+  },
+};
+
+const getUnlockedFeatures = (oldPlan: string | null, newPlan: string) => {
+  const oldF = PLAN_FEATURES[oldPlan || ""] || PLAN_FEATURES.comunidade;
+  const newF = PLAN_FEATURES[newPlan];
+  const unlocked = [];
+  const locked = [];
+
+  for (const key in newF) {
+    if (newF[key] === true && oldF[key] === false) unlocked.push(key);
+    if (newF[key] === false && oldF[key] === true) locked.push(key);
+    if (key === 'maxMembers' && newF[key] !== oldF[key]) {
+      unlocked.push(`maxMembers: ${oldF[key]} -> ${newF[key]}`);
+    }
+  }
+  return { unlocked, locked };
+};
+
 const planMemberLimit = (plan: string): number | null => {
-  if (plan?.toLowerCase().includes("comunidade")) return 100;
-  if (plan?.toLowerCase().includes("crescimento")) return 250;
-  return null; // pastoral = unlimited
+  return PLAN_FEATURES[plan]?.maxMembers ?? null;
 };
 
 // Map Stripe Product IDs to internal plan keys
-// Update these IDs based on your actual Stripe products
 const productToPlan = (productId: string): string | null => {
   const map: Record<string, string> = {
     "prod_UAICj5dGzPRA0j": "comunidade",
@@ -207,13 +244,14 @@ serve(async (req) => {
         
         const { data: sub } = await supabaseAdmin
           .from("church_subscriptions")
-          .select("id, recommended_plan")
+          .select("id, recommended_plan, church_id")
           .eq("stripe_subscription_id", subscription.id)
           .single();
 
         if (sub) {
           churchSubId = sub.id;
-          const planToUse = newPlan || sub.recommended_plan;
+          const oldPlan = sub.recommended_plan;
+          const planToUse = newPlan || oldPlan;
           
           await supabaseAdmin
             .from("church_subscriptions")
@@ -222,15 +260,28 @@ serve(async (req) => {
               trial_ends_at: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
               recommended_plan: planToUse,
               member_limit: planMemberLimit(planToUse),
-              last_webhook_event_id: event.id
+              last_webhook_event_id: event.id,
+              updated_at: new Date().toISOString()
             })
             .eq("id", sub.id);
 
-          // Audit
-          const { data: churchInfo } = await supabaseAdmin.from('church_subscriptions').select('church_id').eq('id', sub.id).single();
-          if (churchInfo?.church_id) {
+          // Audit logic for feature changes
+          if (sub.church_id && planToUse !== oldPlan) {
+            const { unlocked, locked } = getUnlockedFeatures(oldPlan, planToUse);
             await supabaseAdmin.rpc('log_church_audit', { 
-              p_church_id: churchInfo.church_id, 
+              p_church_id: sub.church_id, 
+              p_action: 'plan_changed',
+              p_details: { 
+                old_plan: oldPlan, 
+                new_plan: planToUse, 
+                unlocked, 
+                locked,
+                event_id: event.id 
+              }
+            });
+          } else if (sub.church_id) {
+            await supabaseAdmin.rpc('log_church_audit', { 
+              p_church_id: sub.church_id, 
               p_action: 'subscription_updated',
               p_details: { status, plan: planToUse, event_id: event.id }
             });
