@@ -394,8 +394,12 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
       u.community.toLowerCase().includes(search.toLowerCase()) ||
       (u.email && u.email.toLowerCase().includes(search.toLowerCase()));
     const matchesYear = selectedYear ? u.created_year === selectedYear : true;
-    return matchesSearch && matchesYear;
+    const matchesRole = roleFilter === "all" ? true : u.role === roleFilter;
+    return matchesSearch && matchesYear && matchesRole;
   });
+
+  const totalPages = Math.ceil(filtered.length / usersPerPage);
+  const currentUsers = filtered.slice((currentPage - 1) * usersPerPage, currentPage * usersPerPage);
 
   const admins = filtered.filter(u => u.role === "admin");
   const lideres = filtered.filter(u => u.role === "lider");
