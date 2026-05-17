@@ -205,9 +205,18 @@ export default function MinhaIgreja() {
           <h1 className="font-montserrat font-black text-xl text-foreground">⛪ {(profile as any)?.churches?.name || profile?.community || "Minha Igreja"}</h1>
           <p className="text-muted-foreground text-[10px] font-inter uppercase font-bold tracking-wider">{role === 'admin' ? 'Administrador' : role === 'lider' ? 'Líder de Área' : 'Membro'}</p>
         </div>
-        <button onClick={fetchSubscription} className="ml-auto w-10 h-10 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors">
-          <RefreshCw className="w-4 h-4 text-muted-foreground" />
-        </button>
+        <div className="ml-auto flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={fetchSubscription} 
+            disabled={loading}
+            className="h-9 rounded-xl text-[10px] font-bold"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? "animate-spin" : ""}`} />
+            Sincronizar Status
+          </Button>
+        </div>
       </div>
 
       <div className="px-5 mb-6">
