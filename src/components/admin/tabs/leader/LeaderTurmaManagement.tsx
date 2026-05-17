@@ -4,11 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { GraduationCap, CheckCircle2, RefreshCw, Archive, ChevronDown, ChevronUp, Download, Plus, Pencil } from "lucide-react";
+import { GraduationCap, CheckCircle2, RefreshCw, Archive, ChevronDown, ChevronUp, Download, Plus, Pencil, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import TurmaReportPDF from "@/components/admin/TurmaReportPDF";
+import { jsPDF } from "jspdf";
 
 type Turma = {
   id: string;
@@ -258,6 +259,51 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
 
     setResetting(false);
     setConfirmReset(false);
+  }
+
+  async function exportProfessionReport() {
+    if (professionRecords.length === 0) return;
+    
+    try {
+      const doc = new jsPDF();
+      const margin = 20;
+      let y = 20;
+
+      doc.setFontSize(18);
+      doc.text("Relatório de Profissão de Fé", margin, y);
+      y += 10;
+      
+      doc.setFontSize(10);
+      doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, margin, y);
+      y += 15;
+
+      // Table Header
+      doc.setFont("helvetica", "bold");
+      doc.text("Nome Completo", margin, y);
+      doc.text("Turma", margin + 80, y);
+      doc.text("Data", margin + 140, y);
+      y += 5;
+      doc.line(margin, y, 190, y);
+      y += 7;
+
+      doc.setFont("helvetica", "normal");
+      professionRecords.forEach((record) => {
+        if (y > 270) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(record.full_name, margin, y);
+        doc.text(record.turma_name || "—", margin + 80, y);
+        doc.text(new Date(record.professed_at).toLocaleDateString('pt-BR'), margin + 140, y);
+        y += 8;
+      });
+
+      doc.save(`relatorio_profissao_fe_${new Date().getTime()}.pdf`);
+      toast({ title: "Sucesso", description: "Relatório PDF gerado com sucesso." });
+    } catch (err) {
+      console.error("Error generating PDF:", err);
+      toast({ title: "Erro", description: "Falha ao gerar o relatório PDF.", variant: "destructive" });
+    }
   }
 
   async function loadArchivedTurmaData(turmaId: string) {
@@ -631,12 +677,20 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
           )}
         </div>
       )}
-      {/* Profession of Faith Records */}
       {professionRecords.length > 0 && (
-        <div className="mt-4">
-          <div className="flex items-center gap-2 mb-3">
-            <CheckCircle2 className="w-5 h-5 text-brand-green" />
-            <h3 className="font-montserrat font-bold text-foreground text-sm">Histórico: Professaram a Fé</h3>
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-brand-green" />
+              <h3 className="font-montserrat font-bold text-foreground text-sm">Histórico: Professaram a Fé</h3>
+            </div>
+            <button 
+              onClick={exportProfessionReport}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground text-[10px] font-montserrat font-bold transition-all border border-border"
+            >
+              <FileText className="w-3 h-3" />
+              Relatório PDF
+            </button>
           </div>
           <Card className="border-border">
             <CardContent className="p-0 overflow-hidden">

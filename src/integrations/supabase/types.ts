@@ -3729,6 +3729,15 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["community_name"]
       }
+      get_profession_of_faith_report: {
+        Args: { p_church_id: string }
+        Returns: {
+          full_name: string
+          professed_at: string
+          turma_name: string
+          user_id: string
+        }[]
+      }
       get_push_automation_config: {
         Args: never
         Returns: {
