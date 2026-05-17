@@ -3535,6 +3535,14 @@ export type Database = {
       is_super_admin:
         | { Args: never; Returns: boolean }
         | { Args: { _user_id?: string }; Returns: boolean }
+      test_stripe_webhook: {
+        Args: {
+          p_church_subscription_id: string
+          p_event_type: string
+          p_stripe_status?: string
+        }
+        Returns: Json
+      }
       update_push_automation_config: {
         Args: { _body: string; _enabled: boolean; _key: string; _title: string }
         Returns: undefined
