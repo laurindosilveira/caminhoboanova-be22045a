@@ -3618,6 +3618,15 @@ export type Database = {
         Args: { p_church_id: string }
         Returns: number
       }
+      get_church_user_stats: {
+        Args: { p_church_id: string }
+        Returns: {
+          active_users: number
+          member_limit: number
+          pending_users: number
+          total_users: number
+        }[]
+      }
       get_community_area: {
         Args: { _community: Database["public"]["Enums"]["community_name"] }
         Returns: Database["public"]["Enums"]["area_name"]

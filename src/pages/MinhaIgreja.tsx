@@ -45,6 +45,13 @@ interface AuditLog {
   details: any;
 }
 
+interface UserStats {
+  total_users: number;
+  active_users: number;
+  pending_users: number;
+  member_limit: number | null;
+}
+
 export default function MinhaIgreja() {
   const { user, profile, role, loading: authLoading } = useAuth();
   const navigate = useNavigate();
