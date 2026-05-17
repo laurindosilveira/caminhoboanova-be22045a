@@ -29,6 +29,7 @@ const AreaMembros = lazy(() => import("./pages/AreaMembros"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 import AdminSistemaPasswordGate from "./components/auth/AdminSistemaPasswordGate";
 import { PlanGate } from "./components/auth/PlanGate";
+import { ErrorBoundary } from "./components/shared/ErrorBoundary";
 
 const queryClient = new QueryClient();
 
@@ -177,24 +178,25 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <a
-          href="#main-content"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100000] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-primary focus:text-primary-foreground focus:font-semibold focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          Pular para o conteúdo principal
-        </a>
-        
-
-        <OfflineBanner />
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthProvider>
-            <AreaSwitchProvider>
-              <AppRoutes />
-            </AreaSwitchProvider>
-          </AuthProvider>
-        </BrowserRouter>
+        <ErrorBoundary>
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100000] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-primary focus:text-primary-foreground focus:font-semibold focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            Pular para o conteúdo principal
+          </a>
+          
+          <OfflineBanner />
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <AuthProvider>
+              <AreaSwitchProvider>
+                <AppRoutes />
+              </AreaSwitchProvider>
+            </AuthProvider>
+          </BrowserRouter>
+        </ErrorBoundary>
       </TooltipProvider>
     </QueryClientProvider>
   );

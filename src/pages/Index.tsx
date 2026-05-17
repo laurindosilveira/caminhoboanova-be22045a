@@ -20,7 +20,7 @@ import RemindersSection from "@/components/home/RemindersSection";
 import PersonalizedGreeting from "@/components/home/PersonalizedGreeting";
 import BirthdayHighlights from "@/components/home/BirthdayHighlights";
 import BottomNav, { type Tab } from "@/components/home/BottomNav";
-import ErrorBoundary from "@/components/shared/ErrorBoundary";
+import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUserStats } from "@/hooks/useUserStats";
 import { useAppNotifications } from "@/hooks/useAppNotifications";
