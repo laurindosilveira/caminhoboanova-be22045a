@@ -6,7 +6,7 @@ import { STRIPE_PLANS, getPlanByProductId, type PlanKey } from "@/lib/stripePlan
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, CreditCard, FileText, ExternalLink, RefreshCw, Church, Download, Calendar, CheckCircle2, XCircle, ShieldAlert, Clock } from "lucide-react";
+import { ArrowLeft, CreditCard, FileText, ExternalLink, RefreshCw, Church, Download, Calendar, CheckCircle2, XCircle, ShieldAlert, Clock, History } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 interface Invoice {
@@ -29,11 +29,19 @@ interface SubData {
   invoices: Invoice[];
 }
 
+interface AuditLog {
+  id: string;
+  action: string;
+  created_at: string;
+  details: any;
+}
+
 export default function MinhaIgreja() {
   const { user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [subData, setSubData] = useState<SubData | null>(null);
   const [memberStats, setMemberStats] = useState<{ current: number; limit: number | null } | null>(null);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [portalLoading, setPortalLoading] = useState(false);
 
@@ -41,13 +49,19 @@ export default function MinhaIgreja() {
     if (!user) return;
     setLoading(true);
     try {
-      const [{ data: sData, error: sError }, { data: mCount, error: mError }] = await Promise.all([
+      const [
+        { data: sData, error: sError }, 
+        { data: mCount, error: mError },
+        { data: aLogs, error: aError }
+      ] = await Promise.all([
         supabase.functions.invoke("check-subscription"),
-        supabase.rpc("get_church_member_count", { p_church_id: profile?.church_id as any })
+        supabase.rpc("get_church_member_count", { p_church_id: profile?.church_id as any }),
+        supabase.from('church_audit_logs').select('*').order('created_at', { ascending: false }).limit(10)
       ]);
 
       if (sError) throw sError;
       setSubData(sData);
+      setAuditLogs((aLogs as AuditLog[]) || []);
 
       // Get limit from subscription data or church_subscriptions
       const { data: churchSub } = await supabase
@@ -76,9 +90,16 @@ export default function MinhaIgreja() {
   const planKey = subData?.product_id ? getPlanByProductId(subData.product_id) : null;
   const planInfo = planKey ? STRIPE_PLANS[planKey] : null;
 
-  const handleManageSubscription = async () => {
+  const handleManageSubscription = async (action: string = 'portal_opened') => {
     setPortalLoading(true);
     try {
+      if (profile?.church_id) {
+        await supabase.rpc('log_church_audit', { 
+          p_church_id: profile.church_id, 
+          p_action: action 
+        });
+      }
+
       const { data, error } = await supabase.functions.invoke("customer-portal");
       if (error) throw error;
       if (data?.url) window.open(data.url, "_blank");
@@ -218,6 +239,43 @@ export default function MinhaIgreja() {
                 <Button onClick={() => navigate("/apresentacao#planos")} style={{ background: "var(--gradient-hero)" }} className="w-full h-12 rounded-xl text-primary-foreground font-bold">
                   Conhecer Planos
                 </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Audit History */}
+      <div className="px-5 mb-8">
+        <h2 className="font-montserrat font-bold text-base text-foreground mb-3 flex items-center gap-2">
+          <History className="w-5 h-5 text-primary" />
+          Histórico de Atividades
+        </h2>
+        <Card className="border-border">
+          <CardContent className="p-0 overflow-hidden">
+            {auditLogs.length > 0 ? (
+              <div className="divide-y divide-border">
+                {auditLogs.map((log) => (
+                  <div key={log.id} className="px-4 py-3 flex items-start justify-between gap-3 bg-card/50">
+                    <div>
+                      <p className="text-[11px] font-bold text-foreground uppercase tracking-wider">
+                        {log.action === 'trial_alert_shown' && 'Aviso de vencimento exibido'}
+                        {log.action === 'portal_opened' && 'Portal do cliente acessado'}
+                        {log.action === 'portal_opened_for_cancel' && 'Portal acessado para cancelar'}
+                        {log.action === 'alert_snoozed' && 'Banner sonecado por 24h'}
+                        {!['trial_alert_shown', 'portal_opened', 'portal_opened_for_cancel', 'alert_snoozed'].includes(log.action) && log.action}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground font-inter">
+                        {new Date(log.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="text-[9px] bg-muted/30">AUDITORIA</Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-8 text-center">
+                <p className="text-muted-foreground font-inter text-xs">Nenhuma atividade registrada.</p>
               </div>
             )}
           </CardContent>
