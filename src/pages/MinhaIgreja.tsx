@@ -152,6 +152,39 @@ export default function MinhaIgreja() {
   const planKey = subData?.product_id ? getPlanByProductId(subData.product_id) : null;
   const planInfo = planKey ? STRIPE_PLANS[planKey] : null;
 
+  const handleSaveBranding = async () => {
+    if (!profile?.church_id) return;
+    setSavingBranding(true);
+    try {
+      const { error } = await supabase
+        .from("churches")
+        .update({
+          name: branding.name,
+          logo_url: branding.logo_url,
+          primary_color: branding.primary_color,
+          secondary_color: branding.secondary_color,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", profile.church_id);
+
+      if (error) throw error;
+      
+      toast({ title: "Sucesso", description: "Configurações de marca atualizadas com sucesso." });
+      
+      // Log audit
+      await supabase.rpc('log_church_audit', {
+        p_church_id: profile.church_id,
+        p_action: 'branding_updated',
+        p_details: { name: branding.name }
+      });
+    } catch (err: any) {
+      console.error("Error saving branding:", err);
+      toast({ title: "Erro", description: "Não foi possível salvar as configurações.", variant: "destructive" });
+    } finally {
+      setSavingBranding(false);
+    }
+  };
+
   const handleManageSubscription = async (action: string = 'portal_opened') => {
     if (isMembro) {
       toast({ title: "Acesso negado", description: "Somente administradores ou líderes podem gerenciar a assinatura.", variant: "destructive" });
