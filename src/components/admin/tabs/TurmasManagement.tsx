@@ -332,7 +332,7 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
       <Dialog open={!!confirmArchive} onOpenChange={(open) => !open && setConfirmArchive(null)}>
         <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="font-montserrat font-bold text-foreground text-base">Confirmar grupo</DialogTitle>
+            <DialogTitle className="font-montserrat font-bold text-foreground text-base">Profissão de Fé em Grupo</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex items-center gap-3">
@@ -347,7 +347,7 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
               </div>
             </div>
             <p className="text-muted-foreground font-inter text-xs leading-relaxed">
-              Os alunos do <strong>2º ano</strong> serão movidos para um arquivo chamado "<strong>{confirmArchive?.name} — CONFIRMADOS</strong>". Os alunos do <strong>1º ano permanecerão na turma</strong> original.
+              Os alunos do <strong>2º ano</strong> serão movidos para um arquivo chamado "<strong>{confirmArchive?.name} — PROFESSARAM A FÉ</strong>". Os alunos do <strong>1º ano permanecerão na turma</strong> original.
             </p>
             <div className="flex gap-2">
               <button onClick={() => setConfirmArchive(null)}

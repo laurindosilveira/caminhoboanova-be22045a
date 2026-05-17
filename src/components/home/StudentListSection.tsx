@@ -341,7 +341,7 @@ export default function StudentListSection() {
                 <Input value={editForm.address ?? ""} onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))} className="text-sm" />
               </div>
               <div>
-                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Ano de confirmação</label>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Ano de profissão de fé</label>
                 <Input type="number" min={1} max={3} value={editForm.confirmation_year ?? ""} onChange={e => setEditForm(f => ({ ...f, confirmation_year: e.target.value ? Number(e.target.value) : null }))} className="text-sm" placeholder="1 ou 2" />
               </div>
               <div>
@@ -428,7 +428,7 @@ export default function StudentListSection() {
                   {selectedStudent.confirmation_year && (
                     <div className="flex items-center gap-1.5 text-muted-foreground col-span-2">
                       <GraduationCap className="w-3.5 h-3.5" />
-                      <span>{selectedStudent.confirmation_year}º ano de confirmação</span>
+                      <span>{selectedStudent.confirmation_year}º ano de profissão de fé</span>
                     </div>
                   )}
                 </div>

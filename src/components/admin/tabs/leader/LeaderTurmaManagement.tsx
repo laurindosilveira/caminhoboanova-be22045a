@@ -367,7 +367,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
         </div>
         <div>
           <h2 className="font-montserrat font-black text-foreground text-base">CAMINHO</h2>
-          <p className="text-muted-foreground text-xs font-inter">Confirmação e reinício de jornada</p>
+          <p className="text-muted-foreground text-xs font-inter">Profissão de Fé e reinício de jornada</p>
         </div>
       </div>
 
@@ -471,7 +471,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
       <Dialog open={confirmArchive} onOpenChange={setConfirmArchive}>
         <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="font-montserrat font-bold text-foreground text-base">Confirmar grupo</DialogTitle>
+            <DialogTitle className="font-montserrat font-bold text-foreground text-base">Profissão de Fé em Grupo</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex items-center gap-3">
