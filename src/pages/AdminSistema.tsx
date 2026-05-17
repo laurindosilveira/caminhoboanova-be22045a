@@ -79,6 +79,7 @@ export default function AdminSistema() {
   const [webhookLogs, setWebhookLogs] = useState<any[]>([]);
   const [adminAuditLogs, setAdminAuditLogs] = useState<any[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [errorLogs, setErrorLogs] = useState<any[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) {
