@@ -156,9 +156,16 @@ export default function PasskeySettings() {
                       </span>
                       <Badge variant="secondary" className="text-[9px] h-4 font-bold bg-primary/5 text-primary border-primary/10">PASSKEY</Badge>
                     </div>
-                    <p className="text-[10px] text-muted-foreground font-inter mt-0.5">
-                      Adicionado em {new Date(pk.created_at).toLocaleDateString()}
-                    </p>
+                    <div className="flex flex-col gap-0.5 mt-0.5">
+                      <p className="text-[10px] text-muted-foreground font-inter">
+                        Adicionado em {new Date(pk.created_at).toLocaleDateString()}
+                      </p>
+                      {pk.last_used_at && (
+                        <p className="text-[10px] text-brand-green font-inter font-medium">
+                          Último uso: {new Date(pk.last_used_at).toLocaleDateString()} às {new Date(pk.last_used_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      )}
+                    </div>
                   </>
                 )}
               </div>

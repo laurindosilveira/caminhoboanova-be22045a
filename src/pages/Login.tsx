@@ -18,41 +18,78 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [passkeySupported, setPasskeySupported] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    // Check for passkey support
+    if (window.PublicKeyCredential) {
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+        .then((available) => setPasskeySupported(available))
+        .catch(() => setPasskeySupported(false));
+    } else {
+      setPasskeySupported(false);
+    }
+  }, []);
 
   async function handleBiometricLogin() {
     setError(null);
     setLoading(true);
     try {
       // @ts-ignore - experimental API
-      const { data, error } = await supabase.auth.signInWithPasskey();
+      const { data, error: authError } = await supabase.auth.signInWithPasskey();
       
-      if (error) {
-        // Only show error if it's not the user cancelling
-        if (error.message?.toLowerCase().includes("cancelled") || error.message?.toLowerCase().includes("user aborted")) {
+      if (authError) {
+        const isCancelled = authError.message?.toLowerCase().includes("cancelled") || 
+                           authError.message?.toLowerCase().includes("user aborted") ||
+                           authError.message?.toLowerCase().includes("notallowederror");
+
+        if (isCancelled) {
+          // Log cancellation as audit event if we can identify user later or just as general log
+          console.log("Biometric login cancelled by user");
           setLoading(false);
+          // Automatic fallback: user can just use email/password now
           return;
         }
-        throw error;
+        throw authError;
       }
 
       if (data?.user) {
-        handlePostLogin(data.user);
+        // Log success
+        await handlePostLogin(data.user, "passkey_success");
       }
     } catch (err: any) {
       console.error("Biometric login error:", err);
       setError("Erro ao entrar com biometria: " + (err.message || "Tente novamente."));
+      
+      // Log failure if we had an email or just as general error
       setLoading(false);
     }
   }
 
-  async function handlePostLogin(user: any) {
+  async function handlePostLogin(user: any, method: "password_success" | "passkey_success") {
     // Set app active flag for redirection logic
     localStorage.setItem('caminho_app_active', 'true');
+    
+    // Fetch profile and roles
+    const { data: profile } = await supabase.from('profiles').select('church_id').eq('id', user.id).single();
     
     const [{ data: isAdmin }, { data: isLider }] = await Promise.all([
       supabase.rpc("has_role", { _user_id: user.id, _role: "admin" }),
       supabase.rpc("has_role", { _user_id: user.id, _role: "lider" }),
     ]);
+
+    // Audit log
+    if (profile?.church_id) {
+      await supabase.rpc('log_church_audit', {
+        p_church_id: profile.church_id,
+        p_action: method,
+        p_details: { 
+          email: user.email,
+          user_id: user.id,
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
 
     if (isAdmin || isLider) {
       navigate("/admin");
@@ -94,7 +131,7 @@ export default function Login() {
     }
 
     if (authData.user) {
-      handlePostLogin(authData.user);
+      handlePostLogin(authData.user, "password_success");
     }
   }
 
@@ -200,15 +237,17 @@ export default function Login() {
                 <div className="h-[1px] flex-1 bg-border"></div>
               </div>
 
-              <button
-                type="button"
-                onClick={handleBiometricLogin}
-                disabled={loading}
-                className="w-full py-3 rounded-xl border-2 border-primary/20 bg-primary/5 font-montserrat font-bold text-primary text-sm flex items-center justify-center gap-2 hover:bg-primary/10 transition-all active:scale-95 disabled:opacity-50"
-              >
-                <Fingerprint className="w-5 h-5" />
-                Entrar com Biometria
-              </button>
+              {passkeySupported !== false && (
+                <button
+                  type="button"
+                  onClick={handleBiometricLogin}
+                  disabled={loading}
+                  className="w-full py-3 rounded-xl border-2 border-primary/20 bg-primary/5 font-montserrat font-bold text-primary text-sm flex items-center justify-center gap-2 hover:bg-primary/10 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  <Fingerprint className="w-5 h-5" />
+                  Entrar com Biometria
+                </button>
+              )}
             </form>
 
           <div className="mt-6 text-center">
