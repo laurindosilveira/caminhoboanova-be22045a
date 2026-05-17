@@ -133,13 +133,36 @@ serve(async (req) => {
 
         // 2. Provision Admin Profile (Pastor)
         if (subData.pastor_email && churchId) {
-          const { data: userData } = await supabaseAdmin.auth.admin.getUserByEmail(subData.pastor_email);
+          log("Provisioning admin", { email: subData.pastor_email });
+          let { data: userData } = await supabaseAdmin.auth.admin.getUserByEmail(subData.pastor_email);
+          
+          if (!userData?.user) {
+            log("User not found, inviting", { email: subData.pastor_email });
+            const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(subData.pastor_email, {
+              data: {
+                full_name: subData.pastor_name,
+                church_id: churchId,
+                role: "admin",
+                enrollment_status: "approved"
+              }
+            });
+            if (inviteError) log("Error inviting user", { inviteError });
+            userData = { user: inviteData?.user ?? null };
+          }
+
           if (userData?.user) {
+            log("Linking user to church", { userId: userData.user.id, churchId });
             await supabaseAdmin.from("profiles").update({ 
-              church_id: churchId, role: "admin", enrollment_status: "approved" 
+              church_id: churchId, 
+              role: "admin", 
+              enrollment_status: "approved",
+              full_name: subData.pastor_name
             }).eq("user_id", userData.user.id);
+
             await supabaseAdmin.from("user_roles").upsert({ 
-              user_id: userData.user.id, role: "admin", church_id: churchId 
+              user_id: userData.user.id, 
+              role: "admin", 
+              church_id: churchId 
             }, { onConflict: "user_id,role" });
           }
         }

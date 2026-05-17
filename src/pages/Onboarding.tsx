@@ -177,7 +177,8 @@ export default function Onboarding() {
       const { data, error } = await supabase.functions.invoke("create-checkout", {
         body: { 
           priceId,
-          subscriptionId: (subscriptionData as any)?.id
+          subscriptionId: (subscriptionData as any)?.id,
+          email: pastor.email
         },
       });
       if (error) throw error;
