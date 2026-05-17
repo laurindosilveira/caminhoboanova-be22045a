@@ -3618,13 +3618,13 @@ export type Database = {
       }
       secure_extend_trial: {
         Args: { p_church_subscription_id: string; p_days: number }
-        Returns: Json
+        Returns: undefined
       }
       test_stripe_webhook: {
         Args: {
           p_church_subscription_id: string
           p_event_type: string
-          p_stripe_status?: string
+          p_stripe_status: string
         }
         Returns: Json
       }
