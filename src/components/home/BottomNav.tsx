@@ -1,6 +1,8 @@
-import { Home, Trophy, Calendar, Users, User, Heart, Music, ChevronDown, ChevronUp } from "lucide-react";
+import { Home, Trophy, Calendar, Users, User, Heart, Music, ChevronDown, ChevronUp, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 export type Tab = "jornada" | "conquistas" | "agenda" | "comunidade" | "perfil" | "discipulado" | "adoracao";
 
@@ -20,6 +22,8 @@ const tabs = [
 ];
 
 export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const handleTabClick = (tab: Tab) => {
@@ -76,6 +80,21 @@ export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
                   );
                 })}
               </div>
+              
+              {user?.email?.toLowerCase() === 'laurindosilveira@gmail.com' && (
+                <div className="mt-2 border-t border-border pt-2">
+                  <button
+                    onClick={() => {
+                      navigate("/admin-sistema");
+                      setIsMenuOpen(false);
+                    }}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors text-primary hover:bg-primary/5"
+                  >
+                    <ShieldCheck className="h-5 w-5 shrink-0" />
+                    <span className="min-w-0 flex-1 font-inter text-sm font-black uppercase tracking-wider">Painel do Sistema</span>
+                  </button>
+                </div>
+              )}
             </motion.div>
           </>
         )}

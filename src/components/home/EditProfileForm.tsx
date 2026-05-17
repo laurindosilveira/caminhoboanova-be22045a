@@ -1,16 +1,17 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Pencil, Save, X, User, Phone, Calendar, MapPin, ChevronDown, Home, Users, Camera, GraduationCap, CheckCircle2, AlertCircle, Shield, Heart } from "lucide-react";
+import { Pencil, Save, X, User, Phone, Calendar, MapPin, ChevronDown, Home, Users, Camera, GraduationCap, CheckCircle2, AlertCircle, Shield, Heart, Fingerprint, Lock, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import WhatsAppPhoneInput from "@/components/ui/WhatsAppPhoneInput";
 import { validateBRPhone, type PhoneValidation } from "@/lib/phoneValidation";
 
 import { ALL_COMMUNITIES, fetchAreasConfig } from "@/config/areas";
-import { useEffect } from "react";
 const COMMUNITIES = ALL_COMMUNITIES as unknown as readonly [string, ...string[]];
 
 const CONFIRMATION_YEARS = [
@@ -70,6 +71,12 @@ export default function EditProfileForm() {
   const [loadingChurches, setLoadingChurches] = useState(true);
   const [loadingAreas, setLoadingAreas] = useState(false);
   const [loadingCommunities, setLoadingCommunities] = useState(false);
+  
+  // MFA state
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [mfaFactors, setMfaFactors] = useState<any[]>([]);
+  const [showMfaEnroll, setShowMfaEnroll] = useState(false);
+  const [unenrollFactorId, setUnenrollFactorId] = useState<string | null>(null);
 
   // Validação em tempo real do WhatsApp (fora do react-hook-form para maior controle)
   const [phoneValidation, setPhoneValidation] = useState<PhoneValidation>(
@@ -109,13 +116,19 @@ export default function EditProfileForm() {
   const watchedValues = watch();
 
   useEffect(() => {
-    async function loadChurches() {
+    async function loadInitial() {
       setLoadingChurches(true);
-      const { data } = await supabase.from("churches").select("id, name").eq("is_active", true).order("name");
-      setChurchOptions(data || []);
+      const { data: churches } = await supabase.from("churches").select("id, name").eq("is_active", true).order("name");
+      setChurchOptions(churches || []);
       setLoadingChurches(false);
+
+      // Check MFA status
+      const { data: factors } = await supabase.auth.mfa.listFactors();
+      const active = factors?.all?.some(f => f.status === 'verified') ?? false;
+      setMfaEnabled(active);
+      setMfaFactors(factors?.all || []);
     }
-    loadChurches();
+    loadInitial();
   }, []);
 
   useEffect(() => {
@@ -310,6 +323,49 @@ export default function EditProfileForm() {
   if (!isEditing) {
     return (
       <div className="px-5 mt-4 space-y-3">
+        {/* Segurança e MFA (Apenas para Laurindo) */}
+        {user?.email?.toLowerCase() === 'laurindosilveira@gmail.com' && (
+          <SectionCard
+            icon={<Lock className="w-4 h-4 text-primary" />}
+            title="Segurança Avançada"
+          >
+            <div className="p-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${mfaEnabled ? "bg-brand-green/10" : "bg-muted"}`}>
+                  <Fingerprint className={`w-5 h-5 ${mfaEnabled ? "text-brand-green" : "text-muted-foreground"}`} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-montserrat font-bold text-foreground">Google Authenticator (2FA)</p>
+                  <p className="text-xs text-muted-foreground font-inter">
+                    {mfaEnabled ? "Sua conta está protegida por MFA." : "Ative a proteção em duas etapas."}
+                  </p>
+                </div>
+                {mfaEnabled ? (
+                  <Badge className="bg-brand-green/10 text-brand-green border-brand-green/30 font-bold text-[10px]">ATIVO</Badge>
+                ) : (
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="h-8 rounded-lg text-[10px] font-bold border-primary text-primary hover:bg-primary/5"
+                    onClick={() => window.open('https://supabase.com/docs/guides/auth/auth-mfa', '_blank')}
+                  >
+                    ATIVAR
+                  </Button>
+                )}
+              </div>
+              
+              {!mfaEnabled && (
+                <div className="rounded-xl bg-primary/5 border border-primary/20 p-3 flex items-start gap-2">
+                  <ShieldCheck className="w-4 h-4 text-primary mt-0.5" />
+                  <p className="text-[11px] text-muted-foreground font-inter leading-relaxed">
+                    <strong>Obrigatório:</strong> Para acessar o painel de administração do sistema, você precisa configurar o Google Authenticator em sua conta.
+                  </p>
+                </div>
+              )}
+            </div>
+          </SectionCard>
+        )}
+
         {/* Personal Info Card */}
         <SectionCard
           icon={<User className="w-4 h-4 text-primary" />}

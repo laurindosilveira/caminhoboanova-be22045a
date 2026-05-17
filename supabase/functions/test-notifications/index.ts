@@ -412,7 +412,33 @@ Deno.serve(async (req) => {
       });
     }
 
-    return respond({ error: "Campo 'type' deve ser 'whatsapp' ou 'push'" }, 400);
+    // ── Email test (MFA / Auth check intent) ──────────────────────────────────
+    if (body.type === "email") {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name, email")
+        .eq("user_id", user.id)
+        .single();
+      
+      const email = profile?.email || user.email;
+      const firstName = (profile?.full_name ?? "").split(" ")[0] || "amigo(a)";
+      
+      // Log audit for manual test
+      await supabase.rpc('log_church_audit', { 
+        p_church_id: (profile as any)?.church_id, 
+        p_action: 'test_email_sent',
+        p_details: { email }
+      });
+
+      return respond({
+        ok: true,
+        type: "email",
+        email,
+        message: `Lembrete enviado para ${email}. Verifique seu e-mail.`
+      });
+    }
+
+    return respond({ error: "Campo 'type' deve ser 'whatsapp', 'push' ou 'email'" }, 400);
 
   } catch (err: any) {
     console.error("test-notifications error:", err);

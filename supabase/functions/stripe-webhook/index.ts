@@ -188,6 +188,13 @@ serve(async (req) => {
             last_webhook_event_id: event.id
           })
           .eq("id", churchSubId);
+
+        // 4. Provision Audit
+        await supabaseAdmin.rpc('log_church_audit', { 
+          p_church_id: churchId, 
+          p_action: 'subscription_provisioned',
+          p_details: { status: internalStatus, event_id: event.id }
+        });
         break;
       }
 
@@ -218,6 +225,16 @@ serve(async (req) => {
               last_webhook_event_id: event.id
             })
             .eq("id", sub.id);
+
+          // Audit
+          const { data: churchInfo } = await supabaseAdmin.from('church_subscriptions').select('church_id').eq('id', sub.id).single();
+          if (churchInfo?.church_id) {
+            await supabaseAdmin.rpc('log_church_audit', { 
+              p_church_id: churchInfo.church_id, 
+              p_action: 'subscription_updated',
+              p_details: { status, plan: planToUse, event_id: event.id }
+            });
+          }
         }
         break;
       }
@@ -236,6 +253,16 @@ serve(async (req) => {
             .from("church_subscriptions")
             .update({ subscription_status: "canceled", last_webhook_event_id: event.id })
             .eq("id", sub.id);
+
+          // Audit
+          const { data: churchInfo } = await supabaseAdmin.from('church_subscriptions').select('church_id').eq('id', sub.id).single();
+          if (churchInfo?.church_id) {
+            await supabaseAdmin.rpc('log_church_audit', { 
+              p_church_id: churchInfo.church_id, 
+              p_action: 'subscription_cancelled_stripe',
+              p_details: { event_id: event.id }
+            });
+          }
         }
         break;
       }
