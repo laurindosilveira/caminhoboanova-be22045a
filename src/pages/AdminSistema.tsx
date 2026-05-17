@@ -16,6 +16,8 @@ import {
   ShieldAlert,
   Sparkles,
   XCircle,
+  CalendarDays,
+  Plus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -161,6 +163,31 @@ export default function AdminSistema() {
     }
 
     toast({ title: `Status atualizado para "${STATUS_MAP[newStatus]?.label ?? newStatus}"` });
+    fetchChurches();
+  }
+
+  async function extendTrial(id: string, days: number) {
+    const church = churches.find(c => c.id === id);
+    if (!church) return;
+
+    const currentEnd = church.trial_ends_at ? new Date(church.trial_ends_at) : new Date();
+    const newEnd = new Date(currentEnd.getTime() + days * 86400000);
+
+    const { error } = await supabase
+      .from("church_subscriptions" as any)
+      .update({ 
+        trial_ends_at: newEnd.toISOString(),
+        subscription_status: 'trial',
+        updated_at: new Date().toISOString() 
+      } as any)
+      .eq("id", id);
+
+    if (error) {
+      toast({ title: "Erro ao estender trial", variant: "destructive" });
+      return;
+    }
+
+    toast({ title: `Trial estendido por ${days} dias` });
     fetchChurches();
   }
 
@@ -341,56 +368,70 @@ export default function AdminSistema() {
                           </div>
 
                           <div className="flex flex-col gap-1.5">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="rounded-lg border-primary/30 text-xs text-primary hover:bg-primary/10"
-                              onClick={async () => {
-                                const { data, error } = await supabase.rpc('test_stripe_webhook', {
-                                  p_church_subscription_id: church.id,
-                                  p_event_type: 'manual_reprocess',
-                                  p_stripe_status: 'active'
-                                });
-                                if (error) toast({ title: "Erro ao reprocessar", variant: "destructive" });
-                                else {
-                                  toast({ title: "Webhook reprocessado com sucesso" });
-                                  fetchChurches();
-                                  fetchWebhookLogs();
-                                }
-                              }}
-                            >
-                              Reprocessar
-                            </Button>
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 rounded-lg border-primary/30 text-[10px] text-primary hover:bg-primary/10 flex-1"
+                                onClick={async () => {
+                                  const { data, error } = await supabase.rpc('test_stripe_webhook', {
+                                    p_church_subscription_id: church.id,
+                                    p_event_type: 'manual_reprocess',
+                                    p_stripe_status: 'active'
+                                  });
+                                  if (error) toast({ title: "Erro ao reprocessar", variant: "destructive" });
+                                  else {
+                                    toast({ title: "Webhook reprocessado com sucesso" });
+                                    fetchChurches();
+                                    fetchWebhookLogs();
+                                  }
+                                }}
+                              >
+                                Reprocessar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 rounded-lg border-warning/30 text-[10px] text-warning hover:bg-warning/10 flex-1"
+                                onClick={() => extendTrial(church.id, 7)}
+                                title="Adicionar 7 dias de teste"
+                              >
+                                <Plus className="w-3 h-3 mr-1" /> 7 dias
+                              </Button>
+                            </div>
+                            
                             {church.stripe_customer_id && (
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="rounded-lg border-primary/30 text-xs text-primary hover:bg-primary/10"
+                                className="h-8 rounded-lg border-border text-[10px] hover:bg-muted"
                                 onClick={() => window.open(`https://dashboard.stripe.com/customers/${church.stripe_customer_id}`, "_blank")}
                               >
                                 Ver no Stripe
                               </Button>
                             )}
-                            {church.subscription_status !== "active" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="rounded-lg border-brand-green/30 text-xs text-brand-green hover:bg-brand-green/10"
-                                onClick={() => updateStatus(church.id, "active")}
-                              >
-                                Ativar Manual
-                              </Button>
-                            )}
-                            {church.subscription_status !== "blocked" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="rounded-lg border-destructive/30 text-xs text-destructive hover:bg-destructive/10"
-                                onClick={() => updateStatus(church.id, "blocked")}
-                              >
-                                Bloquear
-                              </Button>
-                            )}
+                            <div className="flex gap-1">
+                              {church.subscription_status !== "active" && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 rounded-lg border-brand-green/30 text-[10px] text-brand-green hover:bg-brand-green/10 flex-1"
+                                  onClick={() => updateStatus(church.id, "active")}
+                                >
+                                  Ativar
+                                </Button>
+                              )}
+                              {church.subscription_status !== "blocked" && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 rounded-lg border-destructive/30 text-[10px] text-destructive hover:bg-destructive/10 flex-1"
+                                  onClick={() => updateStatus(church.id, "blocked")}
+                                >
+                                  Bloquear
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </CardContent>
