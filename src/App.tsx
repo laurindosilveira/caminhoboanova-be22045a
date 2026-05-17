@@ -110,7 +110,7 @@ function RootRedirect() {
 function NotFoundRedirect() {
   const { user, loading } = useAuth();
   if (loading) return null;
-  return <Navigate to={user ? "/home" : "/"} replace />;
+  return <Navigate to="/apresentacao" replace />;
 }
 
 const LoadingFallback = () => (

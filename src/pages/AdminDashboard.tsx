@@ -26,6 +26,7 @@ const LeaderContactsTab = lazy(() => import("@/components/admin/tabs/leader/Lead
 const AdminAreasTab = lazy(() => import("@/components/admin/tabs/AdminAreasTab"));
 const WhatsAppAuditTab = lazy(() => import("@/components/admin/tabs/WhatsAppAuditTab"));
 const WorshipTab = lazy(() => import("@/components/admin/tabs/WorshipTab"));
+const AdminGlobalDashboard = lazy(() => import("@/components/admin/AdminGlobalDashboard"));
 
 import { AREAS, AREA_COMMUNITIES, ALL_COMMUNITIES, getCommunitiesForArea } from "@/config/areas";
 
@@ -397,11 +398,12 @@ export default function AdminDashboard() {
             {activeTab === "users" && <UsersTab onSelectTurma={handleSelectTurmaFromUsers} />}
             {activeTab === "whatsapp" && <WhatsAppAuditTab />}
             {activeTab === "worship" && <WorshipTab />}
+            {activeTab === "admin_global" && isSuper && <AdminGlobalDashboard />}
           </Suspense>
         )}
       </main>
 
-      <AdminBottomNav active={activeTab} onChange={setActiveTab} userRole={role as "admin" | "lider" | null} />
+      <AdminBottomNav active={activeTab} onChange={setActiveTab} userRole={role as "admin" | "lider" | null} isSuper={isSuper} />
     </div>
   );
 }

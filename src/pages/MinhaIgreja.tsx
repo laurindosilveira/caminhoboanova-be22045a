@@ -149,13 +149,62 @@ export default function MinhaIgreja() {
 
       {/* Subscription Status */}
       <div className="px-5 mb-6 space-y-4">
+        {subData?.subscribed && subData.subscription_status === 'trial' && subData.subscription_end && (
+          <div className="bg-primary/10 border border-primary/30 rounded-2xl p-4 flex items-start gap-3">
+            <Clock className="w-5 h-5 text-primary mt-0.5" />
+            <div className="flex-1">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-montserrat font-bold text-sm text-primary">Período de Teste</p>
+                  <p className="text-xs text-muted-foreground font-inter">
+                    Seu trial vence em {formatDate(subData.subscription_end)}. 
+                    {Math.ceil((new Date(subData.subscription_end).getTime() - Date.now()) / 86400000) <= 5 && 
+                      " Aproveite para configurar tudo e garantir sua vaga!"}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-lg font-black text-primary">
+                    {Math.max(0, Math.ceil((new Date(subData.subscription_end).getTime() - Date.now()) / 86400000))}
+                  </span>
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold">dias</p>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <Button 
+                  onClick={() => handleManageSubscription('portal_opened_for_cancel')} 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-8 text-[10px] font-bold border-destructive/30 text-destructive hover:bg-destructive/5"
+                >
+                  Cancelar Trial
+                </Button>
+                <Button 
+                  onClick={() => toast({ title: "Banner ocultado", description: "O aviso aparecerá novamente em 24h." })} 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 text-[10px] font-bold text-muted-foreground"
+                >
+                  Sonecar por 24h
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {subData?.subscribed && subData.subscription_status === 'past_due' && (
           <div className="bg-destructive/10 border border-destructive/30 rounded-2xl p-4 flex items-start gap-3">
             <ShieldAlert className="w-5 h-5 text-destructive mt-0.5" />
-            <div>
+            <div className="flex-1">
               <p className="font-montserrat font-bold text-sm text-destructive">Pagamento Pendente</p>
-              <p className="text-xs text-muted-foreground font-inter">Sua assinatura está com pagamento atrasado. Para evitar o bloqueio da conta, atualize seus dados de pagamento no portal.</p>
-              <Button onClick={() => handleManageSubscription('portal_opened_from_alert')} variant="link" className="p-0 h-auto text-xs text-destructive font-bold mt-1">Regularizar agora →</Button>
+              <div className="mt-2 space-y-2">
+                <p className="text-xs text-muted-foreground font-inter">Sua assinatura está com pagamento atrasado. Checklist para regularizar:</p>
+                <ul className="text-[11px] space-y-1 text-muted-foreground list-disc pl-4">
+                  <li>Verificar limite do cartão de crédito</li>
+                  <li>Confirmar se o cartão não está expirado</li>
+                  <li>Acessar o Portal para atualizar forma de pagamento</li>
+                </ul>
+              </div>
+              <Button onClick={() => handleManageSubscription('portal_opened_from_alert')} variant="link" className="p-0 h-auto text-xs text-destructive font-bold mt-2">Regularizar agora →</Button>
             </div>
           </div>
         )}
@@ -163,10 +212,23 @@ export default function MinhaIgreja() {
         {subData?.subscribed && subData.subscription_status === 'blocked' && (
           <div className="bg-destructive border border-destructive rounded-2xl p-4 flex items-start gap-3">
             <XCircle className="w-5 h-5 text-white mt-0.5" />
-            <div>
+            <div className="flex-1">
               <p className="font-montserrat font-bold text-sm text-white">Acesso Bloqueado</p>
-              <p className="text-xs text-white/80 font-inter">Sua conta foi bloqueada devido à falta de pagamento. Regularize sua situação para retomar o acesso aos recursos.</p>
-              <Button onClick={() => handleManageSubscription('portal_opened_from_block')} variant="secondary" size="sm" className="mt-2 font-bold">Abrir Portal de Pagamento</Button>
+              <div className="mt-2 space-y-2">
+                <p className="text-xs text-white/80 font-inter">Sua conta foi bloqueada devido à falta de pagamento. Passos para desbloqueio:</p>
+                <div className="grid grid-cols-1 gap-2">
+                  <div className="flex items-center gap-2 text-[10px] text-white/90 bg-white/10 p-2 rounded-lg">
+                    <CheckCircle2 className="w-3 h-3" /> Abrir portal de pagamento
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-white/90 bg-white/10 p-2 rounded-lg">
+                    <CheckCircle2 className="w-3 h-3" /> Atualizar dados do cartão
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-white/90 bg-white/10 p-2 rounded-lg">
+                    <CheckCircle2 className="w-3 h-3" /> Aguardar processamento (até 2h)
+                  </div>
+                </div>
+              </div>
+              <Button onClick={() => handleManageSubscription('portal_opened_from_block')} variant="secondary" size="sm" className="mt-3 font-bold w-full">Abrir Portal de Pagamento</Button>
             </div>
           </div>
         )}
