@@ -1,7 +1,6 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 // Build V10: SALA DO DISCIPULADOR - 2024-05-13
 
-
 import { Toaster } from "@/components/ui/toaster";
 import OfflineBanner from "@/components/home/OfflineBanner";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -10,6 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AreaSwitchProvider } from "@/contexts/AreaSwitchContext";
+import { isAppInstalled } from "@/lib/utils";
 
 // Lazy load pages for better initial performance
 const Index = lazy(() => import("./pages/Index"));
@@ -92,17 +92,25 @@ function RootRedirect() {
   
   if (loading) return <LoadingFallback />;
 
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+  const installed = isAppInstalled();
 
   if (user) {
+    // Set persistence flag when user is logged in
+    localStorage.setItem('caminho_app_active', 'true');
     return <Navigate to="/home" replace />;
   }
 
-  if (isStandalone) {
+  if (installed) {
     return <Navigate to="/login" replace />;
   }
 
   return <Navigate to="/apresentacao" replace />;
+}
+
+function NotFoundRedirect() {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  return <Navigate to={user ? "/home" : "/"} replace />;
 }
 
 const LoadingFallback = () => (
@@ -148,7 +156,7 @@ const AppRoutes = () => (
       />
 
       {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-      <Route path="*" element={<NotFound />} />
+      <Route path="*" element={<NotFoundRedirect />} />
     </Routes>
   </Suspense>
 );
