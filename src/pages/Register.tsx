@@ -249,6 +249,7 @@ export default function Register() {
           area: parsed.data.area,
           church_id: parsed.data.churchId,
           enrollment_status: "pending",
+          role: "membro", // Default role
           father_name: parsed.data.fatherName || "",
           mother_name: parsed.data.motherName || "",
           father_phone: parsed.data.fatherPhone || "",
