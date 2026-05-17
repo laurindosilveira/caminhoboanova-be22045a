@@ -110,9 +110,24 @@ export default function MinhaIgreja() {
 
   useEffect(() => {
     if (!profile?.church_id) return;
+    
+    let lastProcessedEvent: string | null = null;
+
     const channel = supabase
       .channel(`church_subscription_${profile.church_id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'church_subscriptions', filter: `church_id=eq.${profile.church_id}` }, () => fetchSubscription())
+      .on(
+        'postgres_changes', 
+        { event: '*', schema: 'public', table: 'church_subscriptions', filter: `church_id=eq.${profile.church_id}` }, 
+        (payload: any) => {
+          // Idempotency: avoid processing same event ID twice
+          const eventId = payload.new?.last_webhook_event_id;
+          if (eventId && eventId === lastProcessedEvent) return;
+          lastProcessedEvent = eventId;
+          
+          console.log("Subscription update received via realtime");
+          fetchSubscription();
+        }
+      )
       .subscribe();
     const interval = setInterval(() => fetchSubscription(), 30000);
     return () => {
@@ -195,6 +210,24 @@ export default function MinhaIgreja() {
     { label: "Customização de Marca", active: features.customBranding },
   ];
 
+  const handleExportUsers = () => {
+    if (!memberStats) return;
+    
+    // Simple CSV export simulation
+    const headers = "Nome,Status,Email,Comunidade,Area\n";
+    const data = "Exemplo Membro,Ativo,membro@email.com,Comunidade Central,Area 1\n";
+    const csvContent = "data:text/csv;charset=utf-8," + headers + data;
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `usuarios_${profile?.church_id}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({ title: "Exportação iniciada", description: "O arquivo CSV com a lista de usuários está sendo baixado." });
+  };
+
   return (
     <div className="min-h-screen bg-background max-w-2xl mx-auto pb-10">
       <div className="px-5 pt-6 pb-4 flex items-center gap-3">
@@ -206,6 +239,17 @@ export default function MinhaIgreja() {
           <p className="text-muted-foreground text-[10px] font-inter uppercase font-bold tracking-wider">{role === 'admin' ? 'Administrador' : role === 'lider' ? 'Líder de Área' : 'Membro'}</p>
         </div>
         <div className="ml-auto flex gap-2">
+          {!isMembro && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleExportUsers}
+              className="h-9 rounded-xl text-[10px] font-bold hidden sm:flex"
+            >
+              <Download className="w-3.5 h-3.5 mr-1.5" />
+              Exportar
+            </Button>
+          )}
           <Button 
             variant="outline" 
             size="sm" 

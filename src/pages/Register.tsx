@@ -242,7 +242,19 @@ export default function Register() {
       const stats = statsArray && statsArray[0];
       
       if (stats && stats.member_limit && stats.total_users >= stats.member_limit) {
+         const blockedReason = `Limite excedido: ${stats.total_users}/${stats.member_limit}`;
          setError(`Limite excedido: Esta igreja já possui ${stats.total_users} usuários (limite do plano: ${stats.member_limit}). Entre em contato com a liderança para upgrade.`);
+         
+         // Log the blocked attempt asynchronously
+         void supabase.rpc("log_blocked_registration", {
+           p_church_id: churchId,
+           p_email: email,
+           p_full_name: fullName,
+           p_reason: blockedReason,
+           p_current_count: Number(stats.total_users),
+           p_limit: Number(stats.member_limit)
+         });
+
          setLoading(false);
          return;
       }
