@@ -56,8 +56,7 @@ export default function Index() {
   const currentArea = effectiveArea || profile?.area || "";
   const navigate = useNavigate();
 
-  // Redirect to presentation if not standalone/installed and not logged in (handled by route guard usually)
-  // But here we want to force presentation as landing for web users
+  // Redirect to presentation if not standalone/installed and not logged in
   useEffect(() => {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
     if (!isStandalone && !authLoading && !user) {
