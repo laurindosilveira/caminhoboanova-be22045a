@@ -683,36 +683,83 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
         </div>
       )}
       {professionRecords.length > 0 && (
-        <div className="mt-8">
-          <div className="flex items-center justify-between mb-3">
+        <div className="mt-8 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5 text-brand-green" />
               <h3 className="font-montserrat font-bold text-foreground text-sm">Histórico: Professaram a Fé</h3>
             </div>
-            <button 
-              onClick={exportProfessionReport}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground text-[10px] font-montserrat font-bold transition-all border border-border"
-            >
-              <FileText className="w-3 h-3" />
-              Relatório PDF
-            </button>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={exportProfessionCSV}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground text-[10px] font-montserrat font-bold transition-all border border-border"
+              >
+                <FileSpreadsheet className="w-3 h-3" />
+                Excel (CSV)
+              </button>
+              <button 
+                onClick={exportProfessionReport}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground text-[10px] font-montserrat font-bold transition-all border border-border"
+              >
+                <FileText className="w-3 h-3" />
+                Relatório PDF
+              </button>
+            </div>
           </div>
+
+          {/* Filters */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-muted/30 p-3 rounded-2xl border border-border/50">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Input 
+                placeholder="Buscar por nome ou turma..." 
+                className="pl-9 h-9 text-xs rounded-xl"
+                value={professionFilters.search}
+                onChange={e => setProfessionFilters(f => ({ ...f, search: e.target.value }))}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">De:</span>
+              <Input 
+                type="date" 
+                className="h-9 text-xs rounded-xl"
+                value={professionFilters.startDate}
+                onChange={e => setProfessionFilters(f => ({ ...f, startDate: e.target.value }))}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">Até:</span>
+              <Input 
+                type="date" 
+                className="h-9 text-xs rounded-xl"
+                value={professionFilters.endDate}
+                onChange={e => setProfessionFilters(f => ({ ...f, endDate: e.target.value }))}
+              />
+            </div>
+          </div>
+
           <Card className="border-border">
             <CardContent className="p-0 overflow-hidden">
               <div className="divide-y divide-border">
-                {professionRecords.map((record) => (
-                  <div key={record.id} className="px-4 py-3 flex items-center justify-between gap-3 bg-card/50">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-foreground truncate">{record.full_name}</p>
-                      <p className="text-[10px] text-muted-foreground font-inter">
-                        {record.turma_name} · {new Date(record.professed_at).toLocaleDateString('pt-BR')}
-                      </p>
+                {filteredProfessionRecords.length > 0 ? (
+                  filteredProfessionRecords.map((record) => (
+                    <div key={record.id} className="px-4 py-3 flex items-center justify-between gap-3 bg-card/50">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-foreground truncate">{record.full_name}</p>
+                        <p className="text-[10px] text-muted-foreground font-inter">
+                          Turma Anterior: {record.turma_name || "Nenhuma"} · {new Date(record.professed_at).toLocaleDateString('pt-BR')}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="text-[8px] bg-brand-green/10 text-brand-green border-brand-green/20">
+                        ARQUIVADO
+                      </Badge>
                     </div>
-                    <Badge variant="outline" className="text-[8px] bg-brand-green/10 text-brand-green border-brand-green/20">
-                      ARQUIVADO
-                    </Badge>
+                  ))
+                ) : (
+                  <div className="p-8 text-center">
+                    <p className="text-xs text-muted-foreground font-inter">Nenhum registro encontrado para os filtros aplicados.</p>
                   </div>
-                ))}
+                )}
               </div>
             </CardContent>
           </Card>
