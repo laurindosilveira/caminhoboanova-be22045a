@@ -385,8 +385,25 @@ export default function MinhaIgreja() {
                 {auditLogs.map((log) => (
                   <div key={log.id} className="px-4 py-3 flex items-start justify-between gap-3 bg-card/50">
                     <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-bold text-foreground uppercase tracking-wider truncate">{log.action}</p>
+                      <p className="text-[11px] font-bold text-foreground uppercase tracking-wider truncate">
+                        {log.action === 'trial_alert_shown' && 'Aviso de vencimento exibido'}
+                        {log.action === 'portal_opened' && 'Portal do cliente acessado'}
+                        {log.action === 'portal_opened_for_cancel' && 'Portal acessado para cancelar'}
+                        {log.action === 'alert_snoozed' && 'Banner sonecado por 24h'}
+                        {log.action === 'subscription_created' && 'Assinatura criada'}
+                        {log.action === 'subscription_updated' && 'Assinatura atualizada'}
+                        {log.action === 'plan_changed' && 'Plano Alterado'}
+                        {log.action === 'branding_updated' && 'Identidade visual alterada'}
+                        {log.action === 'invoice_paid' && 'Fatura paga com sucesso'}
+                        {log.action === 'payment_failed' && 'Falha no pagamento'}
+                        {!['trial_alert_shown', 'portal_opened', 'portal_opened_for_cancel', 'alert_snoozed', 'subscription_created', 'subscription_updated', 'plan_changed', 'branding_updated', 'invoice_paid', 'payment_failed'].includes(log.action) && log.action}
+                      </p>
                       <p className="text-[10px] text-muted-foreground">{new Date(log.created_at).toLocaleString('pt-BR')}</p>
+                      {log.action === 'plan_changed' && log.details?.unlocked?.length > 0 && (
+                        <p className="text-[9px] text-brand-green font-medium mt-1">
+                          Recursos liberados: {log.details.unlocked.join(', ')}
+                        </p>
+                      )}
                     </div>
                     <Badge variant="outline" className="text-[8px] h-4">AUDITORIA</Badge>
                   </div>
