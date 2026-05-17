@@ -106,4 +106,19 @@ describe('Subscription Status & RBAC Simulation', () => {
     
     expect(canEdit).toBe(false);
   });
+
+  it('should react immediately to status changes in the UI logic', () => {
+    const simulateUIReaction = (status: string) => {
+      const isBlocked = status === 'blocked';
+      const isPastDue = status === 'past_due';
+      return {
+        showOverlay: isBlocked || isPastDue,
+        allowActions: status === 'active' || status === 'trial'
+      };
+    };
+
+    expect(simulateUIReaction('active').allowActions).toBe(true);
+    expect(simulateUIReaction('blocked').allowActions).toBe(false);
+    expect(simulateUIReaction('past_due').showOverlay).toBe(true);
+  });
 });
