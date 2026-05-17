@@ -19,6 +19,9 @@ import {
   Trophy,
   X,
   Sparkles,
+  ShieldCheck,
+  ShieldAlert,
+  Fingerprint
 } from "lucide-react";
 import { requestNotificationPermission, isNotificationEnabled, sendNotification } from "@/lib/notifications";
 import { subscribeToWebPush, isWebPushSubscribed } from "@/lib/webPush";
@@ -124,6 +127,11 @@ export default function NotificationSettings() {
   // Troubleshoot panel
   const [showHelp, setShowHelp] = useState(false);
 
+  // MFA state
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [mfaLoading, setMfaLoading] = useState(false);
+  const [showMfaDialog, setShowMfaDialog] = useState(false);
+
   const notificationOptions = [
     { key: "devocional" as const, label: "Devocional diário", desc: `Lembrete às ${preferredHour}h para o devocional`, icon: BookOpen, color: "text-brand-green" },
     { key: "eventos" as const, label: "Eventos e encontros", desc: "Avisos de eventos próximos", icon: CalendarDays, color: "text-primary" },
@@ -178,7 +186,13 @@ export default function NotificationSettings() {
       setLoading(false);
     }
 
+    async function checkMfa() {
+      const { data } = await supabase.auth.mfa.listFactors();
+      setMfaEnabled(data?.all?.some(f => f.status === 'verified') ?? false);
+    }
+
     load();
+    checkMfa();
   }, [user]);
 
   if (!("Notification" in window) || loading) return null;
@@ -362,6 +376,37 @@ export default function NotificationSettings() {
 
   return (
     <div className="px-5 mt-3 space-y-3">
+      {/* ── Bloco Seguranca / MFA ────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+        <div className="flex items-center gap-3 p-4">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${mfaEnabled ? "bg-primary/10" : "bg-muted"}`}>
+            <Fingerprint className={`w-5 h-5 ${mfaEnabled ? "text-primary" : "text-muted-foreground"}`} />
+          </div>
+          <div className="text-left flex-1">
+            <p className="font-montserrat font-bold text-foreground text-sm">Autenticacao em 2 Etapas</p>
+            <p className="text-muted-foreground text-xs font-inter">
+              {mfaEnabled 
+                ? "Google Authenticator ativado e seguro." 
+                : "Proteja sua conta com o Google Authenticator."}
+            </p>
+          </div>
+          <div>
+            {mfaEnabled ? (
+              <Badge className="bg-brand-green/10 text-brand-green border-brand-green/30 font-bold text-[10px]">ATIVO</Badge>
+            ) : (
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="h-8 rounded-lg text-[10px] font-bold"
+                onClick={() => window.open('https://supabase.com/docs/guides/auth/auth-mfa', '_blank')}
+              >
+                CONFIGURAR
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* ── Bloco WhatsApp ────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
         <button
