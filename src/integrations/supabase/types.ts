@@ -404,6 +404,38 @@ export type Database = {
           },
         ]
       }
+      church_audit_logs: {
+        Row: {
+          action: string
+          church_id: string | null
+          created_at: string | null
+          details: Json | null
+          id: string
+        }
+        Insert: {
+          action: string
+          church_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+        }
+        Update: {
+          action?: string
+          church_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "church_audit_logs_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       church_subscriptions: {
         Row: {
           activities: string | null
@@ -430,6 +462,7 @@ export type Database = {
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
           subscription_status: string
+          trial_alert_snoozed_until: string | null
           trial_ends_at: string | null
           updated_at: string
         }
@@ -458,6 +491,7 @@ export type Database = {
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           subscription_status?: string
+          trial_alert_snoozed_until?: string | null
           trial_ends_at?: string | null
           updated_at?: string
         }
@@ -486,6 +520,7 @@ export type Database = {
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           subscription_status?: string
+          trial_alert_snoozed_until?: string | null
           trial_ends_at?: string | null
           updated_at?: string
         }
@@ -3539,6 +3574,10 @@ export type Database = {
       is_super_admin:
         | { Args: never; Returns: boolean }
         | { Args: { _user_id?: string }; Returns: boolean }
+      log_church_audit: {
+        Args: { p_action: string; p_church_id: string; p_details?: Json }
+        Returns: undefined
+      }
       test_stripe_webhook: {
         Args: {
           p_church_subscription_id: string
