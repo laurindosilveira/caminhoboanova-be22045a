@@ -266,8 +266,41 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
     setConfirmReset(false);
   }
 
+  const filteredProfessionRecords = useMemo(() => {
+    return professionRecords.filter(record => {
+      const matchesSearch = record.full_name.toLowerCase().includes(professionFilters.search.toLowerCase()) || 
+                           (record.turma_name || "").toLowerCase().includes(professionFilters.search.toLowerCase());
+      
+      const recordDate = new Date(record.professed_at);
+      const matchesStart = professionFilters.startDate ? recordDate >= new Date(professionFilters.startDate) : true;
+      const matchesEnd = professionFilters.endDate ? recordDate <= new Date(professionFilters.endDate + "T23:59:59") : true;
+      
+      return matchesSearch && matchesStart && matchesEnd;
+    });
+  }, [professionRecords, professionFilters]);
+
+  const exportProfessionCSV = () => {
+    if (filteredProfessionRecords.length === 0) return;
+    
+    const headers = "Nome,Turma Anterior,Data da Profissao de Fe\n";
+    const rows = filteredProfessionRecords.map(r => 
+      `"${r.full_name}","${r.turma_name || ""}","${new Date(r.professed_at).toLocaleDateString('pt-BR')}"`
+    ).join("\n");
+    
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + headers + rows;
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `relatorio_profissao_fe_${new Date().getTime()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({ title: "CSV Gerado", description: "O relatório foi baixado com sucesso." });
+  };
+
   async function exportProfessionReport() {
-    if (professionRecords.length === 0) return;
+    if (filteredProfessionRecords.length === 0) return;
     
     try {
       const doc = new jsPDF();
@@ -285,14 +318,14 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
       // Table Header
       doc.setFont("helvetica", "bold");
       doc.text("Nome Completo", margin, y);
-      doc.text("Turma", margin + 80, y);
+      doc.text("Turma Anterior", margin + 80, y);
       doc.text("Data", margin + 140, y);
       y += 5;
       doc.line(margin, y, 190, y);
       y += 7;
 
       doc.setFont("helvetica", "normal");
-      professionRecords.forEach((record) => {
+      filteredProfessionRecords.forEach((record) => {
         if (y > 270) {
           doc.addPage();
           y = 20;
