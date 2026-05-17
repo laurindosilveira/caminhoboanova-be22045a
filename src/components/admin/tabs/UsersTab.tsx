@@ -445,10 +445,25 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
         </button>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Buscar por nome ou comunidade..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 rounded-2xl border-border" />
+      {/* Search and Filters */}
+      <div className="flex flex-col gap-3">
+        <div className="relative">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input placeholder="Buscar por nome ou comunidade..." value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }} className="pl-9 rounded-2xl border-border" />
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {["all", "admin", "lider", "user"].map(role => (
+            <button
+              key={role}
+              onClick={() => { setRoleFilter(role); setCurrentPage(1); }}
+              className={`px-3 py-1.5 rounded-xl text-[10px] font-montserrat font-bold transition-all border ${
+                roleFilter === role ? "bg-primary text-primary-foreground border-primary" : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"
+              }`}
+            >
+              {role === "all" ? "Todos" : role === "admin" ? "Admins" : role === "lider" ? "Líderes" : "Participantes"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Year filter */}
