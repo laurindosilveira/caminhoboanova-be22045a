@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { full_name, birth_date, phone, community, area } = body;
+    const { full_name, birth_date, phone, community, area, church_id: provided_church_id } = body;
 
     // Validate required fields
     if (!full_name || !birth_date || !phone || !community || !area) {
@@ -46,19 +46,67 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Use service role client to bypass RLS (user may not be confirmed yet)
+    // Use service role client to bypass RLS
     const serviceClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
+    // 1. Check if this user is a pastor from a confirmed subscription
+    let church_id = provided_church_id;
+    let role = "membro";
+    let enrollment_status = "pending";
+
+    const { data: subData } = await serviceClient
+      .from("church_subscriptions")
+      .select("church_id, stripe_subscription_id")
+      .eq("pastor_email", user.email)
+      .eq("subscription_status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (subData?.church_id) {
+      church_id = subData.church_id;
+      role = "admin";
+      enrollment_status = "approved";
+    }
+
+    // 2. Check member limit if not an admin
+    if (role !== "admin" && church_id) {
+      const { data: subInfo } = await serviceClient
+        .from("church_subscriptions")
+        .select("member_limit")
+        .eq("church_id", church_id)
+        .eq("subscription_status", "active")
+        .single();
+
+      if (subInfo?.member_limit) {
+        const { count } = await serviceClient
+          .from("profiles")
+          .select("*", { count: "exact", head: true })
+          .eq("church_id", church_id);
+
+        if (count && count >= subInfo.member_limit) {
+          return new Response(JSON.stringify({ error: "Limite de membros atingido para esta igreja." }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+    }
+
     const { error: insertError } = await serviceClient.from("profiles").insert({
-      user_id: user.id, // Use verified user_id from JWT, not from body
+      user_id: user.id,
       full_name,
       birth_date,
       phone,
       community,
       area,
+      church_id,
+      role,
+      enrollment_status,
+      email: user.email,
     });
 
     if (insertError) {
