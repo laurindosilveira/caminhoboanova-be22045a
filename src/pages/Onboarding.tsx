@@ -189,7 +189,9 @@ export default function Onboarding() {
   const planInfo = STRIPE_PLANS[recommendedPlan];
   const planDetail = PLAN_DETAILS[recommendedPlan];
 
-  const handleCheckout = useCallback(async (priceId: string) => {
+  const handleCheckout = useCallback(async (selectedPlan: "comunidade" | "crescimento" | "pastoral") => {
+    const planInfo = STRIPE_PLANS[selectedPlan];
+    const priceId = planInfo.price_id;
     setCheckoutLoading(true);
     try {
       // Save church data to database before checkout
@@ -211,7 +213,7 @@ export default function Onboarding() {
         objectives: questionnaire.objectives,
         needs: questionnaire.needs,
         preferences: questionnaire.preferences,
-        recommended_plan: recommendedPlan,
+        recommended_plan: selectedPlan,
         subscription_status: "pending_checkout",
         trial_ends_at: trialEndsAt.toISOString(),
       }).select().single();
@@ -241,7 +243,7 @@ export default function Onboarding() {
     } finally {
       setCheckoutLoading(false);
     }
-  }, [church, pastor, community, questionnaire, recommendedPlan]);
+  }, [church, pastor, community, questionnaire]);
 
   // ─── Field helpers ─────────────────────────────────────
   const inputClass = "bg-card border-border focus:border-primary";
