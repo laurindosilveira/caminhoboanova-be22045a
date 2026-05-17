@@ -17,6 +17,17 @@ const planMemberLimit = (plan: string): number | null => {
   return null; // pastoral = unlimited
 };
 
+// Map Stripe Product IDs to internal plan keys
+// Update these IDs based on your actual Stripe products
+const productToPlan = (productId: string): string | null => {
+  const map: Record<string, string> = {
+    "prod_RcaX6hD3uXhY": "comunidade", // Exemplo
+    "prod_RcaY7iE4vYiZ": "crescimento",
+    "prod_RcaZ8jF5wZjA": "pastoral"
+  };
+  return map[productId] || null;
+};
+
 const stripeStatusToInternal = (status: string): string => {
   switch (status) {
     case "trialing": return "trial";
@@ -161,8 +172,9 @@ serve(async (req) => {
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
         const status = stripeStatusToInternal(subscription.status);
+        const productId = subscription.items.data[0].price.product as string;
+        const newPlan = productToPlan(productId);
         
-        // Find church_subscription by stripe id
         const { data: sub } = await supabaseAdmin
           .from("church_subscriptions")
           .select("id, recommended_plan")
@@ -171,12 +183,15 @@ serve(async (req) => {
 
         if (sub) {
           churchSubId = sub.id;
+          const planToUse = newPlan || sub.recommended_plan;
+          
           await supabaseAdmin
             .from("church_subscriptions")
             .update({
               subscription_status: status,
               trial_ends_at: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
-              member_limit: planMemberLimit(sub.recommended_plan),
+              recommended_plan: planToUse,
+              member_limit: planMemberLimit(planToUse),
               last_webhook_event_id: event.id
             })
             .eq("id", sub.id);
