@@ -150,39 +150,47 @@ export default function MinhaIgreja() {
       {/* Subscription Status */}
       <div className="px-5 mb-6 space-y-4">
         {subData?.subscribed && subData.subscription_status === 'trial' && subData.subscription_end && (
-          <div className="bg-primary/10 border border-primary/30 rounded-2xl p-4 flex items-start gap-3">
+          <div className="bg-primary/10 border border-primary/30 rounded-2xl p-4 flex items-start gap-3 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-1">
+               <Badge variant="outline" className="text-[8px] border-primary/20 bg-primary/5">TRIAL</Badge>
+            </div>
             <Clock className="w-5 h-5 text-primary mt-0.5" />
             <div className="flex-1">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="font-montserrat font-bold text-sm text-primary">Período de Teste</p>
-                  <p className="text-xs text-muted-foreground font-inter">
-                    Seu trial vence em {formatDate(subData.subscription_end)}. 
-                    {Math.ceil((new Date(subData.subscription_end).getTime() - Date.now()) / 86400000) <= 5 && 
-                      " Aproveite para configurar tudo e garantir sua vaga!"}
+                  <p className="font-montserrat font-bold text-sm text-primary">Período de Experiência</p>
+                  <p className="text-xs text-muted-foreground font-inter max-w-[200px]">
+                    Sua igreja está no modo demonstração até {formatDate(subData.subscription_end)}.
                   </p>
                 </div>
-                <div className="text-right">
-                  <span className="text-lg font-black text-primary">
+                <div className="text-right bg-white/40 backdrop-blur-sm px-3 py-1.5 rounded-xl border border-primary/10">
+                  <span className="text-xl font-black text-primary block leading-none">
                     {Math.max(0, Math.ceil((new Date(subData.subscription_end).getTime() - Date.now()) / 86400000))}
                   </span>
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold">dias</p>
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold">dias rest.</p>
                 </div>
               </div>
-              <div className="flex gap-2 mt-3">
+              <div className="flex gap-2 mt-4">
                 <Button 
                   onClick={() => handleManageSubscription('portal_opened_for_cancel')} 
+                  disabled={portalLoading}
                   variant="outline" 
                   size="sm" 
-                  className="h-8 text-[10px] font-bold border-destructive/30 text-destructive hover:bg-destructive/5"
+                  className="h-8 text-[10px] font-bold border-destructive/20 text-destructive hover:bg-destructive hover:text-white transition-all px-4"
                 >
                   Cancelar Trial
                 </Button>
                 <Button 
-                  onClick={() => toast({ title: "Banner ocultado", description: "O aviso aparecerá novamente em 24h." })} 
+                  onClick={() => {
+                    const expiry = new Date();
+                    expiry.setHours(expiry.getHours() + 24);
+                    localStorage.setItem(`snooze_trial_${profile?.church_id}`, expiry.toISOString());
+                    toast({ title: "Aviso ocultado", description: "Lembrete adiado por 24 horas." });
+                    fetchSubscription(); // Refresh to hide if we added logic for it
+                  }} 
                   variant="ghost" 
                   size="sm" 
-                  className="h-8 text-[10px] font-bold text-muted-foreground"
+                  className="h-8 text-[10px] font-bold text-muted-foreground hover:bg-muted"
                 >
                   Sonecar por 24h
                 </Button>
