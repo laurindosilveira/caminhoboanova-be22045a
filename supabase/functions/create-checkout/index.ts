@@ -18,18 +18,20 @@ serve(async (req) => {
   );
 
   try {
-    const { priceId, subscriptionId } = await req.json();
+    const { priceId, subscriptionId, email: providedEmail } = await req.json();
     if (!priceId) throw new Error("priceId is required");
 
     const authHeader = req.headers.get("Authorization");
-    let email: string | undefined;
+    let email: string | undefined = providedEmail;
     let customerId: string | undefined;
 
-    // Try to get user email if authenticated
+    // Try to get user email if authenticated (takes precedence)
     if (authHeader) {
       const token = authHeader.replace("Bearer ", "");
       const { data } = await supabaseClient.auth.getUser(token);
-      email = data.user?.email ?? undefined;
+      if (data.user?.email) {
+        email = data.user.email;
+      }
     }
 
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
