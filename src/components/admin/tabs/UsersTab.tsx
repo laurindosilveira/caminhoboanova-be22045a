@@ -729,53 +729,58 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
         </div>
       ) : (
         <>
-          {admins.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <ShieldCheck className="w-3.5 h-3.5 text-primary" />
-                <span className="text-xs font-montserrat font-bold text-muted-foreground uppercase tracking-wide">Administradores ({admins.length})</span>
-              </div>
+          <div className="space-y-6">
+            {currentUsers.length > 0 ? (
               <div className="bg-card border border-border rounded-2xl overflow-hidden">
-                {admins.map((u, i) => (
-                  <UserRow key={u.user_id} user={u} isLast={i === admins.length - 1} isSaving={saving === u.user_id}
-                    onToggle={() => handleToggle(u)} onEdit={() => openEditUser(u)} />
+                {currentUsers.map((u, i) => (
+                  <UserRow 
+                    key={u.user_id} 
+                    user={u} 
+                    isLast={i === currentUsers.length - 1} 
+                    isSaving={saving === u.user_id}
+                    onToggle={() => handleToggle(u)} 
+                    onEdit={() => openEditUser(u)} 
+                  />
                 ))}
               </div>
-            </div>
-          )}
-
-          {lideres.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <ShieldCheck className="w-3.5 h-3.5 text-accent-foreground" />
-                <span className="text-xs font-montserrat font-bold text-muted-foreground uppercase tracking-wide">Líderes ({lideres.length})</span>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground font-inter text-sm">
+                Nenhum usuário encontrado para esta busca/filtro.
               </div>
-              <div className="bg-card border border-border rounded-2xl overflow-hidden">
-                {lideres.map((u, i) => (
-                  <UserRow key={u.user_id} user={u} isLast={i === lideres.length - 1} isSaving={saving === u.user_id}
-                    onToggle={() => handleToggle(u)} onEdit={() => openEditUser(u)} />
+            )}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-4">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 rounded-xl border border-border bg-muted/30 text-xs font-bold disabled:opacity-50"
+              >
+                Anterior
+              </button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`w-8 h-8 rounded-xl text-xs font-bold transition-all ${
+                      currentPage === page ? "bg-primary text-primary-foreground" : "bg-muted/30 text-muted-foreground"
+                    }`}
+                  >
+                    {page}
+                  </button>
                 ))}
               </div>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 rounded-xl border border-border bg-muted/30 text-xs font-bold disabled:opacity-50"
+              >
+                Próximo
+              </button>
             </div>
-          )}
-
-          {regular.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <User className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="text-xs font-montserrat font-bold text-muted-foreground uppercase tracking-wide">Participantes ({regular.length})</span>
-              </div>
-              <div className="bg-card border border-border rounded-2xl overflow-hidden">
-                {regular.map((u, i) => (
-                  <UserRow key={u.user_id} user={u} isLast={i === regular.length - 1} isSaving={saving === u.user_id}
-                    onToggle={() => handleToggle(u)} onEdit={() => openEditUser(u)} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {filtered.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground font-inter text-sm">Nenhum usuário encontrado.</div>
           )}
         </>
       )}
