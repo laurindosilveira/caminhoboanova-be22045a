@@ -410,6 +410,12 @@ export default function NotificationSettings() {
         </div>
       </div>
 
+
+      {/* -- Biometria -- */}
+      <div className="rounded-2xl border border-border bg-card shadow-sm p-4">
+        <PasskeySettings />
+      </div>
+
       {/* ── Bloco WhatsApp ────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
         <button
