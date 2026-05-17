@@ -415,6 +415,7 @@ export type Database = {
           church_phone: string | null
           created_at: string
           id: string
+          is_active: boolean | null
           member_count: string | null
           member_limit: number | null
           needs: string | null
@@ -441,6 +442,7 @@ export type Database = {
           church_phone?: string | null
           created_at?: string
           id?: string
+          is_active?: boolean | null
           member_count?: string | null
           member_limit?: number | null
           needs?: string | null
@@ -467,6 +469,7 @@ export type Database = {
           church_phone?: string | null
           created_at?: string
           id?: string
+          is_active?: boolean | null
           member_count?: string | null
           member_limit?: number | null
           needs?: string | null
