@@ -68,7 +68,10 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [roleFilter, setRoleFilter] = useState<string>("all");
   const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const usersPerPage = 10;
   const [saving, setSaving] = useState<string | null>(null);
   const [promotingUser, setPromotingUser] = useState<UserEntry | null>(null);
   const [promotingRole, setPromotingRole] = useState<"admin" | "lider" | null>(null);
