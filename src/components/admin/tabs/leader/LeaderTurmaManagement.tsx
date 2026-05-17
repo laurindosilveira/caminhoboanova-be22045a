@@ -660,4 +660,3 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
       )}
     </div>
   );
-}
