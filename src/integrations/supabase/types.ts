@@ -2439,6 +2439,39 @@ export type Database = {
           },
         ]
       }
+      profession_of_faith_records: {
+        Row: {
+          church_id: string
+          details: Json | null
+          full_name: string
+          id: string
+          professed_at: string | null
+          turma_id: string | null
+          turma_name: string | null
+          user_id: string
+        }
+        Insert: {
+          church_id: string
+          details?: Json | null
+          full_name: string
+          id?: string
+          professed_at?: string | null
+          turma_id?: string | null
+          turma_name?: string | null
+          user_id: string
+        }
+        Update: {
+          church_id?: string
+          details?: Json | null
+          full_name?: string
+          id?: string
+          professed_at?: string | null
+          turma_id?: string | null
+          turma_name?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           address: string | null
@@ -2457,6 +2490,7 @@ export type Database = {
           father_phone: string | null
           full_name: string
           id: string
+          is_active: boolean | null
           mother_name: string | null
           mother_phone: string | null
           phone: string
@@ -2486,6 +2520,7 @@ export type Database = {
           father_phone?: string | null
           full_name: string
           id?: string
+          is_active?: boolean | null
           mother_name?: string | null
           mother_phone?: string | null
           phone: string
@@ -2515,6 +2550,7 @@ export type Database = {
           father_phone?: string | null
           full_name?: string
           id?: string
+          is_active?: boolean | null
           mother_name?: string | null
           mother_phone?: string | null
           phone?: string
@@ -3622,6 +3658,7 @@ export type Database = {
         Args: { p_church_id: string }
         Returns: {
           active_users: number
+          inactive_users: number
           member_limit: number
           pending_users: number
           total_users: number
@@ -3717,6 +3754,10 @@ export type Database = {
       }
       log_system_access_attempt: {
         Args: { p_status: string }
+        Returns: undefined
+      }
+      process_profession_of_faith: {
+        Args: { p_turma_id?: string; p_user_id: string }
         Returns: undefined
       }
       secure_extend_trial: {
