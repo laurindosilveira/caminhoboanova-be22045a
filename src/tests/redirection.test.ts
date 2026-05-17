@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { isAppInstalled } from '../lib/utils';
+import { isAppInstalled } from '@/lib/utils';
 
 describe('Redirection Logic Heuristics', () => {
   beforeEach(() => {
