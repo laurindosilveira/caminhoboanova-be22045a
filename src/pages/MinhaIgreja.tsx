@@ -185,6 +185,15 @@ export default function MinhaIgreja() {
 
   const planKey = subData?.product_id ? getPlanByProductId(subData.product_id) : null;
   const planInfo = planKey ? STRIPE_PLANS[planKey] : null;
+  const features = getFeaturesForPlan(planKey);
+
+  const activeFeatures = [
+    { label: "Membros", value: features.maxMembers || "Ilimitado", active: true },
+    { label: "Exportação Avançada", active: features.advancedExport },
+    { label: "Multi-Áreas", active: features.multiAreaManagement },
+    { label: "Relatórios Detalhados", active: features.detailedReports },
+    { label: "Customização de Marca", active: features.customBranding },
+  ];
 
   return (
     <div className="min-h-screen bg-background max-w-2xl mx-auto pb-10">
