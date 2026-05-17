@@ -476,7 +476,7 @@ export default function Onboarding() {
                           </ul>
 
                           <Button
-                            onClick={() => handleCheckout(planKey)}
+                            onClick={() => handleConfirmPlan(planKey)}
                             disabled={checkoutLoading}
                             variant={isRecommended ? "default" : "outline"}
                             className={`w-full h-11 text-sm font-montserrat font-bold rounded-xl ${isRecommended ? 'text-primary-foreground shadow-md' : ''}`}
