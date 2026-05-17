@@ -353,6 +353,39 @@ export type Database = {
         }
         Relationships: []
       }
+      blocked_registration_attempts: {
+        Row: {
+          attempted_at: string | null
+          church_id: string
+          current_count: number
+          email: string | null
+          full_name: string | null
+          id: string
+          member_limit: number
+          reason: string
+        }
+        Insert: {
+          attempted_at?: string | null
+          church_id: string
+          current_count: number
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          member_limit: number
+          reason: string
+        }
+        Update: {
+          attempted_at?: string | null
+          church_id?: string
+          current_count?: number
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          member_limit?: number
+          reason?: string
+        }
+        Relationships: []
+      }
       challenge_participants: {
         Row: {
           challenge_id: string
@@ -448,6 +481,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean | null
+          last_threshold_alert_pct: number | null
           last_webhook_event_id: string | null
           member_count: string | null
           member_limit: number | null
@@ -477,6 +511,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean | null
+          last_threshold_alert_pct?: number | null
           last_webhook_event_id?: string | null
           member_count?: string | null
           member_limit?: number | null
@@ -506,6 +541,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean | null
+          last_threshold_alert_pct?: number | null
           last_webhook_event_id?: string | null
           member_count?: string | null
           member_limit?: number | null
@@ -3738,6 +3774,17 @@ export type Database = {
       is_super_admin:
         | { Args: never; Returns: boolean }
         | { Args: { _user_id?: string }; Returns: boolean }
+      log_blocked_registration: {
+        Args: {
+          p_church_id: string
+          p_current_count: number
+          p_email: string
+          p_full_name: string
+          p_limit: number
+          p_reason: string
+        }
+        Returns: undefined
+      }
       log_church_audit: {
         Args: { p_action: string; p_church_id: string; p_details?: Json }
         Returns: undefined
