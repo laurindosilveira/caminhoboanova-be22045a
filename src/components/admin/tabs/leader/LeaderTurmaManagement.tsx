@@ -4,11 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { GraduationCap, CheckCircle2, RefreshCw, Archive, ChevronDown, ChevronUp, Download, Plus, Pencil } from "lucide-react";
+import { GraduationCap, CheckCircle2, RefreshCw, Archive, ChevronDown, ChevronUp, Download, Plus, Pencil, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import TurmaReportPDF from "@/components/admin/TurmaReportPDF";
+import { jsPDF } from "jspdf";
 
 type Turma = {
   id: string;
