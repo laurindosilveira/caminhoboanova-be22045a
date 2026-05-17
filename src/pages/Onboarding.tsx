@@ -516,6 +516,64 @@ export default function Onboarding() {
           </div>
         </div>
       )}
+      {/* Plan Summary Dialog */}
+      <Dialog open={showPlanSummary} onOpenChange={setShowPlanSummary}>
+        <DialogContent className="sm:max-w-[425px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-montserrat font-black text-2xl flex items-center gap-2">
+              <Sparkles className="w-6 h-6 text-primary" />
+              Confirmar Escolha
+            </DialogTitle>
+            <DialogDescription className="font-inter">
+              Revise os detalhes do plano selecionado para a <strong>{church.name}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedPlanKey && (
+            <div className="bg-muted/30 rounded-2xl p-6 border border-border space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Plano</p>
+                  <h4 className="font-montserrat font-black text-xl text-primary">{STRIPE_PLANS[selectedPlanKey].name}</h4>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Valor Mensal</p>
+                  <p className="font-montserrat font-black text-xl">{STRIPE_PLANS[selectedPlanKey].price}</p>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-border/50">
+                <div className="flex items-center gap-2 text-brand-green bg-brand-green/10 px-3 py-2 rounded-lg">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span className="text-xs font-bold font-inter uppercase">30 Dias de Teste Grátis</span>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-2 px-1">
+                  Você não será cobrado hoje. O período de teste encerra em 30 dias. Cancele a qualquer momento.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex-col sm:flex-col gap-2 mt-4">
+            <Button 
+              onClick={handleCheckout} 
+              disabled={checkoutLoading}
+              className="w-full h-12 rounded-xl text-primary-foreground font-bold shadow-lg"
+              style={{ background: "var(--gradient-hero)" }}
+            >
+              {checkoutLoading ? "Iniciando..." : "Confirmar e Ir para Checkout"}
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              onClick={() => setShowPlanSummary(false)} 
+              className="w-full h-11 rounded-xl text-muted-foreground"
+            >
+              Voltar e trocar plano
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
