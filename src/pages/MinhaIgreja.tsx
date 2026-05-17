@@ -86,6 +86,7 @@ export default function MinhaIgreja() {
   useEffect(() => {
     if (!profile?.church_id) return;
 
+    // Real-time listener
     const channel = supabase
       .channel(`church_subscription_${profile.church_id}`)
       .on(
@@ -103,8 +104,15 @@ export default function MinhaIgreja() {
       )
       .subscribe();
 
+    // Fallback polling every 30 seconds
+    const interval = setInterval(() => {
+      console.log("Subscription re-fetch via polling");
+      fetchSubscription();
+    }, 30000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(interval);
     };
   }, [profile?.church_id, fetchSubscription]);
 
