@@ -26,6 +26,7 @@ const LeaderContactsTab = lazy(() => import("@/components/admin/tabs/leader/Lead
 const AdminAreasTab = lazy(() => import("@/components/admin/tabs/AdminAreasTab"));
 const WhatsAppAuditTab = lazy(() => import("@/components/admin/tabs/WhatsAppAuditTab"));
 const WorshipTab = lazy(() => import("@/components/admin/tabs/WorshipTab"));
+const AdminGlobalDashboard = lazy(() => import("@/components/admin/AdminGlobalDashboard"));
 
 import { AREAS, AREA_COMMUNITIES, ALL_COMMUNITIES, getCommunitiesForArea } from "@/config/areas";
 
