@@ -131,6 +131,11 @@ export default function MinhaIgreja() {
   const planInfo = planKey ? STRIPE_PLANS[planKey] : null;
 
   const handleManageSubscription = async (action: string = 'portal_opened') => {
+    if (isMembro) {
+      toast({ title: "Acesso negado", description: "Somente administradores ou líderes podem gerenciar a assinatura.", variant: "destructive" });
+      return;
+    }
+    
     setPortalLoading(true);
     try {
       if (profile?.church_id) {
