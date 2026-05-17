@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import TurmaReportPDF from "./TurmaReportPDF";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -29,6 +30,7 @@ type Props = {
 
 export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBackToUser, selectedCommunity, onChangeCommunity, participants, activities, turmaLabel }: Props) {
   const { role } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
   const [churchId, setChurchId] = useState<string | null>(null);
