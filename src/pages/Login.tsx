@@ -57,6 +57,9 @@ export default function Login() {
 
     // Auto-redirect based on role
     if (authData.user) {
+      // Set app active flag for redirection logic
+      localStorage.setItem('caminho_app_active', 'true');
+      
       const [{ data: isAdmin }, { data: isLider }] = await Promise.all([
         supabase.rpc("has_role", { _user_id: authData.user.id, _role: "admin" }),
         supabase.rpc("has_role", { _user_id: authData.user.id, _role: "lider" }),
@@ -65,7 +68,7 @@ export default function Login() {
       if (isAdmin || isLider) {
         navigate("/admin");
       } else {
-        navigate("/");
+        navigate("/home");
       }
     }
   }
