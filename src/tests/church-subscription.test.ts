@@ -36,7 +36,7 @@ describe('Minha Igreja RBAC and Functionality', () => {
   });
 
   it('should identify member (user) users correctly', () => {
-    const role = 'user';
+    const role: string = 'user';
     const isMembro = role !== "admin" && role !== "lider";
     expect(isMembro).toBe(true);
   });
