@@ -341,6 +341,26 @@ export default function AdminSistema() {
                           </div>
 
                           <div className="flex flex-col gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="rounded-lg border-primary/30 text-xs text-primary hover:bg-primary/10"
+                              onClick={async () => {
+                                const { data, error } = await supabase.rpc('test_stripe_webhook', {
+                                  p_church_subscription_id: church.id,
+                                  p_event_type: 'manual_reprocess',
+                                  p_stripe_status: 'active'
+                                });
+                                if (error) toast({ title: "Erro ao reprocessar", variant: "destructive" });
+                                else {
+                                  toast({ title: "Webhook reprocessado com sucesso" });
+                                  fetchChurches();
+                                  fetchWebhookLogs();
+                                }
+                              }}
+                            >
+                              Reprocessar
+                            </Button>
                             {church.stripe_customer_id && (
                               <Button
                                 size="sm"

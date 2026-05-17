@@ -3462,6 +3462,10 @@ export type Database = {
         }[]
       }
       get_auth_church_id: { Args: never; Returns: string }
+      get_church_member_count: {
+        Args: { p_church_id: string }
+        Returns: number
+      }
       get_community_area: {
         Args: { _community: Database["public"]["Enums"]["community_name"] }
         Returns: Database["public"]["Enums"]["area_name"]
@@ -3535,6 +3539,14 @@ export type Database = {
       is_super_admin:
         | { Args: never; Returns: boolean }
         | { Args: { _user_id?: string }; Returns: boolean }
+      test_stripe_webhook: {
+        Args: {
+          p_church_subscription_id: string
+          p_event_type: string
+          p_stripe_status?: string
+        }
+        Returns: Json
+      }
       update_push_automation_config: {
         Args: { _body: string; _enabled: boolean; _key: string; _title: string }
         Returns: undefined

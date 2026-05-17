@@ -41,17 +41,19 @@ serve(async (req) => {
     }
 
     const customerId = customers.data[0].id;
-    const subscriptions = await stripe.subscriptions.list({ customer: customerId, status: "active", limit: 1 });
+    const subscriptions = await stripe.subscriptions.list({ customer: customerId, limit: 1 });
     const hasActiveSub = subscriptions.data.length > 0;
 
     let productId = null;
     let subscriptionEnd = null;
+    let subscriptionStatus = null;
     let invoices: any[] = [];
 
     if (hasActiveSub) {
       const sub = subscriptions.data[0];
       subscriptionEnd = new Date(sub.current_period_end * 1000).toISOString();
       productId = sub.items.data[0].price.product;
+      subscriptionStatus = sub.status;
     }
 
     // Fetch recent invoices for receipts
@@ -68,8 +70,9 @@ serve(async (req) => {
     }));
 
     return new Response(JSON.stringify({
-      subscribed: hasActiveSub,
+      subscribed: hasActiveSub && ["active", "trialing", "past_due"].includes(subscriptionStatus || ""),
       product_id: productId,
+      subscription_status: subscriptionStatus,
       subscription_end: subscriptionEnd,
       invoices,
     }), {

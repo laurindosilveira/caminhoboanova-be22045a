@@ -63,6 +63,7 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [subTab, setSubTab] = useState<"users" | "turmas" | "waiting">("users");
+  const [churchId, setChurchId] = useState<string | null>(null);
   const [users, setUsers] = useState<UserEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -85,11 +86,20 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
 
   async function fetchUsers() {
     setLoading(true);
-    const [{ data: profiles, error: profilesError }, { data: roles, error: rolesError }, { data: turmasData, error: turmasError }] = await Promise.all([
+    const [
+      { data: profiles, error: profilesError },
+      { data: roles, error: rolesError },
+      { data: turmasData, error: turmasError },
+      { data: authIdData }
+    ] = await Promise.all([
       supabase.from("profiles").select("user_id, full_name, email, community, area, phone, birth_date, father_name, mother_name, father_phone, mother_phone, address, created_at, turma_id").order("full_name"),
       supabase.from("user_roles").select("user_id, role, admin_area"),
       supabase.from("turmas").select("id, name, year, area").eq("is_active", true).order("year", { ascending: false }),
+      supabase.rpc("get_auth_church_id")
     ]);
+
+    const cId = authIdData as string | null;
+    setChurchId(cId);
 
     if (profilesError) {
       setUsers([]);
@@ -285,6 +295,19 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
 
   async function saveEditUser() {
     if (!editingUser) return;
+    if (!churchId) {
+      toast({ title: "Aviso", description: "Não foi possível identificar sua igreja para validar limites.", variant: "destructive" });
+    }
+
+    const { data: countData } = await supabase.rpc("get_church_member_count", { p_church_id: churchId as any });
+    const { data: subData } = await (supabase.from as any)("church_subscriptions").select("member_limit").eq("church_id", churchId).single();
+    
+    if (subData?.member_limit && (countData || 0) >= subData.member_limit && !editingUser.turma_id && editForm.turma_id) {
+       toast({ title: "Limite atingido", description: `Seu plano permite até ${subData.member_limit} membros ativos.`, variant: "destructive" });
+       setSavingEdit(false);
+       return;
+    }
+
     setSavingEdit(true);
 
     // Determine correct area based on community
