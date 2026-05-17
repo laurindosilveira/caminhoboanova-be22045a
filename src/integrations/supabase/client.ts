@@ -14,8 +14,8 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     persistSession: true,
     autoRefreshToken: true,
   },
-  // @ts-ignore - experimental API
+  // @ts-ignore
   experimental: {
     passkey: true
   }
-});
+} as any);
