@@ -677,12 +677,20 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
           )}
         </div>
       )}
-      {/* Profession of Faith Records */}
       {professionRecords.length > 0 && (
-        <div className="mt-4">
-          <div className="flex items-center gap-2 mb-3">
-            <CheckCircle2 className="w-5 h-5 text-brand-green" />
-            <h3 className="font-montserrat font-bold text-foreground text-sm">Histórico: Professaram a Fé</h3>
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-brand-green" />
+              <h3 className="font-montserrat font-bold text-foreground text-sm">Histórico: Professaram a Fé</h3>
+            </div>
+            <button 
+              onClick={exportProfessionReport}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground text-[10px] font-montserrat font-bold transition-all border border-border"
+            >
+              <FileText className="w-3 h-3" />
+              Relatório PDF
+            </button>
           </div>
           <Card className="border-border">
             <CardContent className="p-0 overflow-hidden">
