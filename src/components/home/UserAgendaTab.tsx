@@ -30,6 +30,8 @@ type Event = {
   community: string | null;
   type: string;
   linked_lesson_id: string | null;
+  turma_id?: string | null;
+  church_id?: string | null;
 };
 
 type LessonContentInfo = { lesson_id: string; summary: string; bible_texts: string[]; prayer_prompt: string };
@@ -41,6 +43,20 @@ type AttendanceRecord = {
   leader_confirmed_at?: string | null;
 };
 type LessonInfo = { id: string; title: string; order_num: number; course_title: string; course_order: number };
+type EventParticipant = {
+  user_id: string;
+  full_name: string | null;
+  community: string | null;
+  area: string | null;
+  turma_id?: string | null;
+};
+type EventAttendance = {
+  id: string;
+  event_id: string;
+  user_id: string;
+  status: string;
+  confirmation_source?: string | null;
+};
 
 // Static fallback map for rendering (includes pastoral type)
 const STATIC_EVENT_TYPES: Record<string, { label: string; color: string; emoji: string }> = {
@@ -201,6 +217,11 @@ export default function UserAgendaTab() {
   const [showPendingModal, setShowPendingModal] = useState(false);
   const [pendingAttendance, setPendingAttendance] = useState<PendingAttendance[]>([]);
   const [savingApproval, setSavingApproval] = useState<string | null>(null);
+  const [selectedAttendanceEvent, setSelectedAttendanceEvent] = useState<Event | null>(null);
+  const [eventParticipants, setEventParticipants] = useState<EventParticipant[]>([]);
+  const [eventAttendance, setEventAttendance] = useState<EventAttendance[]>([]);
+  const [loadingEventAttendance, setLoadingEventAttendance] = useState(false);
+  const [savingEventAttendance, setSavingEventAttendance] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetch() {
@@ -630,6 +651,85 @@ export default function UserAgendaTab() {
     setSavingApproval(null);
   }
 
+  async function openEventAttendance(event: Event) {
+    if (!canManage) return;
+    setSelectedAttendanceEvent(event);
+    setLoadingEventAttendance(true);
+
+    let profilesQuery = supabase
+      .from("profiles")
+      .select("user_id, full_name, community, area, turma_id, church_id, enrollment_status")
+      .neq("user_id", profile?.user_id ?? "");
+
+    const targetTurmaId = event.turma_id ?? (profile as any)?.turma_id ?? null;
+    if (targetTurmaId) {
+      profilesQuery = profilesQuery.eq("turma_id", targetTurmaId);
+    } else if (event.community) {
+      profilesQuery = profilesQuery.eq("community", event.community);
+    } else {
+      profilesQuery = profilesQuery.eq("area", event.area ?? currentArea);
+    }
+
+    const eventChurchId = event.church_id ?? (profile as any)?.church_id ?? null;
+    if (eventChurchId) profilesQuery = profilesQuery.eq("church_id", eventChurchId);
+
+    const [{ data: participantsData, error: participantsError }, { data: attendanceData, error: attendanceError }] = await Promise.all([
+      profilesQuery.order("full_name"),
+      supabase
+        .from("attendance")
+        .select("id, event_id, user_id, status, confirmation_source")
+        .eq("event_id", event.id),
+    ]);
+
+    if (participantsError || attendanceError) {
+      toast.error("Nao foi possivel carregar a presenca deste evento.");
+      console.error(participantsError ?? attendanceError);
+      setLoadingEventAttendance(false);
+      return;
+    }
+
+    setEventParticipants((participantsData ?? []).filter((p: any) => p.enrollment_status !== "rejected") as EventParticipant[]);
+    setEventAttendance((attendanceData ?? []) as EventAttendance[]);
+    setLoadingEventAttendance(false);
+  }
+
+  async function markEventAttendance(userId: string, status: "presente" | "faltou") {
+    if (!selectedAttendanceEvent) return;
+    setSavingEventAttendance(userId);
+    const { data: { user } } = await supabase.auth.getUser();
+    const existing = eventAttendance.find(a => a.user_id === userId);
+    const payload: any = {
+      status,
+      confirmation_source: "leader",
+      confirmed_by: user?.id ?? null,
+      leader_confirmed_at: new Date().toISOString(),
+      church_id: selectedAttendanceEvent.church_id ?? (profile as any)?.church_id ?? null,
+    };
+
+    const result = existing
+      ? await supabase.from("attendance").update(payload).eq("id", existing.id).select("id, event_id, user_id, status, confirmation_source").single()
+      : await supabase.from("attendance").insert({
+          event_id: selectedAttendanceEvent.id,
+          user_id: userId,
+          ...payload,
+        } as any).select("id, event_id, user_id, status, confirmation_source").single();
+
+    if (result.error) {
+      toast.error("Nao foi possivel registrar a presenca.");
+      console.error(result.error);
+      setSavingEventAttendance(null);
+      return;
+    }
+
+    setEventAttendance(prev => {
+      const filtered = prev.filter(a => a.user_id !== userId);
+      return [...filtered, result.data as EventAttendance];
+    });
+    setPendingAttendance(prev => prev.filter(a => !(a.event_id === selectedAttendanceEvent.id && a.user_id === userId)));
+    toast.success(status === "presente" ? "Presenca confirmada!" : "Falta marcada.");
+    setSavingEventAttendance(null);
+  }
+
   async function handleCreateType() {
     if (!newTypeForm.label.trim()) { toast.error("Digite um nome para o tipo"); return; }
     setSavingType(true);
@@ -857,6 +957,7 @@ export default function UserAgendaTab() {
                     attendanceRecords={attendanceRecords}
                     onNavigateToLesson={setActiveTab}
                     canManage={canManage}
+                    onOpenAttendance={openEventAttendance}
                     onEdit={openEditForm}
                     onDelete={handleDeleteEvent}
                     typeEmoji={getEmoji(event.type)}
@@ -880,6 +981,7 @@ export default function UserAgendaTab() {
                     linkedLesson={linkedLesson}
                     attendanceRecords={attendanceRecords}
                     canManage={canManage}
+                    onOpenAttendance={openEventAttendance}
                     onEdit={openEditForm}
                     onDelete={handleDeleteEvent}
                     typeEmoji={getEmoji(event.type)}
@@ -1053,6 +1155,123 @@ export default function UserAgendaTab() {
               })
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── MODAL DE PRESENÇA DO EVENTO ────────── */}
+      <Dialog open={!!selectedAttendanceEvent} onOpenChange={(open) => { if (!open) setSelectedAttendanceEvent(null); }}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-montserrat font-bold text-foreground flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-primary" />
+              Presença do evento
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedAttendanceEvent && (
+            <div className="space-y-4 mt-2">
+              <div className="rounded-2xl border border-border bg-muted/30 p-4">
+                <p className="font-montserrat font-bold text-foreground text-sm">{selectedAttendanceEvent.title}</p>
+                <p className="text-muted-foreground font-inter text-xs mt-1">
+                  {format(new Date(selectedAttendanceEvent.event_date), "EEEE, dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-inter text-muted-foreground">
+                  {selectedAttendanceEvent.location && <span className="rounded-full bg-card px-2 py-1">{selectedAttendanceEvent.location}</span>}
+                  {(selectedAttendanceEvent.area || currentArea) && <span className="rounded-full bg-card px-2 py-1">{selectedAttendanceEvent.area ?? currentArea}</span>}
+                </div>
+              </div>
+
+              {loadingEventAttendance ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map(i => <div key={i} className="h-16 rounded-xl bg-muted animate-pulse" />)}
+                </div>
+              ) : (() => {
+                const attendanceByUser = new Map(eventAttendance.map(a => [a.user_id, a]));
+                const pendingUsers = eventParticipants.filter(p => {
+                  const status = attendanceByUser.get(p.user_id)?.status;
+                  return status === "pendente_presente" || status === "pendente_falta";
+                });
+                const directUsers = eventParticipants.filter(p => {
+                  const status = attendanceByUser.get(p.user_id)?.status;
+                  return status !== "pendente_presente" && status !== "pendente_falta";
+                });
+
+                return (
+                  <div className="space-y-4">
+                    {pendingUsers.length > 0 && (
+                      <div className="rounded-2xl border border-accent/30 bg-accent/10 p-3">
+                        <p className="font-montserrat font-bold text-foreground text-xs">Aguardando aprovação</p>
+                        <p className="text-muted-foreground font-inter text-[10px] mt-1">
+                          Estes usuários já pediram confirmação e aparecem na área de aprovação.
+                        </p>
+                        <div className="mt-2 space-y-1.5">
+                          {pendingUsers.map(p => (
+                            <div key={p.user_id} className="flex items-center justify-between rounded-xl bg-card/70 px-3 py-2">
+                              <span className="font-inter text-xs font-semibold text-foreground">{p.full_name ?? "Sem nome"}</span>
+                              <span className="font-inter text-[10px] text-accent-foreground">Em aprovação</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <p className="font-montserrat font-bold text-foreground text-xs mb-2">
+                        Confirmar pela liderança ({directUsers.length})
+                      </p>
+                      {directUsers.length === 0 ? (
+                        <p className="text-center text-muted-foreground font-inter text-sm py-6">Nenhum usuário disponível para confirmação direta.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {directUsers.map(p => {
+                            const record = attendanceByUser.get(p.user_id);
+                            const isSaving = savingEventAttendance === p.user_id;
+                            return (
+                              <div key={p.user_id} className="rounded-2xl border border-border bg-card p-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <p className="font-inter text-sm font-semibold text-foreground truncate">{p.full_name ?? "Sem nome"}</p>
+                                    {p.community && <p className="font-inter text-[10px] text-muted-foreground">{p.community}</p>}
+                                  </div>
+                                  {record?.status && (
+                                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-inter font-semibold ${
+                                      record.status === "presente"
+                                        ? "bg-brand-green/10 text-brand-green"
+                                        : record.status === "faltou"
+                                        ? "bg-destructive/10 text-destructive"
+                                        : "bg-muted text-muted-foreground"
+                                    }`}>
+                                      {record.status === "presente" ? "Presente" : record.status === "faltou" ? "Faltou" : record.status}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="mt-3 grid grid-cols-2 gap-2">
+                                  <button
+                                    onClick={() => markEventAttendance(p.user_id, "presente")}
+                                    disabled={isSaving}
+                                    className="rounded-xl bg-brand-green/10 py-2 text-xs font-inter font-semibold text-brand-green hover:bg-brand-green/20 disabled:opacity-50"
+                                  >
+                                    {isSaving ? "Salvando..." : "Confirmar presença"}
+                                  </button>
+                                  <button
+                                    onClick={() => markEventAttendance(p.user_id, "faltou")}
+                                    disabled={isSaving}
+                                    className="rounded-xl bg-destructive/10 py-2 text-xs font-inter font-semibold text-destructive hover:bg-destructive/20 disabled:opacity-50"
+                                  >
+                                    Marcar falta
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -1236,11 +1455,11 @@ export default function UserAgendaTab() {
   );
 }
 
-function EventCard({ event, past = false, linkedLesson, lessonContent, attendanceRecords = [], onNavigateToLesson, canManage, onEdit, onDelete, typeEmoji, typeLabel, typeColor }: {
+function EventCard({ event, past = false, linkedLesson, lessonContent, attendanceRecords = [], onNavigateToLesson, canManage, onOpenAttendance, onEdit, onDelete, typeEmoji, typeLabel, typeColor }: {
   event: Event; past?: boolean; linkedLesson?: LessonInfo; lessonContent?: LessonContentInfo;
   attendanceRecords?: AttendanceRecord[];
   onNavigateToLesson?: (tab: string) => void;
-  canManage?: boolean; onEdit?: (event: Event) => void; onDelete?: (eventId: string) => void;
+  canManage?: boolean; onOpenAttendance?: (event: Event) => void; onEdit?: (event: Event) => void; onDelete?: (eventId: string) => void;
   typeEmoji?: string; typeLabel?: string; typeColor?: string;
 }) {
   const [showPrep, setShowPrep] = useState(false);
@@ -1278,7 +1497,10 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
   };
 
   return (
-    <div className={`bg-card rounded-2xl border border-border p-4 shadow-sm ${past ? "opacity-60" : ""}`}>
+    <div
+      className={`bg-card rounded-2xl border border-border p-4 shadow-sm ${canManage ? "cursor-pointer hover:border-primary/40 hover:shadow-md transition-all" : ""} ${past ? "opacity-60" : ""}`}
+      onClick={() => { if (canManage) onOpenAttendance?.(event); }}
+    >
       <div className="flex items-start gap-3">
         <div className="w-12 h-12 rounded-xl bg-primary/10 flex flex-col items-center justify-center flex-shrink-0">
           <span className="text-lg leading-none">{typeInfo.emoji}</span>
@@ -1291,10 +1513,13 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
             <h3 className="font-montserrat font-bold text-foreground text-sm">{event.title}</h3>
             {canManage && (
               <div className="flex items-center gap-1 flex-shrink-0">
-                <button onClick={() => onEdit?.(event)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors" title="Editar">
+                <button onClick={(e) => { e.stopPropagation(); onOpenAttendance?.(event); }} className="p-1.5 rounded-lg text-muted-foreground hover:text-brand-green hover:bg-brand-green/10 transition-colors" title="Confirmar presenças">
+                  <ClipboardList className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); onEdit?.(event); }} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors" title="Editar">
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={() => onDelete?.(event.id)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Excluir">
+                <button onClick={(e) => { e.stopPropagation(); onDelete?.(event.id); }} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Excluir">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -1360,7 +1585,7 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
             };
 
             return (
-              <div className="mt-2 flex gap-2 flex-wrap">
+              <div className="mt-2 flex gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
                 <a
                   href={googleUrl}
                   target="_blank"
@@ -1383,7 +1608,7 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
           {linkedLesson && (
             <>
               <button
-                onClick={handleLessonClick}
+                onClick={(e) => { e.stopPropagation(); handleLessonClick(); }}
                 className="flex items-center gap-1.5 mt-2 px-2.5 py-1.5 rounded-lg bg-secondary/10 hover:bg-secondary/20 transition-colors w-full text-left"
               >
                 <BookOpen className="w-3.5 h-3.5 text-secondary flex-shrink-0" />
@@ -1457,7 +1682,7 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
           {!past && linkedLesson && lessonContent && (lessonContent.summary || lessonContent.prayer_prompt || (lessonContent.bible_texts && lessonContent.bible_texts.length > 0)) && (
             <div className="mt-2">
               <button
-                onClick={() => setShowPrep(p => !p)}
+                onClick={(e) => { e.stopPropagation(); setShowPrep(p => !p); }}
                 className="flex items-center gap-1.5 text-primary font-inter text-[11px] font-semibold hover:underline"
               >
                 {showPrep ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
