@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 // Build V10: SALA DO DISCIPULADOR - 2024-05-13
 
 
@@ -87,6 +87,24 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function RootRedirect() {
+  const { user, loading } = useAuth();
+  
+  if (loading) return <LoadingFallback />;
+
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+
+  if (user) {
+    return <Navigate to="/home" replace />;
+  }
+
+  if (isStandalone) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Navigate to="/apresentacao" replace />;
+}
+
 const LoadingFallback = () => (
   <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
     <div className="text-center">
@@ -101,8 +119,11 @@ const LoadingFallback = () => (
 const AppRoutes = () => (
   <Suspense fallback={<LoadingFallback />}>
     <Routes>
+      {/* Root handling logic */}
+      <Route path="/" element={<RootRedirect />} />
+      
       {/* Protected routes */}
-      <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+      <Route path="/home" element={<ProtectedRoute><Index /></ProtectedRoute>} />
       <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
 
       {/* Public auth routes */}
