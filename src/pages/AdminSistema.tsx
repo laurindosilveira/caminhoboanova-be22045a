@@ -705,6 +705,50 @@ export default function AdminSistema() {
               </CardContent>
             </Card>
           </TabsContent>
+          <TabsContent value="error-logs" className="space-y-6">
+            <Card className="border-border">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <div>
+                  <CardTitle className="font-montserrat text-xl font-black">Monitoramento de Erros</CardTitle>
+                  <CardDescription>Erros capturados automaticamente no frontend em tempo real.</CardDescription>
+                </div>
+                <Button variant="outline" size="icon" onClick={fetchErrorLogs} className="rounded-xl">
+                  <RefreshCw className={`h-4 w-4 ${logsLoading ? "animate-spin" : ""}`} />
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {errorLogs.length === 0 ? (
+                    <p className="text-center py-10 text-muted-foreground">Nenhum erro registrado.</p>
+                  ) : (
+                    errorLogs.map((log) => (
+                      <Card key={log.id} className="border-border bg-muted/20">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="destructive" className="text-[10px]">ERROR</Badge>
+                              <span className="text-xs font-bold font-mono">{log.churches?.name || "Global"}</span>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground">{new Date(log.created_at).toLocaleString("pt-BR")}</span>
+                          </div>
+                          <p className="text-sm font-bold text-foreground mb-1">{log.error_message}</p>
+                          <p className="text-[10px] text-muted-foreground font-mono truncate">{log.url}</p>
+                          {log.stack_trace && (
+                            <details className="mt-2">
+                              <summary className="text-[10px] cursor-pointer text-primary font-bold">Ver Stack Trace</summary>
+                              <pre className="mt-2 p-2 bg-black text-white text-[9px] overflow-auto max-h-40 rounded-lg">
+                                {log.stack_trace}
+                              </pre>
+                            </details>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="backup" className="space-y-6">
             <Card className="border-border">
