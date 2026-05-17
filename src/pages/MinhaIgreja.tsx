@@ -63,16 +63,27 @@ export default function MinhaIgreja() {
       const [
         { data: sData, error: sError }, 
         { data: mCount, error: mError },
-        { data: aLogs, error: aError }
+        { data: aLogs, error: aError },
+        { data: cData, error: cError }
       ] = await Promise.all([
         supabase.functions.invoke("check-subscription"),
         supabase.rpc("get_church_member_count", { p_church_id: profile?.church_id as any }),
-        supabase.from('church_audit_logs').select('*').order('created_at', { ascending: false }).limit(10)
+        supabase.from('church_audit_logs').select('*').order('created_at', { ascending: false }).limit(10),
+        supabase.from('churches').select('*').eq('id', profile?.church_id).single()
       ]);
 
       if (sError) throw sError;
       setSubData(sData);
       setAuditLogs((aLogs as AuditLog[]) || []);
+      
+      if (cData) {
+        setBranding({
+          name: cData.name || "",
+          logo_url: cData.logo_url || "",
+          primary_color: cData.primary_color || "#1a1a2e",
+          secondary_color: cData.secondary_color || "#e94560"
+        });
+      }
 
       // Get limit from subscription data or church_subscriptions
       const { data: churchSub } = await supabase
