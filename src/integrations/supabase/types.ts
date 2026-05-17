@@ -3571,6 +3571,7 @@ export type Database = {
         Returns: string
       }
       is_authorized_system_admin: { Args: never; Returns: boolean }
+      is_authorized_system_admin_v2: { Args: never; Returns: boolean }
       is_super_admin:
         | { Args: never; Returns: boolean }
         | { Args: { _user_id?: string }; Returns: boolean }
