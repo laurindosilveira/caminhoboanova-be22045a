@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import {
   Church, User, Users, ClipboardList, ArrowRight, ArrowLeft,
   CheckCircle2, Sparkles, Star, Phone, Mail, MapPin, Hash,
