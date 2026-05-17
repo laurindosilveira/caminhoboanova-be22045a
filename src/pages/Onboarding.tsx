@@ -100,6 +100,8 @@ export default function Onboarding() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [pendingChurchId, setPendingChurchId] = useState<string | null>(localStorage.getItem("pending_onboarding_church_id"));
   const [onboardingStatus, setOnboardingStatus] = useState<'church' | 'payment' | 'completed' | null>(null);
+  const [selectedPlanKey, setSelectedPlanKey] = useState<"comunidade" | "crescimento" | "pastoral" | null>(null);
+  const [showPlanSummary, setShowPlanSummary] = useState(false);
 
   const [church, setChurch] = useState<ChurchInfo>({ name: "", address: "", phone: "", email: "" });
   const [pastor, setPastor] = useState<PastorInfo>({ fullName: "", role: "Pastor", phone: "", email: "" });
