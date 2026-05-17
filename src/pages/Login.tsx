@@ -185,15 +185,31 @@ export default function Login() {
             )}
 
             {/* Submit */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3.5 rounded-xl font-montserrat font-bold text-primary-foreground text-base transition-all active:scale-95 disabled:opacity-60 shadow-md"
-              style={{ background: "var(--gradient-orange)" }}
-            >
-              {loading ? "Entrando..." : "Entrar na Jornada"}
-            </button>
-          </form>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3.5 rounded-xl font-montserrat font-bold text-primary-foreground text-base transition-all active:scale-95 disabled:opacity-60 shadow-md"
+                style={{ background: "var(--gradient-orange)" }}
+              >
+                {loading ? "Entrando..." : "Entrar na Jornada"}
+              </button>
+
+              <div className="relative flex items-center gap-3 my-4">
+                <div className="h-[1px] flex-1 bg-border"></div>
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">ou</span>
+                <div className="h-[1px] flex-1 bg-border"></div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleBiometricLogin}
+                disabled={loading}
+                className="w-full py-3 rounded-xl border-2 border-primary/20 bg-primary/5 font-montserrat font-bold text-primary text-sm flex items-center justify-center gap-2 hover:bg-primary/10 transition-all active:scale-95 disabled:opacity-50"
+              >
+                <Fingerprint className="w-5 h-5" />
+                Entrar com Biometria
+              </button>
+            </form>
 
           <div className="mt-6 text-center">
             <p className="text-muted-foreground font-inter text-sm">
