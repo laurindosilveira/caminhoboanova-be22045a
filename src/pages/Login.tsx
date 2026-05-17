@@ -44,24 +44,32 @@ export default function Login() {
                            authError.message?.toLowerCase().includes("notallowederror");
 
         if (isCancelled) {
-          // Log cancellation as audit event if we can identify user later or just as general log
-          console.log("Biometric login cancelled by user");
+          // Log cancellation
+          await supabase.rpc('log_login_event', {
+            p_email: email || null,
+            p_method: 'passkey',
+            p_status: 'cancelled'
+          });
           setLoading(false);
-          // Automatic fallback: user can just use email/password now
           return;
         }
         throw authError;
       }
 
       if (data?.user) {
-        // Log success
         await handlePostLogin(data.user, "passkey_success");
       }
     } catch (err: any) {
       console.error("Biometric login error:", err);
       setError("Erro ao entrar com biometria: " + (err.message || "Tente novamente."));
       
-      // Log failure if we had an email or just as general error
+      // Log failure
+      await supabase.rpc('log_login_event', {
+        p_email: email || null,
+        p_method: 'passkey',
+        p_status: 'failure',
+        p_details: { error: err.message }
+      });
       setLoading(false);
     }
   }
