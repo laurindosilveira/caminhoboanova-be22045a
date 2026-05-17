@@ -13,7 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Church, User, Users, ClipboardList, ArrowRight, ArrowLeft,
   CheckCircle2, Sparkles, Star, Phone, Mail, MapPin, Hash,
-  Target, Heart, Zap,
+  Target, Heart, Zap, CreditCard
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────
