@@ -134,6 +134,35 @@ serve(async (req) => {
           .eq("id", subscriptionId);
 
         log("Church activated", { name: subData.church_name, status: internalStatus });
+
+        // 3. Provision Admin Profile (Pastor) if user already exists
+        if (subData.pastor_email) {
+          const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserByEmail(subData.pastor_email);
+          if (userData?.user && !userError) {
+            log("Found existing pastor user, provisioning admin role", { email: subData.pastor_email });
+            
+            // Link profile to church and set role
+            await supabaseAdmin
+              .from("profiles")
+              .update({ 
+                church_id: churchId,
+                role: "admin",
+                enrollment_status: "approved"
+              })
+              .eq("user_id", userData.user.id);
+
+            // Ensure role is in user_roles table
+            await supabaseAdmin
+              .from("user_roles")
+              .upsert({ 
+                user_id: userData.user.id, 
+                role: "admin",
+                church_id: churchId
+              }, { onConflict: "user_id,role" });
+          } else {
+            log("Pastor user not found yet, will be provisioned on signup", { email: subData.pastor_email });
+          }
+        }
         break;
       }
 
