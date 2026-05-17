@@ -410,11 +410,13 @@ export type Database = {
           average_age: string | null
           church_address: string | null
           church_email: string
+          church_id: string | null
           church_name: string
           church_phone: string | null
           created_at: string
           id: string
           member_count: string | null
+          member_limit: number | null
           needs: string | null
           objectives: string | null
           pastor_email: string | null
@@ -434,11 +436,13 @@ export type Database = {
           average_age?: string | null
           church_address?: string | null
           church_email: string
+          church_id?: string | null
           church_name: string
           church_phone?: string | null
           created_at?: string
           id?: string
           member_count?: string | null
+          member_limit?: number | null
           needs?: string | null
           objectives?: string | null
           pastor_email?: string | null
@@ -458,11 +462,13 @@ export type Database = {
           average_age?: string | null
           church_address?: string | null
           church_email?: string
+          church_id?: string | null
           church_name?: string
           church_phone?: string | null
           created_at?: string
           id?: string
           member_count?: string | null
+          member_limit?: number | null
           needs?: string | null
           objectives?: string | null
           pastor_email?: string | null
@@ -477,7 +483,15 @@ export type Database = {
           trial_ends_at?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "church_subscriptions_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       churches: {
         Row: {
