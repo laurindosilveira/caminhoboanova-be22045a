@@ -69,19 +69,19 @@ export default function MinhaIgreja() {
   const [savingBranding, setSavingBranding] = useState(false);
 
   const fetchSubscription = useCallback(async () => {
-    if (!user) return;
+    if (!user || !profile?.church_id) return;
     setLoading(true);
     try {
       const [
         { data: sData, error: sError }, 
-        { data: mCount, error: mError },
+        { data: uStats, error: mError },
         { data: aLogs, error: aError },
         { data: cData, error: cError }
       ] = await Promise.all([
         supabase.functions.invoke("check-subscription"),
-        supabase.rpc("get_church_member_count", { p_church_id: profile?.church_id as any }),
+        supabase.rpc("get_church_user_stats", { p_church_id: profile.church_id }),
         supabase.from('church_audit_logs').select('*').order('created_at', { ascending: false }).limit(10),
-        supabase.from('churches').select('*').eq('id', profile?.church_id).single()
+        supabase.from('churches').select('*').eq('id', profile.church_id).single()
       ]);
 
       if (sError) throw sError;
@@ -97,16 +97,9 @@ export default function MinhaIgreja() {
         });
       }
 
-      const { data: churchSub } = await supabase
-        .from("church_subscriptions")
-        .select("member_limit")
-        .eq("church_id", profile?.church_id)
-        .single();
-      
-      setMemberStats({
-        current: mCount || 0,
-        limit: churchSub?.member_limit || null
-      });
+      if (uStats) {
+        setMemberStats(uStats[0] || null);
+      }
     } catch (err: any) {
       console.error("Error checking subscription:", err);
       toast({ title: "Erro", description: "Não foi possível verificar a assinatura.", variant: "destructive" });
