@@ -691,9 +691,9 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
   const whatsappLink = buildWhatsAppLink(phone);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
-        className="bg-card rounded-t-2xl w-full max-w-md max-h-[85vh] flex flex-col shadow-xl animate-in slide-in-from-bottom relative"
+        className="relative flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-card shadow-2xl animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b border-border flex-shrink-0">
@@ -882,7 +882,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
       {/* Category modal — inline overlay, no portal, so clicks don't leak to backdrop */}
       {categoryModal && (
         <div
-          className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
           onClick={(e) => { e.stopPropagation(); setCategoryModal(null); }}
         >
           <div
@@ -992,7 +992,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
       {/* Detail modal — inline overlay, no portal */}
       {detailModal && (
         <div
-          className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex max-h-[82vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-card shadow-2xl animate-in fade-in zoom-in-95 duration-200">
