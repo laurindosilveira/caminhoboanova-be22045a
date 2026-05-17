@@ -394,13 +394,19 @@ export default function MinhaIgreja() {
                         {log.action === 'alert_snoozed' && 'Banner sonecado por 24h'}
                         {log.action === 'subscription_created' && 'Assinatura criada'}
                         {log.action === 'subscription_updated' && 'Assinatura atualizada'}
+                        {log.action === 'plan_changed' && 'Plano Alterado'}
                         {log.action === 'invoice_paid' && 'Fatura paga com sucesso'}
                         {log.action === 'payment_failed' && 'Falha no pagamento'}
-                        {!['trial_alert_shown', 'portal_opened', 'portal_opened_for_cancel', 'alert_snoozed', 'subscription_created', 'subscription_updated', 'invoice_paid', 'payment_failed'].includes(log.action) && log.action}
+                        {!['trial_alert_shown', 'portal_opened', 'portal_opened_for_cancel', 'alert_snoozed', 'subscription_created', 'subscription_updated', 'plan_changed', 'invoice_paid', 'payment_failed'].includes(log.action) && log.action}
                       </p>
                       <p className="text-[10px] text-muted-foreground font-inter">
                         {new Date(log.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </p>
+                      {log.action === 'plan_changed' && log.details?.unlocked?.length > 0 && (
+                        <p className="text-[9px] text-brand-green font-medium mt-1">
+                          Libera: {log.details.unlocked.join(', ')}
+                        </p>
+                      )}
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <Badge variant="outline" className="text-[8px] bg-muted/30 px-1.5 h-4">AUDITORIA</Badge>
