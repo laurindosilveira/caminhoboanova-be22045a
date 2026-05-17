@@ -164,6 +164,15 @@ export default function AdminSistema() {
     setAdminAuditLogs(data || []);
   }
 
+  async function fetchErrorLogs() {
+    const { data } = await supabase
+      .from("frontend_error_logs")
+      .select("*, churches(name)")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    setErrorLogs(data || []);
+  }
+
   async function updateStatus(id: string, newStatus: string) {
     const { error } = await supabase
       .from("church_subscriptions" as any)
