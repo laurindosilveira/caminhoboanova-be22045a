@@ -1357,6 +1357,45 @@ export type Database = {
           },
         ]
       }
+      frontend_error_logs: {
+        Row: {
+          church_id: string | null
+          component_stack: string | null
+          created_at: string
+          error_message: string
+          id: string
+          severity: string | null
+          stack_trace: string | null
+          url: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          church_id?: string | null
+          component_stack?: string | null
+          created_at?: string
+          error_message: string
+          id?: string
+          severity?: string | null
+          stack_trace?: string | null
+          url?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          church_id?: string | null
+          component_stack?: string | null
+          created_at?: string
+          error_message?: string
+          id?: string
+          severity?: string | null
+          stack_trace?: string | null
+          url?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       game_config: {
         Row: {
           church_id: string | null
@@ -3535,6 +3574,10 @@ export type Database = {
     }
     Functions: {
       can_manage_church: { Args: { _church_id: string }; Returns: boolean }
+      check_church_member_limit: {
+        Args: { p_church_id: string }
+        Returns: boolean
+      }
       delete_push_scheduled: { Args: { _id: string }; Returns: undefined }
       delete_user_from_discipleship: {
         Args: { _target_user_id: string }
