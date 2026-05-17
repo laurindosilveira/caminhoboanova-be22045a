@@ -157,6 +157,13 @@ export default function AdminSistema() {
     trial: churches.filter((church) => church.subscription_status === "trial" || church.subscription_status === "pending_checkout").length,
     active: churches.filter((church) => church.subscription_status === "active").length,
     canceled: churches.filter((church) => church.subscription_status === "canceled" || church.subscription_status === "blocked").length,
+    failed: churches.filter((church) => church.subscription_status === "past_due" || church.subscription_status === "unpaid").length,
+    revenue: churches
+      .filter((church) => church.subscription_status === "active")
+      .reduce((acc, church) => {
+        const price = church.recommended_plan === "comunidade" ? 79 : church.recommended_plan === "crescimento" ? 129 : 199;
+        return acc + price;
+      }, 0),
   };
 
   const latestAutomatedUpdate = AUTOMATED_SYSTEM_UPDATES[0] ?? null;
@@ -206,19 +213,20 @@ export default function AdminSistema() {
           </TabsList>
 
           <TabsContent value="igrejas" className="space-y-6">
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
               {[
                 { label: "Total", value: churchStats.total, icon: Church, color: "text-primary" },
-                { label: "Em trial", value: churchStats.trial, icon: Clock, color: "text-warning" },
                 { label: "Ativos", value: churchStats.active, icon: CheckCircle2, color: "text-brand-green" },
-                { label: "Cancelados", value: churchStats.canceled, icon: XCircle, color: "text-destructive" },
+                { label: "Receita (Est.)", value: `R$ ${churchStats.revenue}`, icon: Sparkles, color: "text-yellow-500" },
+                { label: "Falhas", value: churchStats.failed, icon: ShieldAlert, color: "text-destructive" },
+                { label: "Em trial", value: churchStats.trial, icon: Clock, color: "text-warning" },
               ].map((stat) => (
                 <Card key={stat.label} className="border-border">
                   <CardContent className="flex items-center gap-3 p-4">
                     <stat.icon className={`h-5 w-5 ${stat.color}`} />
                     <div>
-                      <p className="font-montserrat text-2xl font-black text-foreground">{stat.value}</p>
-                      <p className="text-xs text-muted-foreground">{stat.label}</p>
+                      <p className="font-montserrat text-xl font-black text-foreground">{stat.value}</p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{stat.label}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -311,6 +319,16 @@ export default function AdminSistema() {
                           </div>
 
                           <div className="flex flex-col gap-1.5">
+                            {church.stripe_customer_id && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="rounded-lg border-primary/30 text-xs text-primary hover:bg-primary/10"
+                                onClick={() => window.open(`https://dashboard.stripe.com/customers/${church.stripe_customer_id}`, "_blank")}
+                              >
+                                Ver no Stripe
+                              </Button>
+                            )}
                             {church.subscription_status !== "active" && (
                               <Button
                                 size="sm"
@@ -318,7 +336,7 @@ export default function AdminSistema() {
                                 className="rounded-lg border-brand-green/30 text-xs text-brand-green hover:bg-brand-green/10"
                                 onClick={() => updateStatus(church.id, "active")}
                               >
-                                Ativar
+                                Ativar Manual
                               </Button>
                             )}
                             {church.subscription_status !== "blocked" && (
