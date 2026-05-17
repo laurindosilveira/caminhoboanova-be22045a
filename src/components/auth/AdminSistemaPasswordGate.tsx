@@ -29,11 +29,13 @@ export default function AdminSistemaPasswordGate({ children }: { children: React
       
       if (isMounted) {
         if (isAuthorized === true) {
+          await supabase.rpc('log_system_access_attempt', { p_status: 'success' });
           setAccessState("allowed");
         } else if (user.email?.toLowerCase() === 'laurindosilveira@gmail.com') {
-          // If the RPC returned false but the email is correct, it means MFA is missing
+          await supabase.rpc('log_system_access_attempt', { p_status: 'mfa_missing' });
           setAccessState("mfa_required");
         } else {
+          await supabase.rpc('log_system_access_attempt', { p_status: 'denied' });
           setAccessState("denied");
         }
       }

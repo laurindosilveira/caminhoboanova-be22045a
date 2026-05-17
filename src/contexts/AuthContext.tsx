@@ -94,12 +94,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let initialFetchDone = false;
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, currentSession) => {
+      async (event, currentSession) => {
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
 
         if (!currentSession?.user) {
-          // Signed out
           setProfile(null);
           setRole(null);
           setAdminArea(null);
@@ -107,15 +106,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // TOKEN_REFRESHED only updates the session token — profile/role data
-        // hasn't changed, so skip the 5-query re-fetch to avoid UI re-renders.
+        // Handle MFA or session invalidation logic for root admin
+        if (currentSession.user.email?.toLowerCase() === 'laurindosilveira@gmail.com') {
+          const { data: authData } = await (supabase.auth as any).getAuthenticatorAssuranceLevel();
+          if (authData?.currentLevel !== 'aal2' && window.location.pathname.startsWith('/admin-sistema')) {
+             console.warn("MFA missing for root admin on system route. Redirecting.");
+             window.location.href = "/";
+             return;
+          }
+        }
+
         if (event === "TOKEN_REFRESHED") {
           return;
         }
 
-        // SIGNED_IN / INITIAL_SESSION / USER_UPDATED → fetch profile
-        // Use setTimeout to avoid Supabase auth callback deadlock.
-        if (!initialFetchDone || event === "SIGNED_IN") {
+        if (!initialFetchDone || event === "SIGNED_IN" || event === "MFA_CHALLENGE_VERIFIED") {
           initialFetchDone = true;
           setTimeout(() => {
             fetchProfileAndRole(currentSession.user.id).finally(() => setLoading(false));

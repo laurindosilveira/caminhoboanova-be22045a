@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -77,6 +77,7 @@ export default function AdminSistema() {
   const [isSystemAdmin, setIsSystemAdmin] = useState(false);
   const [systemAdminChecked, setSystemAdminChecked] = useState(false);
   const [webhookLogs, setWebhookLogs] = useState<any[]>([]);
+  const [adminAuditLogs, setAdminAuditLogs] = useState<any[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
 
   useEffect(() => {
@@ -105,6 +106,7 @@ export default function AdminSistema() {
       if (allowed) {
         fetchChurches();
         fetchWebhookLogs();
+        fetchAdminAuditLogs();
       } else {
         setChurches([]);
         setChurchesLoading(false);
@@ -151,6 +153,15 @@ export default function AdminSistema() {
     setLogsLoading(false);
   }
 
+  async function fetchAdminAuditLogs() {
+    const { data } = await supabase
+      .from("system_admin_audit_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    setAdminAuditLogs(data || []);
+  }
+
   async function updateStatus(id: string, newStatus: string) {
     const { error } = await supabase
       .from("church_subscriptions" as any)
@@ -167,28 +178,26 @@ export default function AdminSistema() {
   }
 
   async function extendTrial(id: string, days: number) {
-    const church = churches.find(c => c.id === id);
-    if (!church) return;
+    try {
+      const { data, error } = await supabase.rpc('secure_extend_trial', {
+        p_church_subscription_id: id,
+        p_days: days
+      });
 
-    const currentEnd = church.trial_ends_at ? new Date(church.trial_ends_at) : new Date();
-    const newEnd = new Date(currentEnd.getTime() + days * 86400000);
+      if (error) {
+        if (error.message.includes('MFA_REQUIRED')) {
+          toast({ title: "Segurança", description: "Sua sessão expirou ou o MFA foi desativado. Refaça o login.", variant: "destructive" });
+          navigate("/login");
+          return;
+        }
+        throw error;
+      }
 
-    const { error } = await supabase
-      .from("church_subscriptions" as any)
-      .update({ 
-        trial_ends_at: newEnd.toISOString(),
-        subscription_status: 'trial',
-        updated_at: new Date().toISOString() 
-      } as any)
-      .eq("id", id);
-
-    if (error) {
+      toast({ title: `Trial estendido por ${days} dias` });
+      fetchChurches();
+    } catch (err) {
       toast({ title: "Erro ao estender trial", variant: "destructive" });
-      return;
     }
-
-    toast({ title: `Trial estendido por ${days} dias` });
-    fetchChurches();
   }
 
   const filteredChurches = churches.filter((church) => {
@@ -257,8 +266,9 @@ export default function AdminSistema() {
           <TabsList className="h-auto flex-wrap justify-start gap-2 rounded-2xl bg-muted/60 p-2">
             <TabsTrigger value="igrejas" className="rounded-xl px-4 py-2">Igrejas</TabsTrigger>
             <TabsTrigger value="atualizacoes" className="rounded-xl px-4 py-2">Atualizacoes do app</TabsTrigger>
+            <TabsTrigger value="audit-logs" className="rounded-xl px-4 py-2">Seguranca</TabsTrigger>
             <TabsTrigger value="webhook-logs" className="rounded-xl px-4 py-2">Webhook Logs</TabsTrigger>
-            <TabsTrigger value="backup" className="rounded-xl px-4 py-2">Backup e migracao</TabsTrigger>
+            <TabsTrigger value="backup" className="rounded-xl px-4 py-2">Backup</TabsTrigger>
           </TabsList>
 
           <TabsContent value="igrejas" className="space-y-6">
@@ -440,6 +450,45 @@ export default function AdminSistema() {
                 })}
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="audit-logs" className="space-y-6">
+            <Card className="border-border">
+              <CardHeader>
+                <CardTitle className="font-montserrat text-lg font-black">Log de Auditoria do Sistema</CardTitle>
+                <CardDescription>Acompanhe tentativas de acesso e acoes administrativas criticas.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-xl border border-border overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-muted text-muted-foreground uppercase font-bold text-[10px]">
+                      <tr>
+                        <th className="px-4 py-3">Data</th>
+                        <th className="px-4 py-3">IP</th>
+                        <th className="px-4 py-3">Acao</th>
+                        <th className="px-4 py-3">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border font-inter">
+                      {adminAuditLogs.map((log) => (
+                        <tr key={log.id} className="hover:bg-muted/30">
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {new Date(log.created_at).toLocaleString('pt-BR')}
+                          </td>
+                          <td className="px-4 py-3 font-mono">{log.ip_address || '—'}</td>
+                          <td className="px-4 py-3 font-medium">{log.action}</td>
+                          <td className="px-4 py-3">
+                            <Badge className={log.status === 'success' ? 'bg-brand-green/10 text-brand-green border-brand-green/30' : 'bg-destructive/10 text-destructive border-destructive/30'}>
+                              {log.status.toUpperCase()}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="atualizacoes" className="space-y-6">
