@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import {
   Church, User, Users, ClipboardList, ArrowRight, ArrowLeft,
   CheckCircle2, Sparkles, Star, Phone, Mail, MapPin, Hash,
@@ -43,14 +44,14 @@ interface QuestionnaireInfo {
   preferences: string;
 }
 
-type StepKey = "church" | "pastor" | "community" | "questionnaire" | "recommendation";
+type StepKey = "church" | "pastor" | "community" | "questionnaire" | "plans";
 
 const STEPS: { key: StepKey; label: string; icon: typeof Church }[] = [
   { key: "church", label: "Igreja", icon: Church },
   { key: "pastor", label: "Pastor", icon: User },
   { key: "community", label: "Comunidade", icon: Users },
   { key: "questionnaire", label: "Questionário", icon: ClipboardList },
-  { key: "recommendation", label: "Recomendação", icon: Star },
+  { key: "plans", label: "Escolher Plano", icon: CreditCard },
 ];
 
 const slideVariants = {
@@ -189,7 +190,9 @@ export default function Onboarding() {
   const planInfo = STRIPE_PLANS[recommendedPlan];
   const planDetail = PLAN_DETAILS[recommendedPlan];
 
-  const handleCheckout = useCallback(async (priceId: string) => {
+  const handleCheckout = useCallback(async (selectedPlan: "comunidade" | "crescimento" | "pastoral") => {
+    const planInfo = STRIPE_PLANS[selectedPlan];
+    const priceId = planInfo.price_id;
     setCheckoutLoading(true);
     try {
       // Save church data to database before checkout
@@ -211,7 +214,7 @@ export default function Onboarding() {
         objectives: questionnaire.objectives,
         needs: questionnaire.needs,
         preferences: questionnaire.preferences,
-        recommended_plan: recommendedPlan,
+        recommended_plan: selectedPlan,
         subscription_status: "pending_checkout",
         trial_ends_at: trialEndsAt.toISOString(),
       }).select().single();
@@ -241,7 +244,7 @@ export default function Onboarding() {
     } finally {
       setCheckoutLoading(false);
     }
-  }, [church, pastor, community, questionnaire, recommendedPlan]);
+  }, [church, pastor, community, questionnaire]);
 
   // ─── Field helpers ─────────────────────────────────────
   const inputClass = "bg-card border-border focus:border-primary";
@@ -405,59 +408,70 @@ export default function Onboarding() {
               </StepCard>
             )}
 
-            {currentStep.key === "recommendation" && (
+            {currentStep.key === "plans" && (
               <div className="space-y-6">
                 <div className="text-center space-y-2">
                   <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.1 }} className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
-                    <Sparkles className="w-8 h-8 text-primary-foreground" />
+                    <CreditCard className="w-8 h-8 text-primary-foreground" />
                   </motion.div>
-                  <h2 className="font-montserrat font-black text-2xl text-foreground">Plano Recomendado</h2>
+                  <h2 className="font-montserrat font-black text-2xl text-foreground">Escolha o plano para sua igreja</h2>
                   <p className="text-muted-foreground font-inter text-sm">
-                    Com base nas informações da <strong>{church.name || "sua igreja"}</strong>, recomendamos:
+                    Selecione o plano que melhor atende à <strong>{church.name || "sua comunidade"}</strong>. Todos incluem 30 dias grátis.
                   </p>
                 </div>
 
-                <Card className="border-2 border-primary overflow-hidden">
-                  <div className={`h-2 bg-gradient-to-r ${planDetail.color}`} />
-                  <CardContent className="p-6 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-3xl mb-1">{planDetail.emoji}</p>
-                        <h3 className="font-montserrat font-black text-2xl text-foreground">{planInfo.name}</h3>
-                        <p className="text-sm text-muted-foreground font-inter">{planDetail.members}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-montserrat font-black text-3xl text-foreground">{planInfo.price}</p>
-                        <p className="text-muted-foreground text-sm">{planInfo.period}</p>
-                      </div>
-                    </div>
+                <div className="grid grid-cols-1 gap-4">
+                  {(["comunidade", "crescimento", "pastoral"] as const).map((planKey) => {
+                    const plan = STRIPE_PLANS[planKey];
+                    const details = PLAN_DETAILS[planKey];
+                    const isRecommended = planKey === recommendPlan(community, questionnaire);
 
-                    <ul className="space-y-2">
-                      {planDetail.features.map((f, i) => (
-                        <li key={i} className="flex items-center gap-2 text-sm font-inter text-foreground">
-                          <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
-                          {f}
-                        </li>
-                      ))}
-                    </ul>
+                    return (
+                      <Card key={planKey} className={`relative border-2 transition-all hover:shadow-lg ${isRecommended ? 'border-primary' : 'border-border'}`}>
+                        {isRecommended && (
+                          <div className="absolute top-0 right-0 p-2">
+                            <Badge className="bg-primary text-primary-foreground text-[10px] font-bold">RECOMENDADO</Badge>
+                          </div>
+                        )}
+                        <div className={`h-1.5 bg-gradient-to-r ${details.color}`} />
+                        <CardContent className="p-5 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <span className="text-2xl">{details.emoji}</span>
+                              <div>
+                                <h3 className="font-montserrat font-black text-lg text-foreground">{plan.name}</h3>
+                                <p className="text-xs text-muted-foreground font-inter">{details.members}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-montserrat font-black text-xl text-foreground">{plan.price}</p>
+                              <p className="text-[10px] text-muted-foreground">{plan.period}</p>
+                            </div>
+                          </div>
 
-                    <Button
-                      onClick={() => handleCheckout(planInfo.price_id)}
-                      disabled={checkoutLoading}
-                      className="w-full h-14 text-lg font-montserrat font-bold rounded-xl text-primary-foreground"
-                      style={{ background: "var(--gradient-hero)" }}
-                    >
-                      {checkoutLoading ? "Redirecionando..." : "Começar com teste grátis de 30 dias"}
-                      <ArrowRight className="w-5 h-5 ml-2" />
-                    </Button>
-                  </CardContent>
-                </Card>
+                          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
+                            {details.features.slice(0, 4).map((f, i) => (
+                              <li key={i} className="flex items-center gap-1.5 text-[11px] font-inter text-foreground/80">
+                                <CheckCircle2 className="w-3 h-3 text-primary flex-shrink-0" />
+                                <span className="truncate">{f}</span>
+                              </li>
+                            ))}
+                          </ul>
 
-                {/* Other plans */}
-                <p className="text-center text-xs text-muted-foreground font-inter">
-                  Prefere outro plano?{" "}
-                  <a href="/apresentacao#planos" className="text-primary underline hover:no-underline">Ver todos os planos</a>
-                </p>
+                          <Button
+                            onClick={() => handleCheckout(planKey)}
+                            disabled={checkoutLoading}
+                            variant={isRecommended ? "default" : "outline"}
+                            className={`w-full h-11 text-sm font-montserrat font-bold rounded-xl ${isRecommended ? 'text-primary-foreground shadow-md' : ''}`}
+                            style={isRecommended ? { background: "var(--gradient-hero)" } : undefined}
+                          >
+                            {checkoutLoading ? "Processando..." : `Selecionar ${plan.name}`}
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </motion.div>
@@ -465,10 +479,10 @@ export default function Onboarding() {
       </div>
 
       {/* Footer navigation */}
-      {currentStep.key !== "recommendation" && (
+      {currentStep.key !== "plans" && (
         <div className="sticky bottom-0 bg-background border-t border-border">
           <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
-            <Button variant="ghost" onClick={goBack} disabled={step === 0} className="gap-2">
+            <Button variant="ghost" onClick={goBack} disabled={step === 0} className="gap-2 text-sm">
               <ArrowLeft className="w-4 h-4" /> Voltar
             </Button>
             <span className="text-xs text-muted-foreground font-inter">
@@ -477,10 +491,10 @@ export default function Onboarding() {
             <Button
               onClick={goNext}
               disabled={!canNext()}
-              className="gap-2 text-primary-foreground"
+              className="gap-2 text-primary-foreground font-bold"
               style={{ background: "var(--gradient-hero)" }}
             >
-              {step === STEPS.length - 2 ? "Ver recomendação" : "Próximo"} <ArrowRight className="w-4 h-4" />
+              {step === STEPS.length - 2 ? "Escolher plano" : "Próximo"} <ArrowRight className="w-4 h-4" />
             </Button>
           </div>
         </div>
