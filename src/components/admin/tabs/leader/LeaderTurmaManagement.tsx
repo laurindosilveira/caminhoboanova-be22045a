@@ -42,6 +42,11 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
   const [turma, setTurma] = useState<Turma | null>(null);
   const [archivedTurmas, setArchivedTurmas] = useState<Turma[]>([]);
   const [professionRecords, setProfessionRecords] = useState<ProfessionOfFaithRecord[]>([]);
+  const [professionFilters, setProfessionFilters] = useState({
+    search: "",
+    startDate: "",
+    endDate: "",
+  });
   const [loading, setLoading] = useState(true);
   const [archiving, setArchiving] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
