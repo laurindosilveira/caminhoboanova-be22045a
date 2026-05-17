@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useState, useCallback, useMemo, useEffect } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { STRIPE_PLANS } from "@/lib/stripePlans";
@@ -93,14 +93,61 @@ const PLAN_DETAILS: Record<string, { emoji: string; color: string; members: stri
 };
 
 export default function Onboarding() {
+  const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState(1);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [pendingChurchId, setPendingChurchId] = useState<string | null>(localStorage.getItem("pending_onboarding_church_id"));
+  const [onboardingStatus, setOnboardingStatus] = useState<'church' | 'payment' | 'completed' | null>(null);
 
   const [church, setChurch] = useState<ChurchInfo>({ name: "", address: "", phone: "", email: "" });
   const [pastor, setPastor] = useState<PastorInfo>({ fullName: "", role: "Pastor", phone: "", email: "" });
   const [community, setCommunity] = useState<CommunityInfo>({ memberCount: "", averageAge: "", activities: "" });
   const [questionnaire, setQuestionnaire] = useState<QuestionnaireInfo>({ objectives: "", needs: "", preferences: "" });
+
+  // Monitor status in real-time
+  useEffect(() => {
+    if (!pendingChurchId) return;
+
+    const channel = supabase
+      .channel('onboarding_status')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'church_subscriptions',
+          filter: `id=eq.${pendingChurchId}`
+        },
+        (payload) => {
+          const status = payload.new.subscription_status;
+          if (status === 'active' || status === 'trial') {
+            setOnboardingStatus('completed');
+            toast({ title: "🎉 Tudo pronto!", description: "Sua igreja foi provisionada com sucesso." });
+            setTimeout(() => {
+              localStorage.removeItem("pending_onboarding_church_id");
+              navigate("/login");
+            }, 3000);
+          } else if (status === 'pending_checkout') {
+            setOnboardingStatus('payment');
+          }
+        }
+      )
+      .subscribe();
+
+    // Initial check
+    const checkInitial = async () => {
+      const { data } = await supabase.from('church_subscriptions').select('subscription_status').eq('id', pendingChurchId).single();
+      if (data?.subscription_status === 'active' || data?.subscription_status === 'trial') {
+        setOnboardingStatus('completed');
+      } else if (data?.subscription_status === 'pending_checkout') {
+        setOnboardingStatus('payment');
+      }
+    };
+    checkInitial();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [pendingChurchId, navigate]);
 
   const currentStep = STEPS[step];
   const progress = ((step + 1) / STEPS.length) * 100;
@@ -169,6 +216,12 @@ export default function Onboarding() {
         trial_ends_at: trialEndsAt.toISOString(),
       }).select().single();
 
+      if (subscriptionData) {
+        localStorage.setItem("pending_onboarding_church_id", (subscriptionData as any).id);
+        setPendingChurchId((subscriptionData as any).id);
+        setOnboardingStatus('payment');
+      }
+
       if (insertError) {
         console.error("Erro ao salvar dados da igreja:", insertError);
         throw insertError;
@@ -195,6 +248,57 @@ export default function Onboarding() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      {/* Onboarding Status Overlay */}
+      <AnimatePresence>
+        {onboardingStatus && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-md flex items-center justify-center p-6"
+          >
+            <Card className="w-full max-w-sm border-2 border-primary shadow-2xl overflow-hidden">
+              <div className="h-2 bg-primary animate-pulse" />
+              <CardContent className="p-8 text-center space-y-6">
+                <div className="relative mx-auto w-20 h-20">
+                  <div className="absolute inset-0 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    {onboardingStatus === 'church' && <Church className="w-8 h-8 text-primary" />}
+                    {onboardingStatus === 'payment' && <CreditCard className="w-8 h-8 text-primary" />}
+                    {onboardingStatus === 'completed' && <CheckCircle2 className="w-8 h-8 text-brand-green" />}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="font-montserrat font-black text-xl">
+                    {onboardingStatus === 'church' && "Salvando Igreja..."}
+                    {onboardingStatus === 'payment' && "Aguardando Pagamento..."}
+                    {onboardingStatus === 'completed' && "Tudo Pronto!"}
+                  </h3>
+                  <p className="text-sm text-muted-foreground font-inter">
+                    {onboardingStatus === 'church' && "Estamos registrando os dados da sua comunidade."}
+                    {onboardingStatus === 'payment' && "Detectamos que você está no checkout do Stripe. Assim que concluir, liberaremos seu acesso."}
+                    {onboardingStatus === 'completed' && "Sua igreja foi criada. Redirecionando para o login..."}
+                  </p>
+                </div>
+
+                {onboardingStatus === 'payment' && (
+                  <div className="pt-2">
+                    <Button variant="outline" className="text-xs" onClick={() => {
+                      localStorage.removeItem("pending_onboarding_church_id");
+                      setPendingChurchId(null);
+                      setOnboardingStatus(null);
+                    }}>
+                      Cancelar e voltar
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
