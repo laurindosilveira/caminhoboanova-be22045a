@@ -12,6 +12,14 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Church, User, Users, ClipboardList, ArrowRight, ArrowLeft,
   CheckCircle2, Sparkles, Star, Phone, Mail, MapPin, Hash,
   Target, Heart, Zap, CreditCard
