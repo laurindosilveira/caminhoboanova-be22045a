@@ -110,9 +110,24 @@ export default function MinhaIgreja() {
 
   useEffect(() => {
     if (!profile?.church_id) return;
+    
+    let lastProcessedEvent: string | null = null;
+
     const channel = supabase
       .channel(`church_subscription_${profile.church_id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'church_subscriptions', filter: `church_id=eq.${profile.church_id}` }, () => fetchSubscription())
+      .on(
+        'postgres_changes', 
+        { event: '*', schema: 'public', table: 'church_subscriptions', filter: `church_id=eq.${profile.church_id}` }, 
+        (payload: any) => {
+          // Idempotency: avoid processing same event ID twice
+          const eventId = payload.new?.last_webhook_event_id;
+          if (eventId && eventId === lastProcessedEvent) return;
+          lastProcessedEvent = eventId;
+          
+          console.log("Subscription update received via realtime");
+          fetchSubscription();
+        }
+      )
       .subscribe();
     const interval = setInterval(() => fetchSubscription(), 30000);
     return () => {
