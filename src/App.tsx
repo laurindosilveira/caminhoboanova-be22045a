@@ -29,6 +29,7 @@ const AreaMembros = lazy(() => import("./pages/AreaMembros"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 import AdminSistemaPasswordGate from "./components/auth/AdminSistemaPasswordGate";
 import { PlanGate } from "./components/auth/PlanGate";
+import { ErrorBoundary } from "./components/shared/ErrorBoundary";
 
 const queryClient = new QueryClient();
 
