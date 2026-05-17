@@ -38,7 +38,7 @@ export function PlanGate({ children, feature, fallbackPath = "/minha-igreja" }: 
     return <Navigate to="/minha-igreja" state={{ from: location, reason: "blocked" }} replace />;
   }
 
-  const planKey = subscription?.product_id ? getPlanByProductId(subscription.product_id) : "comunidade";
+  const planKey = (subscription as any)?.product_id ? getPlanByProductId((subscription as any).product_id) : "comunidade";
   const features = getFeaturesForPlan(planKey);
 
   const hasAccess = features[feature] === true || features[feature] === null;
