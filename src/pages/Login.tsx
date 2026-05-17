@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Eye, EyeOff, Mail, Lock, Flame, MessageCircle } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, Flame, MessageCircle, Fingerprint } from "lucide-react";
 import { z } from "zod";
 
 const loginSchema = z.object({
