@@ -155,7 +155,7 @@ export default function MinhaIgreja() {
             <div>
               <p className="font-montserrat font-bold text-sm text-destructive">Pagamento Pendente</p>
               <p className="text-xs text-muted-foreground font-inter">Sua assinatura está com pagamento atrasado. Para evitar o bloqueio da conta, atualize seus dados de pagamento no portal.</p>
-              <Button onClick={handleManageSubscription} variant="link" className="p-0 h-auto text-xs text-destructive font-bold mt-1">Regularizar agora →</Button>
+              <Button onClick={() => handleManageSubscription('portal_opened_from_alert')} variant="link" className="p-0 h-auto text-xs text-destructive font-bold mt-1">Regularizar agora →</Button>
             </div>
           </div>
         )}
@@ -166,7 +166,7 @@ export default function MinhaIgreja() {
             <div>
               <p className="font-montserrat font-bold text-sm text-white">Acesso Bloqueado</p>
               <p className="text-xs text-white/80 font-inter">Sua conta foi bloqueada devido à falta de pagamento. Regularize sua situação para retomar o acesso aos recursos.</p>
-              <Button onClick={handleManageSubscription} variant="secondary" size="sm" className="mt-2 font-bold">Abrir Portal de Pagamento</Button>
+              <Button onClick={() => handleManageSubscription('portal_opened_from_block')} variant="secondary" size="sm" className="mt-2 font-bold">Abrir Portal de Pagamento</Button>
             </div>
           </div>
         )}
@@ -227,7 +227,7 @@ export default function MinhaIgreja() {
                       {subData.cancel_at_period_end ? 'Encerra em:' : 'Próxima renovação:'} {formatDate(subData.subscription_end)}
                     </p>
                   )}
-                  <Button onClick={handleManageSubscription} disabled={portalLoading} variant="outline" className="w-full h-11 rounded-xl">
+                  <Button onClick={() => handleManageSubscription()} disabled={portalLoading} variant="outline" className="w-full h-11 rounded-xl">
                     {portalLoading ? "Abrindo..." : "Gerenciar Assinatura"}
                     <ExternalLink className="w-4 h-4 ml-2" />
                   </Button>
