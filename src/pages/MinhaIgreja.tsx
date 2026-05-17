@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -82,13 +82,46 @@ export default function MinhaIgreja() {
     }
   }, [user, profile?.church_id]);
 
+  // Real-time updates for subscription
+  useEffect(() => {
+    if (!profile?.church_id) return;
+
+    // Real-time listener
+    const channel = supabase
+      .channel(`church_subscription_${profile.church_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'church_subscriptions',
+          filter: `church_id=eq.${profile.church_id}`
+        },
+        () => {
+          console.log("Subscription updated via real-time");
+          fetchSubscription();
+        }
+      )
+      .subscribe();
+
+    // Fallback polling every 30 seconds
+    const interval = setInterval(() => {
+      console.log("Subscription re-fetch via polling");
+      fetchSubscription();
+    }, 30000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
+  }, [profile?.church_id, fetchSubscription]);
+
+  const isMembro = useMemo(() => role !== "admin" && role !== "lider", [role]);
+
   useEffect(() => {
     if (!authLoading && user) {
-      // Check if user has permission (admin or lider)
-      if (role !== "admin" && role !== "lider") {
-        navigate("/");
-        return;
-      }
+      // Allow admin, lider and user (membro) to see the page
+      // But we will handle restrictions inside the UI
       fetchSubscription();
     }
     if (!authLoading && !user) navigate("/login");
@@ -147,7 +180,7 @@ export default function MinhaIgreja() {
         </button>
         <div>
           <h1 className="font-montserrat font-black text-xl text-foreground">⛪ {(profile as any)?.churches?.name || profile?.community || "Minha Igreja"}</h1>
-          <p className="text-muted-foreground text-[10px] font-inter uppercase font-bold tracking-wider">{role === 'admin' ? 'Administrador' : 'Líder de Área'}</p>
+          <p className="text-muted-foreground text-[10px] font-inter uppercase font-bold tracking-wider">{role === 'admin' ? 'Administrador' : role === 'lider' ? 'Líder de Área' : 'Membro'}</p>
         </div>
         <button onClick={fetchSubscription} aria-label="Atualizar status da assinatura" className="ml-auto w-10 h-10 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors">
           <RefreshCw className="w-4 h-4 text-muted-foreground" />
@@ -177,31 +210,33 @@ export default function MinhaIgreja() {
                   <p className="text-[10px] text-muted-foreground uppercase font-bold">dias rest.</p>
                 </div>
               </div>
-              <div className="flex gap-2 mt-4">
-                <Button 
-                  onClick={() => handleManageSubscription('portal_opened_for_cancel')} 
-                  disabled={portalLoading}
-                  variant="outline" 
-                  size="sm" 
-                  className="h-8 text-[10px] font-bold border-destructive/20 text-destructive hover:bg-destructive hover:text-white transition-all px-4"
-                >
-                  Cancelar Trial
-                </Button>
-                <Button 
-                  onClick={() => {
-                    const expiry = new Date();
-                    expiry.setHours(expiry.getHours() + 24);
-                    localStorage.setItem(`snooze_trial_${profile?.church_id}`, expiry.toISOString());
-                    toast({ title: "Aviso ocultado", description: "Lembrete adiado por 24 horas." });
-                    fetchSubscription(); // Refresh to hide if we added logic for it
-                  }} 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-8 text-[10px] font-bold text-muted-foreground hover:bg-muted"
-                >
-                  Sonecar por 24h
-                </Button>
-              </div>
+              {!isMembro && (
+                <div className="flex gap-2 mt-4">
+                  <Button 
+                    onClick={() => handleManageSubscription('portal_opened_for_cancel')} 
+                    disabled={portalLoading}
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 text-[10px] font-bold border-destructive/20 text-destructive hover:bg-destructive hover:text-white transition-all px-4"
+                  >
+                    Cancelar Trial
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      const expiry = new Date();
+                      expiry.setHours(expiry.getHours() + 24);
+                      localStorage.setItem(`snooze_trial_${profile?.church_id}`, expiry.toISOString());
+                      toast({ title: "Aviso ocultado", description: "Lembrete adiado por 24 horas." });
+                      fetchSubscription();
+                    }} 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 text-[10px] font-bold text-muted-foreground hover:bg-muted"
+                  >
+                    Sonecar por 24h
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -219,7 +254,9 @@ export default function MinhaIgreja() {
                   <li>Acessar o Portal para atualizar forma de pagamento</li>
                 </ul>
               </div>
-              <Button onClick={() => handleManageSubscription('portal_opened_from_alert')} variant="link" className="p-0 h-auto text-xs text-destructive font-bold mt-2">Regularizar agora →</Button>
+              {!isMembro && (
+                <Button onClick={() => handleManageSubscription('portal_opened_from_alert')} variant="link" className="p-0 h-auto text-xs text-destructive font-bold mt-2">Regularizar agora →</Button>
+              )}
             </div>
           </div>
         )}
@@ -243,7 +280,9 @@ export default function MinhaIgreja() {
                   </div>
                 </div>
               </div>
-              <Button onClick={() => handleManageSubscription('portal_opened_from_block')} variant="secondary" size="sm" className="mt-3 font-bold w-full">Abrir Portal de Pagamento</Button>
+              {!isMembro && (
+                <Button onClick={() => handleManageSubscription('portal_opened_from_block')} variant="secondary" size="sm" className="mt-3 font-bold w-full">Abrir Portal de Pagamento</Button>
+              )}
             </div>
           </div>
         )}
@@ -304,10 +343,12 @@ export default function MinhaIgreja() {
                       {subData.cancel_at_period_end ? 'Encerra em:' : 'Próxima renovação:'} {formatDate(subData.subscription_end)}
                     </p>
                   )}
-                  <Button onClick={() => handleManageSubscription()} disabled={portalLoading} variant="outline" className="w-full h-11 rounded-xl">
-                    {portalLoading ? "Abrindo..." : "Gerenciar Assinatura"}
-                    <ExternalLink className="w-4 h-4 ml-2" />
-                  </Button>
+                  {!isMembro && (
+                    <Button onClick={() => handleManageSubscription()} disabled={portalLoading} variant="outline" className="w-full h-11 rounded-xl">
+                      {portalLoading ? "Abrindo..." : "Gerenciar Assinatura"}
+                      <ExternalLink className="w-4 h-4 ml-2" />
+                    </Button>
+                  )}
                 </div>
               </>
             ) : (
