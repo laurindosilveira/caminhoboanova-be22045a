@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -12,7 +12,6 @@ import WhatsAppPhoneInput from "@/components/ui/WhatsAppPhoneInput";
 import { validateBRPhone, type PhoneValidation } from "@/lib/phoneValidation";
 
 import { ALL_COMMUNITIES, fetchAreasConfig } from "@/config/areas";
-import { useEffect } from "react";
 const COMMUNITIES = ALL_COMMUNITIES as unknown as readonly [string, ...string[]];
 
 const CONFIRMATION_YEARS = [
