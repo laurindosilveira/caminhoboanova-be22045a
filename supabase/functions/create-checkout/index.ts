@@ -18,7 +18,7 @@ serve(async (req) => {
   );
 
   try {
-    const { priceId } = await req.json();
+    const { priceId, subscriptionId } = await req.json();
     if (!priceId) throw new Error("priceId is required");
 
     const authHeader = req.headers.get("Authorization");
@@ -53,6 +53,12 @@ serve(async (req) => {
       mode: "subscription",
       subscription_data: {
         trial_period_days: 30,
+        metadata: {
+          subscriptionId: subscriptionId,
+        },
+      },
+      metadata: {
+        subscriptionId: subscriptionId,
       },
       payment_method_collection: "if_required",
       success_url: `${origin}/apresentacao?checkout=success`,
