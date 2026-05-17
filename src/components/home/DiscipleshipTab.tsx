@@ -463,7 +463,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
             <ClipboardList className="w-5 h-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-montserrat font-bold text-foreground text-sm">SALA DO LIDER</p>
+            <p className="font-montserrat font-bold text-foreground text-sm">CAMINHO DO DISCIPULADO</p>
             <p className="text-muted-foreground text-xs font-inter">
               Acesse rapidamente a gestão da turma, encontros, avisos e relatórios.
             </p>
