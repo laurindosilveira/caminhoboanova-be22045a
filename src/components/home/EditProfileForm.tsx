@@ -1,4 +1,4 @@
-import { useState, useRef, lazy, Suspense } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -6,14 +6,14 @@ import { Pencil, Save, X, User, Phone, Calendar, MapPin, ChevronDown, Home, User
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import WhatsAppPhoneInput from "@/components/ui/WhatsAppPhoneInput";
 import { validateBRPhone, type PhoneValidation } from "@/lib/phoneValidation";
 
 import { ALL_COMMUNITIES, fetchAreasConfig } from "@/config/areas";
 import { useEffect } from "react";
 const COMMUNITIES = ALL_COMMUNITIES as unknown as readonly [string, ...string[]];
-
-const MFASetup = lazy(() => import("@supabase/auth-mfa-with-recovery").then(m => ({ default: m.MFASetup })));
 
 const CONFIRMATION_YEARS = [
   { value: "", label: "Não definido" },
