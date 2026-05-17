@@ -64,6 +64,7 @@ export default function AdminDashboard() {
 
   const [churches, setChurches] = useState<Church[]>([]);
   const [selectedChurchId, setSelectedChurchId] = useState<string | null>(null);
+  const [churchLimit, setChurchLimit] = useState<number | null>(null);
 
   // Turma selection state
   const [turmas, setTurmas] = useState<Turma[]>([]);
@@ -235,6 +236,17 @@ export default function AdminDashboard() {
     setParticipants(participantList.sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? "", "pt-BR", { sensitivity: "base" })));
     setTurmas(turmasData ?? []);
     await fetchPlans(participantList.map(p => p.user_id));
+
+    // Fetch church limit
+    if (scopedChurchId) {
+      const { data: subData } = await supabase
+        .from("church_subscriptions")
+        .select("member_limit")
+        .eq("church_id", scopedChurchId)
+        .single();
+      setChurchLimit(subData?.member_limit ?? null);
+    }
+
     setLoading(false);
   }, [fetchPlans, isSuper, selectedChurchId]);
 
@@ -335,7 +347,7 @@ export default function AdminDashboard() {
       <AdminHeader
         areaName={displayTurma}
         subtitle={[selectedChurch?.name, selectedTurma.area].filter(Boolean).join(" · ")}
-        stats={stats}
+        stats={{ ...stats, totalLabel: churchLimit ? `${stats.total}/${churchLimit}` : `${stats.total}` }}
         onSignOut={signOut}
         onBackToUser={() => navigate("/")}
         selectedCommunity={selectedTurma.id}

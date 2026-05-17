@@ -9,6 +9,7 @@ type Stats = {
   avancados: number;
   semAtividade: number;
   mediaProgresso: number;
+  totalLabel?: string;
 };
 
 type Props = {
@@ -121,7 +122,7 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
 
         <div className="grid grid-cols-4 gap-2">
           {[
-            { label: "Participantes", value: stats.total, icon: "👥" },
+            { label: "Participantes", value: stats.totalLabel || stats.total, icon: "👥" },
             { label: "Avançados", value: stats.avancados, icon: "🏆" },
             { label: "Sem atividade", value: stats.semAtividade, icon: "⚠️" },
             { label: "Progresso médio", value: `${stats.mediaProgresso}%`, icon: "📊" },
