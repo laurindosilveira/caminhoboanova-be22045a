@@ -35,8 +35,10 @@ serve(async (req) => {
       .eq("user_id", user.id)
       .single();
 
-    if (!profile || profile.role !== "admin") {
-      throw new Error("Only church admins can access the portal");
+    const { data: isSysAdmin } = await supabaseClient.rpc("is_authorized_system_admin_v2");
+
+    if ((!profile || profile.role !== "admin") && !isSysAdmin) {
+      throw new Error("Only church admins or system admins can access the portal");
     }
 
     const { data: churchSub } = await supabaseClient
