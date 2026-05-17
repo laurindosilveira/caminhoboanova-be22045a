@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { Lock, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { isAuthorizedSystemAdmin } from "@/lib/systemAdminAccess";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
