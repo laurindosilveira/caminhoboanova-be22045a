@@ -99,7 +99,7 @@ describe('Subscription Status & RBAC Simulation', () => {
   });
 
   it('should restrict member role to read-only even with active plan', () => {
-    const role = 'member';
+    const role: string = 'member';
     const isAdmin = role === 'admin';
     const isLeader = role === 'leader';
     const canEdit = isAdmin || isLeader;
