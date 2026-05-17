@@ -305,9 +305,7 @@ export default function MinhaIgreja() {
                     {subData.subscription_status === 'active' ? <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> : <Clock className="w-3.5 h-3.5 mr-1" />}
                     {subData.subscription_status === 'active' ? 'Ativa' : 'Pendente'}
                   </Badge>
-                  {subData.cancel_at_period_end && (
-                    <Badge variant="outline" className="text-[10px] text-destructive border-destructive/30">Cancela em breve</Badge>
-                  )}
+                  <p className="text-[10px] text-muted-foreground font-inter">{subData.cancel_at_period_end ? 'Cancela em:' : 'Renova em:'} {formatDate(subData.subscription_end || "")}</p>
                 </div>
               ) : (
                 <Badge variant="destructive" className="font-semibold">
@@ -317,13 +315,21 @@ export default function MinhaIgreja() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {subData?.subscribed && planInfo ? (
+            {subData?.subscribed ? (
               <>
-                <div className="flex items-baseline justify-between">
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-montserrat font-black text-2xl text-foreground">{planInfo.name}</span>
-                    <span className="text-muted-foreground text-sm font-inter">{planInfo.price}{planInfo.period}</span>
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-muted/30 border border-border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <Church className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold leading-none mb-1">Plano Atual</p>
+                      <p className="font-montserrat font-bold text-base text-foreground">
+                        {planInfo?.name || "Personalizado"}
+                      </p>
+                    </div>
                   </div>
+                  <Badge className="bg-primary/10 text-primary border-primary/20">{subData.subscription_status?.toUpperCase()}</Badge>
                 </div>
 
                 {memberStats && (
