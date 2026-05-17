@@ -261,6 +261,51 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
     setConfirmReset(false);
   }
 
+  async function exportProfessionReport() {
+    if (professionRecords.length === 0) return;
+    
+    try {
+      const doc = new jsPDF();
+      const margin = 20;
+      let y = 20;
+
+      doc.setFontSize(18);
+      doc.text("Relatório de Profissão de Fé", margin, y);
+      y += 10;
+      
+      doc.setFontSize(10);
+      doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, margin, y);
+      y += 15;
+
+      // Table Header
+      doc.setFont("helvetica", "bold");
+      doc.text("Nome Completo", margin, y);
+      doc.text("Turma", margin + 80, y);
+      doc.text("Data", margin + 140, y);
+      y += 5;
+      doc.line(margin, y, 190, y);
+      y += 7;
+
+      doc.setFont("helvetica", "normal");
+      professionRecords.forEach((record) => {
+        if (y > 270) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(record.full_name, margin, y);
+        doc.text(record.turma_name || "—", margin + 80, y);
+        doc.text(new Date(record.professed_at).toLocaleDateString('pt-BR'), margin + 140, y);
+        y += 8;
+      });
+
+      doc.save(`relatorio_profissao_fe_${new Date().getTime()}.pdf`);
+      toast({ title: "Sucesso", description: "Relatório PDF gerado com sucesso." });
+    } catch (err) {
+      console.error("Error generating PDF:", err);
+      toast({ title: "Erro", description: "Falha ao gerar o relatório PDF.", variant: "destructive" });
+    }
+  }
+
   async function loadArchivedTurmaData(turmaId: string) {
     if (archivedPdfData[turmaId]) return;
     setLoadingPdf(turmaId);
