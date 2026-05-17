@@ -19,10 +19,12 @@ type Turma = {
   member_count?: number;
 };
 
-type Props = {
-  defaultArea?: string;
-  defaultChurchId?: string | null;
-};
+interface ProfessionOfFaithRecord {
+  id: string;
+  full_name: string;
+  turma_name: string;
+  professed_at: string;
+}
 
 export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: Props) {
   const { profile } = useAuth();
@@ -30,6 +32,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
   const { toast } = useToast();
   const [turma, setTurma] = useState<Turma | null>(null);
   const [archivedTurmas, setArchivedTurmas] = useState<Turma[]>([]);
+  const [professionRecords, setProfessionRecords] = useState<ProfessionOfFaithRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [archiving, setArchiving] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
