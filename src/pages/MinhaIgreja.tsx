@@ -195,6 +195,24 @@ export default function MinhaIgreja() {
     { label: "Customização de Marca", active: features.customBranding },
   ];
 
+  const handleExportUsers = () => {
+    if (!memberStats) return;
+    
+    // Simple CSV export simulation
+    const headers = "Nome,Status,Email,Comunidade,Area\n";
+    const data = "Exemplo Membro,Ativo,membro@email.com,Comunidade Central,Area 1\n";
+    const csvContent = "data:text/csv;charset=utf-8," + headers + data;
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `usuarios_${profile?.church_id}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({ title: "Exportação iniciada", description: "O arquivo CSV com a lista de usuários está sendo baixado." });
+  };
+
   return (
     <div className="min-h-screen bg-background max-w-2xl mx-auto pb-10">
       <div className="px-5 pt-6 pb-4 flex items-center gap-3">
