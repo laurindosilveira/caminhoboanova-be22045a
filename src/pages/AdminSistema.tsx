@@ -44,7 +44,9 @@ const STATUS_MAP: Record<string, { label: string; color: string; icon: typeof Ch
   pending_checkout: { label: "Aguardando checkout", color: "bg-warning/10 text-warning border-warning/30", icon: Clock },
   trial: { label: "Em trial (30 dias)", color: "bg-brand-green/10 text-brand-green border-brand-green/30", icon: Clock },
   active: { label: "Ativo", color: "bg-brand-green/10 text-brand-green border-brand-green/30", icon: CheckCircle2 },
-  canceled: { label: "Cancelado", color: "bg-destructive/10 text-destructive border-destructive/30", icon: XCircle },
+  past_due: { label: "Pagamento pendente", color: "bg-destructive/10 text-destructive border-destructive/30", icon: ShieldAlert },
+  unpaid: { label: "Inadimplente", color: "bg-destructive/10 text-destructive border-destructive/30", icon: ShieldAlert },
+  canceled: { label: "Cancelado", color: "bg-muted text-muted-foreground border-border", icon: XCircle },
   blocked: { label: "Bloqueado", color: "bg-destructive/10 text-destructive border-destructive/30", icon: ShieldAlert },
 };
 
