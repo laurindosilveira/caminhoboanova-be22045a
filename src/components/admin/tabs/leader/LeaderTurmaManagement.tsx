@@ -162,52 +162,46 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
     if (!turma) return;
     setArchiving(true);
 
-    const { data: turmaProfiles } = await supabase
-      .from("profiles")
-      .select("user_id, confirmation_year")
-      .eq("turma_id", turma.id);
+    try {
+      const { data: turmaProfiles } = await supabase
+        .from("profiles")
+        .select("user_id, confirmation_year")
+        .eq("turma_id", turma.id);
 
-    const allProfiles = turmaProfiles ?? [];
-    const secondYearUsers = allProfiles.filter(p => (p as any).confirmation_year === 2);
+      const allProfiles = turmaProfiles ?? [];
+      const secondYearUsers = allProfiles.filter(p => (p as any).confirmation_year === 2);
 
-    if (secondYearUsers.length === 0) {
-      toast({ title: "Nenhum aluno do 2º ano", description: "Não há alunos do 2º ano para confirmar nesta turma.", variant: "destructive" });
+      if (secondYearUsers.length === 0) {
+        toast({ title: "Nenhum aluno do 2º ano", description: "Não há alunos do 2º ano para realizar a profissão de fé nesta turma.", variant: "destructive" });
+        setArchiving(false);
+        setConfirmArchive(false);
+        return;
+      }
+
+      // Process profession of faith for each student in 2nd year using the RPC
+      // This will inactivate the user and log them in profession_of_faith_records
+      for (const student of secondYearUsers) {
+        await supabase.rpc('process_profession_of_faith', { 
+          p_user_id: student.user_id, 
+          p_turma_id: turma.id 
+        });
+      }
+
+      const firstYearCount = allProfiles.length - secondYearUsers.length;
+      toast({
+        title: "Sucesso!",
+        description: `${secondYearUsers.length} aluno(s) realizaram a profissão de fé e foram arquivados (vagas liberadas). ${firstYearCount} aluno(s) do 1º ano permanecem.`
+      });
+
+      fetchTurma();
+      if (onTurmaUpdated) onTurmaUpdated();
       setArchiving(false);
       setConfirmArchive(false);
-      return;
-    }
-
-    const { data: user } = await supabase.auth.getUser();
-    const archiveName = `${turma.name} — CONFIRMADOS`;
-    const { data: newTurma, error: createError } = await supabase.from("turmas").insert({
-      name: archiveName,
-      area: turma.area,
-      year: turma.year,
-      description: `Grupo confirmado em ${new Date().toLocaleDateString("pt-BR")}. ${secondYearUsers.length} confirmando(s).`,
-      is_active: false,
-      church_id: turma.church_id ?? defaultChurchId ?? profile?.church_id ?? null,
-      created_by: user.user?.id,
-    }).select("id").single();
-
-    if (createError || !newTurma) {
-      toast({ title: "Erro ao criar arquivo", description: createError?.message ?? "Erro desconhecido", variant: "destructive" });
+    } catch (err: any) {
+      toast({ title: "Erro ao processar", description: err.message, variant: "destructive" });
       setArchiving(false);
-      setConfirmArchive(false);
-      return;
     }
-
-    await supabase.from("profiles").update({ turma_id: newTurma.id } as any)
-      .in("user_id", secondYearUsers.map(p => p.user_id));
-
-    const firstYearCount = allProfiles.length - secondYearUsers.length;
-    toast({
-      title: "Grupo confirmado!",
-      description: `"${archiveName}" criado com ${secondYearUsers.length} confirmando(s). ${firstYearCount} aluno(s) do 1º ano permanecem.`
-    });
-
-    fetchTurma();
-    setArchiving(false);
-    setConfirmArchive(false);
+  }
   }
 
   async function handleResetJourney() {
