@@ -51,10 +51,19 @@ export default function Index() {
   const [currentCelebration, setCurrentCelebration] = useState<CelebrationItem | null>(null);
   const [showConfettiPref, setShowConfettiPref] = useState(true);
 
-  const { profile, role, user } = useAuth();
+  const { profile, role, user, loading: authLoading } = useAuth();
   const { effectiveArea } = useAreaSwitch();
   const currentArea = effectiveArea || profile?.area || "";
   const navigate = useNavigate();
+
+  // Redirect to presentation if not standalone/installed and not logged in
+  useEffect(() => {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    if (!isStandalone && !authLoading && !user) {
+      navigate("/apresentacao", { replace: true });
+    }
+  }, [authLoading, user, navigate]);
+
   const stats = useUserStats(currentArea);
   useAppNotifications();
 
