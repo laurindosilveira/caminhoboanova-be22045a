@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 interface Passkey {
   id: string;
-  friendly_name: string;
+  friendly_name?: string;
   created_at: string;
   last_used_at?: string;
 }
@@ -32,10 +32,6 @@ export default function PasskeySettings() {
       setPasskeys(data || []);
     } catch (err: any) {
       console.error("Error fetching passkeys:", err);
-      // If feature is not enabled in Supabase dashboard, this might fail
-      if (err.message?.includes("not enabled")) {
-         // Silently fail or show a subtle message
-      }
     } finally {
       setLoading(false);
     }
@@ -64,7 +60,7 @@ export default function PasskeySettings() {
     
     try {
       // @ts-ignore - experimental API
-      const { error } = await supabase.auth.passkey.delete({ id });
+      const { error } = await supabase.auth.passkey.delete({ passkeyId: id });
       if (error) throw error;
       
       toast.success("Biometria removida.");
@@ -80,8 +76,8 @@ export default function PasskeySettings() {
     try {
       // @ts-ignore - experimental API
       const { error } = await supabase.auth.passkey.update({
-        id,
-        friendly_name: newName.trim()
+        passkeyId: id,
+        friendlyName: newName.trim()
       });
       if (error) throw error;
       
@@ -92,6 +88,7 @@ export default function PasskeySettings() {
       toast.error("Erro ao atualizar nome: " + err.message);
     }
   }
+
 
   if (loading && passkeys.length === 0) {
     return (
