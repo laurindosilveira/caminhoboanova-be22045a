@@ -2826,6 +2826,39 @@ export type Database = {
           },
         ]
       }
+      system_admin_audit_logs: {
+        Row: {
+          action: string
+          admin_id: string | null
+          created_at: string | null
+          details: Json | null
+          email: string | null
+          id: string
+          ip_address: string | null
+          status: string
+        }
+        Insert: {
+          action: string
+          admin_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          email?: string | null
+          id?: string
+          ip_address?: string | null
+          status: string
+        }
+        Update: {
+          action?: string
+          admin_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          email?: string | null
+          id?: string
+          ip_address?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       testimonies: {
         Row: {
           church_id: string | null
@@ -3578,6 +3611,14 @@ export type Database = {
       log_church_audit: {
         Args: { p_action: string; p_church_id: string; p_details?: Json }
         Returns: undefined
+      }
+      log_system_access_attempt: {
+        Args: { p_status: string }
+        Returns: undefined
+      }
+      secure_extend_trial: {
+        Args: { p_church_subscription_id: string; p_days: number }
+        Returns: Json
       }
       test_stripe_webhook: {
         Args: {
