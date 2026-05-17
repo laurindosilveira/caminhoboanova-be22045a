@@ -28,7 +28,13 @@ interface ProfessionOfFaithRecord {
   professed_at: string;
 }
 
-export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: Props) {
+type Props = {
+  defaultArea?: string;
+  defaultChurchId?: string | null;
+  onTurmaUpdated?: () => void;
+};
+
+export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, onTurmaUpdated }: Props) {
   const { profile } = useAuth();
   const { effectiveArea } = useAreaSwitch();
   const { toast } = useToast();
@@ -136,7 +142,6 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
       return;
     }
 
-    // Link this leader to the newly created turma
     const { error: profileError } = await supabase
       .from("profiles")
       .update({ turma_id: newTurma.id } as any)
@@ -151,8 +156,6 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
     setCreateForm({ name: "", description: "" });
     setShowCreate(false);
     setCreating(false);
-
-    // Reload profile so turma_id is updated
     window.location.reload();
   }
 
@@ -198,8 +201,6 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
         return;
       }
 
-      // Process profession of faith for each student in 2nd year using the RPC
-      // This will inactivate the user and log them in profession_of_faith_records
       for (const student of secondYearUsers) {
         await supabase.rpc('process_profession_of_faith', { 
           p_user_id: student.user_id, 
@@ -221,7 +222,6 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
       toast({ title: "Erro ao processar", description: err.message, variant: "destructive" });
       setArchiving(false);
     }
-  }
   }
 
   async function handleResetJourney() {
@@ -660,3 +660,4 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId }: 
       )}
     </div>
   );
+}
