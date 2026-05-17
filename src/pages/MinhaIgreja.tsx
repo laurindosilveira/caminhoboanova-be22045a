@@ -31,23 +31,39 @@ export default function MinhaIgreja() {
   const { user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [subData, setSubData] = useState<SubData | null>(null);
+  const [memberStats, setMemberStats] = useState<{ current: number; limit: number | null } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [portalLoading, setPortalLoading] = useState(false);
 
   const fetchSubscription = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("check-subscription");
-      if (error) throw error;
-      setSubData(data);
+      const [{ data: sData, error: sError }, { data: mCount, error: mError }] = await Promise.all([
+        supabase.functions.invoke("check-subscription"),
+        supabase.rpc("get_church_member_count", { p_church_id: profile?.church_id })
+      ]);
+
+      if (sError) throw sError;
+      setSubData(sData);
+
+      // Get limit from subscription data or church_subscriptions
+      const { data: churchSub } = await supabase
+        .from("church_subscriptions")
+        .select("member_limit")
+        .eq("church_id", profile?.church_id)
+        .single();
+      
+      setMemberStats({
+        current: mCount || 0,
+        limit: churchSub?.member_limit || null
+      });
     } catch (err: any) {
       console.error("Error checking subscription:", err);
-      toast({ title: "Erro", description: "Não foi possível verificar a assinatura. Tente novamente.", variant: "destructive" });
+      toast({ title: "Erro", description: "Não foi possível verificar a assinatura.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, profile?.church_id]);
 
   useEffect(() => {
     if (!authLoading && user) fetchSubscription();
@@ -108,7 +124,29 @@ export default function MinhaIgreja() {
       </div>
 
       {/* Subscription Status */}
-      <div className="px-5 mb-4">
+      <div className="px-5 mb-6 space-y-4">
+        {subData?.subscribed && subData.subscription_status === 'past_due' && (
+          <div className="bg-destructive/10 border border-destructive/30 rounded-2xl p-4 flex items-start gap-3">
+            <ShieldAlert className="w-5 h-5 text-destructive mt-0.5" />
+            <div>
+              <p className="font-montserrat font-bold text-sm text-destructive">Pagamento Pendente</p>
+              <p className="text-xs text-muted-foreground font-inter">Sua assinatura está com pagamento atrasado. Para evitar o bloqueio da conta, atualize seus dados de pagamento no portal.</p>
+              <Button onClick={handleManageSubscription} variant="link" className="p-0 h-auto text-xs text-destructive font-bold mt-1">Regularizar agora →</Button>
+            </div>
+          </div>
+        )}
+
+        {subData?.subscribed && subData.subscription_status === 'blocked' && (
+          <div className="bg-destructive border border-destructive rounded-2xl p-4 flex items-start gap-3">
+            <XCircle className="w-5 h-5 text-white mt-0.5" />
+            <div>
+              <p className="font-montserrat font-bold text-sm text-white">Acesso Bloqueado</p>
+              <p className="text-xs text-white/80 font-inter">Sua conta foi bloqueada devido à falta de pagamento. Regularize sua situação para retomar o acesso aos recursos.</p>
+              <Button onClick={handleManageSubscription} variant="secondary" size="sm" className="mt-2 font-bold">Abrir Portal de Pagamento</Button>
+            </div>
+          </div>
+        )}
+
         <Card className="border-2" style={subData?.subscribed ? { borderColor: "hsl(var(--brand-green))" } : undefined}>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -117,8 +155,9 @@ export default function MinhaIgreja() {
                 Assinatura
               </CardTitle>
               {subData?.subscribed ? (
-                <Badge className="bg-[hsl(var(--brand-green))]/15 text-[hsl(var(--brand-green))] border-[hsl(var(--brand-green))]/30 font-semibold">
-                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Ativa
+                <Badge className={`${subData.subscription_status === 'active' ? 'bg-[hsl(var(--brand-green))]/15 text-[hsl(var(--brand-green))] border-[hsl(var(--brand-green))]/30' : 'bg-warning/15 text-warning border-warning/30'} font-semibold`}>
+                  {subData.subscription_status === 'active' ? <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> : <Clock className="w-3.5 h-3.5 mr-1" />}
+                  {subData.subscription_status === 'active' ? 'Ativa' : 'Pendente'}
                 </Badge>
               ) : (
                 <Badge variant="destructive" className="font-semibold">
@@ -127,29 +166,49 @@ export default function MinhaIgreja() {
               )}
             </div>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
             {subData?.subscribed && planInfo ? (
               <>
-                <div className="flex items-baseline gap-2">
-                  <span className="font-montserrat font-black text-2xl text-foreground">{planInfo.name}</span>
-                  <span className="text-muted-foreground text-sm font-inter">{planInfo.price}{planInfo.period}</span>
+                <div className="flex items-baseline justify-between">
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-montserrat font-black text-2xl text-foreground">{planInfo.name}</span>
+                    <span className="text-muted-foreground text-sm font-inter">{planInfo.price}{planInfo.period}</span>
+                  </div>
                 </div>
-                {subData.subscription_end && (
-                  <p className="text-muted-foreground text-sm font-inter flex items-center gap-1.5">
-                    <Calendar className="w-4 h-4" />
-                    Próxima cobrança: {formatDate(subData.subscription_end)}
-                  </p>
+
+                {memberStats && (
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-inter">
+                      <span className="text-muted-foreground">Membros utilizados</span>
+                      <span className="font-bold">{memberStats.current} / {memberStats.limit || '∞'}</span>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full transition-all ${memberStats.limit && memberStats.current / memberStats.limit > 0.9 ? 'bg-destructive' : 'bg-primary'}`}
+                        style={{ width: `${memberStats.limit ? Math.min(100, (memberStats.current / memberStats.limit) * 100) : 100}%` }}
+                      />
+                    </div>
+                  </div>
                 )}
-                <Button onClick={handleManageSubscription} disabled={portalLoading} variant="outline" className="w-full mt-2">
-                  {portalLoading ? "Abrindo..." : "Gerenciar assinatura"}
-                  <ExternalLink className="w-4 h-4 ml-2" />
-                </Button>
+
+                <div className="space-y-2 pt-2">
+                  {subData.subscription_end && (
+                    <p className="text-muted-foreground text-[11px] font-inter flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5" />
+                      Próxima renovação: {formatDate(subData.subscription_end)}
+                    </p>
+                  )}
+                  <Button onClick={handleManageSubscription} disabled={portalLoading} variant="outline" className="w-full h-11 rounded-xl">
+                    {portalLoading ? "Abrindo..." : "Gerenciar Assinatura"}
+                    <ExternalLink className="w-4 h-4 ml-2" />
+                  </Button>
+                </div>
               </>
             ) : (
               <div className="text-center py-4">
                 <p className="text-muted-foreground font-inter text-sm mb-4">Você ainda não possui uma assinatura ativa.</p>
-                <Button onClick={() => navigate("/apresentacao#planos")} style={{ background: "var(--gradient-hero)" }} className="text-primary-foreground">
-                  Ver planos disponíveis
+                <Button onClick={() => navigate("/apresentacao#planos")} style={{ background: "var(--gradient-hero)" }} className="w-full h-12 rounded-xl text-primary-foreground font-bold">
+                  Conhecer Planos
                 </Button>
               </div>
             )}
