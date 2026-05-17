@@ -224,6 +224,17 @@ export default function MinhaIgreja() {
           <p className="text-muted-foreground text-[10px] font-inter uppercase font-bold tracking-wider">{role === 'admin' ? 'Administrador' : role === 'lider' ? 'Líder de Área' : 'Membro'}</p>
         </div>
         <div className="ml-auto flex gap-2">
+          {!isMembro && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleExportUsers}
+              className="h-9 rounded-xl text-[10px] font-bold hidden sm:flex"
+            >
+              <Download className="w-3.5 h-3.5 mr-1.5" />
+              Exportar
+            </Button>
+          )}
           <Button 
             variant="outline" 
             size="sm" 
