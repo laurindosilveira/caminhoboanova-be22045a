@@ -491,6 +491,7 @@ export default function AdminSistema() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="atualizacoes" className="space-y-6">
             <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
               <Card className="border-border">
                 <CardHeader>
