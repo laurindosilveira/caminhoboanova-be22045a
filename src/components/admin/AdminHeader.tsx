@@ -1,4 +1,5 @@
-import { LogOut, ChevronLeft, RefreshCw, Zap } from "lucide-react";
+import { LogOut, ChevronLeft, RefreshCw, Zap, Church } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 // Cache bust v6: Added Force Refresh for Admin 2024-05-13
 import TurmaReportPDF from "./TurmaReportPDF";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,6 +9,7 @@ type Stats = {
   avancados: number;
   semAtividade: number;
   mediaProgresso: number;
+  totalLabel?: string;
 };
 
 type Props = {
@@ -25,6 +27,7 @@ type Props = {
 
 export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBackToUser, selectedCommunity, onChangeCommunity, participants, activities, turmaLabel }: Props) {
   const { role } = useAuth();
+  const navigate = useNavigate();
   
   const handleForceRefresh = async () => {
     if (window.confirm("Isso irá forçar a limpeza do cache e recarregar o aplicativo. Deseja continuar?")) {
@@ -75,6 +78,15 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
           <div className="flex items-center gap-2">
             {role === "admin" && (
               <button
+                onClick={() => navigate("/minha-igreja")}
+                className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center border border-white/20"
+                title="Gestão da Igreja e Assinatura"
+              >
+                <Church className="w-5 h-5 text-primary-foreground" />
+              </button>
+            )}
+            {role === "admin" && (
+              <button
                 onClick={handleForceRefresh}
                 className="w-9 h-9 rounded-xl bg-amber-500/20 flex items-center justify-center border border-amber-500/30"
                 title="Limpar Cache e Recarregar"
@@ -110,7 +122,7 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
 
         <div className="grid grid-cols-4 gap-2">
           {[
-            { label: "Participantes", value: stats.total, icon: "👥" },
+            { label: "Participantes", value: stats.totalLabel || stats.total, icon: "👥" },
             { label: "Avançados", value: stats.avancados, icon: "🏆" },
             { label: "Sem atividade", value: stats.semAtividade, icon: "⚠️" },
             { label: "Progresso médio", value: `${stats.mediaProgresso}%`, icon: "📊" },

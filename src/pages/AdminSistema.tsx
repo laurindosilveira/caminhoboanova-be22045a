@@ -74,6 +74,8 @@ export default function AdminSistema() {
   const [selectedUpdateId, setSelectedUpdateId] = useState<string | null>(null);
   const [isSystemAdmin, setIsSystemAdmin] = useState(false);
   const [systemAdminChecked, setSystemAdminChecked] = useState(false);
+  const [webhookLogs, setWebhookLogs] = useState<any[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -100,6 +102,7 @@ export default function AdminSistema() {
       setSystemAdminChecked(true);
       if (allowed) {
         fetchChurches();
+        fetchWebhookLogs();
       } else {
         setChurches([]);
         setChurchesLoading(false);
@@ -128,6 +131,22 @@ export default function AdminSistema() {
     }
 
     setChurchesLoading(false);
+  }
+
+  async function fetchWebhookLogs() {
+    setLogsLoading(true);
+    const { data, error } = await supabase
+      .from("stripe_webhook_logs")
+      .select("*, church_subscriptions(church_name)")
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (error) {
+      console.error(error);
+    } else {
+      setWebhookLogs(data || []);
+    }
+    setLogsLoading(false);
   }
 
   async function updateStatus(id: string, newStatus: string) {
@@ -211,6 +230,7 @@ export default function AdminSistema() {
           <TabsList className="h-auto flex-wrap justify-start gap-2 rounded-2xl bg-muted/60 p-2">
             <TabsTrigger value="igrejas" className="rounded-xl px-4 py-2">Igrejas</TabsTrigger>
             <TabsTrigger value="atualizacoes" className="rounded-xl px-4 py-2">Atualizacoes do app</TabsTrigger>
+            <TabsTrigger value="webhook-logs" className="rounded-xl px-4 py-2">Webhook Logs</TabsTrigger>
             <TabsTrigger value="backup" className="rounded-xl px-4 py-2">Backup e migracao</TabsTrigger>
           </TabsList>
 
@@ -506,6 +526,62 @@ export default function AdminSistema() {
                 })}
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="webhook-logs" className="space-y-6">
+            <Card className="border-border">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <div>
+                  <CardTitle className="font-montserrat text-xl font-black">Logs do Stripe Webhook</CardTitle>
+                  <CardDescription>Auditoria de eventos recebidos e processados pelo Stripe.</CardDescription>
+                </div>
+                <Button variant="outline" size="icon" onClick={fetchWebhookLogs} className="rounded-xl">
+                  <RefreshCw className={`h-4 w-4 ${logsLoading ? "animate-spin" : ""}`} />
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {logsLoading ? (
+                  <div className="space-y-2">
+                    {[1, 2, 3].map(i => <div key={i} className="h-12 bg-muted animate-pulse rounded-lg" />)}
+                  </div>
+                ) : webhookLogs.length === 0 ? (
+                  <p className="text-center py-10 text-muted-foreground">Nenhum evento registrado ainda.</p>
+                ) : (
+                  <div className="rounded-xl border border-border overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50 border-b border-border">
+                        <tr>
+                          <th className="px-4 py-2 text-left font-semibold">Evento</th>
+                          <th className="px-4 py-2 text-left font-semibold">Igreja</th>
+                          <th className="px-4 py-2 text-left font-semibold">Status</th>
+                          <th className="px-4 py-2 text-left font-semibold">Data</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {webhookLogs.map((log) => (
+                          <tr key={log.id} className="hover:bg-muted/30 transition-colors">
+                            <td className="px-4 py-3 font-mono text-[10px] truncate max-w-[150px]">
+                              {log.event_type}
+                            </td>
+                            <td className="px-4 py-3 truncate max-w-[150px]">
+                              {log.church_subscriptions?.church_name || "-"}
+                            </td>
+                            <td className="px-4 py-3">
+                              <Badge variant={log.status === "processed" ? "outline" : "destructive"} className="text-[10px] py-0">
+                                {log.status}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground text-[10px]">
+                              {new Date(log.created_at).toLocaleString("pt-BR")}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="backup" className="space-y-6">

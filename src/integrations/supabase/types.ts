@@ -416,6 +416,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean | null
+          last_webhook_event_id: string | null
           member_count: string | null
           member_limit: number | null
           needs: string | null
@@ -443,6 +444,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean | null
+          last_webhook_event_id?: string | null
           member_count?: string | null
           member_limit?: number | null
           needs?: string | null
@@ -470,6 +472,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean | null
+          last_webhook_event_id?: string | null
           member_count?: string | null
           member_limit?: number | null
           needs?: string | null
@@ -2743,6 +2746,47 @@ export type Database = {
             columns: ["church_id"]
             isOneToOne: false
             referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stripe_webhook_logs: {
+        Row: {
+          church_subscription_id: string | null
+          created_at: string | null
+          error_message: string | null
+          event_id: string
+          event_type: string
+          id: string
+          payload: Json
+          status: string | null
+        }
+        Insert: {
+          church_subscription_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          event_id: string
+          event_type: string
+          id?: string
+          payload: Json
+          status?: string | null
+        }
+        Update: {
+          church_subscription_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          event_id?: string
+          event_type?: string
+          id?: string
+          payload?: Json
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_webhook_logs_church_subscription_id_fkey"
+            columns: ["church_subscription_id"]
+            isOneToOne: false
+            referencedRelation: "church_subscriptions"
             referencedColumns: ["id"]
           },
         ]
