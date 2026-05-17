@@ -47,6 +47,7 @@ serve(async (req) => {
     let productId = null;
     let subscriptionEnd = null;
     let subscriptionStatus = null;
+    let cancelAtPeriodEnd = false;
     let invoices: any[] = [];
 
     if (hasActiveSub) {
@@ -54,6 +55,7 @@ serve(async (req) => {
       subscriptionEnd = new Date(sub.current_period_end * 1000).toISOString();
       productId = sub.items.data[0].price.product;
       subscriptionStatus = sub.status;
+      cancelAtPeriodEnd = sub.cancel_at_period_end;
     }
 
     // Fetch recent invoices for receipts
@@ -74,6 +76,7 @@ serve(async (req) => {
       product_id: productId,
       subscription_status: subscriptionStatus,
       subscription_end: subscriptionEnd,
+      cancel_at_period_end: cancelAtPeriodEnd,
       invoices,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
