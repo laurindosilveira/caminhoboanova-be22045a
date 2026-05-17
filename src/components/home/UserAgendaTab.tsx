@@ -665,9 +665,9 @@ export default function UserAgendaTab() {
     if (targetTurmaId) {
       profilesQuery = profilesQuery.eq("turma_id", targetTurmaId);
     } else if (event.community) {
-      profilesQuery = profilesQuery.eq("community", event.community);
+      profilesQuery = profilesQuery.eq("community", event.community as any);
     } else {
-      profilesQuery = profilesQuery.eq("area", event.area ?? currentArea);
+      profilesQuery = profilesQuery.eq("area", (event.area ?? currentArea) as any);
     }
 
     const eventChurchId = event.church_id ?? (profile as any)?.church_id ?? null;
