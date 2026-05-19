@@ -8,7 +8,7 @@ export interface PlanFeatures {
   customBranding: boolean;
 }
 
-export const PLAN_FEATURES: Record<PlanKey, PlanFeatures> = {
+export const PLAN_FEATURES: Record<string, PlanFeatures> = {
   comunidade: {
     maxMembers: 50,
     advancedExport: false,
@@ -24,6 +24,13 @@ export const PLAN_FEATURES: Record<PlanKey, PlanFeatures> = {
     customBranding: false,
   },
   pastoral: {
+    maxMembers: null, // Unlimited
+    advancedExport: true,
+    multiAreaManagement: true,
+    detailedReports: true,
+    customBranding: true,
+  },
+  Premium: {
     maxMembers: null, // Unlimited
     advancedExport: true,
     multiAreaManagement: true,
