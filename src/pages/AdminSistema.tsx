@@ -184,6 +184,15 @@ export default function AdminSistema() {
     setErrorLogs(data || []);
   }
 
+  async function fetchPlanHistory() {
+    const { data } = await supabase
+      .from("plan_history")
+      .select("*, churches(name)")
+      .order("changed_at", { ascending: false })
+      .limit(50);
+    setPlanHistory(data || []);
+  }
+
   async function updateStatus(id: string, newStatus: string) {
     const { error } = await supabase
       .from("church_subscriptions" as any)
