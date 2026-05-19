@@ -56,6 +56,7 @@ export default function MinhaIgreja() {
   const { user, profile, role, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [subData, setSubData] = useState<SubData | null>(null);
+  const [dbSub, setDbSub] = useState<any>(null);
   const [memberStats, setMemberStats] = useState<UserStats | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
