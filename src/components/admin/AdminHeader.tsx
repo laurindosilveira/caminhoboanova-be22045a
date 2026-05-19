@@ -30,7 +30,7 @@ type Props = {
 };
 
 export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBackToUser, selectedCommunity, onChangeCommunity, participants, activities, turmaLabel }: Props) {
-  const { role } = useAuth();
+  const { user, role } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
