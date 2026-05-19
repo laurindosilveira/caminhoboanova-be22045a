@@ -1,4 +1,5 @@
 import { LogOut, ChevronLeft, RefreshCw, Zap, Church, AlertTriangle, CreditCard, BellOff, X } from "lucide-react";
+import { isUnlimitedChurch } from "@/lib/planFeatures";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
