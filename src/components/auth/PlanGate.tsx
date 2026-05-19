@@ -70,7 +70,7 @@ export function PlanGate({ children, feature }: PlanGateProps) {
 
   if (isLoading) return null;
 
-  const isUnlimited = isUnlimitedChurch(profile?.church_id, profile?.email);
+  const isUnlimited = isUnlimitedChurch(profile?.church_id, user?.email);
   const isBlocked = subscription?.subscription_status === "blocked" && !isUnlimited;
   
   const rawPlanKey = (subscription as any)?.product_id 
