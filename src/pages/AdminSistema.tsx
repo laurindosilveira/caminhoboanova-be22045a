@@ -852,6 +852,65 @@ export default function AdminSistema() {
               </CardContent>
             </Card>
           </TabsContent>
+          <TabsContent value="plan-history" className="space-y-6">
+            <Card className="border-border">
+              <CardHeader>
+                <CardTitle className="font-montserrat text-lg font-black flex items-center gap-2">
+                  <ListOrdered className="h-5 w-5 text-primary" />
+                  Histórico de Alterações de Planos
+                </CardTitle>
+                <CardDescription>
+                  Registro detalhado de todas as mudanças de planos e limites de membros.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {planHistory.length === 0 ? (
+                    <p className="text-center py-8 text-muted-foreground italic">Nenhuma alteração registrada ainda.</p>
+                  ) : (
+                    planHistory.map((log) => (
+                      <div key={log.id} className="rounded-xl border border-border bg-muted/30 p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <p className="font-bold text-sm text-foreground">{log.churches?.name || "Igreja desconhecida"}</p>
+                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                              {new Date(log.changed_at).toLocaleString("pt-BR")}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
+                            {log.new_plan || "Manual"}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-xs">
+                          <div>
+                            <p className="text-muted-foreground">Plano Anterior</p>
+                            <p className="font-medium">{log.previous_plan || "-"}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Novo Plano</p>
+                            <p className="font-medium text-brand-green">{log.new_plan || "-"}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Limite Anterior</p>
+                            <p className="font-medium">{log.previous_limit || "∞"}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Novo Limite</p>
+                            <p className="font-medium">{log.new_limit || "∞"}</p>
+                          </div>
+                        </div>
+                        {log.notes && (
+                          <div className="mt-3 pt-2 border-t border-border/50">
+                            <p className="text-[10px] text-muted-foreground italic">{log.notes}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </div>
 
