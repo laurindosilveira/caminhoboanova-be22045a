@@ -316,8 +316,8 @@ export default function MinhaIgreja() {
                     <ShieldCheck className="w-5 h-5 text-primary" />
                     Plano Ativo
                   </CardTitle>
-                  <Badge variant={subData?.subscription_status === 'active' ? 'default' : 'secondary'} className="font-semibold">
-                    {subData?.subscription_status === 'active' ? 'Ativa' : 'Pendente'}
+                  <Badge variant={isUnlimited || subData?.subscription_status === 'active' ? 'default' : 'secondary'} className="font-semibold">
+                    {isUnlimited || subData?.subscription_status === 'active' ? 'Ativa' : 'Pendente'}
                   </Badge>
                 </div>
               </CardHeader>
