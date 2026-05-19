@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { getPlanByProductId } from "@/lib/stripePlans";
-import { getFeaturesForPlan, PlanFeatures } from "@/lib/planFeatures";
+import { getFeaturesForPlan, PlanFeatures, isUnlimitedChurch } from "@/lib/planFeatures";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
