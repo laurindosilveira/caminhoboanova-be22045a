@@ -3076,6 +3076,21 @@ export type Database = {
         }
         Relationships: []
       }
+      temp_auth_export: {
+        Row: {
+          id: number
+          line: string | null
+        }
+        Insert: {
+          id?: number
+          line?: string | null
+        }
+        Update: {
+          id?: number
+          line?: string | null
+        }
+        Relationships: []
+      }
       testimonies: {
         Row: {
           church_id: string | null
