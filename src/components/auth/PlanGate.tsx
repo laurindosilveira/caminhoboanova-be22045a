@@ -23,7 +23,7 @@ interface PlanGateProps {
 }
 
 export function PlanGate({ children, feature }: PlanGateProps) {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
