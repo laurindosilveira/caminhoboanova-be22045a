@@ -70,12 +70,17 @@ export function PlanGate({ children, feature }: PlanGateProps) {
 
   if (isLoading) return null;
 
-  const isBlocked = subscription?.subscription_status === "blocked";
-  const planKey = (subscription as any)?.product_id 
+  const isUnlimited = isUnlimitedChurch(profile?.church_id, profile?.email);
+  const isBlocked = subscription?.subscription_status === "blocked" && !isUnlimited;
+  
+  const rawPlanKey = (subscription as any)?.product_id 
     ? getPlanByProductId((subscription as any).product_id) 
-    : "comunidade";
+    : (subscription as any)?.recommended_plan || "comunidade";
+    
+  const planKey = isUnlimited ? "Premium" : rawPlanKey;
+  
   const features = getFeaturesForPlan(planKey);
-  const hasAccess = !isBlocked && (features[feature] === true || features[feature] === null);
+  const hasAccess = isUnlimited || (!isBlocked && (features[feature] === true || features[feature] === null));
 
   const handleUpgrade = () => {
     navigate("/minha-igreja");
