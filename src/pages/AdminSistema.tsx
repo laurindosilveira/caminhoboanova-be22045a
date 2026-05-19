@@ -298,6 +298,7 @@ export default function AdminSistema() {
             <TabsTrigger value="igrejas" className="rounded-xl px-4 py-2">Igrejas</TabsTrigger>
             <TabsTrigger value="atualizacoes" className="rounded-xl px-4 py-2">Atualizacoes do app</TabsTrigger>
             <TabsTrigger value="audit-logs" className="rounded-xl px-4 py-2">Seguranca</TabsTrigger>
+            <TabsTrigger value="plan-history" className="rounded-xl px-4 py-2">Historico de Planos</TabsTrigger>
             <TabsTrigger value="webhook-logs" className="rounded-xl px-4 py-2">Webhook Logs</TabsTrigger>
             <TabsTrigger value="error-logs" className="rounded-xl px-4 py-2">Monitoramento de Erros</TabsTrigger>
             <TabsTrigger value="backup" className="rounded-xl px-4 py-2">Backup</TabsTrigger>
