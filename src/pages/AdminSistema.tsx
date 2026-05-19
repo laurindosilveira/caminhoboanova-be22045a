@@ -17,7 +17,15 @@ import {
   Sparkles,
   XCircle,
   CalendarDays,
-  Plus
+  Plus,
+  FileDown,
+  FileText,
+  Database,
+  Lock,
+  Package,
+  ListOrdered,
+  FileCode,
+  ShieldCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
