@@ -87,6 +87,7 @@ export default function AdminSistema() {
   const [systemAdminChecked, setSystemAdminChecked] = useState(false);
   const [webhookLogs, setWebhookLogs] = useState<any[]>([]);
   const [adminAuditLogs, setAdminAuditLogs] = useState<any[]>([]);
+  const [planHistory, setPlanHistory] = useState<any[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [errorLogs, setErrorLogs] = useState<any[]>([]);
 
