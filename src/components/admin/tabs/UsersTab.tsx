@@ -62,6 +62,7 @@ type UsersTabProps = {
 };
 
 export default function UsersTab({ onSelectTurma }: UsersTabProps) {
+  const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [subTab, setSubTab] = useState<"users" | "turmas" | "waiting">("users");
