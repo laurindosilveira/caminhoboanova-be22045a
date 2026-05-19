@@ -119,6 +119,7 @@ export default function AdminSistema() {
         fetchWebhookLogs();
         fetchAdminAuditLogs();
         fetchErrorLogs();
+        fetchPlanHistory();
       } else {
         setChurches([]);
         setChurchesLoading(false);
