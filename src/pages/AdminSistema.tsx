@@ -17,7 +17,15 @@ import {
   Sparkles,
   XCircle,
   CalendarDays,
-  Plus
+  Plus,
+  FileDown,
+  FileText,
+  Database,
+  Lock,
+  Package,
+  ListOrdered,
+  FileCode,
+  ShieldCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -281,6 +289,7 @@ export default function AdminSistema() {
             <TabsTrigger value="webhook-logs" className="rounded-xl px-4 py-2">Webhook Logs</TabsTrigger>
             <TabsTrigger value="error-logs" className="rounded-xl px-4 py-2">Monitoramento de Erros</TabsTrigger>
             <TabsTrigger value="backup" className="rounded-xl px-4 py-2">Backup</TabsTrigger>
+            <TabsTrigger value="migration" className="rounded-xl px-4 py-2">Migração</TabsTrigger>
           </TabsList>
 
           <TabsContent value="igrejas" className="space-y-6">
@@ -771,6 +780,62 @@ export default function AdminSistema() {
                 <Button onClick={() => navigate("/exportar-dados")} className="rounded-xl">
                   Abrir exportacao e migracao
                 </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="migration" className="space-y-6">
+            <Card className="border-border">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 font-montserrat text-xl font-black">
+                  <Database className="h-5 w-5 text-primary" />
+                  Arquivos de Migração Consolidada
+                </CardTitle>
+                <CardDescription>
+                  Baixe os arquivos gerados para realizar a migração manual para um novo projeto Supabase.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[
+                    { name: "schema.sql", label: "Estrutura (Schema)", icon: FileCode, color: "text-blue-500", description: "Tabelas, funções, triggers e policies." },
+                    { name: "auth_data.sql", label: "Usuários (Auth)", icon: Lock, color: "text-orange-500", description: "Dados de usuários e perfis." },
+                    { name: "public_data.sql", label: "Dados Públicos", icon: Database, color: "text-green-500", description: "Conteúdo das tabelas do schema public." },
+                    { name: "storage_metadata.sql", label: "Metadados Storage", icon: Package, color: "text-purple-500", description: "Registro de arquivos nos buckets." },
+                    { name: "storage_files.zip", label: "Arquivos Storage", icon: Package, color: "text-purple-500", description: "ZIP com os arquivos físicos dos buckets." },
+                    { name: "edge_functions.zip", label: "Edge Functions", icon: FileCode, color: "text-cyan-500", description: "Código das funções personalizadas." },
+                    { name: "secrets_required.txt", label: "Secrets", icon: ShieldCheck, color: "text-red-500", description: "Lista de chaves e variáveis necessárias." },
+                    { name: "migration_order.txt", label: "Roteiro de Migração", icon: ListOrdered, color: "text-yellow-500", description: "Passo a passo da execução." },
+                    { name: "validation_queries.sql", label: "Validação", icon: CheckCircle2, color: "text-emerald-500", description: "Queries para conferir a integridade." },
+                  ].map((file) => (
+                    <Card key={file.name} className="border-border hover:shadow-md transition-shadow group">
+                      <CardContent className="p-4 flex flex-col h-full">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className={`p-2 rounded-lg bg-muted/50 group-hover:bg-muted transition-colors ${file.color}`}>
+                            <file.icon className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <p className="font-montserrat font-bold text-sm text-foreground">{file.label}</p>
+                            <p className="text-[10px] text-muted-foreground font-mono">{file.name}</p>
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground flex-grow mb-4">
+                          {file.description}
+                        </p>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="w-full rounded-xl gap-2 mt-auto"
+                          asChild
+                        >
+                          <a href={`/migration-export/${file.name}`} download>
+                            <FileDown className="h-4 w-4" />
+                            Download
+                          </a>
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
