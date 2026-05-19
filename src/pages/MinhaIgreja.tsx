@@ -207,8 +207,19 @@ export default function MinhaIgreja() {
     );
   }
 
-  const planKey = subData?.product_id ? getPlanByProductId(subData.product_id) : null;
-  const planInfo = planKey ? STRIPE_PLANS[planKey] : null;
+  const isUnlimited = isUnlimitedChurch(profile?.church_id, user?.email);
+  const rawPlanKey = subData?.product_id 
+    ? getPlanByProductId(subData.product_id) 
+    : dbSub?.recommended_plan || null;
+  
+  const planKey = isUnlimited ? "Premium" : rawPlanKey;
+  
+  const planInfo = planKey && planKey in STRIPE_PLANS 
+    ? STRIPE_PLANS[planKey as PlanKey] 
+    : planKey === "Premium" 
+      ? { name: "Premium", price: "R$ 0", period: "Vitalício" }
+      : null;
+
   const features = getFeaturesForPlan(planKey);
 
   const activeFeatures = [
