@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { STRIPE_PLANS, getPlanByProductId, type PlanKey } from "@/lib/stripePlans";
-import { PLAN_FEATURES, getFeaturesForPlan } from "@/lib/planFeatures";
+import { PLAN_FEATURES, getFeaturesForPlan, isUnlimitedChurch } from "@/lib/planFeatures";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -56,6 +56,7 @@ export default function MinhaIgreja() {
   const { user, profile, role, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [subData, setSubData] = useState<SubData | null>(null);
+  const [dbSub, setDbSub] = useState<any>(null);
   const [memberStats, setMemberStats] = useState<UserStats | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,16 +77,19 @@ export default function MinhaIgreja() {
         { data: sData, error: sError }, 
         { data: uStats, error: mError },
         { data: aLogs, error: aError },
-        { data: cData, error: cError }
+        { data: cData, error: cError },
+        { data: dbSubscriptionData }
       ] = await Promise.all([
         supabase.functions.invoke("check-subscription"),
         supabase.rpc("get_church_user_stats", { p_church_id: profile.church_id }),
         supabase.from('church_audit_logs').select('*').order('created_at', { ascending: false }).limit(10),
-        supabase.from('churches').select('*').eq('id', profile.church_id).single()
+        supabase.from('churches').select('*').eq('id', profile.church_id).single(),
+        supabase.from('church_subscriptions').select('*').eq('church_id', profile.church_id).maybeSingle()
       ]);
 
       if (sError) throw sError;
       setSubData(sData);
+      setDbSub(dbSubscriptionData);
       setAuditLogs((aLogs as AuditLog[]) || []);
       
       if (cData) {
@@ -203,8 +207,19 @@ export default function MinhaIgreja() {
     );
   }
 
-  const planKey = subData?.product_id ? getPlanByProductId(subData.product_id) : null;
-  const planInfo = planKey ? STRIPE_PLANS[planKey] : null;
+  const isUnlimited = isUnlimitedChurch(profile?.church_id, user?.email);
+  const rawPlanKey = subData?.product_id 
+    ? getPlanByProductId(subData.product_id) 
+    : dbSub?.recommended_plan || null;
+  
+  const planKey = isUnlimited ? "Premium" : rawPlanKey;
+  
+  const planInfo = planKey && planKey in STRIPE_PLANS 
+    ? STRIPE_PLANS[planKey as PlanKey] 
+    : planKey === "Premium" 
+      ? { name: "Premium", price: "R$ 0", period: "Vitalício" }
+      : null;
+
   const features = getFeaturesForPlan(planKey);
 
   const activeFeatures = [
@@ -301,8 +316,8 @@ export default function MinhaIgreja() {
                     <ShieldCheck className="w-5 h-5 text-primary" />
                     Plano Ativo
                   </CardTitle>
-                  <Badge variant={subData?.subscription_status === 'active' ? 'default' : 'secondary'} className="font-semibold">
-                    {subData?.subscription_status === 'active' ? 'Ativa' : 'Pendente'}
+                  <Badge variant={isUnlimited || subData?.subscription_status === 'active' ? 'default' : 'secondary'} className="font-semibold">
+                    {isUnlimited || subData?.subscription_status === 'active' ? 'Ativa' : 'Pendente'}
                   </Badge>
                 </div>
               </CardHeader>
@@ -366,12 +381,12 @@ export default function MinhaIgreja() {
                     <div className="space-y-2">
                       <div className="flex justify-between text-[11px] font-inter uppercase font-bold tracking-wider">
                         <span className="text-muted-foreground">Uso de Membros (Total)</span>
-                        <span className="text-foreground">{memberStats.total_users} / {memberStats.member_limit || '∞'}</span>
+                        <span className="text-foreground">{memberStats.total_users} / {isUnlimited ? '∞' : (memberStats.member_limit || '∞')}</span>
                       </div>
                       <div className="h-2.5 bg-muted rounded-full overflow-hidden border border-border/50">
                         <div 
-                          className={`h-full transition-all duration-500 ${memberStats.member_limit && memberStats.total_users / memberStats.member_limit > 0.9 ? 'bg-destructive' : 'bg-primary'}`} 
-                          style={{ width: `${memberStats.member_limit ? Math.min(100, (memberStats.total_users / memberStats.member_limit) * 100) : 100}%` }} 
+                          className={`h-full transition-all duration-500 ${!isUnlimited && memberStats.member_limit && memberStats.total_users / memberStats.member_limit > 0.9 ? 'bg-destructive' : 'bg-primary'}`} 
+                          style={{ width: `${isUnlimited ? 100 : (memberStats.member_limit ? Math.min(100, (memberStats.total_users / memberStats.member_limit) * 100) : 100)}%` }} 
                         />
                       </div>
                       <p className="text-[9px] text-muted-foreground leading-tight italic">

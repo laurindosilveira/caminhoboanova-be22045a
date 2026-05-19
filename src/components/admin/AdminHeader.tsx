@@ -1,4 +1,5 @@
 import { LogOut, ChevronLeft, RefreshCw, Zap, Church, AlertTriangle, CreditCard, BellOff, X } from "lucide-react";
+import { isUnlimitedChurch } from "@/lib/planFeatures";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,7 +30,7 @@ type Props = {
 };
 
 export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBackToUser, selectedCommunity, onChangeCommunity, participants, activities, turmaLabel }: Props) {
-  const { role } = useAuth();
+  const { user, role } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
@@ -38,8 +39,9 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
 
   useEffect(() => {
     async function checkTrial() {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      const isUnlimited = isUnlimitedChurch(null, user.email);
+      if (isUnlimited) return;
 
       const { data: profile } = await supabase
         .from('profiles')

@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { getPlanByProductId } from "@/lib/stripePlans";
-import { getFeaturesForPlan, PlanFeatures } from "@/lib/planFeatures";
+import { getFeaturesForPlan, PlanFeatures, isUnlimitedChurch } from "@/lib/planFeatures";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -23,7 +23,7 @@ interface PlanGateProps {
 }
 
 export function PlanGate({ children, feature }: PlanGateProps) {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -70,12 +70,17 @@ export function PlanGate({ children, feature }: PlanGateProps) {
 
   if (isLoading) return null;
 
-  const isBlocked = subscription?.subscription_status === "blocked";
-  const planKey = (subscription as any)?.product_id 
+  const isUnlimited = isUnlimitedChurch(profile?.church_id, user?.email);
+  const isBlocked = subscription?.subscription_status === "blocked" && !isUnlimited;
+  
+  const rawPlanKey = (subscription as any)?.product_id 
     ? getPlanByProductId((subscription as any).product_id) 
-    : "comunidade";
+    : (subscription as any)?.recommended_plan || "comunidade";
+    
+  const planKey = isUnlimited ? "Premium" : rawPlanKey;
+  
   const features = getFeaturesForPlan(planKey);
-  const hasAccess = !isBlocked && (features[feature] === true || features[feature] === null);
+  const hasAccess = isUnlimited || (!isBlocked && (features[feature] === true || features[feature] === null));
 
   const handleUpgrade = () => {
     navigate("/minha-igreja");
