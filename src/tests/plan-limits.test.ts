@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getFeaturesForPlan } from '../lib/planFeatures';
+import { getFeaturesForPlan, isUnlimitedChurch } from '../lib/planFeatures';
 import { STRIPE_PLANS } from '../lib/stripePlans';
 
 describe('Plan Matrix Logic', () => {
