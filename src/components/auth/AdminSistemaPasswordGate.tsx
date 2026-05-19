@@ -9,8 +9,8 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 
 // Hash simple pour la démo, idéalement on utiliserait une fonction plus robuste 
-// mais pour ce cas spécifique d'accès admin panneau système, on vérifie l'admin list d'abord.
-const ADMIN_PASSWORD_HASH = "20212014"; 
+// La vérification se fait maintenant via une fonction RPC sécurisée dans Supabase
+// qui compare le hash stocké dans le vault/settings.
 
 type AccessState = "checking" | "authorized_admin" | "denied" | "password_required";
 
@@ -66,25 +66,41 @@ export default function AdminSistemaPasswordGate({ children }: { children: React
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Vérification du mot de passe (comparaison directe pour ce cas spécifique demandé)
-    if (password === ADMIN_PASSWORD_HASH) {
-      sessionStorage.setItem(`admin_auth_${user?.id}`, "true");
-      await supabase.rpc('log_system_access_attempt', { p_status: 'success' });
-      setSessionAuthorized(true);
-      setAccessState("authorized_admin");
-      toast({
-        title: "Acesso liberado",
-        description: "Bem-vindo ao painel do sistema.",
+    try {
+      // Vérification du mot de passe via RPC sécurisée (hash comparé côté serveur)
+      const { data: isValid, error } = await supabase.rpc("verify_system_master_password", {
+        p_password_attempt: password
       });
-    } else {
-      await supabase.rpc('log_system_access_attempt', { p_status: 'password_fail' });
+
+      if (error) throw error;
+
+      if (isValid === true) {
+        sessionStorage.setItem(`admin_auth_${user?.id}`, "true");
+        await supabase.rpc('log_system_access_attempt', { p_status: 'success' });
+        setSessionAuthorized(true);
+        setAccessState("authorized_admin");
+        toast({
+          title: "Acesso liberado",
+          description: "Bem-vindo ao painel do sistema.",
+        });
+      } else {
+        await supabase.rpc('log_system_access_attempt', { p_status: 'password_fail' });
+        toast({
+          title: "Senha incorreta",
+          description: "Verifique a senha e tente novamente.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao verificar senha mestra:", error);
       toast({
-        title: "Senha incorreta",
-        description: "Verifique a senha e tente novamente.",
+        title: "Erro de autenticação",
+        description: "Não foi possível verificar a senha no momento.",
         variant: "destructive",
       });
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   if (loading) return null;

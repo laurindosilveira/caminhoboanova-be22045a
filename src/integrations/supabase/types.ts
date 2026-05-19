@@ -3014,6 +3014,24 @@ export type Database = {
         }
         Relationships: []
       }
+      system_settings: {
+        Row: {
+          key: string
+          updated_at: string | null
+          value: string
+        }
+        Insert: {
+          key: string
+          updated_at?: string | null
+          value: string
+        }
+        Update: {
+          key?: string
+          updated_at?: string | null
+          value?: string
+        }
+        Relationships: []
+      }
       testimonies: {
         Row: {
           church_id: string | null
@@ -3832,6 +3850,10 @@ export type Database = {
         Args: { p_church_subscription_id: string; p_days: number }
         Returns: undefined
       }
+      set_system_master_password: {
+        Args: { p_new_password: string }
+        Returns: undefined
+      }
       test_stripe_webhook: {
         Args: {
           p_church_subscription_id: string
@@ -3847,6 +3869,10 @@ export type Database = {
       upsert_game_config_item: {
         Args: { _key: string; _value: number }
         Returns: undefined
+      }
+      verify_system_master_password: {
+        Args: { p_password_attempt: string }
+        Returns: boolean
       }
     }
     Enums: {
