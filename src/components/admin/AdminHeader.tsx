@@ -39,8 +39,9 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
 
   useEffect(() => {
     async function checkTrial() {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      const isUnlimited = isUnlimitedChurch(null, user.email);
+      if (isUnlimited) return;
 
       const { data: profile } = await supabase
         .from('profiles')
