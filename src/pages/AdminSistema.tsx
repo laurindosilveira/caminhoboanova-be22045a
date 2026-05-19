@@ -64,6 +64,7 @@ const PLAN_LABELS: Record<string, { label: string; emoji: string }> = {
   comunidade: { label: "Comunidade", emoji: "Comunidade" },
   crescimento: { label: "Crescimento", emoji: "Crescimento" },
   pastoral: { label: "Pastoral", emoji: "Pastoral" },
+  Premium: { label: "Premium (Ilimitado)", emoji: "Premium" },
 };
 
 const UPDATE_TYPE_OPTIONS = [
@@ -86,6 +87,7 @@ export default function AdminSistema() {
   const [systemAdminChecked, setSystemAdminChecked] = useState(false);
   const [webhookLogs, setWebhookLogs] = useState<any[]>([]);
   const [adminAuditLogs, setAdminAuditLogs] = useState<any[]>([]);
+  const [planHistory, setPlanHistory] = useState<any[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [errorLogs, setErrorLogs] = useState<any[]>([]);
 
@@ -117,6 +119,7 @@ export default function AdminSistema() {
         fetchWebhookLogs();
         fetchAdminAuditLogs();
         fetchErrorLogs();
+        fetchPlanHistory();
       } else {
         setChurches([]);
         setChurchesLoading(false);
@@ -179,6 +182,15 @@ export default function AdminSistema() {
       .order("created_at", { ascending: false })
       .limit(50);
     setErrorLogs(data || []);
+  }
+
+  async function fetchPlanHistory() {
+    const { data } = await supabase
+      .from("plan_history")
+      .select("*, churches(name)")
+      .order("changed_at", { ascending: false })
+      .limit(50);
+    setPlanHistory(data || []);
   }
 
   async function updateStatus(id: string, newStatus: string) {
@@ -286,6 +298,7 @@ export default function AdminSistema() {
             <TabsTrigger value="igrejas" className="rounded-xl px-4 py-2">Igrejas</TabsTrigger>
             <TabsTrigger value="atualizacoes" className="rounded-xl px-4 py-2">Atualizacoes do app</TabsTrigger>
             <TabsTrigger value="audit-logs" className="rounded-xl px-4 py-2">Seguranca</TabsTrigger>
+            <TabsTrigger value="plan-history" className="rounded-xl px-4 py-2">Historico de Planos</TabsTrigger>
             <TabsTrigger value="webhook-logs" className="rounded-xl px-4 py-2">Webhook Logs</TabsTrigger>
             <TabsTrigger value="error-logs" className="rounded-xl px-4 py-2">Monitoramento de Erros</TabsTrigger>
             <TabsTrigger value="backup" className="rounded-xl px-4 py-2">Backup</TabsTrigger>
@@ -835,6 +848,65 @@ export default function AdminSistema() {
                       </CardContent>
                     </Card>
                   ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="plan-history" className="space-y-6">
+            <Card className="border-border">
+              <CardHeader>
+                <CardTitle className="font-montserrat text-lg font-black flex items-center gap-2">
+                  <ListOrdered className="h-5 w-5 text-primary" />
+                  Histórico de Alterações de Planos
+                </CardTitle>
+                <CardDescription>
+                  Registro detalhado de todas as mudanças de planos e limites de membros.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {planHistory.length === 0 ? (
+                    <p className="text-center py-8 text-muted-foreground italic">Nenhuma alteração registrada ainda.</p>
+                  ) : (
+                    planHistory.map((log) => (
+                      <div key={log.id} className="rounded-xl border border-border bg-muted/30 p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <p className="font-bold text-sm text-foreground">{log.churches?.name || "Igreja desconhecida"}</p>
+                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                              {new Date(log.changed_at).toLocaleString("pt-BR")}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
+                            {log.new_plan || "Manual"}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-xs">
+                          <div>
+                            <p className="text-muted-foreground">Plano Anterior</p>
+                            <p className="font-medium">{log.previous_plan || "-"}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Novo Plano</p>
+                            <p className="font-medium text-brand-green">{log.new_plan || "-"}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Limite Anterior</p>
+                            <p className="font-medium">{log.previous_limit || "∞"}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Novo Limite</p>
+                            <p className="font-medium">{log.new_limit || "∞"}</p>
+                          </div>
+                        </div>
+                        {log.notes && (
+                          <div className="mt-3 pt-2 border-t border-border/50">
+                            <p className="text-[10px] text-muted-foreground italic">{log.notes}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>

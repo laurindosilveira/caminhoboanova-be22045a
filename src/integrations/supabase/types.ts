@@ -2117,6 +2117,50 @@ export type Database = {
           },
         ]
       }
+      plan_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          church_id: string
+          id: string
+          new_limit: number | null
+          new_plan: string | null
+          notes: string | null
+          previous_limit: number | null
+          previous_plan: string | null
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          church_id: string
+          id?: string
+          new_limit?: number | null
+          new_plan?: string | null
+          notes?: string | null
+          previous_limit?: number | null
+          previous_plan?: string | null
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          church_id?: string
+          id?: string
+          new_limit?: number | null
+          new_plan?: string | null
+          notes?: string | null
+          previous_limit?: number | null
+          previous_plan?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_history_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       poll_votes: {
         Row: {
           church_id: string | null
