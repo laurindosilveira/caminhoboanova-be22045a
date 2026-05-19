@@ -77,7 +77,8 @@ export default function MinhaIgreja() {
         { data: sData, error: sError }, 
         { data: uStats, error: mError },
         { data: aLogs, error: aError },
-        { data: cData, error: cError }
+        { data: cData, error: cError },
+        supabase.from('church_subscriptions').select('*').eq('church_id', profile.church_id).single()
       ] = await Promise.all([
         supabase.functions.invoke("check-subscription"),
         supabase.rpc("get_church_user_stats", { p_church_id: profile.church_id }),
