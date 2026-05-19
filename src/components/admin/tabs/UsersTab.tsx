@@ -305,10 +305,13 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
       toast({ title: "Aviso", description: "Não foi possível identificar sua igreja para validar limites.", variant: "destructive" });
     }
 
+    const isUnlimited = isUnlimitedChurch(churchId, user?.email);
     const { data: countData } = await supabase.rpc("get_church_member_count", { p_church_id: churchId as any });
-    const { data: subData } = await (supabase.from as any)("church_subscriptions").select("member_limit").eq("church_id", churchId).single();
+    const { data: subData } = await (supabase.from as any)("church_subscriptions").select("member_limit, recommended_plan").eq("church_id", churchId).single();
     
-    if (subData?.member_limit && (countData || 0) >= subData.member_limit && !editingUser.turma_id && editForm.turma_id) {
+    const hasLimit = subData?.member_limit && !isUnlimited && subData.recommended_plan !== "Premium";
+
+    if (hasLimit && (countData || 0) >= subData.member_limit && !editingUser.turma_id && editForm.turma_id) {
        toast({ title: "Limite atingido", description: `Seu plano permite até ${subData.member_limit} membros ativos.`, variant: "destructive" });
        setSavingEdit(false);
        return;
