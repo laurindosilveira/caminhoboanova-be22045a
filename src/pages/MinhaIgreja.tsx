@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { STRIPE_PLANS, getPlanByProductId, type PlanKey } from "@/lib/stripePlans";
-import { PLAN_FEATURES, getFeaturesForPlan } from "@/lib/planFeatures";
+import { PLAN_FEATURES, getFeaturesForPlan, isUnlimitedChurch } from "@/lib/planFeatures";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
