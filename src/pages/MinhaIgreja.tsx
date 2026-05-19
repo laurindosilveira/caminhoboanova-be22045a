@@ -381,12 +381,12 @@ export default function MinhaIgreja() {
                     <div className="space-y-2">
                       <div className="flex justify-between text-[11px] font-inter uppercase font-bold tracking-wider">
                         <span className="text-muted-foreground">Uso de Membros (Total)</span>
-                        <span className="text-foreground">{memberStats.total_users} / {memberStats.member_limit || '∞'}</span>
+                        <span className="text-foreground">{memberStats.total_users} / {isUnlimited ? '∞' : (memberStats.member_limit || '∞')}</span>
                       </div>
                       <div className="h-2.5 bg-muted rounded-full overflow-hidden border border-border/50">
                         <div 
-                          className={`h-full transition-all duration-500 ${memberStats.member_limit && memberStats.total_users / memberStats.member_limit > 0.9 ? 'bg-destructive' : 'bg-primary'}`} 
-                          style={{ width: `${memberStats.member_limit ? Math.min(100, (memberStats.total_users / memberStats.member_limit) * 100) : 100}%` }} 
+                          className={`h-full transition-all duration-500 ${!isUnlimited && memberStats.member_limit && memberStats.total_users / memberStats.member_limit > 0.9 ? 'bg-destructive' : 'bg-primary'}`} 
+                          style={{ width: `${isUnlimited ? 100 : (memberStats.member_limit ? Math.min(100, (memberStats.total_users / memberStats.member_limit) * 100) : 100)}%` }} 
                         />
                       </div>
                       <p className="text-[9px] text-muted-foreground leading-tight italic">
