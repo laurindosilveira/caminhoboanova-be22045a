@@ -289,6 +289,7 @@ export default function AdminSistema() {
             <TabsTrigger value="webhook-logs" className="rounded-xl px-4 py-2">Webhook Logs</TabsTrigger>
             <TabsTrigger value="error-logs" className="rounded-xl px-4 py-2">Monitoramento de Erros</TabsTrigger>
             <TabsTrigger value="backup" className="rounded-xl px-4 py-2">Backup</TabsTrigger>
+            <TabsTrigger value="migration" className="rounded-xl px-4 py-2">Migração</TabsTrigger>
           </TabsList>
 
           <TabsContent value="igrejas" className="space-y-6">
