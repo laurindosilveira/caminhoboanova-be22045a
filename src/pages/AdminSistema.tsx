@@ -64,6 +64,7 @@ const PLAN_LABELS: Record<string, { label: string; emoji: string }> = {
   comunidade: { label: "Comunidade", emoji: "Comunidade" },
   crescimento: { label: "Crescimento", emoji: "Crescimento" },
   pastoral: { label: "Pastoral", emoji: "Pastoral" },
+  Premium: { label: "Premium (Ilimitado)", emoji: "Premium" },
 };
 
 const UPDATE_TYPE_OPTIONS = [
