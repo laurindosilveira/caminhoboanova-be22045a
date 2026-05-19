@@ -78,16 +78,18 @@ export default function MinhaIgreja() {
         { data: uStats, error: mError },
         { data: aLogs, error: aError },
         { data: cData, error: cError },
-        supabase.from('church_subscriptions').select('*').eq('church_id', profile.church_id).single()
+        { data: dbSubscriptionData }
       ] = await Promise.all([
         supabase.functions.invoke("check-subscription"),
         supabase.rpc("get_church_user_stats", { p_church_id: profile.church_id }),
         supabase.from('church_audit_logs').select('*').order('created_at', { ascending: false }).limit(10),
-        supabase.from('churches').select('*').eq('id', profile.church_id).single()
+        supabase.from('churches').select('*').eq('id', profile.church_id).single(),
+        supabase.from('church_subscriptions').select('*').eq('church_id', profile.church_id).maybeSingle()
       ]);
 
       if (sError) throw sError;
       setSubData(sData);
+      setDbSub(dbSubscriptionData);
       setAuditLogs((aLogs as AuditLog[]) || []);
       
       if (cData) {
