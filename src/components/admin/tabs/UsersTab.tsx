@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isUnlimitedChurch } from "@/lib/planFeatures";
 import { Shield, User, Search, ShieldCheck, ShieldOff, CalendarDays, MapPin, ChevronRight, X, Save, Phone, Cake, Home, Users, GraduationCap, Clock, Download, Trash2, Mail, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import WhatsAppPhoneInput from "@/components/ui/WhatsAppPhoneInput";
