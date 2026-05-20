@@ -2,7 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict sDMfkxlPL6GfIHeejFEzGzhKO8pxErv2j290Z1rbx0g4WlpIiYTvUWY3P1zOy9f
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.9
@@ -13,7 +12,7 @@ SET idle_in_transaction_session_timeout = 0;
 SET transaction_timeout = 0;
 SET client_encoding = 'SQL_ASCII';
 SET standard_conforming_strings = off;
-SELECT pg_catalog.set_config('search_path', '', false);
+SET search_path = public, auth, storage;
 SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
@@ -24,7 +23,7 @@ SET row_security = off;
 -- Name: public; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA public;
+CREATE SCHEMA IF NOT EXISTS public;
 
 
 --
@@ -38,7 +37,7 @@ COMMENT ON SCHEMA public IS 'standard public schema';
 -- Name: app_role; Type: TYPE; Schema: public; Owner: -
 --
 
-CREATE TYPE public.app_role AS ENUM (
+CREATE TYPE IF NOT EXISTS public.app_role AS ENUM (
     'user',
     'admin',
     'lider',
@@ -50,7 +49,7 @@ CREATE TYPE public.app_role AS ENUM (
 -- Name: area_name; Type: TYPE; Schema: public; Owner: -
 --
 
-CREATE TYPE public.area_name AS ENUM (
+CREATE TYPE IF NOT EXISTS public.area_name AS ENUM (
     'Área 1',
     'Área 2',
     'DISCIPULADO JEMIAC'
@@ -61,7 +60,7 @@ CREATE TYPE public.area_name AS ENUM (
 -- Name: community_name; Type: TYPE; Schema: public; Owner: -
 --
 
-CREATE TYPE public.community_name AS ENUM (
+CREATE TYPE IF NOT EXISTS public.community_name AS ENUM (
     'Martim Lutero',
     'Bom Pastor',
     'Rincão Fundo',
@@ -77,7 +76,7 @@ CREATE TYPE public.community_name AS ENUM (
 -- Name: can_manage_church(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.can_manage_church(_church_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.can_manage_church(_church_id uuid) RETURNS boolean
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $_$
@@ -126,7 +125,7 @@ $_$;
 -- Name: check_church_member_limit(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.check_church_member_limit() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.check_church_member_limit() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
 DECLARE
@@ -184,7 +183,7 @@ $$;
 -- Name: check_church_member_limit(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.check_church_member_limit(p_church_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.check_church_member_limit(p_church_id uuid) RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -215,7 +214,7 @@ $$;
 -- Name: delete_push_scheduled(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.delete_push_scheduled(_id uuid) RETURNS void
+CREATE OR REPLACE FUNCTION public.delete_push_scheduled(_id uuid) RETURNS void
     LANGUAGE sql SECURITY DEFINER
     AS $$
   DELETE FROM public.push_scheduled WHERE id = _id;
@@ -226,7 +225,7 @@ $$;
 -- Name: delete_user_from_discipleship(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.delete_user_from_discipleship(_target_user_id uuid) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.delete_user_from_discipleship(_target_user_id uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public', 'auth'
     AS $$
@@ -306,7 +305,7 @@ $$;
 -- Name: enforce_church_member_limit(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.enforce_church_member_limit() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.enforce_church_member_limit() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -323,7 +322,7 @@ $$;
 -- Name: get_all_areas(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_all_areas() RETURNS TABLE(id uuid, name text, description text, created_at timestamp with time zone, created_by uuid)
+CREATE OR REPLACE FUNCTION public.get_all_areas() RETURNS TABLE(id uuid, name text, description text, created_at timestamp with time zone, created_by uuid)
     LANGUAGE sql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -342,7 +341,7 @@ $$;
 -- Name: get_all_communities(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_all_communities() RETURNS TABLE(id uuid, name text, area_id uuid, created_at timestamp with time zone, created_by uuid)
+CREATE OR REPLACE FUNCTION public.get_all_communities() RETURNS TABLE(id uuid, name text, area_id uuid, created_at timestamp with time zone, created_by uuid)
     LANGUAGE sql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -361,7 +360,7 @@ $$;
 -- Name: get_area_birthdays(text, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_area_birthdays(_area text, _month integer DEFAULT NULL::integer) RETURNS TABLE(user_id uuid, full_name text, birth_date date, community text, area text)
+CREATE OR REPLACE FUNCTION public.get_area_birthdays(_area text, _month integer DEFAULT NULL::integer) RETURNS TABLE(user_id uuid, full_name text, birth_date date, community text, area text)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -412,7 +411,7 @@ $$;
 -- Name: get_auth_church_id(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_auth_church_id() RETURNS uuid
+CREATE OR REPLACE FUNCTION public.get_auth_church_id() RETURNS uuid
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -427,7 +426,7 @@ $$;
 -- Name: get_church_member_count(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_church_member_count(p_church_id uuid) RETURNS integer
+CREATE OR REPLACE FUNCTION public.get_church_member_count(p_church_id uuid) RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
 BEGIN
@@ -444,7 +443,7 @@ $$;
 -- Name: get_church_user_stats(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_church_user_stats(p_church_id uuid) RETURNS TABLE(total_users bigint, active_users bigint, pending_users bigint, inactive_users bigint, member_limit integer)
+CREATE OR REPLACE FUNCTION public.get_church_user_stats(p_church_id uuid) RETURNS TABLE(total_users bigint, active_users bigint, pending_users bigint, inactive_users bigint, member_limit integer)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -466,7 +465,7 @@ $$;
 -- Name: get_community_area(public.community_name); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_community_area(_community public.community_name) RETURNS public.area_name
+CREATE OR REPLACE FUNCTION public.get_community_area(_community public.community_name) RETURNS public.area_name
     LANGUAGE sql IMMUTABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -481,7 +480,7 @@ $$;
 -- Name: get_community_ranking(public.community_name); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_community_ranking(_community public.community_name) RETURNS TABLE(user_id uuid, full_name text, completed_count bigint, faith_points bigint)
+CREATE OR REPLACE FUNCTION public.get_community_ranking(_community public.community_name) RETURNS TABLE(user_id uuid, full_name text, completed_count bigint, faith_points bigint)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -648,7 +647,7 @@ $$;
 -- Name: get_game_config(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_game_config() RETURNS TABLE(key text, value integer)
+CREATE OR REPLACE FUNCTION public.get_game_config() RETURNS TABLE(key text, value integer)
     LANGUAGE sql SECURITY DEFINER
     AS $$ SELECT key, value FROM public.game_config ORDER BY key; $$;
 
@@ -657,7 +656,7 @@ CREATE FUNCTION public.get_game_config() RETURNS TABLE(key text, value integer)
 -- Name: get_my_area(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_my_area() RETURNS public.area_name
+CREATE OR REPLACE FUNCTION public.get_my_area() RETURNS public.area_name
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -681,7 +680,7 @@ $$;
 -- Name: get_my_church_id(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_my_church_id() RETURNS uuid
+CREATE OR REPLACE FUNCTION public.get_my_church_id() RETURNS uuid
     LANGUAGE sql STABLE SECURITY DEFINER
     AS $$
     SELECT church_id FROM public.profiles WHERE user_id = auth.uid();
@@ -692,7 +691,7 @@ $$;
 -- Name: get_my_community(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_my_community() RETURNS public.community_name
+CREATE OR REPLACE FUNCTION public.get_my_community() RETURNS public.community_name
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -704,7 +703,7 @@ $$;
 -- Name: get_profession_of_faith_report(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_profession_of_faith_report(p_church_id uuid) RETURNS TABLE(user_id uuid, full_name text, turma_name text, professed_at timestamp with time zone)
+CREATE OR REPLACE FUNCTION public.get_profession_of_faith_report(p_church_id uuid) RETURNS TABLE(user_id uuid, full_name text, turma_name text, professed_at timestamp with time zone)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -726,7 +725,7 @@ $$;
 -- Name: get_push_automation_config(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_push_automation_config() RETURNS TABLE(key text, title text, body text, enabled boolean, description text)
+CREATE OR REPLACE FUNCTION public.get_push_automation_config() RETURNS TABLE(key text, title text, body text, enabled boolean, description text)
     LANGUAGE sql SECURITY DEFINER
     AS $$
   SELECT key, title, body, enabled, description
@@ -739,7 +738,7 @@ $$;
 -- Name: get_push_scheduled_pending(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_push_scheduled_pending() RETURNS TABLE(id uuid, title text, body text, target text, target_value text, scheduled_at timestamp with time zone, created_at timestamp with time zone)
+CREATE OR REPLACE FUNCTION public.get_push_scheduled_pending() RETURNS TABLE(id uuid, title text, body text, target text, target_value text, scheduled_at timestamp with time zone, created_at timestamp with time zone)
     LANGUAGE sql SECURITY DEFINER
     AS $$
   SELECT id, title, body, target, target_value, scheduled_at, created_at
@@ -753,7 +752,7 @@ $$;
 -- Name: handle_new_user(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.handle_new_user() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.handle_new_user() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -856,7 +855,7 @@ $$;
 -- Name: handle_new_user_role(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.handle_new_user_role() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.handle_new_user_role() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -873,7 +872,7 @@ $$;
 -- Name: handle_prayer_interaction(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.handle_prayer_interaction() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.handle_prayer_interaction() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
 BEGIN
@@ -895,7 +894,7 @@ $$;
 -- Name: handle_updated_at(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.handle_updated_at() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.handle_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
@@ -909,7 +908,7 @@ $$;
 -- Name: has_role(uuid, public.app_role); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.has_role(_user_id uuid, _role public.app_role) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.has_role(_user_id uuid, _role public.app_role) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -926,7 +925,7 @@ $$;
 -- Name: insert_push_scheduled(text, text, text, text, timestamp with time zone, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.insert_push_scheduled(_title text, _body text, _target text, _target_value text, _scheduled_at timestamp with time zone, _created_by uuid) RETURNS uuid
+CREATE OR REPLACE FUNCTION public.insert_push_scheduled(_title text, _body text, _target text, _target_value text, _scheduled_at timestamp with time zone, _created_by uuid) RETURNS uuid
     LANGUAGE sql SECURITY DEFINER
     AS $$
   INSERT INTO public.push_scheduled (title, body, target, target_value, scheduled_at, created_by)
@@ -939,7 +938,7 @@ $$;
 -- Name: is_authorized_system_admin(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.is_authorized_system_admin() RETURNS boolean
+CREATE OR REPLACE FUNCTION public.is_authorized_system_admin() RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -963,7 +962,7 @@ $$;
 -- Name: is_authorized_system_admin_v2(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.is_authorized_system_admin_v2() RETURNS boolean
+CREATE OR REPLACE FUNCTION public.is_authorized_system_admin_v2() RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -977,7 +976,7 @@ $$;
 -- Name: is_super_admin(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.is_super_admin() RETURNS boolean
+CREATE OR REPLACE FUNCTION public.is_super_admin() RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -992,7 +991,7 @@ $$;
 -- Name: is_super_admin(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.is_super_admin(_user_id uuid DEFAULT auth.uid()) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.is_super_admin(_user_id uuid DEFAULT auth.uid()) RETURNS boolean
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $_$
@@ -1037,7 +1036,7 @@ $_$;
 -- Name: log_blocked_registration(uuid, text, text, text, integer, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.log_blocked_registration(p_church_id uuid, p_email text, p_full_name text, p_reason text, p_current_count integer, p_limit integer) RETURNS void
+CREATE OR REPLACE FUNCTION public.log_blocked_registration(p_church_id uuid, p_email text, p_full_name text, p_reason text, p_current_count integer, p_limit integer) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1052,7 +1051,7 @@ $$;
 -- Name: log_church_audit(uuid, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.log_church_audit(p_church_id uuid, p_action text, p_details jsonb DEFAULT '{}'::jsonb) RETURNS void
+CREATE OR REPLACE FUNCTION public.log_church_audit(p_church_id uuid, p_action text, p_details jsonb DEFAULT '{}'::jsonb) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1067,7 +1066,7 @@ $$;
 -- Name: log_login_event(text, text, text, uuid, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.log_login_event(p_email text, p_method text, p_status text, p_church_id uuid DEFAULT NULL::uuid, p_details jsonb DEFAULT '{}'::jsonb) RETURNS void
+CREATE OR REPLACE FUNCTION public.log_login_event(p_email text, p_method text, p_status text, p_church_id uuid DEFAULT NULL::uuid, p_details jsonb DEFAULT '{}'::jsonb) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
 BEGIN
@@ -1088,7 +1087,7 @@ $$;
 -- Name: log_plan_change(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.log_plan_change() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.log_plan_change() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
 BEGIN
@@ -1122,7 +1121,7 @@ $$;
 -- Name: log_system_access_attempt(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.log_system_access_attempt(p_status text) RETURNS void
+CREATE OR REPLACE FUNCTION public.log_system_access_attempt(p_status text) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1143,7 +1142,7 @@ $$;
 -- Name: notify_subscription_stats_change(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.notify_subscription_stats_change() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.notify_subscription_stats_change() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1159,7 +1158,7 @@ $$;
 -- Name: on_prayer_answered(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.on_prayer_answered() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.on_prayer_answered() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
 BEGIN
@@ -1176,7 +1175,7 @@ $$;
 -- Name: on_prayer_interaction(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.on_prayer_interaction() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.on_prayer_interaction() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
 DECLARE
@@ -1197,7 +1196,7 @@ $$;
 -- Name: process_profession_of_faith(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.process_profession_of_faith(p_user_id uuid, p_turma_id uuid DEFAULT NULL::uuid) RETURNS void
+CREATE OR REPLACE FUNCTION public.process_profession_of_faith(p_user_id uuid, p_turma_id uuid DEFAULT NULL::uuid) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1237,7 +1236,7 @@ $$;
 -- Name: process_profession_of_faith(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.process_profession_of_faith(p_user_id uuid, p_turma_id uuid DEFAULT NULL::uuid, p_performed_by uuid DEFAULT auth.uid()) RETURNS void
+CREATE OR REPLACE FUNCTION public.process_profession_of_faith(p_user_id uuid, p_turma_id uuid DEFAULT NULL::uuid, p_performed_by uuid DEFAULT auth.uid()) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1287,7 +1286,7 @@ $$;
 -- Name: secure_extend_trial(uuid, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.secure_extend_trial(p_church_subscription_id uuid, p_days integer) RETURNS void
+CREATE OR REPLACE FUNCTION public.secure_extend_trial(p_church_subscription_id uuid, p_days integer) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
 DECLARE
@@ -1324,7 +1323,7 @@ $$;
 -- Name: set_system_master_password(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.set_system_master_password(p_new_password text) RETURNS void
+CREATE OR REPLACE FUNCTION public.set_system_master_password(p_new_password text) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public', 'extensions'
     AS $$
@@ -1340,7 +1339,7 @@ $$;
 -- Name: sync_user_role(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.sync_user_role() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.sync_user_role() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
 BEGIN
@@ -1356,7 +1355,7 @@ $$;
 -- Name: test_stripe_webhook(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.test_stripe_webhook(p_church_subscription_id uuid, p_event_type text, p_stripe_status text) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.test_stripe_webhook(p_church_subscription_id uuid, p_event_type text, p_stripe_status text) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
 DECLARE
@@ -1388,7 +1387,7 @@ $$;
 -- Name: update_lesson_content_updated_at(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.update_lesson_content_updated_at() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.update_lesson_content_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO 'public'
     AS $$
@@ -1403,7 +1402,7 @@ $$;
 -- Name: update_privacy_requests_updated_at(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.update_privacy_requests_updated_at() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.update_privacy_requests_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO 'public'
     AS $$
@@ -1418,7 +1417,7 @@ $$;
 -- Name: update_push_automation_config(text, text, text, boolean); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.update_push_automation_config(_key text, _title text, _body text, _enabled boolean) RETURNS void
+CREATE OR REPLACE FUNCTION public.update_push_automation_config(_key text, _title text, _body text, _enabled boolean) RETURNS void
     LANGUAGE sql SECURITY DEFINER
     AS $$
   UPDATE public.push_automation_config
@@ -1431,7 +1430,7 @@ $$;
 -- Name: update_updated_at_column(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.update_updated_at_column() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.update_updated_at_column() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
@@ -1445,7 +1444,7 @@ $$;
 -- Name: upsert_game_config_item(text, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.upsert_game_config_item(_key text, _value integer) RETURNS void
+CREATE OR REPLACE FUNCTION public.upsert_game_config_item(_key text, _value integer) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
 BEGIN
@@ -1459,7 +1458,7 @@ END; $$;
 -- Name: verify_system_master_password(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.verify_system_master_password(p_password_attempt text) RETURNS boolean
+CREATE OR REPLACE FUNCTION public.verify_system_master_password(p_password_attempt text) RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public', 'extensions'
     AS $$
@@ -1486,7 +1485,7 @@ SET default_table_access_method = heap;
 -- Name: achievement_definitions; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.achievement_definitions (
+CREATE TABLE IF NOT EXISTS public.achievement_definitions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     key text NOT NULL,
     icon text DEFAULT '🏆'::text NOT NULL,
@@ -1508,7 +1507,7 @@ CREATE TABLE public.achievement_definitions (
 -- Name: achievement_unlocks; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.achievement_unlocks (
+CREATE TABLE IF NOT EXISTS public.achievement_unlocks (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     achievement_key text NOT NULL,
@@ -1522,7 +1521,7 @@ CREATE TABLE public.achievement_unlocks (
 -- Name: activities; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.activities (
+CREATE TABLE IF NOT EXISTS public.activities (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     type text NOT NULL,
     title text NOT NULL,
@@ -1539,7 +1538,7 @@ CREATE TABLE public.activities (
 -- Name: activity_removal_log; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.activity_removal_log (
+CREATE TABLE IF NOT EXISTS public.activity_removal_log (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     removed_by uuid NOT NULL,
     target_user_id uuid NOT NULL,
@@ -1557,7 +1556,7 @@ CREATE TABLE public.activity_removal_log (
 -- Name: area_pastors; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.area_pastors (
+CREATE TABLE IF NOT EXISTS public.area_pastors (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     area text NOT NULL,
     pastor_name text DEFAULT ''::text NOT NULL,
@@ -1572,7 +1571,7 @@ CREATE TABLE public.area_pastors (
 -- Name: areas; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.areas (
+CREATE TABLE IF NOT EXISTS public.areas (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     name text NOT NULL,
     description text,
@@ -1586,7 +1585,7 @@ CREATE TABLE public.areas (
 -- Name: attendance; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.attendance (
+CREATE TABLE IF NOT EXISTS public.attendance (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     event_id uuid NOT NULL,
     user_id uuid NOT NULL,
@@ -1607,7 +1606,7 @@ CREATE TABLE public.attendance (
 -- Name: authorized_system_admins; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.authorized_system_admins (
+CREATE TABLE IF NOT EXISTS public.authorized_system_admins (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     email text NOT NULL,
     is_active boolean DEFAULT true NOT NULL,
@@ -1621,7 +1620,7 @@ CREATE TABLE public.authorized_system_admins (
 -- Name: blocked_registration_attempts; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.blocked_registration_attempts (
+CREATE TABLE IF NOT EXISTS public.blocked_registration_attempts (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     church_id uuid NOT NULL,
     email text,
@@ -1637,7 +1636,7 @@ CREATE TABLE public.blocked_registration_attempts (
 -- Name: challenge_participants; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.challenge_participants (
+CREATE TABLE IF NOT EXISTS public.challenge_participants (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     challenge_id uuid NOT NULL,
     user_id uuid NOT NULL,
@@ -1654,7 +1653,7 @@ CREATE TABLE public.challenge_participants (
 -- Name: church_audit_logs; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.church_audit_logs (
+CREATE TABLE IF NOT EXISTS public.church_audit_logs (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     church_id uuid,
     action text NOT NULL,
@@ -1667,7 +1666,7 @@ CREATE TABLE public.church_audit_logs (
 -- Name: church_subscriptions; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.church_subscriptions (
+CREATE TABLE IF NOT EXISTS public.church_subscriptions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     church_name text NOT NULL,
     church_address text DEFAULT ''::text,
@@ -1703,7 +1702,7 @@ CREATE TABLE public.church_subscriptions (
 -- Name: churches; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.churches (
+CREATE TABLE IF NOT EXISTS public.churches (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     name text NOT NULL,
     slug text NOT NULL,
@@ -1723,7 +1722,7 @@ CREATE TABLE public.churches (
 -- Name: communities; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.communities (
+CREATE TABLE IF NOT EXISTS public.communities (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     area_id uuid NOT NULL,
     name text NOT NULL,
@@ -1737,7 +1736,7 @@ CREATE TABLE public.communities (
 -- Name: community_challenges; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.community_challenges (
+CREATE TABLE IF NOT EXISTS public.community_challenges (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     title text NOT NULL,
     description text,
@@ -1758,7 +1757,7 @@ CREATE TABLE public.community_challenges (
 -- Name: community_chat; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.community_chat (
+CREATE TABLE IF NOT EXISTS public.community_chat (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     community text NOT NULL,
     user_id uuid NOT NULL,
@@ -1778,7 +1777,7 @@ CREATE TABLE public.community_chat (
 -- Name: community_settings; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.community_settings (
+CREATE TABLE IF NOT EXISTS public.community_settings (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     community text NOT NULL,
     whatsapp_link text,
@@ -1794,7 +1793,7 @@ CREATE TABLE public.community_settings (
 -- Name: course_unlocks; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.course_unlocks (
+CREATE TABLE IF NOT EXISTS public.course_unlocks (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     course_id uuid NOT NULL,
     area text NOT NULL,
@@ -1808,7 +1807,7 @@ CREATE TABLE public.course_unlocks (
 -- Name: courses; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.courses (
+CREATE TABLE IF NOT EXISTS public.courses (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     order_num integer NOT NULL,
     title text NOT NULL,
@@ -1822,7 +1821,7 @@ CREATE TABLE public.courses (
 -- Name: custom_event_types; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.custom_event_types (
+CREATE TABLE IF NOT EXISTS public.custom_event_types (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     value text NOT NULL,
     label text NOT NULL,
@@ -1840,7 +1839,7 @@ CREATE TABLE public.custom_event_types (
 -- Name: data_export_audit; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.data_export_audit (
+CREATE TABLE IF NOT EXISTS public.data_export_audit (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid DEFAULT auth.uid() NOT NULL,
     export_type text NOT NULL,
@@ -1859,7 +1858,7 @@ CREATE TABLE public.data_export_audit (
 -- Name: devotional_content; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.devotional_content (
+CREATE TABLE IF NOT EXISTS public.devotional_content (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     activity_id uuid,
     bible_text text DEFAULT ''::text NOT NULL,
@@ -1882,7 +1881,7 @@ CREATE TABLE public.devotional_content (
 -- Name: devotional_progress; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.devotional_progress (
+CREATE TABLE IF NOT EXISTS public.devotional_progress (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     devotional_id uuid NOT NULL,
@@ -1899,7 +1898,7 @@ CREATE TABLE public.devotional_progress (
 -- Name: devotional_responses; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.devotional_responses (
+CREATE TABLE IF NOT EXISTS public.devotional_responses (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     devotional_id uuid NOT NULL,
@@ -1915,7 +1914,7 @@ CREATE TABLE public.devotional_responses (
 -- Name: devotional_worship_songs; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.devotional_worship_songs (
+CREATE TABLE IF NOT EXISTS public.devotional_worship_songs (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     devotional_id uuid NOT NULL,
     worship_song_id uuid NOT NULL,
@@ -1928,7 +1927,7 @@ CREATE TABLE public.devotional_worship_songs (
 -- Name: discipleship_plans; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.discipleship_plans (
+CREATE TABLE IF NOT EXISTS public.discipleship_plans (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     objectives text,
@@ -1952,7 +1951,7 @@ CREATE TABLE public.discipleship_plans (
 -- Name: event_photos; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.event_photos (
+CREATE TABLE IF NOT EXISTS public.event_photos (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     event_id uuid NOT NULL,
     user_id uuid NOT NULL,
@@ -1970,7 +1969,7 @@ CREATE TABLE public.event_photos (
 -- Name: events; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.events (
+CREATE TABLE IF NOT EXISTS public.events (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     title text NOT NULL,
     description text,
@@ -1993,7 +1992,7 @@ CREATE TABLE public.events (
 -- Name: frontend_error_logs; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.frontend_error_logs (
+CREATE TABLE IF NOT EXISTS public.frontend_error_logs (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     church_id uuid,
     user_id uuid,
@@ -2011,7 +2010,7 @@ CREATE TABLE public.frontend_error_logs (
 -- Name: game_config; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.game_config (
+CREATE TABLE IF NOT EXISTS public.game_config (
     key text NOT NULL,
     value integer NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -2023,7 +2022,7 @@ CREATE TABLE public.game_config (
 -- Name: leader_guide; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.leader_guide (
+CREATE TABLE IF NOT EXISTS public.leader_guide (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     lesson_id uuid NOT NULL,
     greeting text DEFAULT ''::text NOT NULL,
@@ -2043,7 +2042,7 @@ CREATE TABLE public.leader_guide (
 -- Name: leader_meeting_notes; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.leader_meeting_notes (
+CREATE TABLE IF NOT EXISTS public.leader_meeting_notes (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     leader_id uuid NOT NULL,
     lesson_id uuid NOT NULL,
@@ -2063,7 +2062,7 @@ CREATE TABLE public.leader_meeting_notes (
 -- Name: lesson_content; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.lesson_content (
+CREATE TABLE IF NOT EXISTS public.lesson_content (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     lesson_id uuid NOT NULL,
     greeting text DEFAULT ''::text NOT NULL,
@@ -2086,7 +2085,7 @@ CREATE TABLE public.lesson_content (
 -- Name: lesson_responses; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.lesson_responses (
+CREATE TABLE IF NOT EXISTS public.lesson_responses (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     lesson_id uuid NOT NULL,
@@ -2105,7 +2104,7 @@ CREATE TABLE public.lesson_responses (
 -- Name: lessons; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.lessons (
+CREATE TABLE IF NOT EXISTS public.lessons (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     course_id uuid NOT NULL,
     order_num integer NOT NULL,
@@ -2122,7 +2121,7 @@ CREATE TABLE public.lessons (
 -- Name: login_audit_logs; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.login_audit_logs (
+CREATE TABLE IF NOT EXISTS public.login_audit_logs (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     email text,
     method text NOT NULL,
@@ -2138,7 +2137,7 @@ CREATE TABLE public.login_audit_logs (
 -- Name: meeting_evaluations; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.meeting_evaluations (
+CREATE TABLE IF NOT EXISTS public.meeting_evaluations (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     event_id uuid NOT NULL,
     user_id uuid NOT NULL,
@@ -2160,7 +2159,7 @@ CREATE TABLE public.meeting_evaluations (
 -- Name: message_reactions; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.message_reactions (
+CREATE TABLE IF NOT EXISTS public.message_reactions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     message_id uuid NOT NULL,
     user_id uuid NOT NULL,
@@ -2174,7 +2173,7 @@ CREATE TABLE public.message_reactions (
 -- Name: message_views; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.message_views (
+CREATE TABLE IF NOT EXISTS public.message_views (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     message_id uuid NOT NULL,
     user_id uuid NOT NULL,
@@ -2187,7 +2186,7 @@ CREATE TABLE public.message_views (
 -- Name: messages; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.messages (
+CREATE TABLE IF NOT EXISTS public.messages (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     title text NOT NULL,
     body text NOT NULL,
@@ -2204,7 +2203,7 @@ CREATE TABLE public.messages (
 -- Name: notification_preferences; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.notification_preferences (
+CREATE TABLE IF NOT EXISTS public.notification_preferences (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     devocional boolean DEFAULT true NOT NULL,
@@ -2228,7 +2227,7 @@ CREATE TABLE public.notification_preferences (
 -- Name: notifications; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.notifications (
+CREATE TABLE IF NOT EXISTS public.notifications (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     title text NOT NULL,
@@ -2244,7 +2243,7 @@ CREATE TABLE public.notifications (
 -- Name: pastoral_notes; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.pastoral_notes (
+CREATE TABLE IF NOT EXISTS public.pastoral_notes (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     admin_id uuid NOT NULL,
@@ -2261,7 +2260,7 @@ CREATE TABLE public.pastoral_notes (
 -- Name: plan_history; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.plan_history (
+CREATE TABLE IF NOT EXISTS public.plan_history (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     church_id uuid NOT NULL,
     changed_by uuid,
@@ -2278,7 +2277,7 @@ CREATE TABLE public.plan_history (
 -- Name: poll_votes; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.poll_votes (
+CREATE TABLE IF NOT EXISTS public.poll_votes (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     poll_id uuid NOT NULL,
     user_id uuid NOT NULL,
@@ -2292,7 +2291,7 @@ CREATE TABLE public.poll_votes (
 -- Name: polls; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.polls (
+CREATE TABLE IF NOT EXISTS public.polls (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     question text NOT NULL,
     options text[] DEFAULT '{}'::text[] NOT NULL,
@@ -2311,7 +2310,7 @@ CREATE TABLE public.polls (
 -- Name: prayer_diary; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.prayer_diary (
+CREATE TABLE IF NOT EXISTS public.prayer_diary (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     request_id uuid,
@@ -2329,7 +2328,7 @@ CREATE TABLE public.prayer_diary (
 -- Name: prayer_interactions; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.prayer_interactions (
+CREATE TABLE IF NOT EXISTS public.prayer_interactions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     request_id uuid NOT NULL,
@@ -2341,7 +2340,7 @@ CREATE TABLE public.prayer_interactions (
 -- Name: prayer_pairs; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.prayer_pairs (
+CREATE TABLE IF NOT EXISTS public.prayer_pairs (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     community text NOT NULL,
     user_a_id uuid NOT NULL,
@@ -2362,7 +2361,7 @@ CREATE TABLE public.prayer_pairs (
 -- Name: prayer_requests; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.prayer_requests (
+CREATE TABLE IF NOT EXISTS public.prayer_requests (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     area text NOT NULL,
@@ -2385,7 +2384,7 @@ CREATE TABLE public.prayer_requests (
 -- Name: privacy_requests; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.privacy_requests (
+CREATE TABLE IF NOT EXISTS public.privacy_requests (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid DEFAULT auth.uid() NOT NULL,
     request_type text NOT NULL,
@@ -2406,7 +2405,7 @@ CREATE TABLE public.privacy_requests (
 -- Name: profession_of_faith_records; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.profession_of_faith_records (
+CREATE TABLE IF NOT EXISTS public.profession_of_faith_records (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     church_id uuid NOT NULL,
     user_id uuid NOT NULL,
@@ -2423,7 +2422,7 @@ CREATE TABLE public.profession_of_faith_records (
 -- Name: profiles; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     full_name text NOT NULL,
@@ -2459,7 +2458,7 @@ CREATE TABLE public.profiles (
 -- Name: push_activation_reminders; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.push_activation_reminders (
+CREATE TABLE IF NOT EXISTS public.push_activation_reminders (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     target_user_id uuid NOT NULL,
     sent_by uuid NOT NULL,
@@ -2473,7 +2472,7 @@ CREATE TABLE public.push_activation_reminders (
 -- Name: push_automation_config; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.push_automation_config (
+CREATE TABLE IF NOT EXISTS public.push_automation_config (
     key text NOT NULL,
     title text NOT NULL,
     body text NOT NULL,
@@ -2488,7 +2487,7 @@ CREATE TABLE public.push_automation_config (
 -- Name: push_notification_log; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.push_notification_log (
+CREATE TABLE IF NOT EXISTS public.push_notification_log (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     type text DEFAULT 'manual'::text NOT NULL,
     title text DEFAULT ''::text NOT NULL,
@@ -2507,7 +2506,7 @@ CREATE TABLE public.push_notification_log (
 -- Name: push_scheduled; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.push_scheduled (
+CREATE TABLE IF NOT EXISTS public.push_scheduled (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     title text NOT NULL,
     body text NOT NULL,
@@ -2527,7 +2526,7 @@ CREATE TABLE public.push_scheduled (
 -- Name: push_subscriptions; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.push_subscriptions (
+CREATE TABLE IF NOT EXISTS public.push_subscriptions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     endpoint text NOT NULL,
@@ -2543,7 +2542,7 @@ CREATE TABLE public.push_subscriptions (
 -- Name: ranking_seasons; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.ranking_seasons (
+CREATE TABLE IF NOT EXISTS public.ranking_seasons (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     course_id uuid NOT NULL,
     community text NOT NULL,
@@ -2560,7 +2559,7 @@ CREATE TABLE public.ranking_seasons (
 -- Name: spiritual_assessments; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.spiritual_assessments (
+CREATE TABLE IF NOT EXISTS public.spiritual_assessments (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     month integer NOT NULL,
@@ -2584,7 +2583,7 @@ CREATE TABLE public.spiritual_assessments (
 -- Name: stripe_webhook_logs; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.stripe_webhook_logs (
+CREATE TABLE IF NOT EXISTS public.stripe_webhook_logs (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     event_id text NOT NULL,
     event_type text NOT NULL,
@@ -2600,7 +2599,7 @@ CREATE TABLE public.stripe_webhook_logs (
 -- Name: system_admin_audit_logs; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.system_admin_audit_logs (
+CREATE TABLE IF NOT EXISTS public.system_admin_audit_logs (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     admin_id uuid,
     email text,
@@ -2616,7 +2615,7 @@ CREATE TABLE public.system_admin_audit_logs (
 -- Name: system_settings; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.system_settings (
+CREATE TABLE IF NOT EXISTS public.system_settings (
     key text NOT NULL,
     value text NOT NULL,
     updated_at timestamp with time zone DEFAULT now()
@@ -2627,7 +2626,7 @@ CREATE TABLE public.system_settings (
 -- Name: testimonies; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.testimonies (
+CREATE TABLE IF NOT EXISTS public.testimonies (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     user_name text NOT NULL,
@@ -2642,7 +2641,7 @@ CREATE TABLE public.testimonies (
 -- Name: turma_lesson_content; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.turma_lesson_content (
+CREATE TABLE IF NOT EXISTS public.turma_lesson_content (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     turma_id uuid NOT NULL,
     lesson_id uuid NOT NULL,
@@ -2667,7 +2666,7 @@ CREATE TABLE public.turma_lesson_content (
 -- Name: turmas; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.turmas (
+CREATE TABLE IF NOT EXISTS public.turmas (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     name text NOT NULL,
     area text,
@@ -2684,7 +2683,7 @@ CREATE TABLE public.turmas (
 -- Name: user_devotional_overrides; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.user_devotional_overrides (
+CREATE TABLE IF NOT EXISTS public.user_devotional_overrides (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     devotional_id uuid NOT NULL,
@@ -2705,7 +2704,7 @@ CREATE TABLE public.user_devotional_overrides (
 -- Name: user_lesson_overrides; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.user_lesson_overrides (
+CREATE TABLE IF NOT EXISTS public.user_lesson_overrides (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     lesson_id uuid NOT NULL,
@@ -2726,7 +2725,7 @@ CREATE TABLE public.user_lesson_overrides (
 -- Name: user_progress; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.user_progress (
+CREATE TABLE IF NOT EXISTS public.user_progress (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     activity_id uuid NOT NULL,
@@ -2739,7 +2738,7 @@ CREATE TABLE public.user_progress (
 -- Name: user_roles; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.user_roles (
+CREATE TABLE IF NOT EXISTS public.user_roles (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     role public.app_role NOT NULL,
@@ -2754,7 +2753,7 @@ CREATE TABLE public.user_roles (
 -- Name: whatsapp_reminder_config; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.whatsapp_reminder_config (
+CREATE TABLE IF NOT EXISTS public.whatsapp_reminder_config (
     key text NOT NULL,
     enabled boolean DEFAULT true NOT NULL,
     message_template text NOT NULL,
@@ -2768,7 +2767,7 @@ CREATE TABLE public.whatsapp_reminder_config (
 -- Name: whatsapp_reminder_log; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.whatsapp_reminder_log (
+CREATE TABLE IF NOT EXISTS public.whatsapp_reminder_log (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     reminder_type text NOT NULL,
@@ -2790,7 +2789,7 @@ CREATE TABLE public.whatsapp_reminder_log (
 -- Name: worship_attendance; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.worship_attendance (
+CREATE TABLE IF NOT EXISTS public.worship_attendance (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     worship_date date NOT NULL,
@@ -2809,7 +2808,7 @@ CREATE TABLE public.worship_attendance (
 -- Name: worship_songs; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.worship_songs (
+CREATE TABLE IF NOT EXISTS public.worship_songs (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     title text NOT NULL,
     artist text NOT NULL,
@@ -2829,7 +2828,7 @@ CREATE TABLE public.worship_songs (
 -- Name: year_promotion_requests; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.year_promotion_requests (
+CREATE TABLE IF NOT EXISTS public.year_promotion_requests (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     from_year smallint DEFAULT 1 NOT NULL,
@@ -8854,5 +8853,4 @@ ALTER TABLE public.year_promotion_requests ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict sDMfkxlPL6GfIHeejFEzGzhKO8pxErv2j290Z1rbx0g4WlpIiYTvUWY3P1zOy9f
 
