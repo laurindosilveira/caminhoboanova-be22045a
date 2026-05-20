@@ -8,7 +8,8 @@ def escape_sql(val):
         val = json.dumps(val, ensure_ascii=False)
     
     # Escape single quotes by doubling them
-    return f"'{str(val).replace(\"'\", \"''\")}'"
+    escaped = str(val).replace("'", "''")
+    return f"'{escaped}'"
 
 def main():
     # Fetch data
@@ -28,7 +29,7 @@ def main():
     with open(file_path, "w", encoding="utf-8") as f:
         f.write("-- Fix: Replacing NULL prayer with default text\n\n")
         
-        chunk_size = 50 # Small chunks as requested
+        chunk_size = 50 # Small chunks
         for i in range(0, len(rows), chunk_size):
             chunk = rows[i:i + chunk_size]
             f.write("BEGIN;\n\n")
@@ -38,24 +39,24 @@ def main():
             
             values_list = []
             for row in chunk:
-                prayer = row['prayer']
+                prayer = row.get('prayer')
                 if prayer is None or not str(prayer).strip():
                     prayer = default_prayer
                 
                 vals = [
-                    escape_sql(row['id']),
-                    escape_sql(row['lesson_id']),
-                    str(row['day_number']),
-                    escape_sql(row['title']),
-                    escape_sql(row['bible_text']),
-                    escape_sql(row['bible_reference']),
-                    escape_sql(row['reflection']),
-                    escape_sql(row['practice']),
+                    escape_sql(row.get('id')),
+                    escape_sql(row.get('lesson_id')),
+                    str(row.get('day_number', 0)),
+                    escape_sql(row.get('title')),
+                    escape_sql(row.get('bible_text')),
+                    escape_sql(row.get('bible_reference')),
+                    escape_sql(row.get('reflection')),
+                    escape_sql(row.get('practice')),
                     escape_sql(prayer),
-                    escape_sql(row['questions']),
-                    escape_sql(row['created_at']),
-                    escape_sql(row['updated_at']),
-                    escape_sql(row['church_id'])
+                    escape_sql(row.get('questions')),
+                    escape_sql(row.get('created_at')),
+                    escape_sql(row.get('updated_at')),
+                    escape_sql(row.get('church_id'))
                 ]
                 values_list.append(f"({', '.join(vals)})")
             
