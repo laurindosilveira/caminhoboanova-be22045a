@@ -306,3 +306,10 @@ INSERT INTO public.activity_removal_log (id, removed_by, target_user_id, activit
 INSERT INTO public.activity_removal_log (id, removed_by, target_user_id, activity_type, activity_id, activity_title, points_removed, removed_at, notes, church_id) VALUES ('adb3c6e2-2629-4554-a3fb-130fb69ccf11', '2f773751-38c2-45a1-8ee0-f5b856092730', 'c703cab4-4562-496e-9243-fd6bd05d9a80', 'achievement', 'f5d927cd-fbf9-4709-9cd8-46ff10c4432e', '👥 Participou do encontro', 10, '2026-04-21 02:37:46.775509+00', 'Removido via relatório de pontuação', NULL) ON CONFLICT DO NOTHING;
 INSERT INTO public.activity_removal_log (id, removed_by, target_user_id, activity_type, activity_id, activity_title, points_removed, removed_at, notes, church_id) VALUES ('e7dfab12-3e0e-4bbe-a399-b5f785b5152f', '2f773751-38c2-45a1-8ee0-f5b856092730', 'd1157e70-4aa7-4e5c-8b78-4fbb2294702a', 'achievement', 'e48cdb84-d44b-4939-abdf-01316a8f6d65', '👥 Participou do encontro', 10, '2026-04-22 00:56:23.870904+00', 'Removido via relatório de pontuação', NULL) ON CONFLICT DO NOTHING;
 
+
+-- Consultas finais de validação
+SELECT count(*) AS total_churches FROM public.churches;
+SELECT count(*) AS total_profiles FROM public.profiles;
+SELECT count(*) AS total_attendance FROM public.attendance;
+SELECT count(*) AS total_devotional_responses FROM public.devotional_responses;
+
