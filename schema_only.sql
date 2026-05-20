@@ -24,7 +24,7 @@ SET row_security = off;
 --
 
 CREATE SCHEMA IF NOT EXISTS public;
-
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
 
 --
 -- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
@@ -37,39 +37,51 @@ COMMENT ON SCHEMA public IS 'standard public schema';
 -- Name: app_role; Type: TYPE; Schema: public; Owner: -
 --
 
-CREATE TYPE IF NOT EXISTS public.app_role AS ENUM (
-    'user',
-    'admin',
-    'lider',
-    'super_admin'
-);
+DO $$ BEGIN
+    CREATE TYPE public.app_role AS ENUM (
+        'user',
+        'admin',
+        'lider',
+        'super_admin'
+    );
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
 
 --
 -- Name: area_name; Type: TYPE; Schema: public; Owner: -
 --
 
-CREATE TYPE IF NOT EXISTS public.area_name AS ENUM (
-    'Área 1',
-    'Área 2',
-    'DISCIPULADO JEMIAC'
-);
+DO $$ BEGIN
+    CREATE TYPE public.area_name AS ENUM (
+        'Área 1',
+        'Área 2',
+        'DISCIPULADO JEMIAC'
+    );
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
 
 --
 -- Name: community_name; Type: TYPE; Schema: public; Owner: -
 --
 
-CREATE TYPE IF NOT EXISTS public.community_name AS ENUM (
-    'Martim Lutero',
-    'Bom Pastor',
-    'Rincão Fundo',
-    'Rincão Frente',
-    'Linha Brasil',
-    'Iriá Pira 1',
-    'Iriá Pira 2',
-    'JEMIAC'
-);
+DO $$ BEGIN
+    CREATE TYPE public.community_name AS ENUM (
+        'Martim Lutero',
+        'Bom Pastor',
+        'Rincão Fundo',
+        'Rincão Frente',
+        'Linha Brasil',
+        'Iriá Pira 1',
+        'Iriá Pira 2',
+        'JEMIAC'
+    );
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
 
 --
