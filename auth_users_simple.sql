@@ -1,5 +1,5 @@
--- Arquivo de migração simplificado de usuários Auth
--- Contém 41 usuários sem hashes de senha ou identidades.
+-- Arquivo de migração simplificado de usuários Auth (Sem hashes de senha)
+-- Este arquivo contém exatamente 41 usuários.
 
 INSERT INTO auth.users (
   id, 
@@ -12,6 +12,7 @@ INSERT INTO auth.users (
   instance_id, 
   is_anonymous
 ) VALUES
+-- Bloco 1: Usuários 1 a 10
 ('2f773751-38c2-45a1-8ee0-f5b856092730', 'laurindosilveira@gmail.com', '2026-02-18 22:32:25.381835+00', '2026-05-19 21:05:30.494933+00', '2026-02-18 22:53:30.467826+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
 ('b77b3145-6a42-48d7-b9bd-f61be2db8cb4', 'abraao.santos10@yahoo.com.br', '2026-02-19 12:37:47.94157+00', '2026-05-09 21:29:26.555656+00', '2026-02-19 12:38:15.252519+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
 ('33334a32-895e-47f6-b1a8-81f079186a95', 'abraao.santosc@gmail.com', '2026-03-03 19:18:22.404689+00', '2026-03-06 17:07:27.569278+00', '2026-03-03 19:18:22.447541+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
@@ -21,14 +22,42 @@ INSERT INTO auth.users (
 ('ba6442c9-bc68-4670-a14f-bc7f7225fb93', 'carinewahlbrinkrischeter@gmail.com', '2026-03-07 18:38:10.118546+00', '2026-05-19 23:08:14.535444+00', '2026-03-07 18:38:10.124067+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
 ('528f1076-2f86-4c8f-ae7f-cb0a460e4f49', 'manuelaneumanndefreitas0@gmail.com', '2026-03-07 18:38:29.491706+00', '2026-05-19 21:07:15.769754+00', '2026-03-07 18:38:29.497919+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
 ('7c675f6a-f519-4d74-b86e-eb3032a30c4a', 'simondossantosevania@gmail.com', '2026-03-07 18:39:26.565718+00', '2026-05-19 22:41:44.760204+00', '2026-03-07 18:39:26.599282+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
-('7640c7e4-6780-4c27-8a04-ae5ab375f580', 'dickcamila26@gmail.com', '2026-03-07 18:41:47.410124+00', '2026-05-19 21:27:08.29643+00', '2026-03-07 18:41:47.559794+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false)
+('7640c7e4-6780-4c27-8a04-ae5ab375f580', 'dickcamila26@gmail.com', '2026-03-07 18:41:47.410124+00', '2026-05-19 21:27:08.29643+00', '2026-03-07 18:41:47.559794+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+-- Bloco 2: Usuários 11 a 20
+('d92c04c7-9f6b-4093-ac69-7bdc4ad82f13', 'rafaela.schemmer21@gmail.com', '2026-03-07 18:42:44.450606+00', '2026-05-20 03:33:42.144034+00', '2026-03-07 18:42:44.489336+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('9289d1ce-a632-4cd7-930e-73023e549ec5', 'datschlucas@gmail.com', '2026-03-07 18:57:13.42827+00', '2026-05-19 21:40:39.344205+00', '2026-03-07 18:57:13.490242+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('914b898d-24a3-46ad-a764-d2f24e5115d1', 'eliseherder0@gmail.com', '2026-03-07 19:04:33.778638+00', '2026-05-19 23:29:25.678791+00', '2026-03-07 19:04:33.857112+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('a608622c-4120-4d15-949f-235ca64db2cf', 'biancasilvasimon@gmail.com', '2026-03-07 19:54:29.927017+00', '2026-05-19 23:49:52.124616+00', '2026-03-07 19:54:30.087209+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('f753b131-e334-4645-95d6-dd7f3f1193fc', 'arthurismaelr@gmail.com', '2026-03-07 22:47:55.645411+00', '2026-05-19 22:47:19.203246+00', '2026-03-07 22:47:55.792101+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('9addbdbd-1d3f-4480-8931-9fc3acb92df4', 'loosejoice@gmail.com', '2026-03-08 00:03:00.72971+00', '2026-03-14 13:48:45.216108+00', '2026-03-08 00:03:00.826284+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('7c2a671d-0f04-463e-ab89-d0e4fae6d165', 'theoloosedemoura@gmail.com', '2026-03-08 01:52:27.704698+00', '2026-05-18 16:13:13.59972+00', '2026-03-08 01:52:27.815166+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('66b31cf2-7782-4253-98ea-3b6d631703a4', 'jonatantunnermann@gmail.com', '2026-03-08 13:34:04.113185+00', '2026-05-19 19:24:38.286764+00', '2026-03-08 13:34:04.222475+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('ebea6be2-1d97-4b43-a5bc-8f92af388061', 'gustavowidthauperbreunig@gmail.com', '2026-03-08 14:05:58.824801+00', '2026-05-19 19:30:52.852316+00', '2026-03-08 14:05:58.950608+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('70a2c6f1-f740-4669-b8dc-29b38f04d9d9', 'hanelmonica92@gmail.com', '2026-03-08 14:46:33.695538+00', '2026-05-15 10:48:42.373725+00', '2026-03-08 14:46:33.749308+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+-- Bloco 3: Usuários 21 a 30
+('b486e185-6cb3-477c-936b-b204b143e329', 'wendlandleonardo90@gmail.com', '2026-03-08 14:50:47.122439+00', '2026-05-15 14:59:12.012236+00', '2026-03-08 14:50:47.179517+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('4d062445-4744-4007-a2ac-d7c4743fc979', 'davilucad512@gmail.com', '2026-03-08 18:26:35.641635+00', '2026-05-19 22:45:13.166927+00', '2026-03-08 18:26:35.772887+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('8bf335ab-907e-497b-b08b-615ad716e722', 'pyetroahlert27@gmail.com', '2026-03-08 20:52:09.260582+00', '2026-05-19 16:28:30.73527+00', '2026-03-08 20:52:09.399777+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('16d028b2-ddaa-4fe4-b8b8-6ce2b5c33d1e', 'breunigaugusto33@gmail.com', '2026-03-08 21:58:05.526298+00', '2026-05-09 15:36:28.476739+00', '2026-03-08 21:58:05.588193+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('9a0c5687-f135-4377-a410-58592ef8737a', 'eduardokeskealmeida@gmail.com', '2026-03-10 01:07:56.271738+00', '2026-05-09 17:58:01.039699+00', '2026-03-10 01:07:56.335884+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('2dcc9a0e-accc-42df-8c78-5577fc2669db', 'raissa-fbecker@estudante.rs.gov.br', '2026-03-10 15:24:48.485241+00', '2026-05-20 00:37:11.834511+00', '2026-03-10 15:24:48.568924+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('0051fdc1-7e85-4d26-b24c-a12d2dc41781', 'heitormeirelespronca@gmail.com', '2026-03-10 15:58:37.089622+00', '2026-05-19 22:46:47.657065+00', '2026-03-10 15:58:37.129223+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('aa7cfdb6-13b7-4988-8922-86de735eeab2', 'fra.gelatti@gmail.com', '2026-03-10 16:08:18.673638+00', '2026-05-20 12:34:16.699519+00', '2026-03-10 16:08:18.717335+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('c703cab4-4562-496e-9243-fd6bd05d9a80', 'evellyn.panambi@gmail.com', '2026-03-10 18:21:18.910541+00', '2026-05-19 21:59:47.697737+00', '2026-03-10 18:21:18.961285+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('c323dbd0-4856-47eb-82ca-6e2c3bc7917a', 'lucianawesley2013@gmail.com', '2026-03-10 19:22:02.348207+00', '2026-05-19 01:17:34.804402+00', '2026-03-10 19:22:02.386788+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+-- Bloco 4: Usuários 31 a 41
+('1526dc8b-a92a-4a44-b358-b6a3083d0143', 'viniciusthielke4@gmail.com', '2026-03-10 19:36:57.396396+00', '2026-05-19 20:57:07.207457+00', '2026-03-10 19:36:57.510532+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('68ee236d-432b-4e4b-b9ff-bd2fc05bdf5f', 'correasergioluiz7@gmail.com', '2026-03-10 22:00:16.156787+00', '2026-05-12 21:18:11.459681+00', '2026-03-10 22:00:16.208007+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('af8a49dd-780a-419f-b967-a9c9e4b5837c', 'erickhagemannq@gmail.com', '2026-03-10 23:06:29.088244+00', '2026-05-09 16:34:57.727148+00', '2026-03-10 23:06:29.136947+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('a98f08aa-3bc2-409c-a398-b7eec0a28825', 'gabryelmokan@gmail.com', '2026-03-10 23:40:16.109059+00', '2026-05-20 12:41:26.023598+00', '2026-03-10 23:40:16.189314+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('8745732c-55e9-488b-b638-960a6d9ea340', 'evelinsidra@gmail.com', '2026-03-11 23:25:45.269573+00', '2026-05-09 17:05:48.529953+00', '2026-03-11 23:25:45.349317+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('d1157e70-4aa7-4e5c-8b78-4fbb2294702a', 'felipe.thon14@gmail.com', '2026-03-12 22:18:44.730479+00', '2026-05-20 12:09:46.69449+00', '2026-03-12 22:18:44.825661+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('9b42238e-4e16-4511-9073-5281a0b6b1f4', 'ceciliadettmer@gmail.com', '2026-03-14 01:50:27.043053+00', '2026-05-19 22:03:01.188996+00', '2026-03-14 01:50:27.100764+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('84f87cda-6f3a-43ef-a265-93e7c3d15c23', 'lucianohagemann1@gmail.com', '2026-03-19 00:02:59.936018+00', '2026-05-12 00:54:55.1305+00', '2026-03-19 00:03:00.079326+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('e57ed6e7-953a-4210-965b-26b336ba7da1', 'tatianefischer1611@gmail.com', '2026-03-29 22:41:39.01804+00', '2026-05-14 10:32:20.46415+00', '2026-03-29 22:41:39.116913+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('c8aacedf-66e2-4e17-9f97-2bc61aae7110', 'fernandoeduardokrupp@gmail.com', '2026-04-04 16:07:52.576265+00', '2026-04-11 21:41:13.481816+00', '2026-04-04 16:07:52.662063+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false),
+('f3fe7c42-0110-42bd-831c-4ee0e5d3c1fc', 'teste@teste.com', '2026-04-07 20:16:31.602919+00', '2026-05-20 10:52:35.214138+00', '2026-04-07 20:16:31.66969+00', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', false)
 ON CONFLICT (id) DO NOTHING;
 
--- Nota: Para completar a migração de todos os 41 usuários, 
--- repita o padrão acima com os IDs restantes. 
--- Como o agent de interface tem limitações de buffer, 
--- este exemplo cobre os primeiros 10 registros. 
--- Por favor, execute a query SELECT count(*) FROM auth.users; 
--- para verificar a importação completa.
-
-SELECT count(*) FROM auth.users;
+-- Validação final
+SELECT count(*) AS total_users FROM auth.users;
