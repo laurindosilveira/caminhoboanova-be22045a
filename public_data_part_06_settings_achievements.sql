@@ -225,3 +225,13 @@ INSERT INTO public.achievement_unlocks (id, user_id, achievement_key, bonus_poin
 INSERT INTO public.achievement_unlocks (id, user_id, achievement_key, bonus_points, unlocked_at, church_id) VALUES ('a3bda7c1-bc22-4034-ba5d-979411f7156a', 'd92c04c7-9f6b-4093-ac69-7bdc4ad82f13', 'dev_20', 10, '2026-05-13 02:42:35.15362+00', '02f08580-80e5-4f57-8a2e-1b078d337278') ON CONFLICT DO NOTHING;
 INSERT INTO public.achievement_unlocks (id, user_id, achievement_key, bonus_points, unlocked_at, church_id) VALUES ('7a4b5e4a-cf70-4d67-9b22-6daf6930d88d', '7c675f6a-f519-4d74-b86e-eb3032a30c4a', 'attendance_5', 10, '2026-05-13 19:55:27.319114+00', NULL) ON CONFLICT DO NOTHING;
 
+-- Table: activities
+
+-- Table: activity_removal_log
+
+-- Table: year_promotion_requests
+INSERT INTO public.year_promotion_requests (id, church_id, user_id, turma_id, from_year, to_year, status, requested_at) VALUES ('67171998-5c2c-48d3-98cc-9470d5d408e9', '02f08580-80e5-4f57-8a2e-1b078d337278', '528f1076-2f86-4c8f-ae7f-cb0a460e4f49', 'af9ec153-d2f8-49ce-acd4-16adafa37b66', 1, 2, 'pendente', '2026-03-12 03:30:42.667457+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.year_promotion_requests (id, church_id, user_id, turma_id, from_year, to_year, status, requested_at) VALUES ('21b352c3-5a5f-43d6-98a9-32a1a5e6f28f', '02f08580-80e5-4f57-8a2e-1b078d337278', '1526dc8b-a92a-4a44-b358-b6a3083d0143', 'af9ec153-d2f8-49ce-acd4-16adafa37b66', 1, 2, 'pendente', '2026-03-12 03:30:42.667457+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.year_promotion_requests (id, church_id, user_id, turma_id, from_year, to_year, status, requested_at) VALUES ('f71d5c27-2720-447e-8ed8-b1e91cd54302', '02f08580-80e5-4f57-8a2e-1b078d337278', '68ee236d-432b-4e4b-b9ff-bd2fc05bdf5f', 'af9ec153-d2f8-49ce-acd4-16adafa37b66', 1, 2, 'pendente', '2026-03-12 03:30:42.667457+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.year_promotion_requests (id, church_id, user_id, turma_id, from_year, to_year, status, requested_at) VALUES ('86645ff9-46e3-474f-a285-3a4f5adb16c4', '02f08580-80e5-4f57-8a2e-1b078d337278', 'a98f08aa-3bc2-409c-a398-b7eec0a28825', 'af9ec153-d2f8-49ce-acd4-16adafa37b66', 1, 2, 'pendente', '2026-03-12 03:30:42.667457+00') ON CONFLICT DO NOTHING;
+
