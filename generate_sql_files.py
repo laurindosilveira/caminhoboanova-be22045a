@@ -1,69 +1,59 @@
-import json
+import csv
 import os
 import subprocess
+import io
 
-def escape_sql(val):
-    if val is None:
+def escape_sql(val, data_type=None):
+    if val == "" or val is None:
         return "NULL"
-    if isinstance(val, bool):
-        return str(val).lower()
-    if isinstance(val, (int, float)):
-        return str(val)
-    if isinstance(val, list):
-        # Format list as PostgreSQL array literal
-        items = []
-        for item in val:
-            if item is None:
-                items.append("NULL")
-            else:
-                # Basic escaping for array string elements
-                s = str(item).replace("'", "''")
-                items.append(f"'{s}'")
-        return f"ARRAY[{', '.join(items)}]::text[]"
     
+    # Simple type heuristics
+    if val.lower() == 'true': return 'true'
+    if val.lower() == 'false': return 'false'
+    
+    # Check if it looks like a number
+    try:
+        float(val)
+        return val
+    except ValueError:
+        pass
+
+    # Handle arrays (Postgres format in CSV is often {val1,val2})
+    if val.startswith('{') and val.endswith('}'):
+        items = val[1:-1].split(',')
+        escaped_items = []
+        for item in items:
+            item = item.strip().strip('"')
+            escaped_items.append(f"'{item.replace(\"'\", \"''\")}'")
+        return f"ARRAY[{', '.join(escaped_items)}]::text[]"
+
     # String escaping
-    s = str(val).replace("'", "''")
+    s = val.replace("'", "''")
     return f"'{s}'"
 
-def get_table_data(table_name):
-    cmd = f"psql -t -c \"SELECT json_agg(t) FROM (SELECT * FROM public.{table_name}) t\""
+def generate_sql(table_name, filename_prefix, order_index):
+    cmd = f"psql -c \"COPY (SELECT * FROM public.{table_name}) TO STDOUT WITH (FORMAT CSV, HEADER, NULL 'NULL_VAL')\""
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode != 0:
         print(f"Error fetching {table_name}: {result.stderr}")
-        return []
-    output = result.stdout.strip()
-    if not output:
-        return []
-    try:
-        return json.loads(output)
-    except Exception as e:
-        # If output is too large, json_agg might fail or be truncated
-        print(f"Error parsing JSON for {table_name}: {e}")
-        return []
-
-def get_columns(table_name):
-    cmd = f"psql -t -c \"SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = '{table_name}' ORDER BY ordinal_position\""
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-    if result.returncode != 0:
-        return []
-    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
-
-def generate_sql(table_name, filename_prefix, order_index):
-    data = get_table_data(table_name)
-    if not data:
-        # Try a different approach for large tables if json_agg failed
-        print(f"No data for {table_name} via json_agg, falling back to basic SELECT")
-        # I'll just skip for now or try to fetch row by row, but for this task 100-700 rows should be fine.
         return
     
-    columns = get_columns(table_name)
+    csv_data = result.stdout
+    f_in = io.StringIO(csv_data)
+    reader = csv.DictReader(f_in)
+    columns = reader.fieldnames
+    
+    data = list(reader)
+    if not data:
+        print(f"No data for {table_name}")
+        return
+
     filename = f"public_data/{order_index:02d}_{filename_prefix}.sql"
     
     with open(filename, "w", encoding="utf-8") as f:
         f.write(f"-- ARQUIVO: {os.path.basename(filename)}\n\n")
         f.write("BEGIN;\n\n")
         
-        # Split into blocks of 100
         block_size = 100
         for i in range(0, len(data), block_size):
             block = data[i:i + block_size]
@@ -72,7 +62,13 @@ def generate_sql(table_name, filename_prefix, order_index):
             
             values_list = []
             for row in block:
-                vals = [escape_sql(row.get(col)) for col in columns]
+                vals = []
+                for col in columns:
+                    val = row[col]
+                    if val == 'NULL_VAL':
+                        vals.append("NULL")
+                    else:
+                        vals.append(escape_sql(val))
                 values_list.append(f"(\n  {', '.join(vals)}\n)")
             
             f.write(",\n".join(values_list))
