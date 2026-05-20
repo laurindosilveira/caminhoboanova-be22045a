@@ -3,20 +3,21 @@ import os
 import subprocess
 import io
 
-def escape_sql(val, data_type=None):
-    if val == "" or val is None:
+def escape_sql(val):
+    if val == "" or val is None or val == 'NULL_VAL':
         return "NULL"
     
     # Simple type heuristics
     if val.lower() == 'true': return 'true'
     if val.lower() == 'false': return 'false'
     
-    # Check if it looks like a number
-    try:
-        float(val)
-        return val
-    except ValueError:
-        pass
+    # Check if it looks like a number (but exclude things like '2026-05-12')
+    if '-' not in val and ':' not in val:
+        try:
+            float(val)
+            return val
+        except ValueError:
+            pass
 
     # Handle arrays (Postgres format in CSV is often {val1,val2})
     if val.startswith('{') and val.endswith('}'):
@@ -24,7 +25,8 @@ def escape_sql(val, data_type=None):
         escaped_items = []
         for item in items:
             item = item.strip().strip('"')
-            escaped_items.append(f"'{item.replace(\"'\", \"''\")}'")
+            escaped_item = item.replace("'", "''")
+            escaped_items.append(f"'{escaped_item}'")
         return f"ARRAY[{', '.join(escaped_items)}]::text[]"
 
     # String escaping
@@ -48,7 +50,8 @@ def generate_sql(table_name, filename_prefix, order_index):
         print(f"No data for {table_name}")
         return
 
-    filename = f"public_data/{order_index:02d}_{filename_prefix}.sql"
+    filename = f"public_data/public_data_{filename_prefix}.sql"
+    # Overriding filename to match user's requested format "public_data_profiles.sql"
     
     with open(filename, "w", encoding="utf-8") as f:
         f.write(f"-- ARQUIVO: {os.path.basename(filename)}\n\n")
@@ -65,10 +68,7 @@ def generate_sql(table_name, filename_prefix, order_index):
                 vals = []
                 for col in columns:
                     val = row[col]
-                    if val == 'NULL_VAL':
-                        vals.append("NULL")
-                    else:
-                        vals.append(escape_sql(val))
+                    vals.append(escape_sql(val))
                 values_list.append(f"(\n  {', '.join(vals)}\n)")
             
             f.write(",\n".join(values_list))
