@@ -89,8 +89,12 @@ tables_to_generate = [
     ("lessons", "lessons"),
     ("devotional_content", "devotional_content"),
     ("devotional_progress", "devotional_progress"),
-    ("attendance", "attendance")
+    ("user_progress", "lesson_progress"),
+    ("attendance", "attendance"),
+    ("lesson_responses", "lesson_responses"),
+    ("devotional_responses", "devotional_responses")
 ]
+
 
 for idx, (table, prefix) in enumerate(tables_to_generate):
     generate_sql(table, prefix, idx)
