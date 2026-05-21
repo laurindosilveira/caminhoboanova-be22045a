@@ -3,6 +3,10 @@ import json
 def format_value(val):
     if val is None:
         return 'NULL'
+    if isinstance(val, list):
+        # Format as Postgres array: '{item1,item2}'
+        items = [str(i).replace("'", "''") for i in val]
+        return f"'{{{','.join(items)}}}'"
     if isinstance(val, bool):
         return 'true' if val else 'false'
     if isinstance(val, (int, float)):
