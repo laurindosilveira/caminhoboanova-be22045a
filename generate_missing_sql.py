@@ -8,7 +8,8 @@ def format_value(val):
     if isinstance(val, (int, float)):
         return str(val)
     # Escape single quotes for SQL
-    return f"'{str(val).replace(\"'\", \"''\")}'"
+    escaped_val = str(val).replace("'", "''")
+    return f"'{escaped_val}'"
 
 with open('missing_events.json', 'r') as f:
     events = json.load(f)
