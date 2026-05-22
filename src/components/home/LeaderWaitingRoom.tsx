@@ -55,7 +55,7 @@ export default function LeaderWaitingRoom({ areaFilter, churchId, onAssigned }: 
           .select("user_id, full_name, community, area, phone, birth_date, turma_id, enrollment_status, church_id")
           .is("turma_id", null)
           .eq("enrollment_status", "pending")
-          .eq("area", areaFilter)
+          .or(`area.eq.${areaFilter},area.is.null,area.eq.""`)
           .eq("church_id", churchId)
         : (supabase.from as any)("profiles")
           .select("user_id, full_name, community, area, phone, birth_date, turma_id, enrollment_status, church_id")
