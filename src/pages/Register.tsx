@@ -47,7 +47,6 @@ export default function Register() {
   const [error, setError] = useState<string | null>(null);
   const [loadingChurches, setLoadingChurches] = useState(true);
   const [churchOptions, setChurchOptions] = useState<{ id: string; name: string }[]>([]);
-  const [loadingAreas, setLoadingAreas] = useState(false);
   const [areaOptions, setAreaOptions] = useState<RegisterArea[]>([]);
   const [communityOptionsByArea, setCommunityOptionsByArea] = useState<Record<string, string[]>>({});
 
