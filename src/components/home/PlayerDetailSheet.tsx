@@ -371,6 +371,23 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
         });
       }
     });
+    
+    // Calculate course bonus
+    (courses ?? []).forEach((course) => {
+      const courseLessons = (lessons ?? []).filter((l) => l.course_id === course.id);
+      if (courseLessons.length > 0 && courseLessons.every((l) => lessonIds.has(l.id))) {
+        allItems.push({
+          id: `course-bonus-${course.id}`,
+          type: "achievement",
+          source: "native",
+          title: `Bônus: ${course.title}`,
+          subtitle: "Curso concluído!",
+          points: courseBonusPts,
+          date: new Date().toISOString(), // Use current date if no better date available
+          deletable: false,
+        });
+      }
+    });
 
     allItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     setItems(allItems);
