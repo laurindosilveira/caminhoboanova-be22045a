@@ -124,6 +124,22 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
     }));
     setCourses(courseList);
     setUnlockedCourseIds(new Set((unlocksData ?? []).map((u: any) => u.course_id)));
+    
+    // Lessons are unlocked if they are scheduled in the agenda for this area
+    const now = new Date();
+    const scheduled = new Set<string>();
+    (eventsData ?? []).forEach((e: any) => {
+      if (e.area && e.area !== currentArea) return;
+      // Unlock if event is in the past OR if we are within 10 days of it
+      const eventDate = new Date(e.event_date);
+      const windowStart = new Date(eventDate);
+      windowStart.setDate(windowStart.getDate() - 14); // 14 calendar days roughly covers 10 business days
+      if (now >= windowStart) {
+        scheduled.add(e.linked_lesson_id);
+      }
+    });
+    setScheduledLessonIds(scheduled);
+
     if (courseList.length > 0) setExpandedCourse(courseList[0].id);
 
     // Integrated stats
