@@ -396,7 +396,45 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
 
     allItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     setItems(allItems);
-    setTotalPoints(allItems.reduce((sum, item) => sum + item.points, 0));
+    const calculatedTotal = allItems.reduce((sum, item) => sum + item.points, 0);
+    setTotalPoints(calculatedTotal);
+
+    // Validation logic: compare with RPC ranking
+    if (profile?.community) {
+      const { data: rankingData } = await supabase.rpc("get_community_ranking", {
+        _community: profile.community as any,
+        _church_id: churchId as any
+      });
+      
+      const userRanking = (rankingData as any[])?.find(r => r.user_id === userId);
+      const rankingScore = userRanking ? Number(userRanking.faith_points) : 0;
+      
+      if (rankingScore !== calculatedTotal) {
+        setRankingDivergence({ rankingScore, calculatedScore: calculatedTotal });
+        
+        // Log divergence asynchronously
+        supabase.from("ranking_validation_logs").insert({
+          user_id: userId,
+          church_id: churchId,
+          ranking_score: rankingScore,
+          calculated_score: calculatedTotal,
+          divergence: rankingScore - calculatedTotal,
+          breakdown: {
+            calculated_items: allItems.map(i => ({ type: i.type, points: i.points, title: i.title })),
+            ranking_breakdown: userRanking ? {
+              base: userRanking.base_points,
+              course: userRanking.course_bonus,
+              achievement: userRanking.achievement_bonus,
+              other: userRanking.other_bonus
+            } : null
+          }
+        }).then(({ error }) => {
+          if (error) console.error("Error logging ranking divergence:", error);
+        });
+      } else {
+        setRankingDivergence(null);
+      }
+    }
 
     // Compute gaps
     const completedDevIds = new Set((devProgress ?? []).map((p) => p.devotional_id));
