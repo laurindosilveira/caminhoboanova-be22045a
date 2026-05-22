@@ -2931,6 +2931,39 @@ export type Database = {
           },
         ]
       }
+      ranking_validation_logs: {
+        Row: {
+          breakdown: Json | null
+          calculated_score: number
+          church_id: string | null
+          created_at: string
+          divergence: number
+          id: string
+          ranking_score: number
+          user_id: string
+        }
+        Insert: {
+          breakdown?: Json | null
+          calculated_score: number
+          church_id?: string | null
+          created_at?: string
+          divergence: number
+          id?: string
+          ranking_score: number
+          user_id: string
+        }
+        Update: {
+          breakdown?: Json | null
+          calculated_score?: number
+          church_id?: string | null
+          created_at?: string
+          divergence?: number
+          id?: string
+          ranking_score?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       spiritual_assessments: {
         Row: {
           church_id: string | null
@@ -3775,9 +3808,13 @@ export type Database = {
           _community: Database["public"]["Enums"]["community_name"]
         }
         Returns: {
+          achievement_bonus: number
+          base_points: number
           completed_count: number
+          course_bonus: number
           faith_points: number
           full_name: string
+          other_bonus: number
           user_id: string
         }[]
       }
@@ -3893,6 +3930,7 @@ export type Database = {
             }
             Returns: undefined
           }
+      recalculate_ranking: { Args: { _church_id: string }; Returns: Json }
       secure_extend_trial: {
         Args: { p_church_subscription_id: string; p_days: number }
         Returns: undefined
