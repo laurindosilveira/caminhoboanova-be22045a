@@ -25,6 +25,7 @@ type TurmaStats = {
 type AttRow = { user_id: string; status: string; created_at: string };
 type DevRow = { user_id: string; completed_at: string };
 type LessonRow = { user_id: string; lesson_id: string; created_at: string };
+type ProgressRow = { user_id: string; activity_id: string; created_at: string };
 
 const COLORS = [
   "hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))",
@@ -54,6 +55,7 @@ export default function AdminOverviewTab({
   const [attRows, setAttRows] = useState<AttRow[]>([]);
   const [devRows, setDevRows] = useState<DevRow[]>([]);
   const [lessonRows, setLessonRows] = useState<LessonRow[]>([]);
+  const [progressRows, setProgressRows] = useState<ProgressRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -69,20 +71,23 @@ export default function AdminOverviewTab({
       setAttRows([]);
       setDevRows([]);
       setLessonRows([]);
+      setProgressRows([]);
       setLoading(false);
       return;
     }
     const applyChurchScope = (query: any) => churchId
       ? query.or(`church_id.is.null,church_id.eq.${churchId}`)
       : query.is("church_id", null);
-    const [{ data: att }, { data: dev }, { data: les }] = await Promise.all([
+    const [{ data: att }, { data: dev }, { data: les }, { data: prog }] = await Promise.all([
       applyChurchScope(supabase.from("attendance").select("user_id, status, created_at, church_id").in("user_id", userIds)),
       applyChurchScope(supabase.from("devotional_progress").select("user_id, completed_at, church_id").in("user_id", userIds)),
       applyChurchScope(supabase.from("lesson_responses").select("user_id, lesson_id, created_at, church_id").in("user_id", userIds)),
+      applyChurchScope(supabase.from("user_progress").select("user_id, activity_id, created_at, church_id").in("user_id", userIds)),
     ]);
     setAttRows(att ?? []);
     setDevRows(dev ?? []);
     setLessonRows(les ?? []);
+    setProgressRows(prog ?? []);
     setLoading(false);
   }
 
@@ -116,6 +121,10 @@ export default function AdminOverviewTab({
     return lessonRows.filter(l => filteredUserIds.has(l.user_id) && (!cutoff || l.created_at >= cutoff));
   }, [lessonRows, filteredUserIds, cutoff]);
 
+  const filteredProgress = useMemo(() => {
+    return progressRows.filter(p => filteredUserIds.has(p.user_id) && (!cutoff || p.created_at >= cutoff));
+  }, [progressRows, filteredUserIds, cutoff]);
+
   // === KPIs ===
   const totalParticipants = filteredParticipants.length;
   const usersWithPresence = new Set(filteredAtt.filter(a => a.status === "presente").map(a => a.user_id)).size;
@@ -125,6 +134,7 @@ export default function AdminOverviewTab({
     ...filteredAtt.filter(a => a.status === "presente").map(a => a.user_id),
     ...filteredDev.map(d => d.user_id),
     ...filteredLessons.map(l => l.user_id),
+    ...filteredProgress.map(p => p.user_id),
   ]).size;
   const engagementRate = totalParticipants > 0 ? Math.round((engagedUsers / totalParticipants) * 100) : 0;
   const inactiveCount = totalParticipants - engagedUsers;
@@ -137,9 +147,10 @@ export default function AdminOverviewTab({
       const tAtt = attRows.filter(a => turmaIds.has(a.user_id) && a.status === "presente" && (!cutoff || a.created_at >= cutoff));
       const tDev = devRows.filter(d => turmaIds.has(d.user_id) && (!cutoff || d.completed_at >= cutoff));
       const tLes = lessonRows.filter(l => turmaIds.has(l.user_id) && (!cutoff || l.created_at >= cutoff));
+      const tProg = progressRows.filter(p => turmaIds.has(p.user_id) && (!cutoff || p.created_at >= cutoff));
 
       const total = turmaUsers.length;
-      const activeUsers = new Set([...tAtt.map(a => a.user_id), ...tDev.map(d => d.user_id), ...tLes.map(l => l.user_id)]).size;
+      const activeUsers = new Set([...tAtt.map(a => a.user_id), ...tDev.map(d => d.user_id), ...tLes.map(l => l.user_id), ...tProg.map(p => p.user_id)]).size;
       const attUsers = new Set(tAtt.map(a => a.user_id)).size;
       const devUsers = new Set(tDev.map(d => d.user_id)).size;
 
