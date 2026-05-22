@@ -182,6 +182,10 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
             full_name: getSafeName(member.full_name),
             completed_count: Number(member.completed_count ?? 0),
             faith_points: Number(member.faith_points ?? member.points ?? 0),
+            base_points: Number(member.base_points ?? 0),
+            course_bonus: Number(member.course_bonus ?? 0),
+            achievement_bonus: Number(member.achievement_bonus ?? 0),
+            other_bonus: Number(member.other_bonus ?? 0),
           });
         });
 
