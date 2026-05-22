@@ -40,6 +40,8 @@ Deno.test("get_community_ranking should return detailed breakdown", async () => 
 });
 
 Deno.test("recalculate_ranking should execute correctly for admins", async () => {
+  if (!supabaseUrl || !supabaseKey) return;
+  const supabase = createClient(supabaseUrl, supabaseKey);
   const { data, error } = await supabase.rpc("recalculate_ranking", {
     _church_id: "02f08580-80e5-4f57-8a2e-1b078d337278"
   });
