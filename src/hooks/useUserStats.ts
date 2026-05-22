@@ -75,20 +75,28 @@ export function useUserStats(currentArea?: string): UserStats {
       const { data: profile } = await supabase.from("profiles").select("church_id").eq("user_id", user.id).single();
       const churchId = profile?.church_id;
 
+      const applyChurchFilter = (query: any) => churchId 
+        ? query.eq("church_id", churchId)
+        : query.is("church_id", null);
+
+      const applyChurchOrNull = (query: any) => churchId
+        ? query.or(`church_id.is.null,church_id.eq.${churchId}`)
+        : query.is("church_id", null);
+
       console.log("useUserStats: Starting Promise.allSettled for churchId", churchId);
       const results = await Promise.allSettled([
-        supabase.from("activities").select("id, type, title, subtitle, order_num, points, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null').order("order_num"),
-        supabase.from("user_progress").select("activity_id, completed_at, church_id").eq("user_id", user.id).eq("church_id", churchId),
-        supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery, awarded_points, church_id").eq("user_id", user.id).eq("church_id", churchId),
-        supabase.from("lesson_responses").select("lesson_id, church_id").eq("user_id", user.id).eq("church_id", churchId),
-        supabase.from("attendance").select("event_id, status, church_id").eq("user_id", user.id).eq("church_id", churchId),
-        supabase.from("worship_attendance").select("id, status, church_id").eq("user_id", user.id).eq("status", "aprovado").eq("church_id", churchId),
-        supabase.from("achievement_unlocks").select("achievement_key, bonus_points, church_id").eq("user_id", user.id).eq("church_id", churchId),
-        supabase.from("courses").select("id, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
-        supabase.from("lessons").select("id, course_id, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
+        applyChurchOrNull(supabase.from("activities").select("id, type, title, subtitle, order_num, points, church_id")).order("order_num"),
+        applyChurchFilter(supabase.from("user_progress").select("activity_id, completed_at, church_id")).eq("user_id", user.id),
+        applyChurchFilter(supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery, awarded_points, church_id")).eq("user_id", user.id),
+        applyChurchFilter(supabase.from("lesson_responses").select("lesson_id, church_id")).eq("user_id", user.id),
+        applyChurchFilter(supabase.from("attendance").select("event_id, status, church_id")).eq("user_id", user.id),
+        applyChurchFilter(supabase.from("worship_attendance").select("id, status, church_id")).eq("user_id", user.id).eq("status", "aprovado"),
+        applyChurchFilter(supabase.from("achievement_unlocks").select("achievement_key, bonus_points, church_id")).eq("user_id", user.id),
+        applyChurchOrNull(supabase.from("courses").select("id, church_id")),
+        applyChurchOrNull(supabase.from("lessons").select("id, course_id, church_id")),
         supabase.from("challenge_participants").select("id, completed").eq("user_id", user.id).eq("completed", true),
         (supabase as any).rpc("get_game_config"),
-        supabase.from("custom_event_types").select("value, gives_points, points, area, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
+        applyChurchOrNull(supabase.from("custom_event_types").select("value, gives_points, points, area, church_id")),
       ]);
       console.log("useUserStats: Promise.allSettled finished");
 
@@ -97,10 +105,6 @@ export function useUserStats(currentArea?: string): UserStats {
         worshipDataRes, achievementUnlocksRes, coursesDataRes, lessonsDataRes, 
         challengeDataRes, gameConfigRes, customEventTypesDataRes
       ] = results.map(r => r.status === 'fulfilled' ? r.value : { data: null, error: (r as any).reason });
-
-      if (results.some(r => r.status === 'rejected')) {
-        console.error("useUserStats: Some queries failed", results.filter(r => r.status === 'rejected'));
-      }
 
       const activities = activitiesRes.data ?? [];
       const progress = progressRes.data ?? [];
@@ -115,7 +119,6 @@ export function useUserStats(currentArea?: string): UserStats {
       const gameConfig = gameConfigRes.data ?? [];
       const customEventTypesData = customEventTypesDataRes.data ?? [];
 
-      // Carrega configuração dinâmica com fallback nos defaults
       const cfgMap = new Map<string, number>((gameConfig ?? []).map((r: any) => [r.key, Number(r.value)]));
       const cfg = {
         lessonPoints:          cfgMap.get("lesson_points")             ?? 20,
@@ -134,20 +137,18 @@ export function useUserStats(currentArea?: string): UserStats {
         cfgMap.get("level_5_threshold") ?? 200,
       ];
 
-      const acts = activities;
-      const prog = progress;
-      const devProg = devProgress;
-      const completedIds = new Set(prog.map((p: any) => p.activity_id));
+      const completedIds = new Set(progress.map((p: any) => p.activity_id));
       const allDates = [
-        ...prog.map((p: any) => p.completed_at),
-        ...devProg.map((p: any) => p.completed_at),
+        ...progress.map((p: any) => p.completed_at),
+        ...devProgress.map((p: any) => p.completed_at),
       ];
 
-      const activityPoints = acts
-        .filter((a: any) => completedIds.has(a.id) && a.type !== "devocional" && a.type !== "formacao" && a.type !== "encontro")
+      // Include ALL activities from user_progress (matches fixed RPC)
+      const activityPoints = activities
+        .filter((a: any) => completedIds.has(a.id))
         .reduce((sum: number, a: any) => sum + (a.points ?? 0), 0);
 
-      const devotionalPoints = devProg.reduce((sum: number, dp: any) => {
+      const devotionalPoints = devProgress.reduce((sum: number, dp: any) => {
         if (typeof dp.awarded_points === "number") return sum + dp.awarded_points;
         if (dp.is_recovery) return sum + cfg.devotionalRecoveryPts;
         const dow = new Date(dp.completed_at).getDay();
@@ -193,9 +194,8 @@ export function useUserStats(currentArea?: string): UserStats {
       const challengePoints = (challengeData ?? []).length * cfg.challengePoints;
 
       let courseBonusPoints = 0;
-      const allLessons = lessonsData ?? [];
       (coursesData ?? []).forEach((course: any) => {
-        const courseLessons = allLessons.filter((l: any) => l.course_id === course.id);
+        const courseLessons = (lessonsData ?? []).filter((l: any) => l.course_id === course.id);
         if (courseLessons.length > 0 && courseLessons.every((l: any) => completedLessonIds.has(l.id))) {
           courseBonusPoints += cfg.courseBonus;
         }
@@ -208,7 +208,7 @@ export function useUserStats(currentArea?: string): UserStats {
       const faithEnergy = calculateEnergy(allDates);
       const completedCount = completedIds.size;
 
-      const nextActivity = acts.find((a: any) => !completedIds.has(a.id)) ?? null;
+      const nextActivity = activities.find((a: any) => !completedIds.has(a.id)) ?? null;
 
       setStats({
         faithPoints,
@@ -217,7 +217,7 @@ export function useUserStats(currentArea?: string): UserStats {
         faithEnergy,
         completedCount,
         nextActivity,
-        totalActivities: acts.length,
+        totalActivities: activities.length,
         loading: false,
       });
     }
