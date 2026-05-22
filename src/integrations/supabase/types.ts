@@ -3805,7 +3805,7 @@ export type Database = {
       get_community_ranking: {
         Args: {
           _church_id?: string
-          _community: Database["public"]["Enums"]["community_name"]
+          _community?: Database["public"]["Enums"]["community_name"]
         }
         Returns: {
           achievement_bonus: number
@@ -3930,7 +3930,7 @@ export type Database = {
             }
             Returns: undefined
           }
-      recalculate_ranking: { Args: { _church_id: string }; Returns: Json }
+      recalculate_ranking: { Args: { _church_id?: string }; Returns: Json }
       secure_extend_trial: {
         Args: { p_church_subscription_id: string; p_days: number }
         Returns: undefined
