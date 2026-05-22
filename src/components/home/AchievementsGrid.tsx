@@ -160,6 +160,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
         communities.map(async (community) => {
           const { data, error } = await supabase.rpc("get_community_ranking", {
             _community: community as any,
+            _church_id: profile?.church_id as any,
           });
           return { community, data: (data ?? []) as any[], error };
         })

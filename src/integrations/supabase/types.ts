@@ -3770,7 +3770,10 @@ export type Database = {
         Returns: Database["public"]["Enums"]["area_name"]
       }
       get_community_ranking: {
-        Args: { _community: Database["public"]["Enums"]["community_name"] }
+        Args: {
+          _church_id?: string
+          _community: Database["public"]["Enums"]["community_name"]
+        }
         Returns: {
           completed_count: number
           faith_points: number

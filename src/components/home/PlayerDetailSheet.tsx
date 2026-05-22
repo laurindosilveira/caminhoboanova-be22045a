@@ -157,6 +157,10 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
 
   async function fetchActivities() {
     setLoading(true);
+
+    const { data: profile } = await supabase.from("profiles").select("church_id").eq("user_id", userId).maybeSingle();
+    const churchId = profile?.church_id;
+
     const [
       { data: lessonResps },
       { data: devProgress },
@@ -172,21 +176,23 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
       { data: achDefs },
       { data: customEventTypesData },
       { data: profileData },
+      { data: courses },
     ] = await Promise.all([
-      supabase.from("lesson_responses").select("id, lesson_id, question_key, response, created_at").eq("user_id", userId),
-      supabase.from("devotional_progress").select("id, devotional_id, completed_at").eq("user_id", userId),
-      supabase.from("attendance").select("id, event_id, status, created_at").eq("user_id", userId).in("status", ["presente", "faltou", "falta", "justificou", "justificado"]),
-      supabase.from("worship_attendance").select("id, worship_date, preacher_name, worship_time, status, created_at").eq("user_id", userId).eq("status", "aprovado"),
-      supabase.from("achievement_unlocks").select("id, achievement_key, bonus_points, unlocked_at").eq("user_id", userId),
-      supabase.from("user_progress").select("id, activity_id, completed_at").eq("user_id", userId),
-      supabase.from("lessons").select("id, title, course_id, order_num"),
-      supabase.from("devotional_content").select("id, title, day_number, lesson_id"),
-      supabase.from("events").select("id, title, event_date, type"),
-      supabase.from("activities").select("id, title, points, type"),
+      supabase.from("lesson_responses").select("id, lesson_id, question_key, response, created_at").eq("user_id", userId).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
+      supabase.from("devotional_progress").select("id, devotional_id, completed_at").eq("user_id", userId).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
+      supabase.from("attendance").select("id, event_id, status, created_at").eq("user_id", userId).in("status", ["presente", "faltou", "falta", "justificou", "justificado"]).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
+      supabase.from("worship_attendance").select("id, worship_date, preacher_name, worship_time, status, created_at").eq("user_id", userId).eq("status", "aprovado").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
+      supabase.from("achievement_unlocks").select("id, achievement_key, bonus_points, unlocked_at").eq("user_id", userId).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
+      supabase.from("user_progress").select("id, activity_id, completed_at").eq("user_id", userId).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
+      supabase.from("lessons").select("id, title, course_id, order_num").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
+      supabase.from("devotional_content").select("id, title, day_number, lesson_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
+      supabase.from("events").select("id, title, event_date, type").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
+      supabase.from("activities").select("id, title, points, type").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
       supabase.rpc("get_game_config" as any),
-      supabase.from("achievement_definitions" as any).select("key, icon, title"),
-      supabase.from("custom_event_types").select("value, label, gives_points, points, area"),
+      supabase.from("achievement_definitions" as any).select("key, icon, title").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
+      supabase.from("custom_event_types").select("value, label, gives_points, points, area, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
       supabase.from("profiles").select("phone").eq("user_id", userId).maybeSingle(),
+      supabase.from("courses").select("id, title, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
     ]);
 
     // Carrega pontuações dinâmicas do game_config
@@ -196,6 +202,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
     const devWkPts     = cfgMap.get("devotional_weekend_points") ?? 2;
     const attPts       = cfgMap.get("attendance_points")         ?? 10;
     const worshipPts   = cfgMap.get("worship_points")            ?? 5;
+    const courseBonusPts = cfgMap.get("course_completion_bonus")  ?? 100;
 
     const customTypeMap = new Map<string, { label: string; gives_points: boolean; points: number; area: string | null }>(
       (customEventTypesData ?? []).map((type: any) => [
@@ -365,6 +372,23 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
           date: progress.completed_at,
           deletable: true,
           tableId: progress.id,
+        });
+      }
+    });
+    
+    // Calculate course bonus
+    (courses ?? []).forEach((course) => {
+      const courseLessons = (lessons ?? []).filter((l) => l.course_id === course.id);
+      if (courseLessons.length > 0 && courseLessons.every((l) => lessonIds.has(l.id))) {
+        allItems.push({
+          id: `course-bonus-${course.id}`,
+          type: "achievement",
+          source: "native",
+          title: `Bônus: ${course.title}`,
+          subtitle: "Curso concluído!",
+          points: courseBonusPts,
+          date: new Date().toISOString(), // Use current date if no better date available
+          deletable: false,
         });
       }
     });

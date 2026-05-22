@@ -207,7 +207,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
           supabase.from("attendance").select("user_id, status").in("user_id", userIds).eq("status", "presente").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
           Promise.all(
             communitiesInScope.map((community) =>
-              supabase.rpc("get_community_ranking" as any, { _community: community as any })
+              supabase.rpc("get_community_ranking" as any, { _community: community as any, _church_id: churchId })
             )
           ),
         ])
