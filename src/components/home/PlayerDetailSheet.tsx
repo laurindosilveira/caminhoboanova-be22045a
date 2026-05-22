@@ -129,6 +129,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
   const [detailModal, setDetailModal] = useState<DetailModalState | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [totalPoints, setTotalPoints] = useState(0);
+  const [rankingDivergence, setRankingDivergence] = useState<{ rankingScore: number; calculatedScore: number } | null>(null);
   const [gaps, setGaps] = useState<{ missingLessons: { id: string; title: string }[]; missingDevotionals: { id: string; title: string; day_number: number | null }[] } | null>(null);
   const [showGaps, setShowGaps] = useState(false);
   const [showBonusForm, setShowBonusForm] = useState(false);
