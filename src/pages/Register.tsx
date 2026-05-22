@@ -510,56 +510,10 @@ export default function Register() {
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Sua área</label>
-                <div className="relative">
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                  <select
-                    value={area}
-                    onChange={(e) => {
-                      setArea(e.target.value);
-                      setCommunity("");
-                    }}
-                    className="w-full pl-4 pr-10 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none"
-                    required
-                    disabled={!churchId || loadingAreas}
-                  >
-                    <option value="">
-                      {!churchId ? "Selecione primeiro a igreja..." : (loadingAreas ? "Carregando áreas..." : "Selecione sua área...")}
-                    </option>
-                    {areaOptions.map((item) => (
-                      <option key={item.id} value={item.name}>{item.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Sua comunidade</label>
-                <div className="relative">
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                  <select
-                    value={community}
-                    onChange={(e) => setCommunity(e.target.value)}
-                    className="w-full pl-4 pr-10 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none"
-                    required
-                    disabled={!area || loadingAreas}
-                  >
-                    <option value="">
-                      {!area ? "Selecione primeiro a área..." : "Selecione sua comunidade..."}
-                    </option>
-                    {communitiesForSelectedArea.map((item) => (
-                      <option key={item} value={item}>{item}</option>
-                    ))}
-                  </select>
-                </div>
-                {area && community && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-primary" />
-                    <span className="text-muted-foreground font-inter text-xs">
-                      Cadastro vinculado à <strong className="text-foreground">{area}</strong>
-                    </span>
-                  </div>
-                )}
+              <div className="bg-secondary/10 border border-secondary/30 rounded-xl px-4 py-3">
+                <p className="text-secondary font-inter text-xs font-medium">
+                  Sua área e comunidade serão designadas pela liderança da igreja após o cadastro.
+                </p>
               </div>
               {error && (
                 <div className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3">
