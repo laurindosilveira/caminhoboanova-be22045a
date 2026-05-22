@@ -258,11 +258,16 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
               }
             });
 
+            const activityPointMap = new Map((allActivitiesData ?? []).map((a: any) => [a.id, a.points ?? 0]));
+
             const completedActivityIds = new Set(
               (progressData ?? [])
                 .filter((row: any) => row.user_id === profile.user_id)
                 .map((row: any) => row.activity_id)
             );
+            
+            const activityPoints = [...completedActivityIds].reduce((sum, id) => sum + (activityPointMap.get(id) || 0), 0);
+
             const completedLessonIds = new Set(
               (lessonResponsesData ?? [])
                 .filter((row: any) => row.user_id === profile.user_id)
@@ -310,7 +315,8 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
                 worshipCount * cfg.worshipPoints +
                 achievementBonus +
                 courseBonus +
-                challengeCount * cfg.challengePoints,
+                challengeCount * cfg.challengePoints +
+                activityPoints,
             });
           });
         }
