@@ -129,6 +129,8 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
   const [detailModal, setDetailModal] = useState<DetailModalState | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [totalPoints, setTotalPoints] = useState(0);
+  const [rankingDivergence, setRankingDivergence] = useState<{ rankingScore: number; calculatedScore: number; breakdown?: any } | null>(null);
+  const [rankingInfo, setRankingInfo] = useState<{ base: number; course: number; ach: number; other: number } | null>(null);
   const [gaps, setGaps] = useState<{ missingLessons: { id: string; title: string }[]; missingDevotionals: { id: string; title: string; day_number: number | null }[] } | null>(null);
   const [showGaps, setShowGaps] = useState(false);
   const [showBonusForm, setShowBonusForm] = useState(false);
@@ -158,7 +160,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
   async function fetchActivities() {
     setLoading(true);
 
-    const { data: profile } = await supabase.from("profiles").select("church_id").eq("user_id", userId).maybeSingle();
+    const { data: profile } = await supabase.from("profiles").select("church_id, community").eq("user_id", userId).maybeSingle();
     const churchId = profile?.church_id;
 
     const [
@@ -395,7 +397,54 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
 
     allItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     setItems(allItems);
-    setTotalPoints(allItems.reduce((sum, item) => sum + item.points, 0));
+    const calculatedTotal = allItems.reduce((sum, item) => sum + item.points, 0);
+    setTotalPoints(calculatedTotal);
+
+    // Validation logic: compare with RPC ranking
+    if (profile?.community) {
+      const { data: rankingData } = await supabase.rpc("get_community_ranking", {
+        _community: profile.community as any,
+        _church_id: churchId as any
+      });
+      
+      const userRanking = (rankingData as any[])?.find(r => r.user_id === userId);
+      const rankingScore = userRanking ? Number(userRanking.faith_points) : 0;
+      
+      if (userRanking) {
+        setRankingInfo({
+          base: Number(userRanking.base_points ?? 0),
+          course: Number(userRanking.course_bonus ?? 0),
+          ach: Number(userRanking.achievement_bonus ?? 0),
+          other: Number(userRanking.other_bonus ?? 0),
+        });
+      }
+
+      if (rankingScore !== calculatedTotal) {
+        setRankingDivergence({ rankingScore, calculatedScore: calculatedTotal });
+        
+        // Log divergence asynchronously
+        supabase.from("ranking_validation_logs").insert({
+          user_id: userId,
+          church_id: churchId,
+          ranking_score: rankingScore,
+          calculated_score: calculatedTotal,
+          divergence: rankingScore - calculatedTotal,
+          breakdown: {
+            calculated_items: allItems.map(i => ({ type: i.type, points: i.points, title: i.title })),
+            ranking_breakdown: userRanking ? {
+              base: userRanking.base_points,
+              course: userRanking.course_bonus,
+              achievement: userRanking.achievement_bonus,
+              other: userRanking.other_bonus
+            } : null
+          }
+        }).then(({ error }) => {
+          if (error) console.error("Error logging ranking divergence:", error);
+        });
+      } else {
+        setRankingDivergence(null);
+      }
+    }
 
     // Compute gaps
     const completedDevIds = new Set((devProgress ?? []).map((p) => p.devotional_id));
@@ -724,6 +773,19 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
           <div>
             <p className="font-montserrat font-bold text-foreground text-base">{fullName}</p>
             <p className="text-muted-foreground font-inter text-xs">{totalPoints} pontos · {items.length} atividades</p>
+            {rankingInfo && (
+              <div className="flex flex-wrap gap-x-2 text-[10px] text-muted-foreground mt-0.5 opacity-80 leading-tight">
+                <span>Ranking: {rankingInfo.base + rankingInfo.course + rankingInfo.ach + rankingInfo.other} pts</span>
+                {!!rankingInfo.course && <span>(Curso: +{rankingInfo.course})</span>}
+                {!!rankingInfo.ach && <span>(Conq: +{rankingInfo.ach})</span>}
+              </div>
+            )}
+            {rankingDivergence && (
+              <div className="mt-1 flex items-center gap-1.5 text-[10px] text-amber-600 font-inter font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
+                <AlertTriangle className="w-3 h-3" />
+                Divergência: Ranking={rankingDivergence.rankingScore} vs Detalhe={rankingDivergence.calculatedScore}
+              </div>
+            )}
             {whatsappLink && (
               <a
                 href={whatsappLink}

@@ -49,6 +49,10 @@ interface RankingMember {
   full_name: string;
   completed_count: number;
   faith_points: number;
+  base_points?: number;
+  course_bonus?: number;
+  achievement_bonus?: number;
+  other_bonus?: number;
 }
 
 import { getCommunitiesForArea } from "@/config/areas";
@@ -178,6 +182,10 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
             full_name: getSafeName(member.full_name),
             completed_count: Number(member.completed_count ?? 0),
             faith_points: Number(member.faith_points ?? member.points ?? 0),
+            base_points: Number(member.base_points ?? 0),
+            course_bonus: Number(member.course_bonus ?? 0),
+            achievement_bonus: Number(member.achievement_bonus ?? 0),
+            other_bonus: Number(member.other_bonus ?? 0),
           });
         });
 
@@ -637,6 +645,23 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-montserrat font-black text-foreground text-xl">🏆 Conquistas</h2>
         <div className="flex items-center gap-2">
+          {canManage && (
+            <button
+              onClick={async () => {
+                const { data, error } = await supabase.rpc("recalculate_ranking", { _church_id: profile?.church_id });
+                if (error) {
+                  toast.error("Erro ao recalcular ranking: " + error.message);
+                } else {
+                  toast.success("Ranking recalculado com sucesso!");
+                  fetchAreaRanking();
+                }
+              }}
+              className="p-2 rounded-full hover:bg-muted transition-colors text-muted-foreground"
+              title="Recalcular Ranking"
+            >
+              <RefreshCw className="w-5 h-5" />
+            </button>
+          )}
           {canManage && <GameConfigDialog onSaved={fetchAreaRanking} />}
           {canManage && <AchievementsConfigDialog onSaved={fetchAchievementDefs} />}
           <GameRulesDialog breakdown={{
@@ -809,6 +834,14 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
                       {m.full_name} {isMe && <span className="text-secondary text-xs font-inter">(você)</span>}
                     </p>
                     <p className="text-muted-foreground text-xs font-inter">{Number(m.completed_count)} atividades · {Number(m.faith_points)} pts</p>
+                    {(m.base_points || m.course_bonus || m.achievement_bonus || m.other_bonus) ? (
+                      <div className="flex flex-wrap gap-x-2 text-[10px] text-muted-foreground mt-0.5 opacity-80 leading-tight">
+                        {!!m.base_points && <span>Base: {m.base_points}</span>}
+                        {!!m.course_bonus && <span>Curso: +{m.course_bonus}</span>}
+                        {!!m.achievement_bonus && <span>Conq: +{m.achievement_bonus}</span>}
+                        {!!m.other_bonus && <span>Extra: +{m.other_bonus}</span>}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="text-right flex-shrink-0">
                     <span className="font-montserrat font-black text-accent text-sm">{Number(m.faith_points)} pts</span>
