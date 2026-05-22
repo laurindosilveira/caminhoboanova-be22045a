@@ -650,10 +650,10 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
   }
 
   return (
-    <div className="px-5 pt-2 pb-4 space-y-5">
-      <div className="flex items-center justify-between mb-4">
+    <div className="px-5 pt-2 pb-4 space-y-6">
+      <div className="space-y-3">
         <h2 className="font-montserrat font-black text-foreground text-xl">🏆 Conquistas</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canManage && (
             <button
               onClick={async () => {
@@ -665,10 +665,11 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
                   fetchAreaRanking();
                 }
               }}
-              className="p-2 rounded-full hover:bg-muted transition-colors text-muted-foreground"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-muted text-muted-foreground text-xs font-inter font-semibold hover:bg-muted/80 transition-colors"
               title="Recalcular Ranking"
             >
-              <RefreshCw className="w-5 h-5" />
+              <RefreshCw className="w-3.5 h-3.5" />
+              Recalcular
             </button>
           )}
           {canManage && <GameConfigDialog onSaved={fetchAreaRanking} />}
@@ -684,7 +685,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
             totalDevotionals,
             totalEvents,
           }} />
-          <span className="text-xs font-inter text-muted-foreground bg-muted rounded-full px-3 py-1">
+          <span className="text-[10px] font-inter font-bold text-muted-foreground bg-muted rounded-lg px-2 py-1">
             {unlockedCount}/{achievements.length}
           </span>
         </div>
