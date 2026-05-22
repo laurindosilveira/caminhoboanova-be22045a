@@ -817,6 +817,14 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
                       {m.full_name} {isMe && <span className="text-secondary text-xs font-inter">(você)</span>}
                     </p>
                     <p className="text-muted-foreground text-xs font-inter">{Number(m.completed_count)} atividades · {Number(m.faith_points)} pts</p>
+                    {(m.base_points || m.course_bonus || m.achievement_bonus || m.other_bonus) ? (
+                      <div className="flex flex-wrap gap-x-2 text-[10px] text-muted-foreground mt-0.5 opacity-80 leading-tight">
+                        {!!m.base_points && <span>Base: {m.base_points}</span>}
+                        {!!m.course_bonus && <span>Curso: +{m.course_bonus}</span>}
+                        {!!m.achievement_bonus && <span>Conq: +{m.achievement_bonus}</span>}
+                        {!!m.other_bonus && <span>Extra: +{m.other_bonus}</span>}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="text-right flex-shrink-0">
                     <span className="font-montserrat font-black text-accent text-sm">{Number(m.faith_points)} pts</span>
