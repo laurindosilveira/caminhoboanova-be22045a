@@ -25,8 +25,8 @@ const registerSchema = z.object({
   email: z.string().trim().email("Email inválido").max(255),
   password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres").max(128),
   churchId: z.string().trim().min(1, "Selecione sua igreja"),
-  area: z.string().trim().min(1, "Selecione sua área"),
-  community: z.string().trim().min(1, "Selecione sua comunidade"),
+  area: z.string().trim().optional(),
+  community: z.string().trim().optional(),
 });
 
 const inputClass = "w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all";
@@ -47,7 +47,6 @@ export default function Register() {
   const [error, setError] = useState<string | null>(null);
   const [loadingChurches, setLoadingChurches] = useState(true);
   const [churchOptions, setChurchOptions] = useState<{ id: string; name: string }[]>([]);
-  const [loadingAreas, setLoadingAreas] = useState(false);
   const [areaOptions, setAreaOptions] = useState<RegisterArea[]>([]);
   const [communityOptionsByArea, setCommunityOptionsByArea] = useState<Record<string, string[]>>({});
 
@@ -95,57 +94,11 @@ export default function Register() {
     return () => { isMounted = false; };
   }, []);
 
+  // Removed area/community fetching as it's now handled by leadership after registration.
   useEffect(() => {
-    if (!churchId) {
-      setAreaOptions([]);
-      setCommunityOptionsByArea({});
-      return;
-    }
-
-    let isMounted = true;
-
-    async function loadAreaOptions() {
-      setLoadingAreas(true);
-      try {
-        const { data: areasData, error: areasError } = await supabase
-          .from("areas")
-          .select("id, name")
-          .eq("church_id", churchId)
-          .order("name");
-
-        if (areasError) throw areasError;
-
-        const { data: commsData, error: commsError } = await supabase
-          .from("communities")
-          .select("name, area_id, areas(name)")
-          .eq("church_id", churchId)
-          .order("name");
-
-        if (commsError) throw commsError;
-
-        if (isMounted) {
-          setAreaOptions((areasData || []).map(a => ({ id: a.id, name: a.name, description: null })));
-          
-          const commMap: Record<string, string[]> = {};
-          (commsData || []).forEach((c: any) => {
-            const areaName = c.areas?.name;
-            if (areaName) {
-              if (!commMap[areaName]) commMap[areaName] = [];
-              commMap[areaName].push(c.name);
-            }
-          });
-          setCommunityOptionsByArea(commMap);
-        }
-      } catch (err) {
-        console.error("Error loading areas/communities:", err);
-      } finally {
-        if (isMounted) setLoadingAreas(false);
-      }
-    }
-
-    loadAreaOptions();
-    return () => { isMounted = false; };
-  }, [churchId]);
+    setAreaOptions([]);
+    setCommunityOptionsByArea({});
+  }, []);
 
   const communitiesForSelectedArea = useMemo(
     () => (area ? (communityOptionsByArea[area] ?? []) : []),
@@ -210,27 +163,12 @@ export default function Register() {
       return;
     }
 
-    if (!area) {
-      setError("Selecione sua área.");
-      return;
-    }
-
-    if (!community) {
-      setError("Selecione sua comunidade.");
-      return;
-    }
-
     const parsed = registerSchema.safeParse({
       fullName, birthDate, phone, fatherName, motherName,
-      fatherPhone, motherPhone, email, password, churchId, area, community,
+      fatherPhone, motherPhone, email, password, churchId, area: area || "", community: community || "",
     });
     if (!parsed.success) {
       setError(parsed.error.errors[0].message);
-      return;
-    }
-
-    if (!communitiesForSelectedArea.includes(parsed.data.community)) {
-      setError("A comunidade selecionada não pertence à área informada.");
       return;
     }
 
@@ -525,56 +463,10 @@ export default function Register() {
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Sua área</label>
-                <div className="relative">
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                  <select
-                    value={area}
-                    onChange={(e) => {
-                      setArea(e.target.value);
-                      setCommunity("");
-                    }}
-                    className="w-full pl-4 pr-10 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none"
-                    required
-                    disabled={!churchId || loadingAreas}
-                  >
-                    <option value="">
-                      {!churchId ? "Selecione primeiro a igreja..." : (loadingAreas ? "Carregando áreas..." : "Selecione sua área...")}
-                    </option>
-                    {areaOptions.map((item) => (
-                      <option key={item.id} value={item.name}>{item.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Sua comunidade</label>
-                <div className="relative">
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                  <select
-                    value={community}
-                    onChange={(e) => setCommunity(e.target.value)}
-                    className="w-full pl-4 pr-10 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none"
-                    required
-                    disabled={!area || loadingAreas}
-                  >
-                    <option value="">
-                      {!area ? "Selecione primeiro a área..." : "Selecione sua comunidade..."}
-                    </option>
-                    {communitiesForSelectedArea.map((item) => (
-                      <option key={item} value={item}>{item}</option>
-                    ))}
-                  </select>
-                </div>
-                {area && community && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-primary" />
-                    <span className="text-muted-foreground font-inter text-xs">
-                      Cadastro vinculado à <strong className="text-foreground">{area}</strong>
-                    </span>
-                  </div>
-                )}
+              <div className="bg-secondary/10 border border-secondary/30 rounded-xl px-4 py-3">
+                <p className="text-secondary font-inter text-xs font-medium">
+                  Sua área e comunidade serão designadas pela liderança da igreja após o cadastro.
+                </p>
               </div>
               {error && (
                 <div className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3">
@@ -583,7 +475,7 @@ export default function Register() {
               )}
               <button
                 type="submit"
-                disabled={loading || loadingAreas}
+                disabled={loading}
                 className="w-full py-3.5 rounded-xl font-montserrat font-bold text-primary-foreground text-base transition-all active:scale-95 disabled:opacity-60 shadow-md"
                 style={{ background: "var(--gradient-orange)" }}
               >

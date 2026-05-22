@@ -55,13 +55,13 @@ export default function LeaderWaitingRoom({ areaFilter, churchId, onAssigned }: 
           .select("user_id, full_name, community, area, phone, birth_date, turma_id, enrollment_status, church_id")
           .is("turma_id", null)
           .eq("enrollment_status", "pending")
-          .eq("area", areaFilter)
+          .or(`area.eq.${areaFilter},area.is.null,area.eq.""`)
           .eq("church_id", churchId)
         : (supabase.from as any)("profiles")
           .select("user_id, full_name, community, area, phone, birth_date, turma_id, enrollment_status, church_id")
           .is("turma_id", null)
           .eq("enrollment_status", "pending")
-          .eq("area", areaFilter)
+          .or(`area.eq.${areaFilter},area.is.null,area.eq.""`)
           .is("church_id", null)),
       churchId
         ? supabase
@@ -113,7 +113,11 @@ export default function LeaderWaitingRoom({ areaFilter, churchId, onAssigned }: 
     setSaving(userId);
     const { error } = await supabase
       .from("profiles")
-      .update({ turma_id: turmaId, enrollment_status: "approved" })
+      .update({ 
+        turma_id: turmaId, 
+        enrollment_status: "approved",
+        area: (turma.area || areaFilter) as any // Assign the area of the turma or the current leader's area
+      })
       .eq("user_id", userId);
 
     if (error) {
