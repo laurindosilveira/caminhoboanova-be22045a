@@ -198,6 +198,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
     const devWkPts     = cfgMap.get("devotional_weekend_points") ?? 2;
     const attPts       = cfgMap.get("attendance_points")         ?? 10;
     const worshipPts   = cfgMap.get("worship_points")            ?? 5;
+    const courseBonusPts = cfgMap.get("course_completion_bonus")  ?? 100;
 
     const customTypeMap = new Map<string, { label: string; gives_points: boolean; points: number; area: string | null }>(
       (customEventTypesData ?? []).map((type: any) => [
