@@ -763,6 +763,12 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
           <div>
             <p className="font-montserrat font-bold text-foreground text-base">{fullName}</p>
             <p className="text-muted-foreground font-inter text-xs">{totalPoints} pontos · {items.length} atividades</p>
+            {rankingDivergence && (
+              <div className="mt-1 flex items-center gap-1.5 text-[10px] text-amber-600 font-inter font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
+                <AlertTriangle className="w-3 h-3" />
+                Divergência: Ranking={rankingDivergence.rankingScore} vs Detalhe={rankingDivergence.calculatedScore}
+              </div>
+            )}
             {whatsappLink && (
               <a
                 href={whatsappLink}
