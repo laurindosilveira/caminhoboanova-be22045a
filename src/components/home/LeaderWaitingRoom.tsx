@@ -116,7 +116,7 @@ export default function LeaderWaitingRoom({ areaFilter, churchId, onAssigned }: 
       .update({ 
         turma_id: turmaId, 
         enrollment_status: "approved",
-        area: turma.area || areaFilter // Assign the area of the turma or the current leader's area
+        area: (turma.area || areaFilter) as any // Assign the area of the turma or the current leader's area
       })
       .eq("user_id", userId);
 
