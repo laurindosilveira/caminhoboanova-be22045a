@@ -37,16 +37,21 @@ export default function ResetPassword() {
     }
 
     setLoading(true);
-    const { error: updateError } = await supabase.auth.updateUser({ password: parsed.data.password });
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({ password: parsed.data.password });
 
-    if (updateError) {
-      setError("Erro ao redefinir senha: " + updateError.message);
+      if (updateError) {
+        setError("Erro ao redefinir senha: " + updateError.message);
+        return;
+      }
+
+      setDone(true);
+      setTimeout(() => navigate("/login", { replace: true }), 2500);
+    } catch (err: any) {
+      setError("Ocorreu um erro inesperado: " + (err.message || "Tente novamente."));
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setDone(true);
-    setTimeout(() => navigate("/"), 2500);
   }
 
   return (
