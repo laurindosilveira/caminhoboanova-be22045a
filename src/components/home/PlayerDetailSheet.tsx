@@ -773,6 +773,13 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
           <div>
             <p className="font-montserrat font-bold text-foreground text-base">{fullName}</p>
             <p className="text-muted-foreground font-inter text-xs">{totalPoints} pontos · {items.length} atividades</p>
+            {rankingInfo && (
+              <div className="flex flex-wrap gap-x-2 text-[10px] text-muted-foreground mt-0.5 opacity-80 leading-tight">
+                <span>Ranking: {rankingInfo.base + rankingInfo.course + rankingInfo.ach + rankingInfo.other} pts</span>
+                {!!rankingInfo.course && <span>(Curso: +{rankingInfo.course})</span>}
+                {!!rankingInfo.ach && <span>(Conq: +{rankingInfo.ach})</span>}
+              </div>
+            )}
             {rankingDivergence && (
               <div className="mt-1 flex items-center gap-1.5 text-[10px] text-amber-600 font-inter font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
                 <AlertTriangle className="w-3 h-3" />
