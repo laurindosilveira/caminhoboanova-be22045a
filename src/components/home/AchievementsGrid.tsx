@@ -645,6 +645,23 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-montserrat font-black text-foreground text-xl">🏆 Conquistas</h2>
         <div className="flex items-center gap-2">
+          {canManage && (
+            <button
+              onClick={async () => {
+                const { data, error } = await supabase.rpc("recalculate_ranking", { _church_id: profile?.church_id });
+                if (error) {
+                  toast.error("Erro ao recalcular ranking: " + error.message);
+                } else {
+                  toast.success("Ranking recalculado com sucesso!");
+                  fetchAreaRanking();
+                }
+              }}
+              className="p-2 rounded-full hover:bg-muted transition-colors text-muted-foreground"
+              title="Recalcular Ranking"
+            >
+              <RefreshCw className="w-5 h-5" />
+            </button>
+          )}
           {canManage && <GameConfigDialog onSaved={fetchAreaRanking} />}
           {canManage && <AchievementsConfigDialog onSaved={fetchAchievementDefs} />}
           <GameRulesDialog breakdown={{
