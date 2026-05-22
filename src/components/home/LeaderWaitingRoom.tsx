@@ -113,7 +113,11 @@ export default function LeaderWaitingRoom({ areaFilter, churchId, onAssigned }: 
     setSaving(userId);
     const { error } = await supabase
       .from("profiles")
-      .update({ turma_id: turmaId, enrollment_status: "approved" })
+      .update({ 
+        turma_id: turmaId, 
+        enrollment_status: "approved",
+        area: turma.area || areaFilter // Assign the area of the turma or the current leader's area
+      })
       .eq("user_id", userId);
 
     if (error) {
