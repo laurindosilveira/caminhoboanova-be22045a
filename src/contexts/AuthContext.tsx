@@ -108,11 +108,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Handle MFA or session invalidation logic for root admin
         if (currentSession.user.email?.toLowerCase() === 'laurindosilveira@gmail.com') {
-          const { data: authData } = await (supabase.auth as any).getAuthenticatorAssuranceLevel();
-          if (authData?.currentLevel !== 'aal2' && window.location.pathname.startsWith('/admin-sistema')) {
-             console.warn("MFA missing for root admin on system route. Redirecting.");
-             window.location.href = "/";
-             return;
+          if (typeof (supabase.auth as any).getAuthenticatorAssuranceLevel === 'function') {
+            const { data: authData } = await (supabase.auth as any).getAuthenticatorAssuranceLevel();
+            if (authData?.currentLevel !== 'aal2' && window.location.pathname.startsWith('/admin-sistema')) {
+               console.warn("MFA missing for root admin on system route. Redirecting.");
+               window.location.href = "/";
+               return;
+            }
           }
         }
 
