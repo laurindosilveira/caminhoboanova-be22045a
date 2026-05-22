@@ -95,48 +95,11 @@ export default function Register() {
     return () => { isMounted = false; };
   }, []);
 
+  // Removed area/community fetching as it's now handled by leadership after registration.
   useEffect(() => {
-    if (!churchId) {
-      setAreaOptions([]);
-      setCommunityOptionsByArea({});
-      return;
-    }
-
-    let isMounted = true;
-
-    async function loadAreaOptions() {
-      setLoadingAreas(true);
-      try {
-        const { data: areasData, error: areasError } = await supabase
-          .from("areas")
-          .select("id, name")
-          .eq("church_id", churchId)
-          .order("name");
-
-        if (areasError) throw areasError;
-
-        const { data: commsData, error: commsError } = await supabase
-          .from("communities")
-          .select("name, area_id, areas(name)")
-          .eq("church_id", churchId)
-          .order("name");
-
-        if (commsError) throw commsError;
-
-        if (isMounted) {
-          setAreaOptions([]);
-          setCommunityOptionsByArea({});
-        }
-      } catch (err) {
-        console.error("Error loading areas/communities:", err);
-      } finally {
-        if (isMounted) setLoadingAreas(false);
-      }
-    }
-
-    loadAreaOptions();
-    return () => { isMounted = false; };
-  }, [churchId]);
+    setAreaOptions([]);
+    setCommunityOptionsByArea({});
+  }, []);
 
   const communitiesForSelectedArea = useMemo(
     () => (area ? (communityOptionsByArea[area] ?? []) : []),
