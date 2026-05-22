@@ -49,6 +49,10 @@ interface RankingMember {
   full_name: string;
   completed_count: number;
   faith_points: number;
+  base_points?: number;
+  course_bonus?: number;
+  achievement_bonus?: number;
+  other_bonus?: number;
 }
 
 import { getCommunitiesForArea } from "@/config/areas";
