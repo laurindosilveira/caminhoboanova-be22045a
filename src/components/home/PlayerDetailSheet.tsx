@@ -410,6 +410,15 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
       const userRanking = (rankingData as any[])?.find(r => r.user_id === userId);
       const rankingScore = userRanking ? Number(userRanking.faith_points) : 0;
       
+      if (userRanking) {
+        setRankingInfo({
+          base: Number(userRanking.base_points ?? 0),
+          course: Number(userRanking.course_bonus ?? 0),
+          ach: Number(userRanking.achievement_bonus ?? 0),
+          other: Number(userRanking.other_bonus ?? 0),
+        });
+      }
+
       if (rankingScore !== calculatedTotal) {
         setRankingDivergence({ rankingScore, calculatedScore: calculatedTotal });
         
