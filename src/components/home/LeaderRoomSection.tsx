@@ -129,7 +129,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
       const { data, error } = await waitingQuery;
       if (!error && data) {
         const myId = (await supabase.auth.getUser()).data.user?.id;
-        const filtered = data.filter((p: any) => p.user_id !== myId && p.area === turmaArea && (!churchId || p.church_id === churchId));
+        const filtered = data.filter((p: any) => p.user_id !== myId && (!p.area || p.area === turmaArea) && (!churchId || p.church_id === churchId));
         setWaitingCount(filtered.length);
       }
     }
