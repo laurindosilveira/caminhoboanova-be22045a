@@ -25,8 +25,8 @@ const registerSchema = z.object({
   email: z.string().trim().email("Email inválido").max(255),
   password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres").max(128),
   churchId: z.string().trim().min(1, "Selecione sua igreja"),
-  area: z.string().trim().min(1, "Selecione sua área"),
-  community: z.string().trim().min(1, "Selecione sua comunidade"),
+  area: z.string().trim().optional(),
+  community: z.string().trim().optional(),
 });
 
 const inputClass = "w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all";
