@@ -89,7 +89,7 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
       supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
       supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null),
       supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
-      supabase.from("events").select("id").gte("event_date", new Date(Date.now() - 90 * 86400000).toISOString()),
+      supabase.from("events").select("id, linked_lesson_id, area, event_date").not("linked_lesson_id", "is", null),
       supabase.from("attendance").select("event_id, status").eq("user_id", user.id),
       supabase.from("worship_attendance").select("id, status").eq("user_id", user.id).eq("status", "aprovado"),
       supabase.from("course_unlocks").select("course_id").eq("area", currentArea),
