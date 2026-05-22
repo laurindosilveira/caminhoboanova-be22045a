@@ -475,7 +475,7 @@ export default function Register() {
               )}
               <button
                 type="submit"
-                disabled={loading || loadingAreas}
+                disabled={loading}
                 className="w-full py-3.5 rounded-xl font-montserrat font-bold text-primary-foreground text-base transition-all active:scale-95 disabled:opacity-60 shadow-md"
                 style={{ background: "var(--gradient-orange)" }}
               >
