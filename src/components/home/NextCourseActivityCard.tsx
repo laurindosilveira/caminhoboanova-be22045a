@@ -88,7 +88,7 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
       .filter((event: any) => {
         if (!event.linked_lesson_id) return false;
         if (event.target_user_id && event.target_user_id !== user?.id) return false;
-        if (event.area && currentArea && event.area !== currentArea) return false;
+        if (event.area && event.area !== currentArea) return false;
         if (event.turma_id && profile?.turma_id && event.turma_id !== profile.turma_id) return false;
         if (event.turma_id && !profile?.turma_id) return false;
         const isConfirmatorio = event.type === "confirmatorio";
