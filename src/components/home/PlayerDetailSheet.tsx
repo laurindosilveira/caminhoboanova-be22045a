@@ -172,6 +172,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
       { data: achDefs },
       { data: customEventTypesData },
       { data: profileData },
+      { data: courses },
     ] = await Promise.all([
       supabase.from("lesson_responses").select("id, lesson_id, question_key, response, created_at").eq("user_id", userId),
       supabase.from("devotional_progress").select("id, devotional_id, completed_at").eq("user_id", userId),
@@ -187,6 +188,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
       supabase.from("achievement_definitions" as any).select("key, icon, title"),
       supabase.from("custom_event_types").select("value, label, gives_points, points, area"),
       supabase.from("profiles").select("phone").eq("user_id", userId).maybeSingle(),
+      supabase.from("courses").select("id, title"),
     ]);
 
     // Carrega pontuações dinâmicas do game_config
