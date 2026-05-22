@@ -166,7 +166,7 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
     today.setHours(0, 0, 0, 0);
     const now = new Date();
     const actionableEntries = effectiveSchedule.filter(
-      (entry) => today >= entry.windowStart && now < entry.eventDate
+      (entry) => today >= entry.windowStart
     );
 
     // Iterate through currently active schedule entries only.
