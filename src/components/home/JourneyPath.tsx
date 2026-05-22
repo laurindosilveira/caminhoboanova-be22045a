@@ -55,6 +55,7 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
   const [fullyCompletedLessonIds, setFullyCompletedLessonIds] = useState<Set<string>>(new Set());
   const [unlockedCourseIds, setUnlockedCourseIds] = useState<Set<string>>(new Set());
+  const [scheduledLessonIds, setScheduledLessonIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
   const [integrated, setIntegrated] = useState<IntegratedStats>({
@@ -88,7 +89,7 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
       supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
       supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null),
       supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
-      supabase.from("events").select("id").gte("event_date", new Date(Date.now() - 90 * 86400000).toISOString()),
+      supabase.from("events").select("id, linked_lesson_id, area, event_date").not("linked_lesson_id", "is", null),
       supabase.from("attendance").select("event_id, status").eq("user_id", user.id),
       supabase.from("worship_attendance").select("id, status").eq("user_id", user.id).eq("status", "aprovado"),
       supabase.from("course_unlocks").select("course_id").eq("area", currentArea),
@@ -123,6 +124,22 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
     }));
     setCourses(courseList);
     setUnlockedCourseIds(new Set((unlocksData ?? []).map((u: any) => u.course_id)));
+    
+    // Lessons are unlocked if they are scheduled in the agenda for this area
+    const now = new Date();
+    const scheduled = new Set<string>();
+    (eventsData ?? []).forEach((e: any) => {
+      if (e.area && e.area !== currentArea) return;
+      // Unlock if event is in the past OR if we are within 10 days of it
+      const eventDate = new Date(e.event_date);
+      const windowStart = new Date(eventDate);
+      windowStart.setDate(windowStart.getDate() - 14); // 14 calendar days roughly covers 10 business days
+      if (now >= windowStart) {
+        scheduled.add(e.linked_lesson_id);
+      }
+    });
+    setScheduledLessonIds(scheduled);
+
     if (courseList.length > 0) setExpandedCourse(courseList[0].id);
 
     // Integrated stats
@@ -346,9 +363,12 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
                       course.lessons.map((lesson, lessonIndex) => {
                         const isDone = completedLessonIds.has(lesson.id);
                         const isFullyDone = fullyCompletedLessonIds.has(lesson.id);
+                        const isScheduled = scheduledLessonIds.has(lesson.id);
                         const prevLesson = lessonIndex > 0 ? course.lessons[lessonIndex - 1] : null;
-                        // A lesson the user already started/completed is never locked for viewing
-                        const isLocked = !isDone && !isFullyDone && (prevLesson ? !fullyCompletedLessonIds.has(prevLesson.id) : false);
+                        
+                        // A lesson is locked if it's not done AND not scheduled AND (it has a previous lesson that isn't fully done)
+                        // If it's the first lesson of an unlocked course, it's unlocked by default (prevLesson is null)
+                        const isLocked = !isDone && !isFullyDone && !isScheduled && (prevLesson ? !fullyCompletedLessonIds.has(prevLesson.id) : false);
 
                         const isClickable = !isLocked && !!onSelectLesson;
                         return (
