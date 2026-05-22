@@ -363,9 +363,12 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
                       course.lessons.map((lesson, lessonIndex) => {
                         const isDone = completedLessonIds.has(lesson.id);
                         const isFullyDone = fullyCompletedLessonIds.has(lesson.id);
+                        const isScheduled = scheduledLessonIds.has(lesson.id);
                         const prevLesson = lessonIndex > 0 ? course.lessons[lessonIndex - 1] : null;
-                        // A lesson the user already started/completed is never locked for viewing
-                        const isLocked = !isDone && !isFullyDone && (prevLesson ? !fullyCompletedLessonIds.has(prevLesson.id) : false);
+                        
+                        // A lesson is locked if it's not done AND not scheduled AND (it has a previous lesson that isn't fully done)
+                        // If it's the first lesson of an unlocked course, it's unlocked by default (prevLesson is null)
+                        const isLocked = !isDone && !isFullyDone && !isScheduled && (prevLesson ? !fullyCompletedLessonIds.has(prevLesson.id) : false);
 
                         const isClickable = !isLocked && !!onSelectLesson;
                         return (
