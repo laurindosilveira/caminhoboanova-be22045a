@@ -124,17 +124,8 @@ export default function Register() {
         if (commsError) throw commsError;
 
         if (isMounted) {
-          setAreaOptions((areasData || []).map(a => ({ id: a.id, name: a.name, description: null })));
-          
-          const commMap: Record<string, string[]> = {};
-          (commsData || []).forEach((c: any) => {
-            const areaName = c.areas?.name;
-            if (areaName) {
-              if (!commMap[areaName]) commMap[areaName] = [];
-              commMap[areaName].push(c.name);
-            }
-          });
-          setCommunityOptionsByArea(commMap);
+          setAreaOptions([]);
+          setCommunityOptionsByArea({});
         }
       } catch (err) {
         console.error("Error loading areas/communities:", err);
