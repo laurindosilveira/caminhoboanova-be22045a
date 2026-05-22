@@ -55,6 +55,7 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
   const [fullyCompletedLessonIds, setFullyCompletedLessonIds] = useState<Set<string>>(new Set());
   const [unlockedCourseIds, setUnlockedCourseIds] = useState<Set<string>>(new Set());
+  const [scheduledLessonIds, setScheduledLessonIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
   const [integrated, setIntegrated] = useState<IntegratedStats>({
