@@ -151,7 +151,7 @@ export function useAgendaSchedule() {
     for (const event of (events as any[]) ?? []) {
       if (!event.linked_lesson_id) continue;
       if ((event as any).target_user_id && (event as any).target_user_id !== user?.id) continue;
-      if (event.area && currentArea && event.area !== currentArea) continue;
+      if (event.area && event.area !== currentArea) continue;
       if ((event as any).turma_id && profile?.turma_id && (event as any).turma_id !== profile.turma_id) continue;
       if ((event as any).turma_id && !profile?.turma_id) continue;
       const isConfirmatorio = event.type === "confirmatorio";
