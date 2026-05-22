@@ -147,6 +147,15 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
 
   async function handleSave() {
     if (!form.title || !form.event_date) return;
+    
+    // Protection: If a lesson is linked, area must be selected (if scope is area)
+    if (form.linked_lesson_id && form.scope === "area" && !form.area) {
+      toast.error("Selecione uma Área para esta lição!", {
+        description: "Lições vinculadas precisam de uma área definida para que os alunos consigam acessá-la.",
+      });
+      return;
+    }
+
     setSaving(true);
     const normalizedEventDate = form.event_date ? new Date(form.event_date) : null;
     if (!normalizedEventDate || Number.isNaN(normalizedEventDate.getTime())) {
