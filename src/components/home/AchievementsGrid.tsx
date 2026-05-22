@@ -279,7 +279,8 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
             const devotionalPoints = devotionals.reduce((sum: number, row: any) => {
               if (typeof row.awarded_points === "number") return sum + row.awarded_points;
               if (row.is_recovery) return sum + cfg.devotionalRecoveryPts;
-              const dow = new Date(row.completed_at).getDay();
+              const d = new Date(row.completed_at);
+              const dow = d.getDay();
               return sum + (dow === 0 || dow === 6 ? cfg.devotionalWeekendPts : cfg.devotionalPoints);
             }, 0);
 
