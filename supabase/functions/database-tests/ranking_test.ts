@@ -1,11 +1,15 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { assert, assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 Deno.test("get_community_ranking should return detailed breakdown", async () => {
+  if (!supabaseUrl || !supabaseKey) {
+    console.warn("Skipping test: Missing Supabase credentials");
+    return;
+  }
+  const supabase = createClient(supabaseUrl, supabaseKey);
   const { data, error } = await supabase.rpc("get_community_ranking", {
     _community: "Bom Pastor",
     _church_id: "02f08580-80e5-4f57-8a2e-1b078d337278"
