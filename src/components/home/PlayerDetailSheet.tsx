@@ -159,7 +159,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
   async function fetchActivities() {
     setLoading(true);
 
-    const { data: profile } = await supabase.from("profiles").select("church_id").eq("user_id", userId).maybeSingle();
+    const { data: profile } = await supabase.from("profiles").select("church_id, community").eq("user_id", userId).maybeSingle();
     const churchId = profile?.church_id;
 
     const [
