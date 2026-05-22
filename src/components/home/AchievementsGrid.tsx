@@ -211,6 +211,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
             { data: challengeData },
             { data: gameConfig },
             { data: customEventTypesData },
+            { data: allActivitiesData },
           ] = await Promise.all([
             supabase.from("user_progress").select("user_id, activity_id").in("user_id", userIds),
             supabase.from("lesson_responses").select("user_id, lesson_id").in("user_id", userIds),
@@ -223,6 +224,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
             supabase.from("challenge_participants").select("user_id").in("user_id", userIds).eq("completed", true),
             supabase.rpc("get_game_config" as any),
             supabase.from("custom_event_types").select("value, gives_points, points, area"),
+            supabase.from("activities").select("id, points"),
           ]);
 
           const cfgMap = new Map<string, number>((gameConfig ?? []).map((row: any) => [row.key, Number(row.value)]));
