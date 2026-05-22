@@ -210,27 +210,12 @@ export default function Register() {
       return;
     }
 
-    if (!area) {
-      setError("Selecione sua área.");
-      return;
-    }
-
-    if (!community) {
-      setError("Selecione sua comunidade.");
-      return;
-    }
-
     const parsed = registerSchema.safeParse({
       fullName, birthDate, phone, fatherName, motherName,
-      fatherPhone, motherPhone, email, password, churchId, area, community,
+      fatherPhone, motherPhone, email, password, churchId, area: area || "", community: community || "",
     });
     if (!parsed.success) {
       setError(parsed.error.errors[0].message);
-      return;
-    }
-
-    if (!communitiesForSelectedArea.includes(parsed.data.community)) {
-      setError("A comunidade selecionada não pertence à área informada.");
       return;
     }
 
