@@ -308,7 +308,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
         subtitle: isJustified
           ? `Falta justificada · ${event?.event_date ? format(new Date(event.event_date), "d 'de' MMM", { locale: ptBR }) : ""}`
           : event?.event_date ? format(new Date(event.event_date), "d 'de' MMM", { locale: ptBR }) : "",
-        points: isJustified ? 0 : attPts,
+        points: isJustified ? 0 : (customTypeMap.get(event?.type ?? "")?.gives_points ? customTypeMap.get(event?.type ?? "")!.points : attPts),
         date: presence.created_at,
         deletable: true,
         tableId: presence.id,

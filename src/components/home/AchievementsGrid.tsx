@@ -211,6 +211,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
             { data: challengeData },
             { data: gameConfig },
             { data: customEventTypesData },
+            { data: allActivitiesData },
           ] = await Promise.all([
             supabase.from("user_progress").select("user_id, activity_id").in("user_id", userIds),
             supabase.from("lesson_responses").select("user_id, lesson_id").in("user_id", userIds),
@@ -223,6 +224,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
             supabase.from("challenge_participants").select("user_id").in("user_id", userIds).eq("completed", true),
             supabase.rpc("get_game_config" as any),
             supabase.from("custom_event_types").select("value, gives_points, points, area"),
+            supabase.from("activities").select("id, points"),
           ]);
 
           const cfgMap = new Map<string, number>((gameConfig ?? []).map((row: any) => [row.key, Number(row.value)]));
@@ -258,11 +260,16 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
               }
             });
 
+            const activityPointMap = new Map((allActivitiesData ?? []).map((a: any) => [a.id, a.points ?? 0]));
+
             const completedActivityIds = new Set(
               (progressData ?? [])
                 .filter((row: any) => row.user_id === profile.user_id)
                 .map((row: any) => row.activity_id)
             );
+            
+            const activityPoints = [...completedActivityIds].reduce((sum, id) => sum + (activityPointMap.get(id) || 0), 0);
+
             const completedLessonIds = new Set(
               (lessonResponsesData ?? [])
                 .filter((row: any) => row.user_id === profile.user_id)
@@ -279,7 +286,8 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
             const devotionalPoints = devotionals.reduce((sum: number, row: any) => {
               if (typeof row.awarded_points === "number") return sum + row.awarded_points;
               if (row.is_recovery) return sum + cfg.devotionalRecoveryPts;
-              const dow = new Date(row.completed_at).getDay();
+              const d = new Date(row.completed_at);
+              const dow = d.getDay();
               return sum + (dow === 0 || dow === 6 ? cfg.devotionalWeekendPts : cfg.devotionalPoints);
             }, 0);
 
@@ -309,7 +317,8 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
                 worshipCount * cfg.worshipPoints +
                 achievementBonus +
                 courseBonus +
-                challengeCount * cfg.challengePoints,
+                challengeCount * cfg.challengePoints +
+                activityPoints,
             });
           });
         }
