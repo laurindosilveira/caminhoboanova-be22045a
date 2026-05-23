@@ -363,7 +363,9 @@ export default function UserAgendaTab() {
     : events;
 
   const upcoming = filteredEvents.filter(e => new Date(e.event_date) >= now);
-  const past = filteredEvents.filter(e => new Date(e.event_date) < now);
+  const past = filteredEvents
+    .filter(e => new Date(e.event_date) < now)
+    .sort((a, b) => new Date(b.event_date).getTime() - new Date(a.event_date).getTime());
 
   async function handleCheckIn(eventId: string, status: "pendente_presente" | "pendente_falta", justification?: string) {
     const { data: { user } } = await supabase.auth.getUser();

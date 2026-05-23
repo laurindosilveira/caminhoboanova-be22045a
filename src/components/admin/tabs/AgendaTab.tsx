@@ -88,7 +88,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
     if (!churchId) return;
     setLoading(true);
 
-    const { data, error } = await supabase.from("events").select("*").eq("church_id", churchId).order("event_date");
+    const { data, error } = await supabase.from("events").select("*").eq("church_id", churchId).order("event_date", { ascending: false });
     if (error) {
       toast.error("Erro ao carregar eventos", { description: error.message });
     }
