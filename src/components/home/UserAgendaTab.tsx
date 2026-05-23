@@ -1218,17 +1218,44 @@ export default function UserAgendaTab() {
                   <div className="space-y-4">
                     {pendingUsers.length > 0 && (
                       <div className="rounded-2xl border border-accent/30 bg-accent/10 p-3">
-                        <p className="font-montserrat font-bold text-foreground text-xs">Aguardando aprovação</p>
+                        <p className="font-montserrat font-bold text-foreground text-xs">Solicitações Pendentes</p>
                         <p className="text-muted-foreground font-inter text-[10px] mt-1">
-                          Estes usuários já pediram confirmação e aparecem na área de aprovação.
+                          Estes usuários pediram confirmação. Você pode aprová-los aqui ou na área de aprovação.
                         </p>
                         <div className="mt-2 space-y-1.5">
-                          {pendingUsers.map(p => (
-                            <div key={p.user_id} className="flex items-center justify-between rounded-xl bg-card/70 px-3 py-2">
-                              <span className="font-inter text-xs font-semibold text-foreground">{p.full_name ?? "Sem nome"}</span>
-                              <span className="font-inter text-[10px] text-accent-foreground">Em aprovação</span>
-                            </div>
-                          ))}
+                          {pendingUsers.map(p => {
+                            const isSaving = savingEventAttendance === p.user_id;
+                            const isPresenceRequest = attendanceByUser.get(p.user_id)?.status === "pendente_presente";
+                            
+                            return (
+                              <div key={p.user_id} className="rounded-xl bg-card/70 border border-accent/20 px-3 py-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="min-w-0">
+                                    <p className="font-inter text-xs font-semibold text-foreground truncate">{p.full_name ?? "Sem nome"}</p>
+                                    <p className="text-[9px] font-bold text-accent-foreground uppercase">
+                                      {isPresenceRequest ? "Solicitou Presença" : "Solicitou Justificativa"}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button
+                                    onClick={() => markEventAttendance(p.user_id, "presente")}
+                                    disabled={isSaving}
+                                    className="rounded-lg bg-brand-green/20 py-1.5 text-[10px] font-inter font-bold text-brand-green hover:bg-brand-green/30 disabled:opacity-50"
+                                  >
+                                    {isSaving ? "..." : "Aprovar"}
+                                  </button>
+                                  <button
+                                    onClick={() => markEventAttendance(p.user_id, "faltou")}
+                                    disabled={isSaving}
+                                    className="rounded-lg bg-destructive/10 py-1.5 text-[10px] font-inter font-bold text-destructive hover:bg-destructive/20 disabled:opacity-50"
+                                  >
+                                    Rejeitar
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
