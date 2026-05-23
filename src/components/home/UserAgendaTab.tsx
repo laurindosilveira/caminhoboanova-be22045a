@@ -650,6 +650,24 @@ export default function UserAgendaTab() {
       setSavingApproval(null);
       return;
     }
+    const approvedItem = pendingAttendance.find(a => a.id === id);
+    if (approvedItem && selectedAttendanceEvent && approvedItem.event_id === selectedAttendanceEvent.id) {
+      if (action === "rejeitado") {
+        setEventAttendance(prev => prev.filter(a => a.user_id !== approvedItem.user_id));
+      } else {
+        // Fetch or simulate the updated record to keep UI in sync
+        setEventAttendance(prev => {
+          const filtered = prev.filter(a => a.user_id !== approvedItem.user_id);
+          return [...filtered, { 
+            id: approvedItem.id, 
+            event_id: approvedItem.event_id, 
+            user_id: approvedItem.user_id, 
+            status: action,
+            confirmation_source: "both"
+          }];
+        });
+      }
+    }
     setPendingAttendance(prev => prev.filter(a => a.id !== id));
     toast.success(action === "presente" ? "Presença aprovada ✅" : action === "justificou" ? "Falta justificada ✓" : "Solicitação rejeitada");
     setSavingApproval(null);
