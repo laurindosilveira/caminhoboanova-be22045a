@@ -702,9 +702,10 @@ export default function UserAgendaTab() {
     setSavingEventAttendance(userId);
     const { data: { user } } = await supabase.auth.getUser();
     const existing = eventAttendance.find(a => a.user_id === userId);
+    const isPending = existing?.status === "pendente_presente" || existing?.status === "pendente_falta";
     const payload: any = {
       status,
-      confirmation_source: "leader",
+      confirmation_source: isPending ? "both" : "leader",
       confirmed_by: user?.id ?? null,
       leader_confirmed_at: new Date().toISOString(),
       church_id: selectedAttendanceEvent.church_id ?? (profile as any)?.church_id ?? null,
