@@ -650,6 +650,24 @@ export default function UserAgendaTab() {
       setSavingApproval(null);
       return;
     }
+    const approvedItem = pendingAttendance.find(a => a.id === id);
+    if (approvedItem && selectedAttendanceEvent && approvedItem.event_id === selectedAttendanceEvent.id) {
+      if (action === "rejeitado") {
+        setEventAttendance(prev => prev.filter(a => a.user_id !== approvedItem.user_id));
+      } else {
+        // Fetch or simulate the updated record to keep UI in sync
+        setEventAttendance(prev => {
+          const filtered = prev.filter(a => a.user_id !== approvedItem.user_id);
+          return [...filtered, { 
+            id: approvedItem.id, 
+            event_id: approvedItem.event_id, 
+            user_id: approvedItem.user_id, 
+            status: action,
+            confirmation_source: "both"
+          }];
+        });
+      }
+    }
     setPendingAttendance(prev => prev.filter(a => a.id !== id));
     toast.success(action === "presente" ? "Presença aprovada ✅" : action === "justificou" ? "Falta justificada ✓" : "Solicitação rejeitada");
     setSavingApproval(null);
@@ -702,9 +720,10 @@ export default function UserAgendaTab() {
     setSavingEventAttendance(userId);
     const { data: { user } } = await supabase.auth.getUser();
     const existing = eventAttendance.find(a => a.user_id === userId);
+    const isPending = existing?.status === "pendente_presente" || existing?.status === "pendente_falta";
     const payload: any = {
       status,
-      confirmation_source: "leader",
+      confirmation_source: isPending ? "both" : "leader",
       confirmed_by: user?.id ?? null,
       leader_confirmed_at: new Date().toISOString(),
       church_id: selectedAttendanceEvent.church_id ?? (profile as any)?.church_id ?? null,
@@ -1205,72 +1224,93 @@ export default function UserAgendaTab() {
                   const status = attendanceByUser.get(p.user_id)?.status;
                   return status === "pendente_presente" || status === "pendente_falta";
                 });
-                const directUsers = eventParticipants.filter(p => {
+                const confirmedUsers = eventParticipants.filter(p => {
                   const status = attendanceByUser.get(p.user_id)?.status;
-                  return status !== "pendente_presente" && status !== "pendente_falta";
+                  return status === "presente" || status === "faltou" || status === "justificou";
+                });
+                const availableUsers = eventParticipants.filter(p => {
+                  const status = attendanceByUser.get(p.user_id)?.status;
+                  return !status;
                 });
 
                 return (
                   <div className="space-y-4">
                     {pendingUsers.length > 0 && (
                       <div className="rounded-2xl border border-accent/30 bg-accent/10 p-3">
-                        <p className="font-montserrat font-bold text-foreground text-xs">Aguardando aprovação</p>
+                        <p className="font-montserrat font-bold text-foreground text-xs">Solicitações Pendentes</p>
                         <p className="text-muted-foreground font-inter text-[10px] mt-1">
-                          Estes usuários já pediram confirmação e aparecem na área de aprovação.
+                          Estes usuários pediram confirmação. Você pode aprová-los aqui ou na área de aprovação.
                         </p>
                         <div className="mt-2 space-y-1.5">
-                          {pendingUsers.map(p => (
-                            <div key={p.user_id} className="flex items-center justify-between rounded-xl bg-card/70 px-3 py-2">
-                              <span className="font-inter text-xs font-semibold text-foreground">{p.full_name ?? "Sem nome"}</span>
-                              <span className="font-inter text-[10px] text-accent-foreground">Em aprovação</span>
-                            </div>
-                          ))}
+                          {pendingUsers.map(p => {
+                            const isSaving = savingEventAttendance === p.user_id;
+                            const isPresenceRequest = attendanceByUser.get(p.user_id)?.status === "pendente_presente";
+                            
+                            return (
+                              <div key={p.user_id} className="rounded-xl bg-card/70 border border-accent/20 px-3 py-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="min-w-0">
+                                    <p className="font-inter text-xs font-semibold text-foreground truncate">{p.full_name ?? "Sem nome"}</p>
+                                    <p className="text-[9px] font-bold text-accent-foreground uppercase">
+                                      {isPresenceRequest ? "Solicitou Presença" : "Solicitou Justificativa"}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button
+                                    onClick={() => markEventAttendance(p.user_id, "presente")}
+                                    disabled={isSaving}
+                                    className="rounded-lg bg-brand-green/20 py-1.5 text-[10px] font-inter font-bold text-brand-green hover:bg-brand-green/30 disabled:opacity-50"
+                                  >
+                                    {isSaving ? "..." : "Aprovar"}
+                                  </button>
+                                  <button
+                                    onClick={() => markEventAttendance(p.user_id, "faltou")}
+                                    disabled={isSaving}
+                                    className="rounded-lg bg-destructive/10 py-1.5 text-[10px] font-inter font-bold text-destructive hover:bg-destructive/20 disabled:opacity-50"
+                                  >
+                                    Rejeitar
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
 
                     <div>
                       <p className="font-montserrat font-bold text-foreground text-xs mb-2">
-                        Confirmar pela liderança ({directUsers.length})
+                        Pendente de confirmação ({availableUsers.length})
                       </p>
-                      {directUsers.length === 0 ? (
-                        <p className="text-center text-muted-foreground font-inter text-sm py-6">Nenhum usuário disponível para confirmação direta.</p>
+                      {availableUsers.length === 0 ? (
+                        <div className="text-center py-6 bg-muted/20 rounded-xl border border-dashed border-border">
+                          <p className="text-muted-foreground font-inter text-xs">Todos os participantes já foram marcados.</p>
+                        </div>
                       ) : (
                         <div className="space-y-2">
-                          {directUsers.map(p => {
-                            const record = attendanceByUser.get(p.user_id);
+                          {availableUsers.map(p => {
                             const isSaving = savingEventAttendance === p.user_id;
                             return (
                               <div key={p.user_id} className="rounded-2xl border border-border bg-card p-3">
-                                <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center justify-between gap-2">
                                   <div className="min-w-0">
                                     <p className="font-inter text-sm font-semibold text-foreground truncate">{p.full_name ?? "Sem nome"}</p>
                                     {p.community && <p className="font-inter text-[10px] text-muted-foreground">{p.community}</p>}
                                   </div>
-                                  {record?.status && (
-                                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-inter font-semibold ${
-                                      record.status === "presente"
-                                        ? "bg-brand-green/10 text-brand-green"
-                                        : record.status === "faltou"
-                                        ? "bg-destructive/10 text-destructive"
-                                        : "bg-muted text-muted-foreground"
-                                    }`}>
-                                      {record.status === "presente" ? "Presente" : record.status === "faltou" ? "Faltou" : record.status}
-                                    </span>
-                                  )}
                                 </div>
                                 <div className="mt-3 grid grid-cols-2 gap-2">
                                   <button
                                     onClick={() => markEventAttendance(p.user_id, "presente")}
                                     disabled={isSaving}
-                                    className="rounded-xl bg-brand-green/10 py-2 text-xs font-inter font-semibold text-brand-green hover:bg-brand-green/20 disabled:opacity-50"
+                                    className="rounded-xl bg-brand-green/10 py-2 text-xs font-inter font-semibold text-brand-green hover:bg-brand-green/20 disabled:opacity-50 transition-colors"
                                   >
                                     {isSaving ? "Salvando..." : "Confirmar presença"}
                                   </button>
                                   <button
                                     onClick={() => markEventAttendance(p.user_id, "faltou")}
                                     disabled={isSaving}
-                                    className="rounded-xl bg-destructive/10 py-2 text-xs font-inter font-semibold text-destructive hover:bg-destructive/20 disabled:opacity-50"
+                                    className="rounded-xl bg-destructive/10 py-2 text-xs font-inter font-semibold text-destructive hover:bg-destructive/20 disabled:opacity-50 transition-colors"
                                   >
                                     Marcar falta
                                   </button>
@@ -1281,6 +1321,43 @@ export default function UserAgendaTab() {
                         </div>
                       )}
                     </div>
+
+                    {confirmedUsers.length > 0 && (
+                      <div className="pt-2 border-t border-border/50">
+                        <p className="font-montserrat font-bold text-foreground text-xs mb-2">
+                          Presenças registradas ({confirmedUsers.length})
+                        </p>
+                        <div className="space-y-1.5">
+                          {confirmedUsers.map(p => {
+                            const record = attendanceByUser.get(p.user_id);
+                            const isSaving = savingEventAttendance === p.user_id;
+                            const isPresent = record?.status === "presente";
+                            
+                            return (
+                              <div key={p.user_id} className="rounded-xl border border-border/50 bg-muted/10 px-3 py-2 flex items-center justify-between">
+                                <div className="min-w-0">
+                                  <p className="font-inter text-xs font-semibold text-foreground truncate">{p.full_name ?? "Sem nome"}</p>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                                    isPresent ? "bg-brand-green/10 text-brand-green" : "bg-destructive/10 text-destructive"
+                                  }`}>
+                                    {isPresent ? "PRESENTE" : "FALTOU"}
+                                  </span>
+                                </div>
+                                <div className="flex gap-1">
+                                  <button
+                                    onClick={() => markEventAttendance(p.user_id, isPresent ? "faltou" : "presente")}
+                                    disabled={isSaving}
+                                    className="text-[10px] font-inter font-bold text-primary hover:underline px-2 py-1 disabled:opacity-50"
+                                  >
+                                    {isSaving ? "..." : "Alterar"}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
