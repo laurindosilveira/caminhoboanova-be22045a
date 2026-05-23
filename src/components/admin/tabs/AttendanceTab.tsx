@@ -148,7 +148,7 @@ export default function AttendanceTab({ participants, activities, communities, i
     let query = supabase
       .from("events")
       .select("id, title, event_date, type, location, community, area, description, linked_lesson_id, church_id")
-      .order("event_date", { ascending: true })
+      .order("event_date", { ascending: false })
       .limit(50);
     query = churchId ? query.eq("church_id", churchId) : query.is("church_id", null);
     // Filter by admin area (non-super admins only see their area + events without area)
