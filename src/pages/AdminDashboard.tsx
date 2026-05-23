@@ -398,6 +398,15 @@ export default function AdminDashboard() {
             {activeTab === "users" && <UsersTab onSelectTurma={handleSelectTurmaFromUsers} />}
             {activeTab === "whatsapp" && <WhatsAppAuditTab />}
             {activeTab === "worship" && <WorshipTab />}
+            {activeTab === "attendance" && (
+              <AttendanceTab
+                participants={areaParticipants}
+                activities={activities}
+                communities={communities}
+                adminArea={selectedTurma.area ?? profile?.area ?? ""}
+                churchId={currentChurchId}
+              />
+            )}
             {activeTab === "admin_global" && isSuper && <AdminGlobalDashboard />}
           </Suspense>
         )}

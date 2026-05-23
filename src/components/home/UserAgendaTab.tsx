@@ -208,6 +208,8 @@ export default function UserAgendaTab() {
   const [newTypeForm, setNewTypeForm] = useState({ label: "", emoji: "📅", gives_points: false, points: 10 });
   const [savingType, setSavingType] = useState(false);
 
+  const [showAllPast, setShowAllPast] = useState(false);
+  
   // Pending attendance approval (leaders only)
   type PendingAttendance = {
     id: string; event_id: string; user_id: string; status: string;
@@ -971,7 +973,7 @@ export default function UserAgendaTab() {
           {past.length > 0 && (
             <div className="space-y-3">
               <p className="font-montserrat font-bold text-muted-foreground text-sm">Eventos anteriores</p>
-              {past.slice(0, 3).map(event => {
+              {(showAllPast ? past : past.slice(0, 3)).map(event => {
                 const linkedLesson = event.linked_lesson_id ? lessonInfoMap.get(event.linked_lesson_id) : undefined;
                 return (
                   <EventCard
@@ -990,6 +992,16 @@ export default function UserAgendaTab() {
                   />
                 );
               })}
+              {past.length > 3 && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full text-xs text-muted-foreground hover:text-primary"
+                  onClick={() => setShowAllPast(!showAllPast)}
+                >
+                  {showAllPast ? "Mostrar menos" : `Ver mais ${past.length - 3} eventos anteriores`}
+                </Button>
+              )}
             </div>
           )}
         </>
