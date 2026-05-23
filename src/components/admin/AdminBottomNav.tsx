@@ -1,7 +1,7 @@
-import { BarChart3, BookOpen, Shield, Megaphone, Settings, AlertTriangle, Crown, GraduationCap, MessageSquare, CalendarDays, Phone, MessageCircle, Music, Globe } from "lucide-react";
+import { BarChart3, BookOpen, Shield, Megaphone, Settings, AlertTriangle, Crown, GraduationCap, MessageSquare, CalendarDays, Phone, MessageCircle, Music, Globe, ClipboardList } from "lucide-react";
 // Build V11: SALA DO DISCIPULADOR - Scroll Forçado e Labels Atualizados
 
-export type AdminTab = "overview" | "alerts" | "courses" | "leaders" | "push" | "users" | "settings" | "turma" | "avisos" | "agenda" | "contatos" | "whatsapp" | "worship" | "admin_global";
+export type AdminTab = "overview" | "alerts" | "courses" | "leaders" | "push" | "users" | "settings" | "turma" | "avisos" | "agenda" | "contatos" | "whatsapp" | "worship" | "admin_global" | "attendance";
 
 type TabDef = { id: AdminTab; label: string; icon: typeof BarChart3 };
 
@@ -19,8 +19,9 @@ const ALL_TABS: TabDef[] = [
 
 const LIDER_TAB_DEFS: TabDef[] = [
   { id: "overview", label: "Painel", icon: BarChart3 },
-  { id: "turma", label: "CAMINHO", icon: GraduationCap },
+  { id: "attendance", label: "Presença", icon: ClipboardList },
   { id: "agenda", label: "Encontros", icon: CalendarDays },
+  { id: "turma", label: "CAMINHO", icon: GraduationCap },
   { id: "avisos", label: "Avisos", icon: MessageSquare },
   { id: "contatos", label: "Contatos", icon: Phone },
   { id: "courses", label: "Cursos", icon: BookOpen },
