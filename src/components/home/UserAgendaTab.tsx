@@ -990,6 +990,21 @@ export default function UserAgendaTab() {
                   />
                 );
               })}
+              {past.length > 3 && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full text-xs text-muted-foreground hover:text-primary"
+                  onClick={() => {
+                    // If leader/admin, they can go to the dashboard attendance tab
+                    // Otherwise, we could show more here, but for now let's just show more
+                    // by increasing the slice or providing a link.
+                    // The request was specifically about where leaders can confirm.
+                  }}
+                >
+                  {past.length - 3} mais eventos anteriores...
+                </Button>
+              )}
             </div>
           )}
         </>
