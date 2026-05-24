@@ -91,7 +91,7 @@ export function useAgendaSchedule() {
       const result = await (supabase.from as any)("events")
         .select(selectClause)
         .not("linked_lesson_id", "is", null)
-        .order("event_date");
+        .order("event_date", { ascending: false });
 
       if (!result.error) {
         eventsResult = result;
@@ -202,7 +202,10 @@ export function useAgendaSchedule() {
         devotionalMode,
       });
     }
-
+    
+    // Always sort chronologically (ASC) for consistent UI and logic
+    entries.sort((a, b) => a.eventDate.getTime() - b.eventDate.getTime());
+    
     setSchedule(entries);
     setLoading(false);
   }

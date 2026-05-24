@@ -230,7 +230,7 @@ export default function UserAgendaTab() {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       const [{ data: eventsData }, attResult, { data: coursesData }, { data: lessonsData }, { data: lessonContentData }] = await Promise.all([
-        supabase.from("events").select("*").order("event_date"),
+        supabase.from("events").select("*").order("event_date", { ascending: false }),
         user
           ? supabase.from("attendance").select("event_id, status, confirmation_source, user_requested_at, leader_confirmed_at").eq("user_id", user.id)
           : Promise.resolve({ data: [] }),
@@ -292,7 +292,7 @@ export default function UserAgendaTab() {
         () => {
           async function refetch() {
             const { data: { user: currentUser } } = await supabase.auth.getUser();
-            const { data: eventsData } = await supabase.from("events").select("*").order("event_date");
+            const { data: eventsData } = await supabase.from("events").select("*").order("event_date", { ascending: false });
             const all = (eventsData ?? []) as Event[];
             const isManager = role === "admin" || role === "lider";
             const filtered = all.filter(e => {
@@ -362,7 +362,10 @@ export default function UserAgendaTab() {
     ? events.filter(e => allowedTypes.has(e.type))
     : events;
 
-  const upcoming = filteredEvents.filter(e => new Date(e.event_date) >= now);
+  const upcoming = filteredEvents
+    .filter(e => new Date(e.event_date) >= now)
+    .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
+
   const past = filteredEvents
     .filter(e => new Date(e.event_date) < now)
     .sort((a, b) => new Date(b.event_date).getTime() - new Date(a.event_date).getTime());
@@ -778,9 +781,6 @@ export default function UserAgendaTab() {
     setSavingType(false);
   }
 
-  const pastEvents = filteredEvents
-    .filter(e => new Date(e.event_date) < now)
-    .sort((a, b) => new Date(b.event_date).getTime() - new Date(a.event_date).getTime());
 
   return (
     <div className="px-5 pt-5 pb-4 space-y-5">
@@ -994,7 +994,7 @@ export default function UserAgendaTab() {
           {past.length > 0 && (
             <div className="space-y-3">
               <p className="font-montserrat font-bold text-muted-foreground text-sm">Eventos anteriores</p>
-              {(showAllPast ? past : past.slice(0, 3)).map(event => {
+              {(showAllPast ? past : past.slice(0, 5)).map(event => {
                 const linkedLesson = event.linked_lesson_id ? lessonInfoMap.get(event.linked_lesson_id) : undefined;
                 return (
                   <EventCard
@@ -1013,14 +1013,14 @@ export default function UserAgendaTab() {
                   />
                 );
               })}
-              {past.length > 3 && (
+              {past.length > 5 && (
                 <Button 
                   variant="ghost" 
                   size="sm" 
                   className="w-full text-xs text-muted-foreground hover:text-primary"
                   onClick={() => setShowAllPast(!showAllPast)}
                 >
-                  {showAllPast ? "Mostrar menos" : `Ver mais ${past.length - 3} eventos anteriores`}
+                  {showAllPast ? "Mostrar menos" : `Ver mais ${past.length - 5} eventos anteriores`}
                 </Button>
               )}
             </div>
@@ -1029,14 +1029,14 @@ export default function UserAgendaTab() {
       ) : null}
 
       {/* ── HISTÓRICO DE PRESENÇA ────────────────── */}
-      {viewMode === "list" && pastEvents.length > 0 && (
+      {viewMode === "list" && past.length > 0 && (
         <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
           <div className="px-4 py-3 flex items-center gap-2.5 border-b border-border bg-muted/30">
             <CalendarDays className="w-4 h-4 text-secondary" />
             <p className="font-montserrat font-bold text-foreground text-sm">Histórico de Presença</p>
           </div>
           <div className="p-4 space-y-2">
-            {pastEvents.slice(0, 8).map((evt) => {
+            {(showAllPast ? past : past.slice(0, 8)).map((evt) => {
               const record = attendanceRecords.find(a => a.event_id === evt.id);
               const status = record?.status;
               const statusCfg: Record<string, { icon: string; label: string; cls: string }> = {
@@ -1066,7 +1066,7 @@ export default function UserAgendaTab() {
             })}
 
             {(() => {
-              const total = pastEvents.filter(e => attendanceRecords.some(a => a.event_id === e.id)).length;
+              const total = past.filter(e => attendanceRecords.some(a => a.event_id === e.id)).length;
               const present = attendanceRecords.filter(a => a.status === "presente").length;
               const rate = total > 0 ? Math.round((present / total) * 100) : 0;
               return total > 0 ? (
