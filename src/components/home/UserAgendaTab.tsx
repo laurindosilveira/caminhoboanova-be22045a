@@ -230,7 +230,7 @@ export default function UserAgendaTab() {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       const [{ data: eventsData }, attResult, { data: coursesData }, { data: lessonsData }, { data: lessonContentData }] = await Promise.all([
-        supabase.from("events").select("*").order("event_date"),
+        supabase.from("events").select("*").order("event_date", { ascending: false }),
         user
           ? supabase.from("attendance").select("event_id, status, confirmation_source, user_requested_at, leader_confirmed_at").eq("user_id", user.id)
           : Promise.resolve({ data: [] }),
@@ -292,7 +292,7 @@ export default function UserAgendaTab() {
         () => {
           async function refetch() {
             const { data: { user: currentUser } } = await supabase.auth.getUser();
-            const { data: eventsData } = await supabase.from("events").select("*").order("event_date");
+            const { data: eventsData } = await supabase.from("events").select("*").order("event_date", { ascending: false });
             const all = (eventsData ?? []) as Event[];
             const isManager = role === "admin" || role === "lider";
             const filtered = all.filter(e => {
