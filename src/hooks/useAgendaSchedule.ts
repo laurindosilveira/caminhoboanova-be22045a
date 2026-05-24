@@ -202,7 +202,10 @@ export function useAgendaSchedule() {
         devotionalMode,
       });
     }
-
+    
+    // Always sort chronologically (ASC) for consistent UI and logic
+    entries.sort((a, b) => a.eventDate.getTime() - b.eventDate.getTime());
+    
     setSchedule(entries);
     setLoading(false);
   }
