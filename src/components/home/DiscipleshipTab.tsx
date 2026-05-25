@@ -10,6 +10,7 @@ import LessonDevotionalEditor from "@/components/admin/tabs/LessonDevotionalEdit
 import LessonChoiceView from "@/components/home/LessonChoiceView";
 import ResourceLibrary from "@/components/home/ResourceLibrary";
 import LeaderRoomSection from "@/components/home/LeaderRoomSection";
+import NovoCursoModal from "@/components/home/NovoCursoModal";
 import { useAgendaSchedule } from "@/hooks/useAgendaSchedule";
 import { toast } from "sonner";
 
@@ -46,7 +47,7 @@ type DiscipleshipTabProps = {
 };
 
 export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "choice", onTargetLessonConsumed }: DiscipleshipTabProps = {}) {
-  const { profile, role, signOut } = useAuth();
+  const { profile, role, isSuper, signOut } = useAuth();
   const { effectiveArea } = useAreaSwitch();
   const isLeaderOrAdmin = role === "admin" || role === "lider";
   const agendaSchedule = useAgendaSchedule();
@@ -73,6 +74,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
   const [worshipCount, setWorshipCount] = useState(0);
   const [unlockedCourseIds, setUnlockedCourseIds] = useState<Set<string>>(new Set());
   const [manualLessonOverrideMap, setManualLessonOverrideMap] = useState<Map<string, { id: string; custom_points: number | null }>>(new Map());
+  const [showNovoCurso, setShowNovoCurso] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [helpType, setHelpType] = useState<"crise" | "conversar" | "oracao" | null>(null);
   const [helpMessage, setHelpMessage] = useState("");
@@ -124,7 +126,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
       supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).eq("month", month).eq("year", year).maybeSingle(),
       supabase.from("discipleship_plans").select("objectives,challenges,recommendations,next_steps,health_status").eq("user_id", user.id).maybeSingle(),
-      supabase.from("courses").select("*").order("order_num"),
+      profile?.church_id ? supabase.from("courses").select("*").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("courses").select("*").is("church_id", null).order("order_num"),
       supabase.from("lessons").select("id, title, order_num, objective, topics, course_id, church_id").order("order_num"),
       supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
       supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false }).limit(10),
@@ -515,11 +517,19 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
               agendaSchedule={agendaSchedule}
               manualLessonOverrideIds={new Set(manualLessonOverrideMap.keys())}
               isLeaderOrAdmin={isLeaderOrAdmin}
+              onNovoCurso={(isLeaderOrAdmin || isSuper) ? () => setShowNovoCurso(true) : undefined}
               onSelectLesson={(lesson) => {
                 setSelectedLesson(lesson);
                 setSelectedLessonMode("choice");
               }}
             />
+            {showNovoCurso && (
+              <NovoCursoModal
+                churchId={profile?.church_id ?? null}
+                onClose={() => setShowNovoCurso(false)}
+                onCreated={() => { setShowNovoCurso(false); fetchAll(); }}
+              />
+            )}
             <ResourceLibrary />
           </motion.div>
         )}

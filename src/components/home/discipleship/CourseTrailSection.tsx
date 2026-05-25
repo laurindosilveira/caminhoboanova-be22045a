@@ -1,4 +1,4 @@
-import { GraduationCap, CalendarDays, ChevronDown, ChevronRight, CheckCircle2, Lock } from "lucide-react";
+import { GraduationCap, CalendarDays, ChevronDown, ChevronRight, CheckCircle2, Lock, Plus } from "lucide-react";
 import { toast } from "sonner";
 import type { Course, Lesson } from "./shared";
 
@@ -23,13 +23,14 @@ type Props = {
   agendaSchedule: AgendaSchedule;
   manualLessonOverrideIds: Set<string>;
   isLeaderOrAdmin: boolean;
+  onNovoCurso?: () => void;
   onSelectLesson: (lesson: Lesson) => void;
 };
 
 export default function CourseTrailSection({
   courses, expandedCourse, onExpandCourse,
   unlockedCourseIds, completedLessonIds, fullyCompletedLessonIds,
-  agendaSchedule, manualLessonOverrideIds, isLeaderOrAdmin, onSelectLesson,
+  agendaSchedule, manualLessonOverrideIds, isLeaderOrAdmin, onNovoCurso, onSelectLesson,
 }: Props) {
   if (courses.length === 0) return null;
 
@@ -38,12 +39,22 @@ export default function CourseTrailSection({
       {/* Header */}
       <div className="bg-secondary/10 rounded-2xl p-4 flex items-start gap-3">
         <GraduationCap className="w-5 h-5 text-secondary flex-shrink-0 mt-0.5" />
-        <div>
+        <div className="flex-1">
           <p className="font-montserrat font-bold text-foreground text-sm">Trilha Confirmatória</p>
           <p className="text-muted-foreground font-inter text-xs mt-0.5">
             {courses.reduce((s, c) => s + c.lessons.length, 0)} lições em {courses.length} cursos
           </p>
         </div>
+        {onNovoCurso && (
+          <button
+            onClick={onNovoCurso}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-montserrat font-bold text-primary-foreground flex-shrink-0"
+            style={{ background: "var(--gradient-hero)" }}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Novo Curso
+          </button>
+        )}
       </div>
 
       {/* Waiting message */}
