@@ -136,27 +136,6 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
     fetchWaitingCount();
   }, [canView, turmaArea, expanded, churchId]);
 
-  const fetchPlans = useCallback(async (ids: string[]) => {
-    if (ids.length === 0) return;
-    const [{ data: plansData }, { data: assessData }] = await Promise.all([
-      supabase.from("discipleship_plans").select("user_id, health_status, is_priority").in("user_id", ids).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
-      supabase.from("spiritual_assessments").select("user_id, needs_pastor")
-        .in("user_id", ids)
-        .or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null")
-        .eq("month", new Date().getMonth() + 1)
-        .eq("year", new Date().getFullYear()),
-    ]);
-    const map: Record<string, PlanInfo> = {};
-    (plansData ?? []).forEach(pl => {
-      map[pl.user_id] = { health_status: pl.health_status, is_priority: pl.is_priority ?? false };
-    });
-    (assessData ?? []).forEach(a => {
-      if (!map[a.user_id]) map[a.user_id] = { health_status: "atencao", is_priority: false };
-      map[a.user_id].needs_pastor = a.needs_pastor;
-    });
-    setPlans(map);
-  }, [churchId]);
-
   async function fetchData() {
     // Admins can view any area even without a turma_id
     const isAdmin = role === "admin";
@@ -193,25 +172,35 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
 
     const userIds = profilesList.map(p => p.user_id);
     const communitiesInScope = [...new Set(profilesList.map(p => p.community).filter(Boolean))];
+    const now = new Date();
+    const churchScope = churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null";
     const [
       { data: progressData },
       { data: lessonResponsesData },
       { data: devotionalProgressData },
       { data: attendanceData },
       rankingResponses,
+      { data: plansData },
+      { data: assessData },
     ] = userIds.length > 0
       ? await Promise.all([
-          supabase.from("user_progress").select("user_id, activity_id").in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
-          supabase.from("lesson_responses").select("user_id, lesson_id").in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
-          supabase.from("devotional_progress").select("user_id, devotional_id, completed_at").in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
-          supabase.from("attendance").select("user_id, status").in("user_id", userIds).eq("status", "presente").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
+          supabase.from("user_progress").select("user_id, activity_id").in("user_id", userIds).or(churchScope),
+          supabase.from("lesson_responses").select("user_id, lesson_id").in("user_id", userIds).or(churchScope),
+          supabase.from("devotional_progress").select("user_id, devotional_id, completed_at").in("user_id", userIds).or(churchScope),
+          supabase.from("attendance").select("user_id, status").in("user_id", userIds).eq("status", "presente").or(churchScope),
           Promise.all(
             communitiesInScope.map((community) =>
               supabase.rpc("get_community_ranking" as any, { _community: community as any, _church_id: churchId })
             )
           ),
+          supabase.from("discipleship_plans").select("user_id, health_status, is_priority").in("user_id", userIds).or(churchScope),
+          supabase.from("spiritual_assessments").select("user_id, needs_pastor")
+            .in("user_id", userIds)
+            .or(churchScope)
+            .eq("month", now.getMonth() + 1)
+            .eq("year", now.getFullYear()),
         ])
-      : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, [] as any];
+      : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, [] as any, { data: [] }, { data: [] }];
 
     const rankingMap = new Map<string, number>();
     const rankingFailedCommunities = new Set<string>();
@@ -252,10 +241,19 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
       } as any;
     });
 
+    const plansMap: Record<string, PlanInfo> = {};
+    (plansData ?? []).forEach((pl: any) => {
+      plansMap[pl.user_id] = { health_status: pl.health_status, is_priority: pl.is_priority ?? false };
+    });
+    (assessData ?? []).forEach((a: any) => {
+      if (!plansMap[a.user_id]) plansMap[a.user_id] = { health_status: "atencao", is_priority: false };
+      plansMap[a.user_id].needs_pastor = a.needs_pastor;
+    });
+
     setActivities(activitiesData ?? []);
     setParticipants(participantList);
     setTurmas(turmasData ?? []);
-    await fetchPlans(participantList.map(p => p.user_id));
+    setPlans(plansMap);
     setLoading(false);
     setDataLoaded(true);
   }

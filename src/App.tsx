@@ -31,7 +31,14 @@ import AdminSistemaPasswordGate from "./components/auth/AdminSistemaPasswordGate
 import { PlanGate } from "./components/auth/PlanGate";
 import { ErrorBoundary } from "./components/shared/ErrorBoundary";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60 * 1000,
+      retry: 1,
+    },
+  },
+});
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, profile, loading, signOut } = useAuth();

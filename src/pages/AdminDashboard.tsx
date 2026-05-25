@@ -99,26 +99,6 @@ export default function AdminDashboard() {
     }
   }, [role, profile, turmas, selectedTurma, loading]);
 
-  const fetchPlans = useCallback(async (ids: string[]) => {
-    if (ids.length === 0) return;
-    const [{ data: plansData }, { data: assessData }] = await Promise.all([
-      supabase.from("discipleship_plans").select("user_id, health_status, is_priority").in("user_id", ids),
-      supabase.from("spiritual_assessments").select("user_id, needs_pastor")
-        .in("user_id", ids)
-        .eq("month", new Date().getMonth() + 1)
-        .eq("year", new Date().getFullYear()),
-    ]);
-    const map: Record<string, PlanInfo> = {};
-    (plansData ?? []).forEach(pl => {
-      map[pl.user_id] = { health_status: pl.health_status, is_priority: pl.is_priority ?? false };
-    });
-    (assessData ?? []).forEach(a => {
-      if (!map[a.user_id]) map[a.user_id] = { health_status: "atencao", is_priority: false };
-      map[a.user_id].needs_pastor = a.needs_pastor;
-    });
-    setPlans(map);
-  }, []);
-
   const fetchData = useCallback(async () => {
     setLoading(true);
     const [{ data: churchesData }, { data: profilesData }, userResult] = await Promise.all([
@@ -183,6 +163,7 @@ export default function AdminDashboard() {
     devotionalQuery = churchScope(devotionalQuery);
     attendanceQuery = churchScope(attendanceQuery);
 
+    const now = new Date();
     const [
       { data: activitiesData },
       { data: turmasData },
@@ -190,6 +171,9 @@ export default function AdminDashboard() {
       { data: lessonRespsData },
       { data: devProgressData },
       { data: attendanceData },
+      { data: plansData },
+      { data: assessData },
+      subResult,
     ] = await Promise.all([
       activitiesQuery,
       turmasQuery,
@@ -197,13 +181,21 @@ export default function AdminDashboard() {
       userIds.length > 0 ? lessonQuery : Promise.resolve({ data: [] }),
       userIds.length > 0 ? devotionalQuery : Promise.resolve({ data: [] }),
       userIds.length > 0 ? attendanceQuery : Promise.resolve({ data: [] }),
+      userIds.length > 0
+        ? supabase.from("discipleship_plans").select("user_id, health_status, is_priority").in("user_id", userIds)
+        : Promise.resolve({ data: [] }),
+      userIds.length > 0
+        ? supabase.from("spiritual_assessments").select("user_id, needs_pastor")
+            .in("user_id", userIds)
+            .eq("month", now.getMonth() + 1)
+            .eq("year", now.getFullYear())
+        : Promise.resolve({ data: [] }),
+      scopedChurchId
+        ? supabase.from("church_subscriptions").select("member_limit").eq("church_id", scopedChurchId).single()
+        : Promise.resolve({ data: null }),
     ]);
 
     // lesson count = unique lessons per user
-    const lessonCountMap: Record<string, number> = {};
-    (lessonRespsData ?? []).forEach((r: any) => {
-      if (!lessonCountMap[r.user_id]) lessonCountMap[r.user_id] = new Set<string>() as any;
-    });
     const lessonSets: Record<string, Set<string>> = {};
     (lessonRespsData ?? []).forEach((r: any) => {
       if (!lessonSets[r.user_id]) lessonSets[r.user_id] = new Set();
@@ -233,23 +225,22 @@ export default function AdminDashboard() {
       } as any;
     });
 
+    const plansMap: Record<string, PlanInfo> = {};
+    (plansData ?? []).forEach((pl: any) => {
+      plansMap[pl.user_id] = { health_status: pl.health_status, is_priority: pl.is_priority ?? false };
+    });
+    (assessData ?? []).forEach((a: any) => {
+      if (!plansMap[a.user_id]) plansMap[a.user_id] = { health_status: "atencao", is_priority: false };
+      plansMap[a.user_id].needs_pastor = a.needs_pastor;
+    });
+
     setActivities(activitiesData ?? []);
     setParticipants(participantList.sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? "", "pt-BR", { sensitivity: "base" })));
     setTurmas(turmasData ?? []);
-    await fetchPlans(participantList.map(p => p.user_id));
-
-    // Fetch church limit
-    if (scopedChurchId) {
-      const { data: subData } = await supabase
-        .from("church_subscriptions")
-        .select("member_limit")
-        .eq("church_id", scopedChurchId)
-        .single();
-      setChurchLimit(subData?.member_limit ?? null);
-    }
-
+    setPlans(plansMap);
+    setChurchLimit((subResult as any)?.data?.member_limit ?? null);
     setLoading(false);
-  }, [fetchPlans, isSuper, selectedChurchId]);
+  }, [isSuper, selectedChurchId]);
 
   // Memoized filtered participants (by turma — used for overview, scores, etc.)
   const isAreaScope = selectedTurma?.id.startsWith("area::") ?? false;

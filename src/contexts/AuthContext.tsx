@@ -59,21 +59,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function fetchProfileAndRole(userId: string) {
     const results = await Promise.allSettled([
       supabase.from("profiles").select("*, churches(name)").eq("user_id", userId).maybeSingle(),
-      supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
-      supabase.rpc("has_role", { _user_id: userId, _role: "lider" }),
       supabase.rpc("is_super_admin", { _user_id: userId }),
       supabase.from("user_roles").select("role, admin_area").eq("user_id", userId).in("role", ["admin", "lider"]),
     ]);
 
     const profileRes = results[0].status === 'fulfilled' ? results[0].value : { data: null, error: (results[0] as any).reason };
-    const isAdminRes = results[1].status === 'fulfilled' ? results[1].value : { data: false, error: (results[1] as any).reason };
-    const isLiderRes = results[2].status === 'fulfilled' ? results[2].value : { data: false, error: (results[2] as any).reason };
-    const isSuperRes = results[3].status === 'fulfilled' ? results[3].value : { data: false, error: (results[3] as any).reason };
-    const roleRowsRes = results[4].status === 'fulfilled' ? results[4].value : { data: [], error: (results[4] as any).reason };
+    const isSuperRes = results[1].status === 'fulfilled' ? results[1].value : { data: false, error: (results[1] as any).reason };
+    const roleRowsRes = results[2].status === 'fulfilled' ? results[2].value : { data: [], error: (results[2] as any).reason };
 
     if (profileRes.error) console.error("Error fetching profile:", profileRes.error);
-    if (isAdminRes.error) console.error("Error checking admin role:", isAdminRes.error);
-    if (isLiderRes.error) console.error("Error checking lider role:", isLiderRes.error);
     if (isSuperRes.error) console.error("Error checking super admin:", isSuperRes.error);
     if (roleRowsRes.error) console.error("Error fetching user roles:", roleRowsRes.error);
     setProfile((profileRes.data as any) ?? null);
@@ -81,11 +75,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const roleRows = roleRowsRes.data ?? [];
     const selectedRoleRow = roleRows.find((row) => row.role === "admin") ?? roleRows[0] ?? null;
     setAdminArea(selectedRoleRow?.admin_area ?? null);
-    if (!isAdminRes.error && !isLiderRes.error) {
-      if (isAdminRes.data === true) setRole("admin");
-      else if (isLiderRes.data === true) setRole("lider");
-      else setRole("user");
-    }
+    const isAdmin = roleRows.some((row) => row.role === "admin");
+    const isLider = roleRows.some((row) => row.role === "lider");
+    if (isAdmin) setRole("admin");
+    else if (isLider) setRole("lider");
+    else setRole("user");
   }
 
   useEffect(() => {

@@ -64,7 +64,7 @@ export default function Index() {
     }
   }, [authLoading, user, navigate]);
 
-  const stats = useUserStats(currentArea);
+  const stats = useUserStats(user?.id, profile?.church_id, currentArea);
   useAppNotifications();
 
   // Load confetti preference
