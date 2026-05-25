@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useChurch } from "@/hooks/useChurch";
-import { GraduationCap, ChevronDown, ChevronRight, BookOpen, Tag, Edit3, FileText, Pencil } from "lucide-react";
+import { GraduationCap, ChevronDown, ChevronRight, BookOpen, Tag, Edit3, FileText, Pencil, Plus, X } from "lucide-react";
 import LessonContentEditor from "@/components/admin/tabs/LessonContentEditor";
 import LessonDevotionalEditor from "@/components/admin/tabs/LessonDevotionalEditor";
 import LeaderGuideEditor from "@/components/admin/tabs/LeaderGuideEditor";
@@ -29,7 +29,7 @@ type Course = {
 type EditMode = { lesson: Lesson; mode: "study" | "devotionals" | "leader-guide" | "leader-customize" } | null;
 
 export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: string | null }) {
-  const { role } = useAuth();
+  const { role, isSuper } = useAuth();
   const { churchId } = useChurch();
   const effectiveChurchId = selectedChurchId ?? churchId;
   const isLider = role === "lider";
@@ -39,22 +39,29 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [publishedLessonIds, setPublishedLessonIds] = useState<Set<string>>(new Set());
   const [devotionalCounts, setDevotionalCounts] = useState<Record<string, number>>({});
+  const [showNewGlobal, setShowNewGlobal] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newSubtitle, setNewSubtitle] = useState("");
+  const [savingGlobal, setSavingGlobal] = useState(false);
+  const [globalError, setGlobalError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (effectiveChurchId) {
+    if (effectiveChurchId || isSuper) {
       fetchCourses();
     }
-  }, [effectiveChurchId]);
+  }, [effectiveChurchId, isSuper]);
 
   async function fetchCourses() {
-    if (!effectiveChurchId) return;
     setLoading(true);
+    const filter = effectiveChurchId
+      ? `church_id.is.null,church_id.eq.${effectiveChurchId}`
+      : "church_id.is.null";
 
     const [{ data: coursesData }, { data: lessonsData }, { data: contentData }, { data: devData }] = await Promise.all([
-      supabase.from("courses").select("*").or(`church_id.is.null,church_id.eq.${effectiveChurchId}`).order("order_num"),
-      supabase.from("lessons").select("*").or(`church_id.is.null,church_id.eq.${effectiveChurchId}`).order("order_num"),
-      supabase.from("lesson_content").select("lesson_id, church_id").or(`church_id.is.null,church_id.eq.${effectiveChurchId}`),
-      supabase.from("devotional_content").select("lesson_id, church_id").not("lesson_id", "is", null).or(`church_id.is.null,church_id.eq.${effectiveChurchId}`),
+      supabase.from("courses").select("*").or(filter).order("order_num"),
+      supabase.from("lessons").select("*").or(filter).order("order_num"),
+      supabase.from("lesson_content").select("lesson_id, church_id").or(filter),
+      supabase.from("devotional_content").select("lesson_id, church_id").not("lesson_id", "is", null).or(filter),
     ]);
 
     const courseList = (coursesData ?? []).map(c => ({
@@ -72,6 +79,28 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
     
     if (courseList.length > 0 && !expandedCourse) setExpandedCourse(courseList[0].id);
     setLoading(false);
+  }
+
+  async function handleCreateGlobal() {
+    if (!newTitle.trim()) { setGlobalError("Informe o nome do curso."); return; }
+    setSavingGlobal(true);
+    setGlobalError(null);
+    const { data: maxRow } = await supabase
+      .from("courses").select("order_num").is("church_id", null)
+      .order("order_num", { ascending: false }).limit(1);
+    const orderNum = maxRow && maxRow.length > 0 ? ((maxRow[0] as any).order_num ?? 0) + 1 : 1;
+    const { error } = await supabase.from("courses").insert({
+      title: newTitle.trim(),
+      subtitle: newSubtitle.trim() || null,
+      order_num: orderNum,
+      church_id: null,
+    });
+    setSavingGlobal(false);
+    if (error) { setGlobalError(error.message); return; }
+    setNewTitle("");
+    setNewSubtitle("");
+    setShowNewGlobal(false);
+    fetchCourses();
   }
 
   if (loading) {
@@ -103,7 +132,7 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
     <div className="space-y-4">
       <div className="bg-secondary/10 rounded-2xl p-4 flex items-start gap-3">
         <GraduationCap className="w-5 h-5 text-secondary flex-shrink-0 mt-0.5" />
-        <div>
+        <div className="flex-1">
           <p className="font-montserrat font-bold text-foreground text-sm">Trilha Confirmatória</p>
           <p className="text-muted-foreground font-inter text-xs mt-0.5">
             {courses.reduce((s, c) => s + c.lessons.length, 0)} lições em {courses.length} cursos cadastrados
@@ -115,7 +144,53 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
             }
           </p>
         </div>
+        {isSuper && (
+          <button
+            onClick={() => { setShowNewGlobal(v => !v); setGlobalError(null); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-montserrat font-bold text-primary-foreground flex-shrink-0"
+            style={{ background: "var(--gradient-hero)" }}
+          >
+            {showNewGlobal ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+            {showNewGlobal ? "Cancelar" : "Novo Curso Global"}
+          </button>
+        )}
       </div>
+
+      {isSuper && showNewGlobal && (
+        <div className="bg-card rounded-2xl border border-primary/30 p-4 space-y-3">
+          <p className="font-montserrat font-bold text-foreground text-sm">Novo Curso Global</p>
+          <p className="font-inter text-xs text-muted-foreground">Ficará disponível para todas as igrejas da plataforma.</p>
+          <div>
+            <label className="block font-inter text-xs font-medium text-foreground mb-1">Nome do curso *</label>
+            <input
+              type="text"
+              value={newTitle}
+              onChange={e => setNewTitle(e.target.value)}
+              placeholder="Ex: Fundamentos da Fé"
+              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background font-inter text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+            />
+          </div>
+          <div>
+            <label className="block font-inter text-xs font-medium text-foreground mb-1">Subtítulo (opcional)</label>
+            <input
+              type="text"
+              value={newSubtitle}
+              onChange={e => setNewSubtitle(e.target.value)}
+              placeholder="Ex: Curso introdutório para novos membros"
+              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background font-inter text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+            />
+          </div>
+          {globalError && <p className="text-destructive font-inter text-xs">{globalError}</p>}
+          <button
+            onClick={handleCreateGlobal}
+            disabled={savingGlobal}
+            className="w-full py-2.5 rounded-xl font-montserrat font-bold text-primary-foreground text-sm disabled:opacity-50"
+            style={{ background: "var(--gradient-hero)" }}
+          >
+            {savingGlobal ? "Criando..." : "Criar Curso Global"}
+          </button>
+        </div>
+      )}
 
       {courses.map((course) => {
         const isOpen = expandedCourse === course.id;
