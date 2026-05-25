@@ -49,7 +49,7 @@ type Props = {
 };
 
 export default function JourneyPath({ onSelectLesson }: Props = {}) {
-  const { profile, role } = useAuth();
+  const { profile, role, isSuper } = useAuth();
   const { effectiveArea } = useAreaSwitch();
   const [showNovoCurso, setShowNovoCurso] = useState(false);
   const currentArea = effectiveArea || profile?.area || "";
@@ -190,7 +190,7 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-montserrat font-black text-foreground text-xl">🛤️ Caminho do Discipulado</h2>
           <div className="flex items-center gap-2">
-            {(role === "admin" || role === "lider") && profile?.church_id && (
+            {(isSuper || role === "admin" || role === "lider") && (
               <button
                 onClick={() => setShowNovoCurso(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-montserrat font-bold text-primary-foreground"
@@ -439,9 +439,9 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
         </div>
       )}
 
-      {showNovoCurso && profile?.church_id && (
+      {showNovoCurso && (
         <NovoCursoModal
-          churchId={profile.church_id}
+          churchId={profile?.church_id ?? null}
           onClose={() => setShowNovoCurso(false)}
           onCreated={() => {
             setShowNovoCurso(false);

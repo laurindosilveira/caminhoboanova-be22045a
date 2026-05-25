@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { X, BookOpen, Plus, ChevronRight } from "lucide-react";
+import { X, BookOpen, Plus, ChevronRight, Globe } from "lucide-react";
 
 type Props = {
-  churchId: string;
+  churchId: string | null;
   onClose: () => void;
   onCreated: () => void;
 };
@@ -18,7 +18,9 @@ type GlobalCourse = {
 type Step = "choose" | "platform" | "custom";
 
 export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) {
-  const [step, setStep] = useState<Step>("choose");
+  // Super admin sem church_id vai direto para criação de curso global
+  const isGlobalAdmin = !churchId;
+  const [step, setStep] = useState<Step>(isGlobalAdmin ? "custom" : "choose");
   const [globalCourses, setGlobalCourses] = useState<GlobalCourse[]>([]);
   const [loadingGlobal, setLoadingGlobal] = useState(false);
   const [title, setTitle] = useState("");
@@ -30,7 +32,9 @@ export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) 
     setLoadingGlobal(true);
     const [{ data: globalData }, { data: churchData }] = await Promise.all([
       supabase.from("courses").select("id, title, subtitle, order_num").is("church_id", null).order("order_num"),
-      supabase.from("courses").select("title").eq("church_id", churchId),
+      churchId
+        ? supabase.from("courses").select("title").eq("church_id", churchId)
+        : Promise.resolve({ data: [] }),
     ]);
     const churchTitles = new Set((churchData ?? []).map((c: any) => c.title));
     setGlobalCourses((globalData ?? []).filter((c: any) => !churchTitles.has(c.title)));
@@ -38,16 +42,15 @@ export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) 
   }
 
   async function getNextOrderNum(): Promise<number> {
-    const { data } = await supabase
-      .from("courses")
-      .select("order_num")
-      .eq("church_id", churchId)
-      .order("order_num", { ascending: false })
-      .limit(1);
+    const query = churchId
+      ? supabase.from("courses").select("order_num").eq("church_id", churchId)
+      : supabase.from("courses").select("order_num").is("church_id", null);
+    const { data } = await query.order("order_num", { ascending: false }).limit(1);
     return data && data.length > 0 ? ((data[0] as any).order_num ?? 0) + 1 : 1;
   }
 
   async function handleSelectGlobal(course: GlobalCourse) {
+    if (!churchId) return;
     setSaving(true);
     setError(null);
     const orderNum = await getNextOrderNum();
@@ -70,11 +73,15 @@ export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) 
       title: title.trim(),
       subtitle: subtitle.trim() || null,
       order_num: orderNum,
-      church_id: churchId,
+      church_id: churchId ?? null,
     });
     if (err) { setError(err.message); setSaving(false); return; }
     onCreated();
   }
+
+  const stepTitle = isGlobalAdmin
+    ? "Criar Curso Global"
+    : step === "choose" ? "Novo Curso" : step === "platform" ? "Cursos da Plataforma" : "Criar Curso Personalizado";
 
   return (
     <div
@@ -83,15 +90,20 @@ export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) 
     >
       <div className="bg-background w-full max-w-lg rounded-t-3xl p-6 pb-10 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="font-montserrat font-black text-foreground text-lg">
-            {step === "choose" ? "Novo Curso" : step === "platform" ? "Cursos da Plataforma" : "Criar Curso Personalizado"}
-          </h2>
+          <h2 className="font-montserrat font-black text-foreground text-lg">{stepTitle}</h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-muted">
             <X className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>
 
-        {step === "choose" && (
+        {isGlobalAdmin && (
+          <p className="text-muted-foreground font-inter text-xs mb-4 flex items-center gap-1.5">
+            <Globe className="w-3.5 h-3.5" />
+            Este curso ficará disponível para todas as igrejas da plataforma.
+          </p>
+        )}
+
+        {step === "choose" && !isGlobalAdmin && (
           <div className="space-y-3">
             <p className="text-muted-foreground font-inter text-sm mb-4">Como deseja adicionar um novo curso?</p>
             <button
@@ -163,7 +175,7 @@ export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) 
           </div>
         )}
 
-        {step === "custom" && (
+        {(step === "custom" || isGlobalAdmin) && (
           <div className="space-y-4">
             <div>
               <label className="block font-inter text-sm font-medium text-foreground mb-1.5">Nome do curso *</label>
@@ -192,11 +204,13 @@ export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) 
               className="w-full py-3.5 rounded-2xl font-montserrat font-bold text-primary-foreground text-sm disabled:opacity-50"
               style={{ background: "var(--gradient-hero)" }}
             >
-              {saving ? "Criando..." : "Criar Curso"}
+              {saving ? "Criando..." : isGlobalAdmin ? "Criar Curso Global" : "Criar Curso"}
             </button>
-            <button onClick={() => setStep("choose")} className="w-full text-center text-muted-foreground font-inter text-xs underline">
-              ← Voltar
-            </button>
+            {!isGlobalAdmin && (
+              <button onClick={() => setStep("choose")} className="w-full text-center text-muted-foreground font-inter text-xs underline">
+                ← Voltar
+              </button>
+            )}
           </div>
         )}
       </div>
