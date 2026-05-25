@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle2, Lock, BookOpen, ChevronDown, ChevronRight, CalendarDays, Heart, GraduationCap } from "lucide-react";
+import { CheckCircle2, Lock, BookOpen, ChevronDown, ChevronRight, CalendarDays, Heart, GraduationCap, Plus } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
+import NovoCursoModal from "./NovoCursoModal";
 
 type Lesson = {
   id: string;
@@ -48,8 +49,9 @@ type Props = {
 };
 
 export default function JourneyPath({ onSelectLesson }: Props = {}) {
-  const { profile } = useAuth();
+  const { profile, role } = useAuth();
   const { effectiveArea } = useAreaSwitch();
+  const [showNovoCurso, setShowNovoCurso] = useState(false);
   const currentArea = effectiveArea || profile?.area || "";
   const [courses, setCourses] = useState<Course[]>([]);
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
@@ -72,6 +74,7 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
   async function fetchData() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
+    const churchId = profile?.church_id;
 
     const [
       { data: coursesData },
@@ -84,7 +87,7 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
       { data: worshipData },
       { data: unlocksData },
     ] = await Promise.all([
-      supabase.from("courses").select("*").order("order_num"),
+      supabase.from("courses").select("*").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null").order("order_num"),
       supabase.from("lessons").select("id, title, order_num, objective, course_id").order("order_num"),
       supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
       supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null),
@@ -186,9 +189,21 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-montserrat font-black text-foreground text-xl">🛤️ Caminho do Discipulado</h2>
-          <span className="text-muted-foreground text-xs font-inter bg-muted rounded-full px-3 py-1">
-            {overallPct}% completo
-          </span>
+          <div className="flex items-center gap-2">
+            {(role === "admin" || role === "lider") && profile?.church_id && (
+              <button
+                onClick={() => setShowNovoCurso(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-montserrat font-bold text-primary-foreground"
+                style={{ background: "var(--gradient-hero)" }}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Novo Curso
+              </button>
+            )}
+            <span className="text-muted-foreground text-xs font-inter bg-muted rounded-full px-3 py-1">
+              {overallPct}% completo
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
@@ -422,6 +437,17 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
             );
           })}
         </div>
+      )}
+
+      {showNovoCurso && profile?.church_id && (
+        <NovoCursoModal
+          churchId={profile.church_id}
+          onClose={() => setShowNovoCurso(false)}
+          onCreated={() => {
+            setShowNovoCurso(false);
+            fetchData();
+          }}
+        />
       )}
     </div>
   );
