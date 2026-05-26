@@ -125,20 +125,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
+    // Safety net: if auth never resolves (Supabase unreachable), stop loading after 6s
+    const safetyTimeout = setTimeout(() => setLoading(false), 6000);
+
     // getSession covers the case where INITIAL_SESSION never fires (some browsers).
     // The initialFetchDone flag prevents a double fetch when both paths run.
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      if (currentSession?.user && !initialFetchDone) {
-        initialFetchDone = true;
-        setSession(currentSession);
-        setUser(currentSession.user);
-        fetchProfileAndRole(currentSession.user.id).finally(() => setLoading(false));
-      } else if (!currentSession?.user) {
-        setLoading(false);
-      }
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session: currentSession } }) => {
+        if (currentSession?.user && !initialFetchDone) {
+          initialFetchDone = true;
+          setSession(currentSession);
+          setUser(currentSession.user);
+          fetchProfileAndRole(currentSession.user.id).finally(() => setLoading(false));
+        } else if (!currentSession?.user) {
+          setLoading(false);
+        }
+      })
+      .catch(() => setLoading(false));
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(safetyTimeout);
+    };
   }, []);
 
   async function signOut() {

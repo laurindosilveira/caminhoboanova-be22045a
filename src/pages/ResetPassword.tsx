@@ -16,14 +16,23 @@ export default function ResetPassword() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [validSession, setValidSession] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
-    // Check for recovery session from URL hash
-    supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") {
         setValidSession(true);
       }
+      setSessionChecked(true);
     });
+
+    // Fallback: if no auth event fires in 5s, show invalid link message
+    const timeout = setTimeout(() => setSessionChecked(true), 5000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   async function handleReset(e: React.FormEvent) {
@@ -58,7 +67,25 @@ export default function ResetPassword() {
     <div className="min-h-screen flex flex-col" style={{ background: "var(--gradient-hero)" }}>
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm bg-card rounded-3xl shadow-2xl p-7">
-          {done ? (
+          {!sessionChecked ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground font-inter text-sm">Verificando link...</p>
+            </div>
+          ) : !validSession ? (
+            <div className="text-center py-4">
+              <h2 className="font-montserrat font-black text-foreground text-xl mb-2">Link inválido ou expirado</h2>
+              <p className="text-muted-foreground font-inter text-sm mb-6">
+                Este link de recuperação não é válido ou já expirou. Solicite um novo.
+              </p>
+              <a
+                href="/recuperar-senha"
+                className="inline-block w-full py-3.5 rounded-xl font-montserrat font-bold text-primary-foreground text-base text-center transition-all active:scale-95 shadow-md"
+                style={{ background: "var(--gradient-orange)" }}
+              >
+                Solicitar novo link
+              </a>
+            </div>
+          ) : done ? (
             <div className="text-center py-4">
               <div className="w-16 h-16 rounded-full bg-brand-green/10 flex items-center justify-center mx-auto mb-4">
                 <CheckCircle className="w-9 h-9 text-brand-green" />

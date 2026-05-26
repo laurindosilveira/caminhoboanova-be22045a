@@ -30,7 +30,12 @@ export default function ForgotPassword() {
     });
 
     if (authError) {
-      setError("Erro ao enviar email: " + authError.message);
+      const isFetchError = authError.message.toLowerCase().includes("failed to fetch") || authError.message.toLowerCase().includes("network");
+      setError(
+        isFetchError
+          ? "Não foi possível conectar ao servidor. Verifique sua internet e tente novamente."
+          : "Erro ao enviar email: " + authError.message
+      );
       setLoading(false);
       return;
     }
