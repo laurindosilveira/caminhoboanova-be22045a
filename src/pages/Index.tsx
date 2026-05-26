@@ -1,7 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { ShieldCheck, Loader2, Church } from "lucide-react";
+import { ShieldCheck, Loader2, Church, Lock, Eye, EyeOff, X } from "lucide-react";
 import { motion } from "framer-motion";
 
 import HeroHeader from "@/components/home/HeroHeader";
@@ -25,6 +25,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUserStats } from "@/hooks/useUserStats";
 import { useAppNotifications } from "@/hooks/useAppNotifications";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
+import { supabase } from "@/integrations/supabase/client";
 import CelebrationModal, { type CelebrationType } from "@/components/gamification/CelebrationModal";
 import NextCourseActivityCard from "@/components/home/NextCourseActivityCard";
 
@@ -46,6 +47,31 @@ export default function Index() {
   const [targetLessonMode, setTargetLessonMode] = useState<LessonNavigationMode>("choice");
   const [profileSubTab, setProfileSubTab] = useState<ProfileSubTab>("meu-perfil");
   
+  // Change password modal
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPwd, setShowNewPwd] = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
+  const [pwdLoading, setPwdLoading] = useState(false);
+  const [pwdError, setPwdError] = useState<string | null>(null);
+  const [pwdSuccess, setPwdSuccess] = useState(false);
+
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPwdError(null);
+    if (newPassword.length < 6) { setPwdError("A senha deve ter pelo menos 6 caracteres."); return; }
+    if (newPassword !== confirmPassword) { setPwdError("As senhas não coincidem."); return; }
+    setPwdLoading(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setPwdLoading(false);
+    if (error) { setPwdError("Erro ao salvar: " + error.message); return; }
+    setPwdSuccess(true);
+    setNewPassword("");
+    setConfirmPassword("");
+    setTimeout(() => { setShowChangePassword(false); setPwdSuccess(false); }, 2000);
+  }
+
   // Celebration queue/lock logic
   const [celebrationQueue, setCelebrationQueue] = useState<CelebrationItem[]>([]);
   const [currentCelebration, setCurrentCelebration] = useState<CelebrationItem | null>(null);
@@ -390,6 +416,23 @@ export default function Index() {
                   </button>
                 </div>
 
+                {/* Mudar senha */}
+                <div className="px-5">
+                  <button
+                    onClick={() => { setShowChangePassword(true); setPwdError(null); setPwdSuccess(false); }}
+                    className="w-full flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-secondary/10">
+                      <Lock className="w-5 h-5 text-secondary" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-montserrat font-bold text-foreground text-sm">Mudar senha</p>
+                      <p className="text-muted-foreground text-xs font-inter">Alterar a senha da sua conta</p>
+                    </div>
+                    <span className="ml-auto text-muted-foreground text-xs">→</span>
+                  </button>
+                </div>
+
                 {/* Edição de dados pessoais */}
                 <EditProfileForm />
 
@@ -404,6 +447,79 @@ export default function Index() {
 
       {/* Bottom Navigation */}
       <BottomNav activeTab={activeTab} onChange={setActiveTab} />
+
+      {/* Change Password Modal */}
+      {showChangePassword && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-5" style={{ background: "rgba(0,0,0,0.5)" }}>
+          <div className="w-full max-w-sm bg-card rounded-3xl shadow-2xl p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="font-montserrat font-black text-foreground text-lg">Mudar senha</h2>
+              <button onClick={() => setShowChangePassword(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {pwdSuccess ? (
+              <div className="text-center py-4">
+                <p className="font-montserrat font-bold text-brand-green text-base">Senha alterada com sucesso!</p>
+              </div>
+            ) : (
+              <form onSubmit={handleChangePassword} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Nova senha</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                      type={showNewPwd ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Mínimo 6 caracteres"
+                      className="w-full pl-10 pr-11 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all"
+                      required
+                    />
+                    <button type="button" onClick={() => setShowNewPwd(!showNewPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                      {showNewPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-inter font-medium text-foreground mb-1.5">Confirmar nova senha</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                      type={showConfirmPwd ? "text" : "password"}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Repita a nova senha"
+                      className="w-full pl-10 pr-11 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all"
+                      required
+                    />
+                    <button type="button" onClick={() => setShowConfirmPwd(!showConfirmPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                      {showConfirmPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {pwdError && (
+                  <div className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3">
+                    <p className="text-destructive font-inter text-sm">{pwdError}</p>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={pwdLoading}
+                  className="w-full py-3.5 rounded-xl font-montserrat font-bold text-primary-foreground text-base transition-all active:scale-95 disabled:opacity-60 shadow-md"
+                  style={{ background: "var(--gradient-orange)" }}
+                >
+                  {pwdLoading ? "Salvando..." : "Salvar nova senha"}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Celebration Modal */}
       <CelebrationModal
