@@ -19,14 +19,30 @@ export default function ResetPassword() {
   const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
+    // Check URL hash for recovery token (implicit flow: #access_token=...&type=recovery)
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    const isRecoveryHash = hash.get("type") === "recovery";
+
+    // Check query string for recovery code (PKCE flow: ?code=...&type=recovery or just code present)
+    const query = new URLSearchParams(window.location.search);
+    const hasCode = query.has("code");
+
+    if (isRecoveryHash || hasCode) {
+      setValidSession(true);
+      setSessionChecked(true);
+      return;
+    }
+
+    // Fallback: listen for PASSWORD_RECOVERY event in case the hash wasn't processed yet
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") {
         setValidSession(true);
+        setSessionChecked(true);
+      } else if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+        setSessionChecked(true);
       }
-      setSessionChecked(true);
     });
 
-    // Fallback: if no auth event fires in 5s, show invalid link message
     const timeout = setTimeout(() => setSessionChecked(true), 5000);
 
     return () => {
