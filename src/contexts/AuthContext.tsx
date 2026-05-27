@@ -89,6 +89,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
+        // Recovery sessions must NOT log the user in — ResetPassword page handles them
+        if (event === "PASSWORD_RECOVERY") {
+          setLoading(false);
+          return;
+        }
+
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
 
@@ -132,12 +138,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // The initialFetchDone flag prevents a double fetch when both paths run.
     supabase.auth.getSession()
       .then(({ data: { session: currentSession } }) => {
-        if (currentSession?.user && !initialFetchDone) {
+        // Don't treat a session as normal login if we're in the recovery flow
+        const isRecoveryUrl =
+          window.location.hash.includes('type=recovery') ||
+          new URLSearchParams(window.location.search).has('code');
+
+        if (currentSession?.user && !initialFetchDone && !isRecoveryUrl) {
           initialFetchDone = true;
           setSession(currentSession);
           setUser(currentSession.user);
           fetchProfileAndRole(currentSession.user.id).finally(() => setLoading(false));
-        } else if (!currentSession?.user) {
+        } else {
           setLoading(false);
         }
       })

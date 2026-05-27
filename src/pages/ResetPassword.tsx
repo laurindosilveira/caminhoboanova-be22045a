@@ -71,7 +71,10 @@ export default function ResetPassword() {
       }
 
       setDone(true);
-      setTimeout(() => navigate("/login", { replace: true }), 2500);
+      setTimeout(async () => {
+        await supabase.auth.signOut();
+        navigate("/login", { replace: true });
+      }, 2500);
     } catch (err: any) {
       setError("Ocorreu um erro inesperado: " + (err.message || "Tente novamente."));
     } finally {
