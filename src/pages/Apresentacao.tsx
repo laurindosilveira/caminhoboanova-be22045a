@@ -225,13 +225,16 @@ export default function Apresentacao() {
             </div>
             <span className="font-montserrat font-bold text-lg tracking-tight text-foreground">Caminho</span>
           </div>
-          <div className="flex items-center gap-8 text-sm font-inter font-medium text-muted-foreground">
+          <div className="hidden md:flex items-center gap-8 text-sm font-inter font-medium text-muted-foreground">
             <a href="#funcionalidades" className="hover:text-primary transition-colors">Funcionalidades</a>
             <a href="#beneficios" className="hover:text-primary transition-colors">Benefícios</a>
             <a href="#planos" className="hover:text-primary transition-colors">Planos</a>
             <a href="/login" className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white bg-primary hover:bg-primary/90 transition-all">Entrar</a>
           </div>
           <div className="flex items-center gap-3">
+            <a href="/login" className="md:hidden px-3 py-1.5 rounded-lg text-sm font-semibold text-white bg-primary hover:bg-primary/90 transition-all">
+              Entrar
+            </a>
             <a href="#planos" className="hidden sm:inline-flex px-5 py-2.5 rounded-full text-primary-foreground text-sm font-semibold hover:shadow-lg transition-all" style={{ background: "var(--gradient-hero)" }}>
               Começar agora
             </a>
