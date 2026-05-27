@@ -88,6 +88,24 @@ const updateSW = registerSW({
   },
 });
 
+// ─── Recovery redirect (must run before React renders) ────────────────────────
+// Supabase sometimes sends the PKCE code to the Site URL (/) instead of
+// /redefinir-senha when the redirectTo isn't in the allowed list, or on
+// mobile where the in-app browser opens the root. Fix it here synchronously
+// before React Router or AuthContext see the URL.
+{
+  const _s = new URLSearchParams(window.location.search);
+  const _h = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const _isRecovery = _s.has("code") || _h.get("type") === "recovery";
+  if (_isRecovery && window.location.pathname !== "/redefinir-senha") {
+    window.history.replaceState(
+      null,
+      "",
+      "/redefinir-senha" + window.location.search + window.location.hash
+    );
+  }
+}
+
 // ─── Render App ───────────────────────────────────────
 createRoot(document.getElementById("root")!).render(<App />);
 
