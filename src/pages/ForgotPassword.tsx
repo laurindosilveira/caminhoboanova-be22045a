@@ -25,23 +25,27 @@ export default function ForgotPassword() {
     }
 
     setLoading(true);
-    const { error: authError } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-      redirectTo: `${window.location.origin}/redefinir-senha`,
-    });
+    try {
+      const { error: authError } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+        redirectTo: `${window.location.origin}/redefinir-senha`,
+      });
 
-    if (authError) {
-      const isFetchError = authError.message.toLowerCase().includes("failed to fetch") || authError.message.toLowerCase().includes("network");
-      setError(
-        isFetchError
-          ? "Não foi possível conectar ao servidor. Verifique sua internet e tente novamente."
-          : "Erro ao enviar email: " + authError.message
-      );
+      if (authError) {
+        const isFetchError = authError.message.toLowerCase().includes("failed to fetch") || authError.message.toLowerCase().includes("network");
+        setError(
+          isFetchError
+            ? "Não foi possível conectar ao servidor. Verifique sua internet e tente novamente."
+            : "Erro ao enviar email: " + authError.message
+        );
+        return;
+      }
+
+      setSent(true);
+    } catch (err: any) {
+      setError("Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setSent(true);
-    setLoading(false);
   }
 
   return (
