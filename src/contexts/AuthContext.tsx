@@ -89,12 +89,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
+        // DEBUG TEMPORÁRIO — remover após resolver o problema
+        console.log("[AUTH DEBUG] event:", event, "| url:", window.location.href, "| user:", currentSession?.user?.email ?? null);
+
         // Recovery sessions must NOT log the user in — ResetPassword page handles them.
         // Both PASSWORD_RECOVERY and INITIAL_SESSION can carry the recovery token
         // (implicit flow fires INITIAL_SESSION with the session before PASSWORD_RECOVERY).
         const isRecoveryUrl =
+          window.location.pathname === "/redefinir-senha" ||
           window.location.hash.includes("type=recovery") ||
           new URLSearchParams(window.location.search).has("code");
+
+        console.log("[AUTH DEBUG] isRecoveryUrl:", isRecoveryUrl);
 
         if (event === "PASSWORD_RECOVERY" || (isRecoveryUrl && event === "INITIAL_SESSION")) {
           setLoading(false);
@@ -146,8 +152,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(({ data: { session: currentSession } }) => {
         // Don't treat a session as normal login if we're in the recovery flow
         const isRecoveryUrl =
+          window.location.pathname === "/redefinir-senha" ||
           window.location.hash.includes('type=recovery') ||
           new URLSearchParams(window.location.search).has('code');
+
+        console.log("[AUTH DEBUG] getSession | user:", currentSession?.user?.email ?? null, "| isRecoveryUrl:", isRecoveryUrl, "| url:", window.location.href);
 
         if (currentSession?.user && !initialFetchDone && !isRecoveryUrl) {
           initialFetchDone = true;
