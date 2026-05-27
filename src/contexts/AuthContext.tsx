@@ -89,8 +89,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        // Recovery sessions must NOT log the user in — ResetPassword page handles them
-        if (event === "PASSWORD_RECOVERY") {
+        // Recovery sessions must NOT log the user in — ResetPassword page handles them.
+        // Both PASSWORD_RECOVERY and INITIAL_SESSION can carry the recovery token
+        // (implicit flow fires INITIAL_SESSION with the session before PASSWORD_RECOVERY).
+        const isRecoveryUrl =
+          window.location.hash.includes("type=recovery") ||
+          new URLSearchParams(window.location.search).has("code");
+
+        if (event === "PASSWORD_RECOVERY" || (isRecoveryUrl && event === "INITIAL_SESSION")) {
           setLoading(false);
           return;
         }
