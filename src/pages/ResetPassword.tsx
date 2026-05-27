@@ -19,35 +19,58 @@ export default function ResetPassword() {
   const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
-    // Check URL hash for recovery token (implicit flow: #access_token=...&type=recovery)
-    const hash = new URLSearchParams(window.location.hash.slice(1));
-    const isRecoveryHash = hash.get("type") === "recovery";
+    let cancelled = false;
+    let cleanupSub: (() => void) | null = null;
+    const timeout = setTimeout(() => { if (!cancelled) setSessionChecked(true); }, 5000);
 
-    // Check query string for recovery code (PKCE flow: ?code=...&type=recovery or just code present)
-    const query = new URLSearchParams(window.location.search);
-    const hasCode = query.has("code");
+    async function check() {
+      // Implicit flow: #type=recovery in hash
+      const hash = new URLSearchParams(window.location.hash.slice(1));
+      if (hash.get("type") === "recovery") {
+        if (!cancelled) { setValidSession(true); setSessionChecked(true); }
+        clearTimeout(timeout);
+        return;
+      }
 
-    if (isRecoveryHash || hasCode) {
-      setValidSession(true);
-      setSessionChecked(true);
-      return;
-    }
+      // Primary check: session already established (Supabase auto-exchanges ?code= very early,
+      // often before the component mounts — so we can't rely on ?code= still being in the URL)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (cancelled) return;
 
-    // Fallback: listen for PASSWORD_RECOVERY event in case the hash wasn't processed yet
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
+      if (session) {
         setValidSession(true);
         setSessionChecked(true);
-      } else if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
-        setSessionChecked(true);
+        clearTimeout(timeout);
+        return;
       }
-    });
 
-    const timeout = setTimeout(() => setSessionChecked(true), 5000);
+      // No session yet — check if a code is still in the URL and wait for exchange
+      const hasCode = new URLSearchParams(window.location.search).has("code");
+      if (!hasCode) {
+        // No session, no hash, no code = definitely an invalid or expired link
+        setSessionChecked(true);
+        clearTimeout(timeout);
+        return;
+      }
+
+      // Code is present but exchange hasn't completed yet — listen for the auth event
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
+        if (cancelled) return;
+        if ((event === "SIGNED_IN" || event === "PASSWORD_RECOVERY") && sess) {
+          setValidSession(true);
+          setSessionChecked(true);
+          clearTimeout(timeout);
+        }
+      });
+      cleanupSub = () => subscription.unsubscribe();
+    }
+
+    check();
 
     return () => {
-      subscription.unsubscribe();
+      cancelled = true;
       clearTimeout(timeout);
+      cleanupSub?.();
     };
   }, []);
 

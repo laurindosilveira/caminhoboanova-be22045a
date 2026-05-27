@@ -102,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         console.log("[AUTH DEBUG] isRecoveryUrl:", isRecoveryUrl);
 
-        if (event === "PASSWORD_RECOVERY" || (isRecoveryUrl && event === "INITIAL_SESSION")) {
+        if (event === "PASSWORD_RECOVERY" || (isRecoveryUrl && (event === "INITIAL_SESSION" || event === "SIGNED_IN"))) {
           setLoading(false);
           return;
         }
