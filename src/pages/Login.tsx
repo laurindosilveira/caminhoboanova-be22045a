@@ -18,6 +18,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isNetworkError, setIsNetworkError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState<boolean | null>(null);
 
@@ -110,6 +111,7 @@ export default function Login() {
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setIsNetworkError(false);
 
     const parsed = loginSchema.safeParse({ email, password });
     if (!parsed.success) {
@@ -118,38 +120,46 @@ export default function Login() {
     }
 
     setLoading(true);
-
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: parsed.data.email,
-      password: parsed.data.password,
-    });
-
-    if (authError) {
-      const msg = authError.message?.toLowerCase() || "";
-      
-      // Log failure
-      await supabase.rpc('log_login_event', {
-        p_email: email,
-        p_method: 'password',
-        p_status: 'failure',
-        p_details: { error: authError.message }
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: parsed.data.email,
+        password: parsed.data.password,
       });
 
-      if (msg.includes("invalid login credentials")) {
-        setError("Email ou senha incorretos. Verifique seus dados e tente novamente.");
-      } else if (msg.includes("email not confirmed")) {
-        setError("Seu email ainda não foi confirmado. Verifique sua caixa de entrada.");
-      } else if (msg.includes("too many requests") || msg.includes("rate limit")) {
-        setError("Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.");
-      } else {
-        setError("Erro ao entrar: " + authError.message);
-      }
-      setLoading(false);
-      return;
-    }
+      if (authError) {
+        const msg = authError.message?.toLowerCase() || "";
 
-    if (authData.user) {
-      handlePostLogin(authData.user, "password_success");
+        // Log failure (best effort — may also fail if offline)
+        supabase.rpc('log_login_event', {
+          p_email: email,
+          p_method: 'password',
+          p_status: 'failure',
+          p_details: { error: authError.message }
+        }).catch(() => {});
+
+        if (msg.includes("failed to fetch") || msg.includes("network") || msg.includes("fetch")) {
+          setIsNetworkError(true);
+          setError("Sem conexão com o servidor. Atualize o app e tente novamente.");
+        } else if (msg.includes("invalid login credentials")) {
+          setError("Email ou senha incorretos. Verifique seus dados e tente novamente.");
+        } else if (msg.includes("email not confirmed")) {
+          setError("Seu email ainda não foi confirmado. Verifique sua caixa de entrada.");
+        } else if (msg.includes("too many requests") || msg.includes("rate limit")) {
+          setError("Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.");
+        } else {
+          setError("Erro ao entrar: " + authError.message);
+        }
+        return;
+      }
+
+      if (authData.user) {
+        handlePostLogin(authData.user, "password_success");
+      }
+    } catch (err: any) {
+      setIsNetworkError(true);
+      setError("Sem conexão com o servidor. Atualize o app e tente novamente.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -236,6 +246,15 @@ export default function Login() {
             {error && (
               <div className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3" role="alert" id="login-error">
                 <p className="text-destructive font-inter text-sm">{error}</p>
+                {isNetworkError && (
+                  <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="mt-2 w-full py-2 rounded-lg bg-destructive text-destructive-foreground font-montserrat font-bold text-sm transition-all active:scale-95"
+                  >
+                    Atualizar app
+                  </button>
+                )}
               </div>
             )}
 

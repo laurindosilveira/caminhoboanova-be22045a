@@ -16,8 +16,8 @@ function hideSplash() {
 // Check for updates early and apply them automatically.
 // This avoids PWA users staying on an old deployed bundle after a release.
 
-const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour (not every 60s)
-const VISIBILITY_CHECK_COOLDOWN_MS = 5 * 60 * 1000; // avoid noisy checks when tab focus changes
+const CHECK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+const VISIBILITY_CHECK_COOLDOWN_MS = 60 * 1000; // 1 minute cooldown between focus checks
 
 function showUpdateBanner(updateSWFn: () => void) {
   // Remove any existing banner
