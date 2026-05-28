@@ -6,10 +6,11 @@ import OfflineBanner from "@/components/home/OfflineBanner";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AreaSwitchProvider } from "@/contexts/AreaSwitchContext";
 import { isAppInstalled } from "@/lib/utils";
+import { getPasswordRecoveryRedirect } from "@/lib/passwordRecoveryRedirect";
 
 // Lazy load pages for better initial performance
 const Index = lazy(() => import("./pages/Index"));
@@ -138,8 +139,23 @@ const LoadingFallback = () => (
   </div>
 );
 
+function PasswordRecoveryRedirect() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const redirectTo = getPasswordRecoveryRedirect(location.pathname, location.search, location.hash);
+    if (redirectTo) {
+      navigate(redirectTo, { replace: true });
+    }
+  }, [location.hash, location.pathname, location.search, navigate]);
+
+  return null;
+}
+
 const AppRoutes = () => (
   <Suspense fallback={<LoadingFallback />}>
+    <PasswordRecoveryRedirect />
     <Routes>
       {/* Root handling logic */}
       <Route path="/" element={<RootRedirect />} />

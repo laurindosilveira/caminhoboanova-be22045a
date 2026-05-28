@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { isPasswordRecoveryUrl } from "@/lib/passwordRecoveryRedirect";
 
 interface Profile {
   id: string;
@@ -95,10 +96,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Recovery sessions must NOT log the user in — ResetPassword page handles them.
         // Both PASSWORD_RECOVERY and INITIAL_SESSION can carry the recovery token
         // (implicit flow fires INITIAL_SESSION with the session before PASSWORD_RECOVERY).
-        const isRecoveryUrl =
-          window.location.pathname === "/redefinir-senha" ||
-          window.location.hash.includes("type=recovery") ||
-          new URLSearchParams(window.location.search).has("code");
+        const isRecoveryUrl = isPasswordRecoveryUrl(
+          window.location.pathname,
+          window.location.search,
+          window.location.hash
+        );
 
         console.log("[AUTH DEBUG] isRecoveryUrl:", isRecoveryUrl);
 
@@ -151,10 +153,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession()
       .then(({ data: { session: currentSession } }) => {
         // Don't treat a session as normal login if we're in the recovery flow
-        const isRecoveryUrl =
-          window.location.pathname === "/redefinir-senha" ||
-          window.location.hash.includes('type=recovery') ||
-          new URLSearchParams(window.location.search).has('code');
+        const isRecoveryUrl = isPasswordRecoveryUrl(
+          window.location.pathname,
+          window.location.search,
+          window.location.hash
+        );
 
         console.log("[AUTH DEBUG] getSession | user:", currentSession?.user?.email ?? null, "| isRecoveryUrl:", isRecoveryUrl, "| url:", window.location.href);
 
