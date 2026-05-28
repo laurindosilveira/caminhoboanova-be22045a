@@ -20,6 +20,7 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [isNetworkError, setIsNetworkError] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isReloading, setIsReloading] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -106,6 +107,20 @@ export default function Login() {
     } else {
       navigate("/home");
     }
+  }
+
+  async function handleForceReload() {
+    setIsReloading(true);
+    try {
+      if ('caches' in window) {
+        const names = await caches.keys();
+        await Promise.all(names.map(n => caches.delete(n)));
+      }
+      if (navigator.serviceWorker?.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
+      }
+    } catch {}
+    window.location.reload();
   }
 
   async function handleLogin(e: React.FormEvent) {
@@ -247,13 +262,23 @@ export default function Login() {
               <div className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3" role="alert" id="login-error">
                 <p className="text-destructive font-inter text-sm">{error}</p>
                 {isNetworkError && (
-                  <button
-                    type="button"
-                    onClick={() => window.location.reload()}
-                    className="mt-2 w-full py-2 rounded-lg bg-destructive text-destructive-foreground font-montserrat font-bold text-sm transition-all active:scale-95"
-                  >
-                    Atualizar app
-                  </button>
+                  <div className="mt-2 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setError(null); setIsNetworkError(false); }}
+                      className="w-full py-2 rounded-lg border border-destructive/40 text-destructive font-montserrat font-bold text-sm transition-all active:scale-95"
+                    >
+                      Tentar de novo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleForceReload}
+                      disabled={isReloading}
+                      className="w-full py-2 rounded-lg bg-destructive text-destructive-foreground font-montserrat font-bold text-sm transition-all active:scale-95 disabled:opacity-60"
+                    >
+                      {isReloading ? "Atualizando..." : "Atualizar app"}
+                    </button>
+                  </div>
                 )}
               </div>
             )}
