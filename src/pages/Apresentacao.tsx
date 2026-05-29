@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { STRIPE_PLANS } from "@/lib/stripePlans";
 import { toast } from "@/hooks/use-toast";
@@ -229,12 +230,12 @@ export default function Apresentacao() {
             <a href="#funcionalidades" className="hover:text-primary transition-colors">Funcionalidades</a>
             <a href="#beneficios" className="hover:text-primary transition-colors">Benefícios</a>
             <a href="#planos" className="hover:text-primary transition-colors">Planos</a>
-            <a href="/login" className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white bg-primary hover:bg-primary/90 transition-all">Entrar</a>
+            <Link to="/login" className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white bg-primary hover:bg-primary/90 transition-all">Entrar</Link>
           </div>
           <div className="flex items-center gap-3">
-            <a href="/login" className="md:hidden px-3 py-1.5 rounded-lg text-sm font-semibold text-white bg-primary hover:bg-primary/90 transition-all">
+            <Link to="/login" className="md:hidden px-3 py-1.5 rounded-lg text-sm font-semibold text-white bg-primary hover:bg-primary/90 transition-all">
               Entrar
-            </a>
+            </Link>
             <a href="#planos" className="hidden sm:inline-flex px-5 py-2.5 rounded-full text-primary-foreground text-sm font-semibold hover:shadow-lg transition-all" style={{ background: "var(--gradient-hero)" }}>
               Começar agora
             </a>
