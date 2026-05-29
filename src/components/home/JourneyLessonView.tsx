@@ -106,7 +106,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
         supabase.from("leader_meeting_notes")
           .select("*")
           .eq("lesson_id", lesson.id)
-          .eq("church_id", profile?.church_id ?? "")
+          .eq("church_id", profile?.church_id ?? null)
           .eq("area", area as any)
           .maybeSingle(),
       ]);

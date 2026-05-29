@@ -40,7 +40,7 @@ export default function DevotionalReminder({ onNavigateToDiscipulado }: Props) {
         supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
         supabase.from("devotional_content").select("id, lesson_id, day_number"),
         supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
-        supabase.from("course_unlocks").select("course_id").eq("area", userArea ?? ""),
+        userArea ? supabase.from("course_unlocks").select("course_id").eq("area", userArea) : Promise.resolve({ data: [] as any[], error: null }),
       ]);
 
       const unlockedCourseIds = new Set((unlocks ?? []).map((unlock) => unlock.course_id));

@@ -622,7 +622,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
           {canManage && (
             <button
               onClick={async () => {
-                const { data, error } = await supabase.rpc("recalculate_ranking", { _church_id: profile?.church_id });
+                const { data, error } = await supabase.rpc("recalculate_ranking", { _church_id: profile?.church_id ?? null });
                 if (error) {
                   toast.error("Erro ao recalcular ranking: " + error.message);
                 } else {

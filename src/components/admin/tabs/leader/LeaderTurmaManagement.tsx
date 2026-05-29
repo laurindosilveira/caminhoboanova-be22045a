@@ -151,7 +151,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
     const { error: profileError } = await supabase
       .from("profiles")
       .update({ turma_id: newTurma.id } as any)
-      .eq("user_id", authUser.user?.id ?? "");
+      .eq("user_id", authUser.user!.id);
 
     if (profileError) {
       toast({ title: "Turma criada, mas erro ao vincular", description: profileError.message, variant: "destructive" });
