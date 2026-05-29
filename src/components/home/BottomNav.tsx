@@ -67,8 +67,7 @@ export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
                 </p>
               </div>
 
-              {/* Grid 2 colunas — todas as abas visíveis de uma vez */}
-              <div className="grid grid-cols-2 gap-2 px-3">
+              <div className="flex flex-col gap-2 px-3 pb-2">
                 {tabs.map(({ tab, icon: Icon, label }) => {
                   const isActive = activeTab === tab;
                   return (
