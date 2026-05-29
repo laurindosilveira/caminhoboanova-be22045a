@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle2, Lock, BookOpen, ChevronDown, ChevronRight, CalendarDays, Heart, GraduationCap, Plus } from "lucide-react";
+import { CheckCircle2, Lock, BookOpen, ChevronDown, ChevronRight, CalendarDays, Heart, GraduationCap } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import NovoCursoModal from "./NovoCursoModal";
 
 type Lesson = {
   id: string;
@@ -51,7 +50,6 @@ type Props = {
 export default function JourneyPath({ onSelectLesson }: Props = {}) {
   const { profile, role, isSuper } = useAuth();
   const { effectiveArea } = useAreaSwitch();
-  const [showNovoCurso, setShowNovoCurso] = useState(false);
   const currentArea = effectiveArea || profile?.area || "";
   const [courses, setCourses] = useState<Course[]>([]);
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
@@ -190,16 +188,6 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-montserrat font-black text-foreground text-xl">🛤️ Caminho do Discipulado</h2>
           <div className="flex items-center gap-2">
-            {(isSuper || role === "admin" || role === "lider") && (
-              <button
-                onClick={() => setShowNovoCurso(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-montserrat font-bold text-primary-foreground"
-                style={{ background: "var(--gradient-hero)" }}
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Novo Curso
-              </button>
-            )}
             <span className="text-muted-foreground text-xs font-inter bg-muted rounded-full px-3 py-1">
               {overallPct}% completo
             </span>
@@ -439,16 +427,6 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
         </div>
       )}
 
-      {showNovoCurso && (
-        <NovoCursoModal
-          churchId={profile?.church_id ?? null}
-          onClose={() => setShowNovoCurso(false)}
-          onCreated={() => {
-            setShowNovoCurso(false);
-            fetchData();
-          }}
-        />
-      )}
     </div>
   );
 }
