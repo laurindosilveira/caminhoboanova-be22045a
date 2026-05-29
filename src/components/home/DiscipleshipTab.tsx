@@ -456,6 +456,24 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
         healthStatus={healthStatus}
       />
 
+      {(isLeaderOrAdmin || isSuper) && (
+        <button
+          onClick={() => setShowNovoCurso(true)}
+          className="w-full flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4 shadow-sm hover:bg-primary/10 transition-colors text-left"
+        >
+          <div className="w-11 h-11 rounded-2xl flex items-center justify-center bg-primary/15 text-primary">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-montserrat font-bold text-primary text-sm">Novo Curso</p>
+            <p className="text-muted-foreground text-xs font-inter">
+              Adicionar curso da plataforma ou criar personalizado
+            </p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-primary/60 flex-shrink-0" />
+        </button>
+      )}
+
       {isLeaderOrAdmin && (
         <button
           onClick={() => setShowLeaderRoom(true)}
@@ -517,19 +535,11 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
               agendaSchedule={agendaSchedule}
               manualLessonOverrideIds={new Set(manualLessonOverrideMap.keys())}
               isLeaderOrAdmin={isLeaderOrAdmin}
-              onNovoCurso={(isLeaderOrAdmin || isSuper) ? () => setShowNovoCurso(true) : undefined}
               onSelectLesson={(lesson) => {
                 setSelectedLesson(lesson);
                 setSelectedLessonMode("choice");
               }}
             />
-            {showNovoCurso && (
-              <NovoCursoModal
-                churchId={profile?.church_id ?? null}
-                onClose={() => setShowNovoCurso(false)}
-                onCreated={() => { setShowNovoCurso(false); fetchAll(); }}
-              />
-            )}
             <ResourceLibrary />
           </motion.div>
         )}
@@ -580,6 +590,14 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
           </motion.div>
         )}
       </AnimatePresence>
+
+      {showNovoCurso && (
+        <NovoCursoModal
+          churchId={profile?.church_id ?? null}
+          onClose={() => setShowNovoCurso(false)}
+          onCreated={() => { setShowNovoCurso(false); fetchAll(); }}
+        />
+      )}
     </div>
   );
 }

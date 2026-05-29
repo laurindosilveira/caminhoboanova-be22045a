@@ -85,10 +85,10 @@ export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-background w-full max-w-lg rounded-t-3xl p-6 pb-10 shadow-2xl">
+      <div className="bg-background w-full max-w-lg rounded-3xl p-6 shadow-2xl max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-montserrat font-black text-foreground text-lg">{stepTitle}</h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-muted">
