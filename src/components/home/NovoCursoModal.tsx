@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { X, BookOpen, Plus, ChevronRight, Globe } from "lucide-react";
+import { X, BookOpen, Plus, ChevronRight, Globe, Building2 } from "lucide-react";
 
 type Props = {
   churchId: string | null;
@@ -15,14 +15,23 @@ type GlobalCourse = {
   order_num: number;
 };
 
-type Step = "choose" | "platform" | "custom";
+type Church = {
+  id: string;
+  name: string;
+};
+
+type Step = "choose" | "platform" | "custom" | "scope" | "church-select";
+type CourseScope = "global" | "church" | null;
 
 export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) {
-  // Super admin sem church_id vai direto para criação de curso global
   const isGlobalAdmin = !churchId;
-  const [step, setStep] = useState<Step>(isGlobalAdmin ? "custom" : "choose");
+  const [step, setStep] = useState<Step>(isGlobalAdmin ? "scope" : "choose");
+  const [courseScope, setCourseScope] = useState<CourseScope>(null);
   const [globalCourses, setGlobalCourses] = useState<GlobalCourse[]>([]);
   const [loadingGlobal, setLoadingGlobal] = useState(false);
+  const [churches, setChurches] = useState<Church[]>([]);
+  const [loadingChurches, setLoadingChurches] = useState(false);
+  const [targetChurchId, setTargetChurchId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [saving, setSaving] = useState(false);
@@ -41,9 +50,16 @@ export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) 
     setLoadingGlobal(false);
   }
 
-  async function getNextOrderNum(): Promise<number> {
-    const query = churchId
-      ? supabase.from("courses").select("order_num").eq("church_id", churchId)
+  async function loadChurches() {
+    setLoadingChurches(true);
+    const { data } = await supabase.from("churches").select("id, name").order("name");
+    setChurches((data ?? []) as Church[]);
+    setLoadingChurches(false);
+  }
+
+  async function getNextOrderNum(effectiveId: string | null): Promise<number> {
+    const query = effectiveId
+      ? supabase.from("courses").select("order_num").eq("church_id", effectiveId)
       : supabase.from("courses").select("order_num").is("church_id", null);
     const { data } = await query.order("order_num", { ascending: false }).limit(1);
     return data && data.length > 0 ? ((data[0] as any).order_num ?? 0) + 1 : 1;
@@ -53,7 +69,7 @@ export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) 
     if (!churchId) return;
     setSaving(true);
     setError(null);
-    const orderNum = await getNextOrderNum();
+    const orderNum = await getNextOrderNum(churchId);
     const { error: err } = await supabase.from("courses").insert({
       title: course.title,
       subtitle: course.subtitle,
@@ -66,22 +82,37 @@ export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) 
 
   async function handleCreateCustom() {
     if (!title.trim()) { setError("Informe o nome do curso."); return; }
+    if (isGlobalAdmin && courseScope === "church" && !targetChurchId) {
+      setError("Selecione uma igreja."); return;
+    }
     setSaving(true);
     setError(null);
-    const orderNum = await getNextOrderNum();
+    const effectiveChurchId = isGlobalAdmin
+      ? (courseScope === "church" ? targetChurchId : null)
+      : (churchId ?? null);
+    const orderNum = await getNextOrderNum(effectiveChurchId);
     const { error: err } = await supabase.from("courses").insert({
       title: title.trim(),
       subtitle: subtitle.trim() || null,
       order_num: orderNum,
-      church_id: churchId ?? null,
+      church_id: effectiveChurchId,
     });
     if (err) { setError(err.message); setSaving(false); return; }
     onCreated();
   }
 
+  const selectedChurchName = courseScope === "church"
+    ? (churches.find(c => c.id === targetChurchId)?.name ?? "Igreja")
+    : null;
+
   const stepTitle = isGlobalAdmin
-    ? "Criar Curso Global"
-    : step === "choose" ? "Novo Curso" : step === "platform" ? "Cursos da Plataforma" : "Criar Curso Personalizado";
+    ? step === "scope" ? "Tipo de Curso"
+    : step === "church-select" ? "Selecionar Igreja"
+    : courseScope === "church" ? `Curso para ${selectedChurchName}`
+    : "Criar Curso Global"
+    : step === "choose" ? "Novo Curso"
+    : step === "platform" ? "Cursos da Plataforma"
+    : "Criar Curso Personalizado";
 
   return (
     <div
@@ -96,13 +127,75 @@ export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) 
           </button>
         </div>
 
-        {isGlobalAdmin && (
-          <p className="text-muted-foreground font-inter text-xs mb-4 flex items-center gap-1.5">
-            <Globe className="w-3.5 h-3.5" />
-            Este curso ficará disponível para todas as igrejas da plataforma.
-          </p>
+        {/* Super admin: choose global or specific church */}
+        {isGlobalAdmin && step === "scope" && (
+          <div className="space-y-3">
+            <p className="text-muted-foreground font-inter text-sm mb-4">Onde este curso ficará disponível?</p>
+            <button
+              onClick={() => { setCourseScope("global"); setStep("custom"); }}
+              className="w-full flex items-center gap-4 p-4 bg-card border border-border rounded-2xl text-left hover:border-primary/50 transition-colors"
+            >
+              <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center flex-shrink-0">
+                <Globe className="w-5 h-5 text-secondary" />
+              </div>
+              <div className="flex-1">
+                <p className="font-montserrat font-bold text-foreground text-sm">Curso Global</p>
+                <p className="font-inter text-xs text-muted-foreground">Disponível para todas as igrejas da plataforma</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            </button>
+            <button
+              onClick={() => { setCourseScope("church"); loadChurches(); setStep("church-select"); }}
+              className="w-full flex items-center gap-4 p-4 bg-card border border-border rounded-2xl text-left hover:border-primary/50 transition-colors"
+            >
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Building2 className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="font-montserrat font-bold text-foreground text-sm">Para uma Igreja Específica</p>
+                <p className="font-inter text-xs text-muted-foreground">Visível apenas para a igreja selecionada</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
         )}
 
+        {/* Super admin: select a specific church */}
+        {isGlobalAdmin && step === "church-select" && (
+          <div>
+            {loadingChurches ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map(i => <div key={i} className="h-14 bg-muted rounded-xl animate-pulse" />)}
+              </div>
+            ) : churches.length === 0 ? (
+              <div className="text-center py-8">
+                <Building2 className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                <p className="font-montserrat font-bold text-foreground text-sm">Nenhuma igreja cadastrada</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {churches.map(church => (
+                  <button
+                    key={church.id}
+                    onClick={() => { setTargetChurchId(church.id); setStep("custom"); }}
+                    className="w-full flex items-center gap-3 p-3 bg-card border border-border rounded-xl text-left hover:border-primary/50 transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                      <Building2 className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <p className="font-inter text-sm font-medium text-foreground flex-1">{church.name}</p>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                ))}
+              </div>
+            )}
+            <button onClick={() => setStep("scope")} className="mt-4 text-muted-foreground font-inter text-xs underline">
+              ← Voltar
+            </button>
+          </div>
+        )}
+
+        {/* Regular admin: choose between platform courses or custom */}
         {step === "choose" && !isGlobalAdmin && (
           <div className="space-y-3">
             <p className="text-muted-foreground font-inter text-sm mb-4">Como deseja adicionar um novo curso?</p>
@@ -175,8 +268,20 @@ export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) 
           </div>
         )}
 
-        {(step === "custom" || isGlobalAdmin) && (
+        {step === "custom" && (
           <div className="space-y-4">
+            {isGlobalAdmin && courseScope === "global" && (
+              <p className="text-muted-foreground font-inter text-xs flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5" />
+                Este curso ficará disponível para todas as igrejas da plataforma.
+              </p>
+            )}
+            {isGlobalAdmin && courseScope === "church" && selectedChurchName && (
+              <p className="text-muted-foreground font-inter text-xs flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5" />
+                Este curso ficará disponível apenas para {selectedChurchName}.
+              </p>
+            )}
             <div>
               <label className="block font-inter text-sm font-medium text-foreground mb-1.5">Nome do curso *</label>
               <input
@@ -204,13 +309,23 @@ export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) 
               className="w-full py-3.5 rounded-2xl font-montserrat font-bold text-primary-foreground text-sm disabled:opacity-50"
               style={{ background: "var(--gradient-hero)" }}
             >
-              {saving ? "Criando..." : isGlobalAdmin ? "Criar Curso Global" : "Criar Curso"}
+              {saving ? "Criando..."
+                : (isGlobalAdmin && courseScope === "church") ? `Criar Curso para ${selectedChurchName ?? "Igreja"}`
+                : isGlobalAdmin ? "Criar Curso Global"
+                : "Criar Curso"}
             </button>
-            {!isGlobalAdmin && (
-              <button onClick={() => setStep("choose")} className="w-full text-center text-muted-foreground font-inter text-xs underline">
-                ← Voltar
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (isGlobalAdmin) {
+                  courseScope === "church" ? setStep("church-select") : setStep("scope");
+                } else {
+                  setStep("choose");
+                }
+              }}
+              className="w-full text-center text-muted-foreground font-inter text-xs underline"
+            >
+              ← Voltar
+            </button>
           </div>
         )}
       </div>

@@ -414,8 +414,8 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
         lesson={selectedLesson}
         onBack={() => { setSelectedLesson(null); setSelectedLessonMode("choice"); }}
         onOpenStudy={() => setSelectedLessonMode("study")}
-        onOpenEdit={isLeaderOrAdmin ? () => setSelectedLessonMode("edit") : undefined}
-        onOpenEditDevotionals={isLeaderOrAdmin ? () => setSelectedLessonMode("edit-devotionals") : undefined}
+        onOpenEdit={(isLeaderOrAdmin && (isSuper || selectedLesson.church_id !== null)) ? () => setSelectedLessonMode("edit") : undefined}
+        onOpenEditDevotionals={(isLeaderOrAdmin && (isSuper || selectedLesson.church_id !== null)) ? () => setSelectedLessonMode("edit-devotionals") : undefined}
         autoOpenAvailableDevotional={autoOpenDevotionalLessonId === selectedLesson.id}
         onAutoOpenAvailableDevotionalConsumed={() => setAutoOpenDevotionalLessonId(null)}
         scheduledDevotionalDates={agendaSchedule.lessonDevotionalDates.get(selectedLesson.id)}

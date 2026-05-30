@@ -262,8 +262,8 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
 
                         {/* Action buttons */}
                         <div className="flex gap-2 ml-10 flex-wrap">
-                          {/* Admin or Leader (if church match) buttons */}
-                          {(!isLider || lesson.church_id) && (
+                          {/* Edit buttons: super admin can edit anything; others only church-specific lessons */}
+                          {(isSuper || lesson.church_id !== null) && (
                             <>
                               <button
                                 onClick={() => setEditMode({ lesson, mode: "study" })}
