@@ -116,8 +116,8 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     }
   }, [targetLessonId, targetLessonMode, loading, agendaSchedule.loading, courses, onTargetLessonConsumed]);
 
-  async function fetchAll() {
-    setLoading(true);
+  async function fetchAll(silent = false) {
+    if (!silent) setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
@@ -198,7 +198,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     setAttendanceRecords((attendanceData ?? []) as AttendanceRecord[]);
     setAllAssessments((allAssess ?? []) as Assessment[]);
     setWorshipCount((worshipData ?? []).length);
-    setLoading(false);
+    if (!silent) setLoading(false);
   }
 
   async function handleSaveAssessment() {
@@ -546,7 +546,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
               manualLessonOverrideIds={new Set(manualLessonOverrideMap.keys())}
               isLeaderOrAdmin={isLeaderOrAdmin}
               isSuper={isSuper}
-              onRefresh={fetchAll}
+              onRefresh={() => fetchAll(true)}
               onSelectLesson={(lesson) => {
                 setSelectedLesson(lesson);
                 setSelectedLessonMode("choice");
