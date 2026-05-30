@@ -121,13 +121,13 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }, { data: responsesData }, { data: eventsData }, { data: attendanceData }, { data: allAssess }, { data: devContentData }, { data: devProgressData }, { data: worshipData }, { data: unlocksData }, { data: lessonOverrideData }] = await Promise.all([
+    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }, { data: responsesData }, { data: eventsData }, { data: attendanceData }, { data: allAssess }, { data: devContentData }, { data: devProgressData }, { data: worshipData }, { data: unlocksData }, { data: lessonOverrideData }, { data: modulesData }] = await Promise.all([
       supabase.from("activities").select("id, type, title, points"),
       supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
       supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).eq("month", month).eq("year", year).maybeSingle(),
       supabase.from("discipleship_plans").select("objectives,challenges,recommendations,next_steps,health_status").eq("user_id", user.id).maybeSingle(),
       profile?.church_id ? supabase.from("courses").select("*").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("courses").select("*").is("church_id", null).order("order_num"),
-      profile?.church_id ? supabase.from("lessons").select("id, title, order_num, objective, topics, course_id, church_id").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("lessons").select("id, title, order_num, objective, topics, course_id, church_id").is("church_id", null).order("order_num"),
+      profile?.church_id ? supabase.from("lessons").select("id, title, order_num, objective, topics, course_id, church_id, module_id").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("lessons").select("id, title, order_num, objective, topics, course_id, church_id, module_id").is("church_id", null).order("order_num"),
       supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
       supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false }).limit(10),
       supabase.from("attendance").select("event_id, status").eq("user_id", user.id),
@@ -137,6 +137,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       supabase.from("worship_attendance").select("id").eq("user_id", user.id).eq("status", "aprovado"),
       supabase.from("course_unlocks").select("course_id").eq("area", currentArea),
       supabase.from("user_lesson_overrides" as any).select("id, lesson_id, custom_points, available_from, available_until, is_unlocked").eq("user_id", user.id),
+      profile?.church_id ? supabase.from("modules" as any).select("id, course_id, title, order_num, church_id").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("modules" as any).select("id, course_id, title, order_num, church_id").is("church_id", null).order("order_num"),
     ]);
 
     setActivities(acts ?? []);
@@ -164,10 +165,19 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     });
     setFullyCompletedLessonIds(fullyDone);
 
-    const courseList = (coursesData ?? []).map(c => ({
-      ...c,
-      lessons: (lessonsData ?? []).filter(l => l.course_id === c.id),
-    }));
+    const courseList = (coursesData ?? []).map(c => {
+      const courseModules = ((modulesData ?? []) as any[])
+        .filter((m: any) => m.course_id === c.id)
+        .map((m: any) => ({
+          ...m,
+          lessons: (lessonsData ?? []).filter((l: any) => l.module_id === m.id),
+        }));
+      return {
+        ...c,
+        lessons: (lessonsData ?? []).filter((l: any) => l.course_id === c.id),
+        modules: courseModules,
+      };
+    });
     setCourses(courseList);
     setUnlockedCourseIds(new Set((unlocksData ?? []).map((u: any) => u.course_id)));
     const nowIso = new Date();

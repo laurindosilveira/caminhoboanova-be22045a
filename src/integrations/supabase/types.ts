@@ -1704,6 +1704,7 @@ export type Database = {
           created_at: string
           devotional_mode: string
           id: string
+          module_id: string | null
           objective: string | null
           order_num: number
           title: string
@@ -1715,6 +1716,7 @@ export type Database = {
           created_at?: string
           devotional_mode?: string
           id?: string
+          module_id?: string | null
           objective?: string | null
           order_num: number
           title: string
@@ -1726,6 +1728,7 @@ export type Database = {
           created_at?: string
           devotional_mode?: string
           id?: string
+          module_id?: string | null
           objective?: string | null
           order_num?: number
           title?: string
@@ -1741,6 +1744,55 @@ export type Database = {
           },
           {
             foreignKeyName: "lessons_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lessons_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "modules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      modules: {
+        Row: {
+          church_id: string | null
+          course_id: string
+          created_at: string
+          id: string
+          order_num: number
+          title: string
+        }
+        Insert: {
+          church_id?: string | null
+          course_id: string
+          created_at?: string
+          id?: string
+          order_num?: number
+          title: string
+        }
+        Update: {
+          church_id?: string | null
+          course_id?: string
+          created_at?: string
+          id?: string
+          order_num?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modules_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modules_course_id_fkey"
             columns: ["course_id"]
             isOneToOne: false
             referencedRelation: "courses"

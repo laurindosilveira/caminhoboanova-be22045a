@@ -1,6 +1,6 @@
-import { GraduationCap, CalendarDays, ChevronDown, ChevronRight, CheckCircle2, Lock } from "lucide-react";
+import { GraduationCap, CalendarDays, ChevronDown, ChevronRight, CheckCircle2, Lock, Layers } from "lucide-react";
 import { toast } from "sonner";
-import type { Course, Lesson } from "./shared";
+import type { Course, Lesson, Module } from "./shared";
 
 type AgendaSchedule = {
   loading: boolean;
@@ -67,6 +67,8 @@ export default function CourseTrailSection({
         const doneLessons = course.lessons.filter(l => fullyCompletedLessonIds.has(l.id)).length;
         const totalLessons = course.lessons.length;
         const coursePct = totalLessons > 0 ? Math.round((doneLessons / totalLessons) * 100) : 0;
+        const hasModules = course.modules && course.modules.length > 0;
+
         return (
           <div key={course.id} className={`bg-card rounded-2xl border shadow-sm overflow-hidden ${
             isCourseUnlocked ? "border-border" : "border-border opacity-75"
@@ -116,93 +118,64 @@ export default function CourseTrailSection({
 
             {isOpen && isCourseUnlocked && (
               <div className="border-t border-border">
-                {course.lessons.length === 0 ? (
+                {totalLessons === 0 && !hasModules ? (
                   <p className="px-4 py-3 text-muted-foreground font-inter text-xs text-center">Nenhuma lição cadastrada ainda.</p>
-                ) : (
-                  course.lessons.map((lesson) => {
-                    const isDone = completedLessonIds.has(lesson.id);
-                    const isFullyDone = fullyCompletedLessonIds.has(lesson.id);
-                    const isScheduled = agendaSchedule.scheduledLessonIds.has(lesson.id);
-                    const isStudyOpen = agendaSchedule.studyOpenLessonIds.has(lesson.id);
-                    const hasManualOverride = manualLessonOverrideIds.has(lesson.id);
-                    const eventDate = agendaSchedule.lessonEventDate.get(lesson.id);
-                    const eventDay = eventDate ? new Date(eventDate) : null;
-                    if (eventDay) eventDay.setHours(0, 0, 0, 0);
-                    const todayZero = new Date(); todayZero.setHours(0, 0, 0, 0);
-                    const isLateAccess = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(lesson.id) && !isFullyDone;
-                    const isAccessible = isLeaderOrAdmin || isStudyOpen || isLateAccess || isFullyDone || hasManualOverride;
-                    const isLocked = !isLeaderOrAdmin && agendaSchedule.hasScheduledEvents && !isAccessible && !isFullyDone;
-                    const isNotScheduled = !isLeaderOrAdmin && agendaSchedule.hasScheduledEvents && !isScheduled && !isFullyDone && !isDone && !hasManualOverride;
-
-                    let lockMessage = "";
-                    if (isNotScheduled) {
-                      lockMessage = "Aguardando agenda";
-                    } else if (hasManualOverride) {
-                      lockMessage = "Liberação manual do líder";
-                    } else if (isLateAccess) {
-                      lockMessage = "Acesso tardio — sem pontuação";
-                    } else if (isLocked) {
-                      const entry = agendaSchedule.schedule.find(e => e.lessonId === lesson.id);
-                      if (entry) {
-                        lockMessage = `Disponível em ${entry.windowStart.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
-                      } else {
-                        lockMessage = "Ainda não liberada";
-                      }
-                    }
-
-                    return (
-                      <button
+                ) : hasModules ? (
+                  /* Lessons grouped by modules */
+                  <>
+                    {course.modules.map((mod) => (
+                      <div key={mod.id}>
+                        {/* Module header */}
+                        <div className="flex items-center gap-2 px-4 py-2.5 bg-secondary/5 border-b border-border">
+                          <Layers className="w-3.5 h-3.5 text-secondary flex-shrink-0" />
+                          <p className="font-montserrat font-semibold text-secondary text-xs">{mod.title}</p>
+                        </div>
+                        {mod.lessons.length === 0 ? (
+                          <p className="px-6 py-2.5 text-muted-foreground font-inter text-xs">Nenhuma lição neste módulo ainda.</p>
+                        ) : (
+                          mod.lessons.map((lesson) => (
+                            <LessonButton
+                              key={lesson.id}
+                              lesson={lesson}
+                              completedLessonIds={completedLessonIds}
+                              fullyCompletedLessonIds={fullyCompletedLessonIds}
+                              agendaSchedule={agendaSchedule}
+                              manualLessonOverrideIds={manualLessonOverrideIds}
+                              isLeaderOrAdmin={isLeaderOrAdmin}
+                              onSelectLesson={onSelectLesson}
+                            />
+                          ))
+                        )}
+                      </div>
+                    ))}
+                    {/* Lessons without module (if any) */}
+                    {course.lessons.filter(l => !l.module_id).map((lesson) => (
+                      <LessonButton
                         key={lesson.id}
-                        onClick={() => {
-                          if (isLocked || isNotScheduled) {
-                            toast.info(isNotScheduled
-                              ? "Esta lição ainda não foi agendada pelo líder."
-                              : "Esta lição ainda não foi liberada.", {
-                              duration: 3000,
-                            });
-                            return;
-                          }
-                          onSelectLesson(lesson);
-                        }}
-                        className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border last:border-b-0 transition-colors ${
-                          (isLocked || isNotScheduled) ? "opacity-50 cursor-not-allowed" : "hover:bg-primary/5"
-                        } ${isFullyDone ? "bg-brand-green/5" : isDone ? "bg-secondary/5" : ""}`}
-                      >
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                          isFullyDone ? "bg-brand-green/15" : (isLocked || isNotScheduled) ? "bg-muted" : "bg-secondary/10"
-                        }`}>
-                          {isFullyDone
-                            ? <CheckCircle2 className="w-4 h-4 text-brand-green" />
-                            : (isLocked || isNotScheduled)
-                            ? <Lock className="w-3.5 h-3.5 text-muted-foreground" />
-                            : <span className="font-montserrat font-bold text-secondary text-xs">{lesson.order_num}</span>
-                          }
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`font-inter text-sm ${isFullyDone ? "text-brand-green font-medium" : (isLocked || isNotScheduled) ? "text-muted-foreground" : "text-foreground"}`}>{lesson.title}</p>
-                          {lesson.objective && (
-                            <p className="font-inter text-[10px] text-muted-foreground truncate mt-0.5">{lesson.objective}</p>
-                          )}
-                          {lockMessage && (
-                            <p className="font-inter text-[10px] text-muted-foreground mt-0.5">{lockMessage}</p>
-                          )}
-                          {isDone && !isFullyDone && !isLateAccess && !(isLocked || isNotScheduled) && (
-                            <p className="font-inter text-[10px] text-secondary mt-0.5">⏳ Faltam devocionais ou estudo</p>
-                          )}
-                        </div>
-                        {isFullyDone
-                          ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-brand-green/15 text-brand-green px-2 py-0.5 rounded-full">✓ Completa</span>
-                          : isLateAccess
-                          ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Prazo encerrado</span>
-                          : isDone && !(isLocked || isNotScheduled)
-                          ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-secondary/15 text-secondary px-2 py-0.5 rounded-full">Em andamento</span>
-                          : (isLocked || isNotScheduled)
-                          ? <Lock className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                          : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                        }
-                      </button>
-                    );
-                  })
+                        lesson={lesson}
+                        completedLessonIds={completedLessonIds}
+                        fullyCompletedLessonIds={fullyCompletedLessonIds}
+                        agendaSchedule={agendaSchedule}
+                        manualLessonOverrideIds={manualLessonOverrideIds}
+                        isLeaderOrAdmin={isLeaderOrAdmin}
+                        onSelectLesson={onSelectLesson}
+                      />
+                    ))}
+                  </>
+                ) : (
+                  /* No modules: flat lesson list */
+                  course.lessons.map((lesson) => (
+                    <LessonButton
+                      key={lesson.id}
+                      lesson={lesson}
+                      completedLessonIds={completedLessonIds}
+                      fullyCompletedLessonIds={fullyCompletedLessonIds}
+                      agendaSchedule={agendaSchedule}
+                      manualLessonOverrideIds={manualLessonOverrideIds}
+                      isLeaderOrAdmin={isLeaderOrAdmin}
+                      onSelectLesson={onSelectLesson}
+                    />
+                  ))
                 )}
               </div>
             )}
@@ -210,5 +183,101 @@ export default function CourseTrailSection({
         );
       })}
     </div>
+  );
+}
+
+// ─── Lesson button ────────────────────────────────────────────────────────────
+
+function LessonButton({
+  lesson, completedLessonIds, fullyCompletedLessonIds,
+  agendaSchedule, manualLessonOverrideIds, isLeaderOrAdmin, onSelectLesson,
+}: {
+  lesson: Lesson;
+  completedLessonIds: Set<string>;
+  fullyCompletedLessonIds: Set<string>;
+  agendaSchedule: AgendaSchedule;
+  manualLessonOverrideIds: Set<string>;
+  isLeaderOrAdmin: boolean;
+  onSelectLesson: (lesson: Lesson) => void;
+}) {
+  const isDone = completedLessonIds.has(lesson.id);
+  const isFullyDone = fullyCompletedLessonIds.has(lesson.id);
+  const isScheduled = agendaSchedule.scheduledLessonIds.has(lesson.id);
+  const isStudyOpen = agendaSchedule.studyOpenLessonIds.has(lesson.id);
+  const hasManualOverride = manualLessonOverrideIds.has(lesson.id);
+  const eventDate = agendaSchedule.lessonEventDate.get(lesson.id);
+  const eventDay = eventDate ? new Date(eventDate) : null;
+  if (eventDay) eventDay.setHours(0, 0, 0, 0);
+  const isLateAccess = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(lesson.id) && !isFullyDone;
+  const isAccessible = isLeaderOrAdmin || isStudyOpen || isLateAccess || isFullyDone || hasManualOverride;
+  const isLocked = !isLeaderOrAdmin && agendaSchedule.hasScheduledEvents && !isAccessible && !isFullyDone;
+  const isNotScheduled = !isLeaderOrAdmin && agendaSchedule.hasScheduledEvents && !isScheduled && !isFullyDone && !isDone && !hasManualOverride;
+
+  let lockMessage = "";
+  if (isNotScheduled) {
+    lockMessage = "Aguardando agenda";
+  } else if (hasManualOverride) {
+    lockMessage = "Liberação manual do líder";
+  } else if (isLateAccess) {
+    lockMessage = "Acesso tardio — sem pontuação";
+  } else if (isLocked) {
+    const entry = agendaSchedule.schedule.find(e => e.lessonId === lesson.id);
+    if (entry) {
+      lockMessage = `Disponível em ${entry.windowStart.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
+    } else {
+      lockMessage = "Ainda não liberada";
+    }
+  }
+
+  return (
+    <button
+      onClick={() => {
+        if (isLocked || isNotScheduled) {
+          toast.info(isNotScheduled
+            ? "Esta lição ainda não foi agendada pelo líder."
+            : "Esta lição ainda não foi liberada.", {
+            duration: 3000,
+          });
+          return;
+        }
+        onSelectLesson(lesson);
+      }}
+      className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border last:border-b-0 transition-colors ${
+        (isLocked || isNotScheduled) ? "opacity-50 cursor-not-allowed" : "hover:bg-primary/5"
+      } ${isFullyDone ? "bg-brand-green/5" : isDone ? "bg-secondary/5" : ""}`}
+    >
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+        isFullyDone ? "bg-brand-green/15" : (isLocked || isNotScheduled) ? "bg-muted" : "bg-secondary/10"
+      }`}>
+        {isFullyDone
+          ? <CheckCircle2 className="w-4 h-4 text-brand-green" />
+          : (isLocked || isNotScheduled)
+          ? <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+          : <span className="font-montserrat font-bold text-secondary text-xs">{lesson.order_num}</span>
+        }
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className={`font-inter text-sm ${isFullyDone ? "text-brand-green font-medium" : (isLocked || isNotScheduled) ? "text-muted-foreground" : "text-foreground"}`}>{lesson.title}</p>
+        {lesson.objective && (
+          <p className="font-inter text-[10px] text-muted-foreground truncate mt-0.5">{lesson.objective}</p>
+        )}
+        {lockMessage && (
+          <p className="font-inter text-[10px] text-muted-foreground mt-0.5">{lockMessage}</p>
+        )}
+        {isDone && !isFullyDone && !isLateAccess && !(isLocked || isNotScheduled) && (
+          <p className="font-inter text-[10px] text-secondary mt-0.5">⏳ Faltam devocionais ou estudo</p>
+        )}
+      </div>
+      {isFullyDone
+        ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-brand-green/15 text-brand-green px-2 py-0.5 rounded-full">✓ Completa</span>
+        : isLateAccess
+        ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Prazo encerrado</span>
+        : isDone && !(isLocked || isNotScheduled)
+        ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-secondary/15 text-secondary px-2 py-0.5 rounded-full">Em andamento</span>
+        : (isLocked || isNotScheduled)
+        ? <Lock className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+        : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+      }
+    </button>
   );
 }
