@@ -101,7 +101,8 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
   async function handleSave() {
     setSaving(true);
 
-    await supabase.from("lesson_content").upsert({
+    const conflictTarget = churchId ? "lesson_id,church_id" : "lesson_id";
+    const { error } = await supabase.from("lesson_content").upsert({
       lesson_id: lesson.id,
       church_id: churchId ?? null,
       greeting: content.greeting,
@@ -114,11 +115,16 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
       video_link: content.video_link,
       audio_link: content.audio_link,
       pdf_link: content.pdf_link,
-    }, { onConflict: "lesson_id,church_id" });
+    }, { onConflict: conflictTarget });
     setSaving(false);
-    setSaved(true);
-    setIsPublished(true);
-    setTimeout(() => setSaved(false), 3000);
+    if (!error) {
+      setSaved(true);
+      setIsPublished(true);
+      setTimeout(() => setSaved(false), 3000);
+    } else {
+      console.error("Erro ao salvar conteúdo:", error);
+      alert("Erro ao salvar. Tente novamente.");
+    }
   }
 
   function updateBibleText(i: number, val: string) {
