@@ -10,6 +10,7 @@ import {
   Church,
   Clock,
   DatabaseBackup,
+  GraduationCap,
   Megaphone,
   RefreshCw,
   Search,
@@ -34,6 +35,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
+import GlobalCourseReleasesPanel from "@/components/admin/tabs/GlobalCourseReleasesPanel";
 
 interface ChurchSubscription {
   id: string;
@@ -301,6 +303,7 @@ export default function AdminSistema() {
             <TabsTrigger value="plan-history" className="rounded-xl px-4 py-2">Historico de Planos</TabsTrigger>
             <TabsTrigger value="webhook-logs" className="rounded-xl px-4 py-2">Webhook Logs</TabsTrigger>
             <TabsTrigger value="error-logs" className="rounded-xl px-4 py-2">Monitoramento de Erros</TabsTrigger>
+            <TabsTrigger value="cursos" className="rounded-xl px-4 py-2">Cursos</TabsTrigger>
             <TabsTrigger value="backup" className="rounded-xl px-4 py-2">Backup</TabsTrigger>
             <TabsTrigger value="migration" className="rounded-xl px-4 py-2">Migração</TabsTrigger>
           </TabsList>
@@ -908,6 +911,24 @@ export default function AdminSistema() {
                     ))
                   )}
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="cursos" className="space-y-6">
+            <Card className="border-border">
+              <CardHeader>
+                <CardTitle className="font-montserrat text-lg font-black flex items-center gap-2">
+                  <GraduationCap className="h-5 w-5 text-secondary" />
+                  Liberação de Cursos Globais
+                </CardTitle>
+                <CardDescription>
+                  Gerencie quais igrejas têm acesso a cada curso global da plataforma.
+                  Após liberar, o admin de cada igreja ativa o curso para sua turma.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <GlobalCourseReleasesPanel />
               </CardContent>
             </Card>
           </TabsContent>

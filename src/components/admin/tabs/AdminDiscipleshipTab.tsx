@@ -44,20 +44,29 @@ export default function AdminDiscipleshipTab({ participants, activities, initial
   const [unlockLoading, setUnlockLoading] = useState<string | null>(null);
 
   const myArea = profile?.area ?? "";
+  const myChurchId = profile?.church_id ?? null;
 
   useEffect(() => {
     fetchCourseUnlocks();
-  }, [myArea]);
+  }, [myArea, myChurchId]);
 
   async function fetchCourseUnlocks() {
-    const [{ data: coursesData, error: coursesError }, { data: unlocksData, error: unlocksError }] = await Promise.all([
-      supabase.from("courses").select("id, title, order_num").order("order_num"),
+    const [{ data: coursesData, error: coursesError }, { data: unlocksData, error: unlocksError }, { data: releasesData }] = await Promise.all([
+      supabase.from("courses").select("id, title, order_num, church_id").order("order_num"),
       supabase.from("course_unlocks").select("course_id, area").eq("area", myArea),
+      myChurchId
+        ? (supabase.from("global_course_releases" as any) as any).select("course_id").eq("church_id", myChurchId)
+        : Promise.resolve({ data: [] }),
     ]);
     if (coursesError || unlocksError) {
       toast.error(coursesError?.message ?? unlocksError?.message ?? "Nao foi possivel carregar os cursos.");
     }
-    setCourses(coursesData ?? []);
+    const releasedGlobalIds = new Set((releasesData ?? []).map((r: any) => r.course_id));
+    const visibleCourses = (coursesData ?? []).filter((c: any) =>
+      c.church_id === myChurchId ||
+      (c.church_id === null && releasedGlobalIds.has(c.id))
+    );
+    setCourses(visibleCourses);
     setUnlockedCourseIds(new Set((unlocksData ?? []).map((u: any) => u.course_id)));
   }
 
