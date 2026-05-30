@@ -593,7 +593,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
 
       {showNovoCurso && (
         <NovoCursoModal
-          churchId={profile?.church_id ?? null}
+          churchId={isSuper ? null : (profile?.church_id ?? null)}
           onClose={() => setShowNovoCurso(false)}
           onCreated={() => { setShowNovoCurso(false); fetchAll(); }}
         />
