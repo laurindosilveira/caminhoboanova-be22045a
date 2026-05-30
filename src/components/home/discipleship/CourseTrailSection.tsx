@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GraduationCap, CalendarDays, ChevronDown, ChevronRight, CheckCircle2, Lock, Layers, Plus, X } from "lucide-react";
+import { GraduationCap, CalendarDays, ChevronDown, ChevronRight, CheckCircle2, Lock, Layers, Plus, X, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Course, Lesson, Module } from "./shared";
@@ -307,6 +307,8 @@ export default function CourseTrailSection({
                           agendaSchedule={agendaSchedule}
                           manualLessonOverrideIds={manualLessonOverrideIds}
                           isLeaderOrAdmin={isLeaderOrAdmin}
+                          isSuper={isSuper}
+                          onRefresh={onRefresh}
                           onSelectLesson={onSelectLesson}
                         />
                       ))
@@ -351,7 +353,8 @@ export default function CourseTrailSection({
 
 function LessonButton({
   lesson, completedLessonIds, fullyCompletedLessonIds,
-  agendaSchedule, manualLessonOverrideIds, isLeaderOrAdmin, onSelectLesson,
+  agendaSchedule, manualLessonOverrideIds, isLeaderOrAdmin,
+  isSuper, onRefresh, onSelectLesson,
 }: {
   lesson: Lesson;
   completedLessonIds: Set<string>;
@@ -359,8 +362,24 @@ function LessonButton({
   agendaSchedule: AgendaSchedule;
   manualLessonOverrideIds: Set<string>;
   isLeaderOrAdmin: boolean;
+  isSuper?: boolean;
+  onRefresh?: () => void;
   onSelectLesson: (lesson: Lesson) => void;
 }) {
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(lesson.title);
+  const [savingRename, setSavingRename] = useState(false);
+
+  async function handleRename() {
+    if (!renameValue.trim() || renameValue.trim() === lesson.title) { setRenaming(false); return; }
+    setSavingRename(true);
+    const { error } = await supabase.from("lessons").update({ title: renameValue.trim() }).eq("id", lesson.id);
+    setSavingRename(false);
+    if (error) { toast.error("Erro ao renomear: " + error.message); return; }
+    setRenaming(false);
+    onRefresh?.();
+  }
+
   const isDone = completedLessonIds.has(lesson.id);
   const isFullyDone = fullyCompletedLessonIds.has(lesson.id);
   const isScheduled = agendaSchedule.scheduledLessonIds.has(lesson.id);
@@ -382,46 +401,89 @@ function LessonButton({
       : "Ainda não liberada";
   }
 
+  if (renaming) {
+    return (
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border last:border-b-0 bg-primary/5">
+        <div className="w-8 h-8 rounded-lg bg-secondary/10 flex items-center justify-center flex-shrink-0">
+          <span className="font-montserrat font-bold text-secondary text-xs">{lesson.order_num}</span>
+        </div>
+        <input
+          autoFocus
+          value={renameValue}
+          onChange={e => setRenameValue(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") handleRename(); if (e.key === "Escape") { setRenaming(false); setRenameValue(lesson.title); } }}
+          className="flex-1 px-2 py-1.5 rounded-lg border border-primary bg-background font-inter text-sm text-foreground focus:outline-none"
+        />
+        <button onClick={handleRename} disabled={savingRename}
+          className="px-3 py-1.5 rounded-lg font-montserrat font-bold text-primary-foreground text-xs disabled:opacity-50"
+          style={{ background: "var(--gradient-hero)" }}
+        >
+          {savingRename ? "..." : "Salvar"}
+        </button>
+        <button onClick={() => { setRenaming(false); setRenameValue(lesson.title); }}
+          className="p-1.5 rounded-lg bg-muted text-muted-foreground"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <button
-      onClick={() => {
-        if (isLocked || isNotScheduled) {
-          toast.info(isNotScheduled ? "Esta lição ainda não foi agendada pelo líder." : "Esta lição ainda não foi liberada.", { duration: 3000 });
-          return;
-        }
-        onSelectLesson(lesson);
-      }}
-      className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border last:border-b-0 transition-colors ${
-        (isLocked || isNotScheduled) ? "opacity-50 cursor-not-allowed" : "hover:bg-primary/5"
-      } ${isFullyDone ? "bg-brand-green/5" : isDone ? "bg-secondary/5" : ""}`}
-    >
-      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-        isFullyDone ? "bg-brand-green/15" : (isLocked || isNotScheduled) ? "bg-muted" : "bg-secondary/10"
-      }`}>
+    <div className={`flex items-center gap-3 px-4 py-3 border-b border-border last:border-b-0 group ${
+      isFullyDone ? "bg-brand-green/5" : isDone ? "bg-secondary/5" : ""
+    }`}>
+      <button
+        onClick={() => {
+          if (isLocked || isNotScheduled) {
+            toast.info(isNotScheduled ? "Esta lição ainda não foi agendada pelo líder." : "Esta lição ainda não foi liberada.", { duration: 3000 });
+            return;
+          }
+          onSelectLesson(lesson);
+        }}
+        className={`flex items-center gap-3 flex-1 min-w-0 text-left transition-colors ${
+          (isLocked || isNotScheduled) ? "opacity-50 cursor-not-allowed" : "hover:opacity-80"
+        }`}
+      >
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+          isFullyDone ? "bg-brand-green/15" : (isLocked || isNotScheduled) ? "bg-muted" : "bg-secondary/10"
+        }`}>
+          {isFullyDone
+            ? <CheckCircle2 className="w-4 h-4 text-brand-green" />
+            : (isLocked || isNotScheduled) ? <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+            : <span className="font-montserrat font-bold text-secondary text-xs">{lesson.order_num}</span>
+          }
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className={`font-inter text-sm ${isFullyDone ? "text-brand-green font-medium" : (isLocked || isNotScheduled) ? "text-muted-foreground" : "text-foreground"}`}>
+            {lesson.title}
+          </p>
+          {lesson.objective && <p className="font-inter text-[10px] text-muted-foreground truncate mt-0.5">{lesson.objective}</p>}
+          {lockMessage && <p className="font-inter text-[10px] text-muted-foreground mt-0.5">{lockMessage}</p>}
+          {isDone && !isFullyDone && !isLateAccess && !(isLocked || isNotScheduled) && (
+            <p className="font-inter text-[10px] text-secondary mt-0.5">⏳ Faltam devocionais ou estudo</p>
+          )}
+        </div>
         {isFullyDone
-          ? <CheckCircle2 className="w-4 h-4 text-brand-green" />
-          : (isLocked || isNotScheduled) ? <Lock className="w-3.5 h-3.5 text-muted-foreground" />
-          : <span className="font-montserrat font-bold text-secondary text-xs">{lesson.order_num}</span>
+          ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-brand-green/15 text-brand-green px-2 py-0.5 rounded-full">✓ Completa</span>
+          : isLateAccess ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Prazo encerrado</span>
+          : isDone && !(isLocked || isNotScheduled) ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-secondary/15 text-secondary px-2 py-0.5 rounded-full">Em andamento</span>
+          : (isLocked || isNotScheduled) ? <Lock className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+          : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
         }
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className={`font-inter text-sm ${isFullyDone ? "text-brand-green font-medium" : (isLocked || isNotScheduled) ? "text-muted-foreground" : "text-foreground"}`}>
-          {lesson.title}
-        </p>
-        {lesson.objective && <p className="font-inter text-[10px] text-muted-foreground truncate mt-0.5">{lesson.objective}</p>}
-        {lockMessage && <p className="font-inter text-[10px] text-muted-foreground mt-0.5">{lockMessage}</p>}
-        {isDone && !isFullyDone && !isLateAccess && !(isLocked || isNotScheduled) && (
-          <p className="font-inter text-[10px] text-secondary mt-0.5">⏳ Faltam devocionais ou estudo</p>
-        )}
-      </div>
-      {isFullyDone
-        ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-brand-green/15 text-brand-green px-2 py-0.5 rounded-full">✓ Completa</span>
-        : isLateAccess ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Prazo encerrado</span>
-        : isDone && !(isLocked || isNotScheduled) ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-secondary/15 text-secondary px-2 py-0.5 rounded-full">Em andamento</span>
-        : (isLocked || isNotScheduled) ? <Lock className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-        : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-      }
-    </button>
+      </button>
+
+      {/* Rename button — super admin only */}
+      {isSuper && (
+        <button
+          onClick={() => { setRenaming(true); setRenameValue(lesson.title); }}
+          className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-muted flex-shrink-0"
+          title="Renomear lição"
+        >
+          <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+        </button>
+      )}
+    </div>
   );
 }
 

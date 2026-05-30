@@ -399,6 +399,7 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
                         publishedLessonIds={publishedLessonIds}
                         devotionalCounts={devotionalCounts}
                         onEdit={setEditMode}
+                        onRefresh={fetchCourses}
                       />
                     ))}
 
@@ -461,6 +462,7 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
                         publishedLessonIds={publishedLessonIds}
                         devotionalCounts={devotionalCounts}
                         onEdit={setEditMode}
+                        onRefresh={fetchCourses}
                       />
                     ))}
                   </div>
@@ -508,7 +510,7 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
 // ─── Lesson row ───────────────────────────────────────────────────────────────
 
 function LessonRow({
-  lesson, isSuper, isLider, publishedLessonIds, devotionalCounts, onEdit,
+  lesson, isSuper, isLider, publishedLessonIds, devotionalCounts, onEdit, onRefresh,
 }: {
   lesson: { id: string; order_num: number; title: string; objective: string | null; topics: string[] | null; church_id: string | null };
   isSuper: boolean;
@@ -516,7 +518,21 @@ function LessonRow({
   publishedLessonIds: Set<string>;
   devotionalCounts: Record<string, number>;
   onEdit: (mode: { lesson: any; mode: "study" | "devotionals" | "leader-guide" | "leader-customize" }) => void;
+  onRefresh: () => void;
 }) {
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(lesson.title);
+  const [savingRename, setSavingRename] = useState(false);
+
+  async function handleRename() {
+    if (!renameValue.trim() || renameValue.trim() === lesson.title) { setRenaming(false); return; }
+    setSavingRename(true);
+    await supabase.from("lessons").update({ title: renameValue.trim() }).eq("id", lesson.id);
+    setSavingRename(false);
+    setRenaming(false);
+    onRefresh();
+  }
+
   const devCount = devotionalCounts[lesson.id] || 0;
   return (
     <div className="border-b border-border last:border-b-0">
@@ -526,7 +542,32 @@ function LessonRow({
             <span className="font-montserrat font-bold text-secondary text-xs">{lesson.order_num}</span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-inter text-sm text-foreground">{lesson.title}</p>
+            {renaming ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  autoFocus
+                  value={renameValue}
+                  onChange={e => setRenameValue(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") handleRename(); if (e.key === "Escape") { setRenaming(false); setRenameValue(lesson.title); } }}
+                  className="flex-1 px-2 py-1 rounded-lg border border-primary bg-background font-inter text-sm text-foreground focus:outline-none"
+                />
+                <button onClick={handleRename} disabled={savingRename} className="px-2 py-1 rounded-lg bg-primary text-primary-foreground font-inter text-xs disabled:opacity-50">
+                  {savingRename ? "..." : "OK"}
+                </button>
+                <button onClick={() => { setRenaming(false); setRenameValue(lesson.title); }} className="px-2 py-1 rounded-lg bg-muted text-muted-foreground font-inter text-xs">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 group">
+                <p className="font-inter text-sm text-foreground">{lesson.title}</p>
+                {isSuper && (
+                  <button onClick={() => { setRenaming(true); setRenameValue(lesson.title); }} className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted">
+                    <Pencil className="w-3 h-3 text-muted-foreground" />
+                  </button>
+                )}
+              </div>
+            )}
             {lesson.objective && (
               <div className="flex items-start gap-1.5 mt-1">
                 <BookOpen className="w-3 h-3 text-secondary flex-shrink-0 mt-0.5" />
