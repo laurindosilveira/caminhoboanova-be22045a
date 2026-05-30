@@ -78,33 +78,35 @@ export default function Login() {
   }
 
   async function handlePostLogin(user: any, method: "password_success" | "passkey_success") {
-    // Set app active flag for redirection logic
     localStorage.setItem('caminho_app_active', 'true');
-    
-    // Fetch profile and roles
-    const { data: profile } = await supabase.from('profiles').select('church_id').eq('id', user.id).single();
-    
-    const [{ data: isAdmin }, { data: isLider }] = await Promise.all([
-      supabase.rpc("has_role", { _user_id: user.id, _role: "admin" }),
-      supabase.rpc("has_role", { _user_id: user.id, _role: "lider" }),
-    ]);
 
-    // Audit log
-    if (profile?.church_id) {
-      await supabase.rpc('log_church_audit', {
-        p_church_id: profile.church_id,
-        p_action: method,
-        p_details: { 
-          email: user.email,
-          user_id: user.id,
-          timestamp: new Date().toISOString()
-        }
-      });
-    }
+    try {
+      const [profileRes, isAdminRes, isLiderRes] = await Promise.allSettled([
+        supabase.from('profiles').select('church_id').eq('id', user.id).single(),
+        supabase.rpc("has_role", { _user_id: user.id, _role: "admin" }),
+        supabase.rpc("has_role", { _user_id: user.id, _role: "lider" }),
+      ]);
 
-    if (isAdmin || isLider) {
-      navigate("/admin");
-    } else {
+      const profile = profileRes.status === 'fulfilled' ? profileRes.value.data : null;
+      const isAdmin = isAdminRes.status === 'fulfilled' ? isAdminRes.value.data : false;
+      const isLider = isLiderRes.status === 'fulfilled' ? isLiderRes.value.data : false;
+
+      // Audit log (best effort — don't await to avoid blocking navigation)
+      if (profile?.church_id) {
+        supabase.rpc('log_church_audit', {
+          p_church_id: profile.church_id,
+          p_action: method,
+          p_details: { email: user.email, user_id: user.id, timestamp: new Date().toISOString() }
+        }).catch(() => {});
+      }
+
+      if (isAdmin || isLider) {
+        navigate("/admin");
+      } else {
+        navigate("/home");
+      }
+    } catch {
+      // Even if post-login queries fail, navigate to home — AuthContext will handle profile loading
       navigate("/home");
     }
   }
@@ -135,6 +137,14 @@ export default function Login() {
     }
 
     setLoading(true);
+
+    // Safety net: never leave button stuck for more than 15s
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+      setIsNetworkError(true);
+      setError("A operação está demorando muito. Verifique sua conexão e tente novamente.");
+    }, 15000);
+
     try {
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: parsed.data.email,
@@ -144,7 +154,6 @@ export default function Login() {
       if (authError) {
         const msg = authError.message?.toLowerCase() || "";
 
-        // Log failure (best effort — may also fail if offline)
         supabase.rpc('log_login_event', {
           p_email: email,
           p_method: 'password',
@@ -168,12 +177,13 @@ export default function Login() {
       }
 
       if (authData.user) {
-        handlePostLogin(authData.user, "password_success");
+        await handlePostLogin(authData.user, "password_success");
       }
     } catch (err: any) {
       setIsNetworkError(true);
       setError("Sem conexão com o servidor. Atualize o app e tente novamente.");
     } finally {
+      clearTimeout(safetyTimer);
       setLoading(false);
     }
   }
