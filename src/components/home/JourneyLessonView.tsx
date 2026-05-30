@@ -649,7 +649,6 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
         key={qKey}
         value={responses[qKey] ?? ""}
         onChange={e => updateResponse(qKey, e.target.value)}
-        onBlur={e => saveResponse(qKey, e.target.value)}
         placeholder={isAdmin ? "(Sem resposta ainda)" : placeholder}
         readOnly={isAdmin}
         rows={3}
