@@ -545,6 +545,8 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
               agendaSchedule={agendaSchedule}
               manualLessonOverrideIds={new Set(manualLessonOverrideMap.keys())}
               isLeaderOrAdmin={isLeaderOrAdmin}
+              isSuper={isSuper}
+              onRefresh={fetchAll}
               onSelectLesson={(lesson) => {
                 setSelectedLesson(lesson);
                 setSelectedLessonMode("choice");
