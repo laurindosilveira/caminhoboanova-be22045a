@@ -80,33 +80,28 @@ export default function Login() {
   async function handlePostLogin(user: any, method: "password_success" | "passkey_success") {
     localStorage.setItem('caminho_app_active', 'true');
 
-    try {
-      const [profileRes, isAdminRes, isLiderRes] = await Promise.allSettled([
-        supabase.from('profiles').select('church_id').eq('id', user.id).single(),
-        supabase.rpc("has_role", { _user_id: user.id, _role: "admin" }),
-        supabase.rpc("has_role", { _user_id: user.id, _role: "lider" }),
-      ]);
+    // Race all DB queries against a 5s timeout — if DB is slow, go to /home anyway
+    const withTimeout = <T>(p: Promise<T>): Promise<T | null> =>
+      Promise.race([p, new Promise<null>(res => setTimeout(() => res(null), 5000))]);
 
-      const profile = profileRes.status === 'fulfilled' ? profileRes.value.data : null;
-      const isAdmin = isAdminRes.status === 'fulfilled' ? isAdminRes.value.data : false;
-      const isLider = isLiderRes.status === 'fulfilled' ? isLiderRes.value.data : false;
+    const [profileRes, isAdminRes, isLiderRes] = await Promise.all([
+      withTimeout(supabase.from('profiles').select('church_id').eq('id', user.id).single()),
+      withTimeout(supabase.rpc("has_role", { _user_id: user.id, _role: "admin" })),
+      withTimeout(supabase.rpc("has_role", { _user_id: user.id, _role: "lider" })),
+    ]);
 
-      // Audit log (best effort — don't await to avoid blocking navigation)
-      if (profile?.church_id) {
-        supabase.rpc('log_church_audit', {
-          p_church_id: profile.church_id,
-          p_action: method,
-          p_details: { email: user.email, user_id: user.id, timestamp: new Date().toISOString() }
-        }).catch(() => {});
-      }
+    const isAdmin = (isAdminRes as any)?.data === true;
+    const isLider = (isLiderRes as any)?.data === true;
 
-      if (isAdmin || isLider) {
-        navigate("/admin");
-      } else {
-        navigate("/home");
-      }
-    } catch {
-      // Even if post-login queries fail, navigate to home — AuthContext will handle profile loading
+    supabase.rpc('log_church_audit', {
+      p_church_id: (profileRes as any)?.data?.church_id ?? null,
+      p_action: method,
+      p_details: { email: user.email, user_id: user.id, timestamp: new Date().toISOString() }
+    }).catch(() => {});
+
+    if (isAdmin || isLider) {
+      navigate("/admin");
+    } else {
       navigate("/home");
     }
   }
@@ -138,12 +133,12 @@ export default function Login() {
 
     setLoading(true);
 
-    // Safety net: never leave button stuck for more than 15s
+    // Safety net: never leave button stuck for more than 10s
     const safetyTimer = setTimeout(() => {
       setLoading(false);
       setIsNetworkError(true);
       setError("A operação está demorando muito. Verifique sua conexão e tente novamente.");
-    }, 15000);
+    }, 10000);
 
     try {
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
@@ -177,7 +172,7 @@ export default function Login() {
       }
 
       if (authData.user) {
-        await handlePostLogin(authData.user, "password_success");
+        handlePostLogin(authData.user, "password_success");
       }
     } catch (err: any) {
       setIsNetworkError(true);
