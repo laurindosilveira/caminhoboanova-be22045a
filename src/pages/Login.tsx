@@ -175,8 +175,14 @@ export default function Login() {
         handlePostLogin(authData.user, "password_success");
       }
     } catch (err: any) {
-      setIsNetworkError(true);
-      setError("Sem conexão com o servidor. Atualize o app e tente novamente.");
+      console.error("Login exception:", err?.message || err);
+      const errMsg = (err?.message || "").toLowerCase();
+      if (errMsg.includes("invalid login") || errMsg.includes("invalid credentials")) {
+        setError("Email ou senha incorretos. Verifique seus dados e tente novamente.");
+      } else {
+        setIsNetworkError(true);
+        setError("Sem conexão com o servidor. Atualize o app e tente novamente.");
+      }
     } finally {
       clearTimeout(safetyTimer);
       setLoading(false);
