@@ -9,6 +9,7 @@ import { CalendarDays, Plus, X, MapPin, Users, BookOpen, Pencil, Check, Sparkles
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { getSubsequentLessonEvents } from "@/lib/lessonScheduleCascade";
 
 type Event = {
   id: string;
@@ -187,13 +188,8 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
       const newLessonId = payload.linked_lesson_id;
 
       if (oldLessonId !== newLessonId && newLessonId && oldEvent) {
-        const subsequentWithLessons = events.filter(
-          e =>
-            e.id !== editingFullEventId &&
-            new Date(e.event_date).getTime() > new Date(oldEvent.event_date).getTime() &&
-            e.linked_lesson_id
-        );
-        if (subsequentWithLessons.length > 0) {
+        const subsequentEvents = getSubsequentLessonEvents(events, oldEvent);
+        if (subsequentEvents.length > 0) {
           await supabase.from("events").update({ ...payload, linked_lesson_id: oldLessonId }).eq("id", editingFullEventId);
           setCascadePending({ eventId: editingFullEventId, oldLessonId, newLessonId });
           setShowCascadeDialog(true);
@@ -256,13 +252,8 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
     const newLessonId = editLessonId || null;
 
     if (oldLessonId !== newLessonId && newLessonId) {
-      const subsequentWithLessons = events.filter(
-        e =>
-          e.id !== eventId &&
-          new Date(e.event_date).getTime() > new Date(event.event_date).getTime() &&
-          e.linked_lesson_id
-      );
-      if (subsequentWithLessons.length > 0) {
+      const subsequentEvents = getSubsequentLessonEvents(events, event);
+      if (subsequentEvents.length > 0) {
         setCascadePending({ eventId, oldLessonId, newLessonId });
         setShowCascadeDialog(true);
         return;
@@ -294,9 +285,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
     }
 
     if (doCascade) {
-      const subsequent = events
-        .filter(e => e.id !== eventId && new Date(e.event_date).getTime() > new Date(event.event_date).getTime() && e.linked_lesson_id)
-        .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
+      const subsequent = getSubsequentLessonEvents(events, event);
 
       if (subsequent.length > 0) {
         const newLesson = lessons.find(l => l.id === newLessonId);

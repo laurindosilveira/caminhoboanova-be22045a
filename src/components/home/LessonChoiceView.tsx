@@ -16,7 +16,7 @@ type Lesson = {
   course_id: string;
 };
 
-type DevotionalItem = {
+export type DevotionalItem = {
   id: string;
   lesson_id: string;
   day_number: number;
@@ -29,7 +29,7 @@ type DevotionalItem = {
   questions: string[];
 };
 
-type DevotionalOverride = {
+export type DevotionalOverride = {
   id: string;
   devotional_id: string;
   custom_points: number | null;
@@ -38,7 +38,7 @@ type DevotionalOverride = {
   is_unlocked: boolean;
 };
 
-type DevotionalStatus = "available" | "completed" | "locked" | "future" | "recovery";
+export type DevotionalStatus = "available" | "completed" | "locked" | "future" | "recovery";
 
 type Props = {
   lesson: Lesson;
@@ -119,7 +119,7 @@ function isOverrideActive(override: DevotionalOverride | undefined, now: Date) {
  *     (one per missed devotional, in order). Recovery is strict: miss the recovery
  *     date and it becomes permanently "locked".
  */
-function computeDevotionalStatuses(
+export function computeDevotionalStatuses(
   devList: DevotionalItem[],
   completedMap: Map<string, string>,
   completedRecoveryIds: Set<string>,
@@ -142,14 +142,6 @@ function computeDevotionalStatuses(
   function isToday(date: Date) {
     return normalizeDate(date).getTime() === today.getTime();
   }
-
-  const devListIds = new Set(devList.map((dev) => dev.id));
-  const completedToday = Array.from(completedMap.entries()).some(([devId, dateStr]) => {
-    if (!devListIds.has(devId)) return false;
-    const completedDate = new Date(dateStr);
-    completedDate.setHours(0, 0, 0, 0);
-    return completedDate.getTime() === today.getTime();
-  });
 
   for (const dev of devList) {
     if (dev.day_number > scheduledDayLimit) {
@@ -198,12 +190,9 @@ function computeDevotionalStatuses(
       }
 
       if (isToday(scheduledDate)) {
-        if (completedToday) {
-          statuses.set(dev.id, "future");
-          lockedSet.add(dev.id);
-        } else {
-          statuses.set(dev.id, "available");
-        }
+        // Completing another devotional today (especially a weekend/recovery
+        // item) must not block the devotional assigned to this calendar day.
+        statuses.set(dev.id, "available");
         continue;
       }
 
@@ -283,12 +272,7 @@ function computeDevotionalStatuses(
       statuses.set(dev.id, "future");
       lockedSet.add(dev.id);
     } else if (isToday(scheduledDate)) {
-      if (completedToday) {
-        statuses.set(dev.id, "future");
-        lockedSet.add(dev.id);
-      } else {
-        statuses.set(dev.id, "available");
-      }
+      statuses.set(dev.id, "available");
     } else {
       statuses.set(dev.id, "locked");
       lockedSet.add(dev.id);
