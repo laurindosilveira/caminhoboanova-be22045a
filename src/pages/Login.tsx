@@ -9,6 +9,7 @@ import {
   formatLoginDiagnostic,
   type LoginDiagnostic,
 } from "@/lib/loginDiagnostics";
+import { ignoreAsyncError } from "@/lib/safeAsync";
 
 const loginSchema = z.object({
   email: z.string().trim().email("Email inválido").max(255),
@@ -55,11 +56,11 @@ export default function Login() {
 
         if (isCancelled) {
           // Log cancellation
-          await supabase.rpc('log_login_event', {
+          ignoreAsyncError(supabase.rpc('log_login_event', {
             p_email: email || null,
             p_method: 'passkey',
             p_status: 'cancelled'
-          });
+          }), "Passkey cancellation audit");
           setLoading(false);
           return;
         }
@@ -74,12 +75,12 @@ export default function Login() {
       setError("Erro ao entrar com biometria: " + (err.message || "Tente novamente."));
       
       // Log failure
-      await supabase.rpc('log_login_event', {
+      ignoreAsyncError(supabase.rpc('log_login_event', {
         p_email: email || null,
         p_method: 'passkey',
         p_status: 'failure',
         p_details: { error: err.message }
-      });
+      }), "Passkey failure audit");
       setLoading(false);
     }
   }
@@ -100,11 +101,11 @@ export default function Login() {
     const isAdmin = (isAdminRes as any)?.data === true;
     const isLider = (isLiderRes as any)?.data === true;
 
-    supabase.rpc('log_church_audit', {
+    ignoreAsyncError(supabase.rpc('log_church_audit', {
       p_church_id: (profileRes as any)?.data?.church_id ?? null,
       p_action: method,
       p_details: { email: user.email, user_id: user.id, timestamp: new Date().toISOString() }
-    }).catch(() => {});
+    }), "Login success audit");
 
     if (isAdmin || isLider) {
       navigate("/admin");
@@ -188,12 +189,12 @@ export default function Login() {
       if (authError) {
         const msg = authError.message?.toLowerCase() || "";
 
-        supabase.rpc('log_login_event', {
+        ignoreAsyncError(supabase.rpc('log_login_event', {
           p_email: email,
           p_method: 'password',
           p_status: 'failure',
           p_details: { error: authError.message }
-        }).catch(() => {});
+        }), "Login failure audit");
 
         if (msg.includes("failed to fetch") || msg.includes("network") || msg.includes("fetch")) {
           await showNetworkDiagnostic(authError);
@@ -210,7 +211,7 @@ export default function Login() {
       }
 
       if (authData.user) {
-        handlePostLogin(authData.user, "password_success");
+        await handlePostLogin(authData.user, "password_success");
       }
     } catch (err: any) {
       console.error("Login exception:", err?.message || err);
