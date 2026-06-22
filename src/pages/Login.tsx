@@ -117,15 +117,21 @@ export default function Login() {
   async function handleForceReload() {
     setIsReloading(true);
     try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map(registration => registration.unregister()));
+      }
       if ('caches' in window) {
         const names = await caches.keys();
         await Promise.all(names.map(n => caches.delete(n)));
       }
-      if (navigator.serviceWorker?.controller) {
-        navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
-      }
-    } catch {}
-    window.location.reload();
+    } catch (updateError) {
+      console.error("[App hard refresh failed]", updateError);
+    }
+
+    const refreshUrl = new URL(window.location.href);
+    refreshUrl.searchParams.set("app-refresh", Date.now().toString());
+    window.location.replace(refreshUrl.toString());
   }
 
   async function showNetworkDiagnostic(error: unknown, timedOut = false) {
@@ -330,6 +336,7 @@ export default function Login() {
                           : "não respondeu"}
                       </p>
                       <p>Horário: {new Date(loginDiagnostic.timestamp).toLocaleString("pt-BR")}</p>
+                      <p>Build: {new Date(loginDiagnostic.buildDate).toLocaleString("pt-BR")}</p>
                     </div>
                     <button
                       type="button"

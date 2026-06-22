@@ -19,6 +19,7 @@ export type LoginDiagnostic = {
   supabase: ProbeResult;
   authError: string;
   appVersion: string;
+  buildDate: string;
   userAgent: string;
 };
 
@@ -103,6 +104,7 @@ export async function diagnoseLoginFailure(
     supabase,
     authError: errorText(authError),
     appVersion: typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "desconhecida",
+    buildDate: typeof __APP_BUILD_DATE__ === "string" ? __APP_BUILD_DATE__ : "desconhecida",
     userAgent: navigator.userAgent,
   };
 }
@@ -117,6 +119,7 @@ export function formatLoginDiagnostic(diagnostic: LoginDiagnostic) {
     `Diagnóstico de login: ${diagnostic.code}`,
     `Horário: ${diagnostic.timestamp}`,
     `Versão: ${diagnostic.appVersion}`,
+    `Build: ${diagnostic.buildDate}`,
     `Navegador online: ${diagnostic.online ? "sim" : "não"}`,
     `Site: ${formatProbe(diagnostic.app)}`,
     `Supabase: ${formatProbe(diagnostic.supabase)}`,

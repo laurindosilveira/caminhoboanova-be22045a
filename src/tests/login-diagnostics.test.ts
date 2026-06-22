@@ -56,12 +56,14 @@ describe("login diagnostic report", () => {
       supabase: { ok: false, status: null, error: "TypeError: Failed to fetch" },
       authError: "AuthRetryableFetchError: Failed to fetch",
       appVersion: "1.0.0",
+      buildDate: "2026-06-22T11:55:00.000Z",
       userAgent: "Test Browser",
     });
 
     expect(report).toContain("SUPABASE_UNREACHABLE");
     expect(report).toContain("Site: respondeu (HTTP 200)");
     expect(report).toContain("Supabase: falhou");
+    expect(report).toContain("Build: 2026-06-22T11:55:00.000Z");
     expect(report).not.toContain("senha");
   });
 });

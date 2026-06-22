@@ -50,6 +50,13 @@ function showUpdateBanner(updateSWFn: () => void) {
   setTimeout(() => banner.remove(), 15000);
 }
 
+// Force reload when a new SW takes control — safety net for iOS/Android PWA
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    window.location.reload();
+  });
+}
+
 const updateSW = registerSW({
   immediate: true,
 
