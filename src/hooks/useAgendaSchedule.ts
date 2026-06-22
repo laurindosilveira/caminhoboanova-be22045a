@@ -47,6 +47,18 @@ function startOfLocalDay(date: Date): Date {
   return day;
 }
 
+export function getStudyOpenLessonIds(
+  schedule: Pick<ScheduleEntry, "lessonId" | "windowStart" | "eventDate">[],
+  now = new Date(),
+): Set<string> {
+  const today = startOfLocalDay(now);
+  return new Set(
+    schedule
+      .filter((entry) => today >= entry.windowStart && now < entry.eventDate)
+      .map((entry) => entry.lessonId),
+  );
+}
+
 export function useAgendaSchedule() {
   const { profile, role, user } = useAuth();
   const { effectiveArea } = useAreaSwitch();
@@ -91,7 +103,7 @@ export function useAgendaSchedule() {
       const result = await (supabase.from as any)("events")
         .select(selectClause)
         .not("linked_lesson_id", "is", null)
-        .order("event_date", { ascending: false });
+        .order("event_date", { ascending: true });
 
       if (!result.error) {
         eventsResult = result;
@@ -215,7 +227,7 @@ export function useAgendaSchedule() {
   today.setHours(0, 0, 0, 0);
 
   const releasedLessonIds = new Set<string>();
-  const studyOpenLessonIds = new Set<string>();
+  const studyOpenLessonIds = getStudyOpenLessonIds(schedule, now);
   const lateAccessLessonIds = new Set<string>();
   const lessonDevotionalDates = new Map<string, Date[]>();
   const lessonEventDate = new Map<string, Date>();
@@ -231,9 +243,6 @@ export function useAgendaSchedule() {
     lessonReleasedDays.set(entry.lessonId, entry.releasedDayNumbers);
     lessonDevotionalMode.set(entry.lessonId, entry.devotionalMode);
   }
-
-  const currentOpenEntry = schedule.find((e) => today >= e.windowStart && now < e.eventDate);
-  if (currentOpenEntry) studyOpenLessonIds.add(currentOpenEntry.lessonId);
 
   const scheduledLessonIds = new Set(schedule.map((e) => e.lessonId));
   const nextScheduledEvent = schedule.find((e) => e.eventDate >= now) ?? null;

@@ -19,6 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import CalendarView from "./CalendarView";
 import emptyAgendaImg from "@/assets/empty-agenda.png";
+import { getSubsequentLessonEvents } from "@/lib/lessonScheduleCascade";
 
 type Event = {
   id: string;
@@ -472,10 +473,8 @@ export default function UserAgendaTab() {
 
       // Check cascade for lesson change
       if (oldLessonId !== newLessonId && newLessonId) {
-        const subsequentWithLessons = events.filter(
-          e => e.id !== editingEvent.id && new Date(e.event_date).getTime() > new Date(editingEvent.event_date).getTime() && e.linked_lesson_id
-        );
-        if (subsequentWithLessons.length > 0) {
+        const subsequentEvents = getSubsequentLessonEvents(events, editingEvent);
+        if (subsequentEvents.length > 0) {
           // Save other fields first (without lesson change), then handle cascade
           const { error: prepareCascadeError } = await supabase
             .from("events")
@@ -536,9 +535,7 @@ export default function UserAgendaTab() {
     }
 
     if (doCascade) {
-      const subsequent = events
-        .filter(e => e.id !== eventId && new Date(e.event_date).getTime() > new Date(event.event_date).getTime() && e.linked_lesson_id)
-        .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
+      const subsequent = getSubsequentLessonEvents(events, event);
 
       if (subsequent.length > 0) {
         const newLesson = lessonOptions.find(l => l.id === newLessonId);
