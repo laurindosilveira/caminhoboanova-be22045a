@@ -4,6 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { Eye, EyeOff, Mail, Lock, Flame, MessageCircle, Fingerprint } from "lucide-react";
 import { z } from "zod";
+import {
+  diagnoseLoginFailure,
+  formatLoginDiagnostic,
+  type LoginDiagnostic,
+} from "@/lib/loginDiagnostics";
 
 const loginSchema = z.object({
   email: z.string().trim().email("Email inválido").max(255),
@@ -22,6 +27,8 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState<boolean | null>(null);
+  const [loginDiagnostic, setLoginDiagnostic] = useState<LoginDiagnostic | null>(null);
+  const [diagnosticCopied, setDiagnosticCopied] = useState(false);
 
   useEffect(() => {
     // Check for passkey support
@@ -120,10 +127,37 @@ export default function Login() {
     window.location.reload();
   }
 
+  async function showNetworkDiagnostic(error: unknown, timedOut = false) {
+    setIsNetworkError(true);
+    setError("Não foi possível concluir o login. Verifique o diagnóstico abaixo.");
+
+    try {
+      const diagnostic = await diagnoseLoginFailure(error, { timedOut });
+      setLoginDiagnostic(diagnostic);
+      console.error("[Login diagnostic]", diagnostic);
+    } catch (diagnosticError) {
+      console.error("[Login diagnostic failed]", diagnosticError);
+    }
+  }
+
+  async function copyDiagnostic() {
+    if (!loginDiagnostic) return;
+
+    try {
+      await navigator.clipboard.writeText(formatLoginDiagnostic(loginDiagnostic));
+      setDiagnosticCopied(true);
+      window.setTimeout(() => setDiagnosticCopied(false), 2000);
+    } catch (copyError) {
+      console.error("[Login diagnostic copy failed]", copyError);
+    }
+  }
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setIsNetworkError(false);
+    setLoginDiagnostic(null);
+    setDiagnosticCopied(false);
 
     const parsed = loginSchema.safeParse({ email, password });
     if (!parsed.success) {
@@ -132,19 +166,24 @@ export default function Login() {
     }
 
     setLoading(true);
-
-    // Safety net: never leave button stuck for more than 10s
-    const safetyTimer = setTimeout(() => {
-      setLoading(false);
-      setIsNetworkError(true);
-      setError("A operação está demorando muito. Verifique sua conexão e tente novamente.");
-    }, 10000);
+    let loginTimeoutId: number | undefined;
 
     try {
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: parsed.data.email,
-        password: parsed.data.password,
+      const loginTimeout = new Promise<never>((_, reject) => {
+        loginTimeoutId = window.setTimeout(() => {
+          const timeoutError = new Error("A autenticação excedeu 12 segundos");
+          timeoutError.name = "AuthTimeoutError";
+          reject(timeoutError);
+        }, 12000);
       });
+
+      const { data: authData, error: authError } = await Promise.race([
+        supabase.auth.signInWithPassword({
+          email: parsed.data.email,
+          password: parsed.data.password,
+        }),
+        loginTimeout,
+      ]);
 
       if (authError) {
         const msg = authError.message?.toLowerCase() || "";
@@ -157,8 +196,7 @@ export default function Login() {
         }).catch(() => {});
 
         if (msg.includes("failed to fetch") || msg.includes("network") || msg.includes("fetch")) {
-          setIsNetworkError(true);
-          setError("Sem conexão com o servidor. Atualize o app e tente novamente.");
+          await showNetworkDiagnostic(authError);
         } else if (msg.includes("invalid login credentials")) {
           setError("Email ou senha incorretos. Verifique seus dados e tente novamente.");
         } else if (msg.includes("email not confirmed")) {
@@ -180,11 +218,12 @@ export default function Login() {
       if (errMsg.includes("invalid login") || errMsg.includes("invalid credentials")) {
         setError("Email ou senha incorretos. Verifique seus dados e tente novamente.");
       } else {
-        setIsNetworkError(true);
-        setError("Sem conexão com o servidor. Atualize o app e tente novamente.");
+        await showNetworkDiagnostic(err, err?.name === "AuthTimeoutError");
       }
     } finally {
-      clearTimeout(safetyTimer);
+      if (loginTimeoutId !== undefined) {
+        window.clearTimeout(loginTimeoutId);
+      }
       setLoading(false);
     }
   }
@@ -272,11 +311,43 @@ export default function Login() {
             {error && (
               <div className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3" role="alert" id="login-error">
                 <p className="text-destructive font-inter text-sm">{error}</p>
+                {loginDiagnostic && (
+                  <div className="mt-3 rounded-lg border border-destructive/20 bg-background/70 p-3 text-left">
+                    <p className="font-montserrat text-xs font-black text-destructive">
+                      Código: {loginDiagnostic.code}
+                    </p>
+                    <div className="mt-2 space-y-1 font-inter text-xs text-muted-foreground">
+                      <p>Internet: {loginDiagnostic.online ? "detectada" : "não detectada"}</p>
+                      <p>
+                        Site: {loginDiagnostic.app.ok
+                          ? `respondeu (HTTP ${loginDiagnostic.app.status})`
+                          : "não respondeu"}
+                      </p>
+                      <p>
+                        Servidor de login: {loginDiagnostic.supabase.ok
+                          ? `respondeu (HTTP ${loginDiagnostic.supabase.status})`
+                          : "não respondeu"}
+                      </p>
+                      <p>Horário: {new Date(loginDiagnostic.timestamp).toLocaleString("pt-BR")}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={copyDiagnostic}
+                      className="mt-3 w-full rounded-lg border border-destructive/30 px-3 py-2 font-montserrat text-xs font-bold text-destructive"
+                    >
+                      {diagnosticCopied ? "Diagnóstico copiado" : "Copiar diagnóstico técnico"}
+                    </button>
+                  </div>
+                )}
                 {isNetworkError && (
                   <div className="mt-2 flex flex-col gap-2">
                     <button
                       type="button"
-                      onClick={() => { setError(null); setIsNetworkError(false); }}
+                      onClick={() => {
+                        setError(null);
+                        setIsNetworkError(false);
+                        setLoginDiagnostic(null);
+                      }}
                       className="w-full py-2 rounded-lg border border-destructive/40 text-destructive font-montserrat font-bold text-sm transition-all active:scale-95"
                     >
                       Tentar de novo
