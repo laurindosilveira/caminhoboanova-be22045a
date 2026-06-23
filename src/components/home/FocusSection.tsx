@@ -149,10 +149,13 @@ export default function FocusSection({ onNavigateToDiscipulado }: FocusSectionPr
       }
 
       // 2. No active devotional — check for next lesson to study
-      const { data: lessonResponses } = await supabase
-        .from("lesson_responses")
+      const { data: lessonResponses, error: lessonProgressError } = await supabase
+        .from("lesson_progress")
         .select("lesson_id")
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .eq("is_completed", true);
+
+      if (lessonProgressError) throw lessonProgressError;
 
       const studiedLessons = new Set(lessonResponses?.map(r => r.lesson_id) || []);
 

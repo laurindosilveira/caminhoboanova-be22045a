@@ -4,12 +4,12 @@ import { ignoreAsyncError } from "@/lib/safeAsync";
 describe("ignoreAsyncError", () => {
   it("accepts a thenable without a catch method", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    const thenable: PromiseLike<unknown> = {
+    const thenable = {
       then: (_onFulfilled, onRejected) => {
         onRejected?.(new Error("audit failed"));
-        return Promise.resolve();
+        return Promise.resolve(undefined) as any;
       },
-    };
+    } as PromiseLike<unknown>;
 
     expect(() => ignoreAsyncError(thenable, "Audit test")).not.toThrow();
 

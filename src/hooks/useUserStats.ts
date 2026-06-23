@@ -60,7 +60,9 @@ async function fetchUserStats(
     supabase.from("activities").select("id, type, title, subtitle, order_num, points, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null').order("order_num"),
     churchId ? supabase.from("user_progress").select("activity_id, completed_at, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("user_progress").select("activity_id, completed_at, church_id").eq("user_id", userId),
     churchId ? supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery, awarded_points, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery, awarded_points, church_id").eq("user_id", userId),
-    churchId ? supabase.from("lesson_responses").select("lesson_id, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("lesson_responses").select("lesson_id, church_id").eq("user_id", userId),
+    churchId
+      ? supabase.from("lesson_progress").select("lesson_id, church_id").eq("user_id", userId).eq("is_completed", true).or(`church_id.is.null,church_id.eq.${churchId}`)
+      : supabase.from("lesson_progress").select("lesson_id, church_id").eq("user_id", userId).eq("is_completed", true),
     churchId ? supabase.from("attendance").select("event_id, status, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("attendance").select("event_id, status, church_id").eq("user_id", userId),
     churchId ? supabase.from("worship_attendance").select("id, status, church_id").eq("user_id", userId).eq("status", "aprovado").eq("church_id", churchId) : supabase.from("worship_attendance").select("id, status, church_id").eq("user_id", userId).eq("status", "aprovado"),
     churchId ? supabase.from("achievement_unlocks").select("achievement_key, bonus_points, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("achievement_unlocks").select("achievement_key, bonus_points, church_id").eq("user_id", userId),

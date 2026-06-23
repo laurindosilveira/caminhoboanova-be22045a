@@ -130,7 +130,7 @@ export default function StudentListSection() {
       supabase.from("attendance").select("status").eq("user_id", student.user_id),
       supabase.from("worship_attendance").select("*", { count: "exact", head: true }).eq("user_id", student.user_id).eq("status", "aprovado"),
       supabase.from("devotional_progress").select("*", { count: "exact", head: true }).eq("user_id", student.user_id),
-      supabase.from("lesson_responses").select("*", { count: "exact", head: true }).eq("user_id", student.user_id),
+      supabase.from("lesson_progress").select("*", { count: "exact", head: true }).eq("user_id", student.user_id).eq("is_completed", true),
       supabase.from("discipleship_plans").select("health_status, is_priority").eq("user_id", student.user_id).maybeSingle(),
       supabase.from("spiritual_assessments").select("needs_pastor").eq("user_id", student.user_id).eq("month", now.getMonth() + 1).eq("year", now.getFullYear()).maybeSingle(),
     ]);

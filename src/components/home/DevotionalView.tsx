@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ChevronLeft, BookOpen, Heart, CheckCircle2, AlertCircle, Music } from "lucide-react";
 import { toast } from "sonner";
 import WorshipCard from "./WorshipCard";
+import { buildDevotionalResponsePayload } from "@/lib/learningCompletion";
 
 type WorshipSong = {
   id: string;
@@ -89,13 +90,19 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("devotional_responses")
         .select("question_index, response")
         .eq("user_id", user.id)
         .eq("devotional_id", activity.id)
         .order("question_index");
 
+      if (error) {
+        toast.error("Não foi possível carregar as respostas do devocional.", {
+          description: error.message,
+        });
+        return;
+      }
       if (!data) return;
 
       const nextAnswers: Record<number, string> = {};
@@ -132,56 +139,21 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
       return;
     }
 
-    const answerRows = activeQuestions.map((_, index) => ({
-      user_id: user.id,
-      devotional_id: activity.id,
-      question_index: index,
-      response: answers[index] ?? "",
-    }));
+    const responsePayload = buildDevotionalResponsePayload(answers, activeQuestions.length);
+    const { error } = await supabase.rpc("complete_devotional", {
+      p_devotional_id: activity.id,
+      p_responses: responsePayload,
+      p_is_recovery: isRecovery,
+      p_awarded_points: awardedPoints ?? activity.points,
+      p_override_release_id: overrideId ?? null,
+    });
 
-    let { error: progressError } = await supabase.from("devotional_progress").insert({
-      user_id: user.id,
-      devotional_id: activity.id,
-      is_recovery: isRecovery,
-      awarded_points: awardedPoints ?? activity.points,
-      override_release_id: overrideId ?? null,
-    } as any);
-
-    if (progressError && /awarded_points|override_release_id/i.test(progressError.message)) {
-      const fallback = await supabase.from("devotional_progress").insert({
-        user_id: user.id,
-        devotional_id: activity.id,
-        is_recovery: isRecovery,
-      } as any);
-      progressError = fallback.error;
-    }
-
-    if (progressError) {
+    if (error) {
       toast.error("Não foi possível concluir o devocional.", {
-        description: progressError.message,
+        description: error.message,
       });
       setCompleting(false);
       return;
-    }
-
-    if (answerRows.length > 0) {
-      const { error: answersError } = await supabase
-        .from("devotional_responses")
-        .upsert(answerRows, { onConflict: "user_id,devotional_id,question_index" });
-
-      if (answersError) {
-        await supabase
-          .from("devotional_progress")
-          .delete()
-          .eq("user_id", user.id)
-          .eq("devotional_id", activity.id);
-
-        toast.error("Não foi possível salvar as respostas do devocional.", {
-          description: "A conclusão foi cancelada para evitar pontuação sem respostas.",
-        });
-        setCompleting(false);
-        return;
-      }
     }
     
     // Dispatch celebration event

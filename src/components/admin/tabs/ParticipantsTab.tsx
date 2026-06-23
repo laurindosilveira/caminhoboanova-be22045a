@@ -247,6 +247,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       { data: lessonContentData, error: lessonContentError },
       { data: devContentData, error: devContentError },
       { data: eventsData, error: eventsDataError },
+      { data: lessonProgress, error: lessonProgressError },
     ] = await Promise.all([
       supabase.from("lesson_responses").select("lesson_id, question_key, response, created_at, awarded_points").eq("user_id", p.user_id).order("created_at"),
       supabase.from("devotional_progress").select("devotional_id, completed_at, awarded_points").eq("user_id", p.user_id).order("completed_at"),
@@ -257,6 +258,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       supabase.from("lesson_content").select("lesson_id, questions"),
       supabase.from("devotional_content").select("id, lesson_id, title, day_number, bible_reference, questions"),
       supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false }),
+      supabase.from("lesson_progress").select("lesson_id, completed_at, awarded_points").eq("user_id", p.user_id).eq("is_completed", true),
     ]);
 
     const loadError = lessonRespsError
@@ -267,7 +269,8 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       ?? coursesDataError
       ?? lessonContentError
       ?? devContentError
-      ?? eventsDataError;
+      ?? eventsDataError
+      ?? lessonProgressError;
 
     if (loadError) {
       setLessonCompletions([]);
@@ -297,9 +300,12 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     });
 
     const lCompletions: RealLessonCompletion[] = [];
+    const lessonProgressMap = new Map<string, any>((lessonProgress ?? []).map((item: any) => [item.lesson_id, item]));
     (lessonsData ?? []).forEach(lesson => {
+      const progress = lessonProgressMap.get(lesson.id);
+      if (!progress) return;
       const respMap = respsByLesson.get(lesson.id);
-      if (!respMap || respMap.size === 0) return;
+      if (!respMap) return;
       const questions = lessonContentMap.get(lesson.id) ?? [];
       const responses = questions.map((q, i) => ({
         question: q,
@@ -311,14 +317,15 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
           if (val.response) responses.push({ question: key, response: val.response });
         }
       });
-      const firstResp = Array.from(respMap.values())[0];
-      const awardedPoints = Array.from(respMap.values()).find((value) => typeof value.awarded_points === "number")?.awarded_points ?? 20;
+      const awardedPoints = typeof progress.awarded_points === "number"
+        ? progress.awarded_points
+        : Array.from(respMap.values()).find((value) => typeof value.awarded_points === "number")?.awarded_points ?? 20;
       lCompletions.push({
         lesson_id: lesson.id,
         lesson_title: lesson.title,
         course_title: courseMap.get(lesson.course_id) ?? "",
         responses: responses.filter(r => r.response),
-        completed_at: firstResp?.created_at ?? null,
+        completed_at: progress.completed_at ?? null,
         awarded_points: awardedPoints,
       });
     });
@@ -450,9 +457,12 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     setDeletingId(lessonId);
     const lesson = lessonCompletions.find(l => l.lesson_id === lessonId);
     const pointsRemoved = lesson?.awarded_points ?? 20;
-    const { error } = await supabase.from("lesson_responses").delete().eq("user_id", p.user_id).eq("lesson_id", lessonId);
-    if (error) {
-      toast({ title: "Erro ao remover estudo", description: error.message, variant: "destructive" });
+    const [{ error }, { error: progressError }] = await Promise.all([
+      supabase.from("lesson_responses").delete().eq("user_id", p.user_id).eq("lesson_id", lessonId),
+      supabase.from("lesson_progress").delete().eq("user_id", p.user_id).eq("lesson_id", lessonId),
+    ]);
+    if (error || progressError) {
+      toast({ title: "Erro ao remover estudo", description: (error ?? progressError)?.message, variant: "destructive" });
       setDeletingType(null);
       setDeletingId(null);
       return;

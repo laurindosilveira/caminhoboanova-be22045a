@@ -1643,6 +1643,73 @@ export type Database = {
           },
         ]
       }
+      lesson_progress: {
+        Row: {
+          audio_listened: boolean
+          awarded_points: number | null
+          church_id: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          is_completed: boolean
+          lesson_id: string
+          override_release_id: string | null
+          updated_at: string
+          user_id: string
+          video_watched: boolean
+        }
+        Insert: {
+          audio_listened?: boolean
+          awarded_points?: number | null
+          church_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          is_completed?: boolean
+          lesson_id: string
+          override_release_id?: string | null
+          updated_at?: string
+          user_id: string
+          video_watched?: boolean
+        }
+        Update: {
+          audio_listened?: boolean
+          awarded_points?: number | null
+          church_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          is_completed?: boolean
+          lesson_id?: string
+          override_release_id?: string | null
+          updated_at?: string
+          user_id?: string
+          video_watched?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lesson_progress_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lesson_progress_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lesson_progress_override_release_id_fkey"
+            columns: ["override_release_id"]
+            isOneToOne: false
+            referencedRelation: "user_lesson_overrides"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lesson_responses: {
         Row: {
           awarded_points: number | null
@@ -3795,6 +3862,27 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      complete_devotional: {
+        Args: {
+          p_awarded_points?: number
+          p_devotional_id: string
+          p_is_recovery?: boolean
+          p_override_release_id?: string
+          p_responses?: Json
+        }
+        Returns: undefined
+      }
+      complete_lesson: {
+        Args: {
+          p_audio_listened?: boolean
+          p_awarded_points?: number
+          p_lesson_id: string
+          p_override_release_id?: string
+          p_responses: Json
+          p_video_watched?: boolean
+        }
+        Returns: undefined
+      }
       can_manage_church: { Args: { _church_id: string }; Returns: boolean }
       check_church_member_limit: {
         Args: { p_church_id: string }
@@ -3904,6 +3992,15 @@ export type Database = {
           key: string
           title: string
         }[]
+      }
+      save_lesson_draft: {
+        Args: {
+          p_audio_listened?: boolean
+          p_lesson_id: string
+          p_responses?: Json
+          p_video_watched?: boolean
+        }
+        Returns: undefined
       }
       get_push_scheduled_pending: {
         Args: never

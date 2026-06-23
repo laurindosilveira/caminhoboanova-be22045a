@@ -81,7 +81,7 @@ export default function TurmaReportPDF({ participants, activities, turmaName }: 
         supabase.from("meeting_evaluations").select("*").in("user_id", userIds),
         supabase.from("worship_attendance").select("user_id, status, worship_date").in("user_id", userIds),
         supabase.from("devotional_progress").select("user_id, devotional_id").in("user_id", userIds),
-        supabase.from("lesson_responses").select("user_id, lesson_id").in("user_id", userIds),
+        supabase.from("lesson_progress").select("user_id, lesson_id").in("user_id", userIds).eq("is_completed", true),
       ]);
 
       // Fetch event details for attendance

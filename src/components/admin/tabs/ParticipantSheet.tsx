@@ -227,7 +227,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         supabase.from("discipleship_plans").select("*").eq("user_id", p.user_id).maybeSingle(),
         supabase.from("pastoral_notes").select("*").eq("user_id", p.user_id).order("created_at", { ascending: false }),
         supabase.from("lessons").select("id, title, order_num, objective, topics, course_id").order("order_num"),
-        supabase.from("lesson_responses").select("lesson_id, created_at").eq("user_id", p.user_id).order("created_at"),
+        supabase.from("lesson_progress").select("lesson_id, completed_at").eq("user_id", p.user_id).eq("is_completed", true).order("completed_at"),
         supabase.from("devotional_progress").select("devotional_id, completed_at").eq("user_id", p.user_id).order("completed_at"),
         supabase.from("devotional_content").select("id, lesson_id, title, day_number"),
         supabase.from("attendance").select("id, event_id, status, created_at").eq("user_id", p.user_id),
@@ -260,11 +260,11 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       const courseTitleMap = new Map((visibleCourses as Course[]).map((course) => [course.id, course.title]));
 
       const lessonCompletionMap = new Map<string, string | null>();
-      (lessonResponsesData ?? []).forEach((response) => {
+      (lessonResponsesData ?? []).forEach((response: any) => {
         if (!visibleLessonIds.has(response.lesson_id)) return;
         const existing = lessonCompletionMap.get(response.lesson_id);
-        if (!existing || new Date(response.created_at).getTime() < new Date(existing).getTime()) {
-          lessonCompletionMap.set(response.lesson_id, response.created_at);
+        if (!existing || new Date(response.completed_at).getTime() < new Date(existing).getTime()) {
+          lessonCompletionMap.set(response.lesson_id, response.completed_at);
         }
       });
       setLessonCompletions(

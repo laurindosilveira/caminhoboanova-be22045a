@@ -185,7 +185,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
     ] = userIds.length > 0
       ? await Promise.all([
           supabase.from("user_progress").select("user_id, activity_id").in("user_id", userIds).or(churchScope),
-          supabase.from("lesson_responses").select("user_id, lesson_id").in("user_id", userIds).or(churchScope),
+          supabase.from("lesson_progress").select("user_id, lesson_id").in("user_id", userIds).eq("is_completed", true).or(churchScope),
           supabase.from("devotional_progress").select("user_id, devotional_id, completed_at").in("user_id", userIds).or(churchScope),
           supabase.from("attendance").select("user_id, status").in("user_id", userIds).eq("status", "presente").or(churchScope),
           Promise.all(

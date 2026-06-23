@@ -204,6 +204,7 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
     await Promise.all([
       supabase.from("user_progress").delete().in("user_id", userIds),
       supabase.from("lesson_responses").delete().in("user_id", userIds),
+      supabase.from("lesson_progress").delete().in("user_id", userIds),
       supabase.from("devotional_progress").delete().in("user_id", userIds),
       supabase.from("achievement_unlocks").delete().in("user_id", userIds),
       supabase.from("attendance").delete().in("user_id", userIds),

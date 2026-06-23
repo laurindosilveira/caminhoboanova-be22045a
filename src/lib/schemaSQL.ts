@@ -159,6 +159,25 @@ CREATE TABLE public.lesson_responses (
   UNIQUE(user_id, lesson_id, question_key)
 );
 
+-- lesson_progress
+-- Draft responses remain in lesson_responses; only this table represents a
+-- validated lesson completion.
+CREATE TABLE public.lesson_progress (
+  id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id uuid NOT NULL,
+  lesson_id uuid NOT NULL REFERENCES public.lessons(id) ON DELETE CASCADE,
+  is_completed boolean NOT NULL DEFAULT false,
+  completed_at timestamp with time zone,
+  video_watched boolean NOT NULL DEFAULT false,
+  audio_listened boolean NOT NULL DEFAULT false,
+  awarded_points integer,
+  override_release_id uuid,
+  church_id uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  UNIQUE(user_id, lesson_id)
+);
+
 -- lesson_content
 CREATE TABLE public.lesson_content (
   id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -475,6 +494,7 @@ ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.message_reactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lesson_responses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.lesson_progress ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lesson_content ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.devotional_content ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.devotional_progress ENABLE ROW LEVEL SECURITY;
@@ -584,8 +604,9 @@ BEGIN
   ),
   lesson_points AS (
     SELECT lr.user_id, COUNT(DISTINCT lr.lesson_id) * _lesson_pts AS pts
-    FROM public.lesson_responses lr
+    FROM public.lesson_progress lr
     JOIN scoped_profiles sp ON sp.user_id = lr.user_id
+    WHERE lr.is_completed = true
     GROUP BY lr.user_id
   ),
   devotional_pts AS (
@@ -654,7 +675,7 @@ BEGIN
     FROM scoped_profiles sp
     JOIN public.courses c ON true
     JOIN public.lessons l ON l.course_id = c.id
-    LEFT JOIN public.lesson_responses lr ON lr.lesson_id = l.id AND lr.user_id = sp.user_id
+    LEFT JOIN public.lesson_progress lr ON lr.lesson_id = l.id AND lr.user_id = sp.user_id AND lr.is_completed = true
     GROUP BY sp.user_id, c.id, (SELECT COUNT(*) FROM public.lessons WHERE course_id = c.id)
     HAVING COUNT(DISTINCT lr.lesson_id) = (SELECT COUNT(*) FROM public.lessons WHERE course_id = c.id)
   ),
@@ -709,7 +730,9 @@ CREATE TRIGGER update_discipleship_plans_updated_at BEFORE UPDATE ON public.disc
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 CREATE TRIGGER update_lesson_responses_updated_at BEFORE UPDATE ON public.lesson_responses
-  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_lesson_progress_updated_at BEFORE UPDATE ON public.lesson_progress
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 CREATE TRIGGER update_lesson_content_timestamp BEFORE UPDATE ON public.lesson_content
   FOR EACH ROW EXECUTE FUNCTION public.update_lesson_content_updated_at();
@@ -818,6 +841,11 @@ CREATE POLICY "Users can remove their own reactions" ON public.message_reactions
 CREATE POLICY "Users can manage their own lesson responses" ON public.lesson_responses FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Admins can view lesson responses in their area" ON public.lesson_responses FOR SELECT USING (has_role(auth.uid(), 'admin') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = lesson_responses.user_id AND p.area = get_my_area())));
 CREATE POLICY "Liders can view lesson responses in their area" ON public.lesson_responses FOR SELECT USING (has_role(auth.uid(), 'lider') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = lesson_responses.user_id AND p.area = get_my_area())));
+
+-- lesson_progress
+CREATE POLICY "Users can manage their own lesson progress" ON public.lesson_progress FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Admins can view lesson progress in their area" ON public.lesson_progress FOR SELECT USING (has_role(auth.uid(), 'admin') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = lesson_progress.user_id AND p.area = get_my_area())));
+CREATE POLICY "Liders can view lesson progress in their area" ON public.lesson_progress FOR SELECT USING (has_role(auth.uid(), 'lider') AND (is_super_admin(auth.uid()) OR EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = lesson_progress.user_id AND p.area = get_my_area())));
 
 -- lesson_content
 CREATE POLICY "Admins can manage lesson content" ON public.lesson_content FOR ALL USING (has_role(auth.uid(), 'admin')) WITH CHECK (has_role(auth.uid(), 'admin'));

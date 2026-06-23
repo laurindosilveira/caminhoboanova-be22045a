@@ -246,7 +246,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
         supabase.from("lessons").select("id, course_id"),
         supabase.from("devotional_content").select("id, lesson_id"),
         supabase.from("events").select("id", { count: "exact", head: true }).gte("event_date", new Date(Date.now() - 90 * 86400000).toISOString()).or(`area.eq.${currentArea},area.is.null`),
-        supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
+        supabase.from("lesson_progress").select("lesson_id").eq("user_id", user.id).eq("is_completed", true),
         supabase.from("activities").select("id, points"),
         supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
         supabase.from("achievement_unlocks").select("bonus_points").eq("user_id", user.id),
@@ -256,7 +256,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
         // Devotionals linked to lessons that have events in last 15 days
         supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null),
         supabase.from("devotional_progress").select("devotional_id, completed_at").eq("user_id", user.id).gte("completed_at", fifteenDaysAgo),
-        supabase.from("lesson_responses").select("lesson_id, created_at").eq("user_id", user.id).gte("created_at", fifteenDaysAgo),
+        supabase.from("lesson_progress").select("lesson_id, completed_at").eq("user_id", user.id).eq("is_completed", true).gte("completed_at", fifteenDaysAgo),
         supabase.from("course_unlocks").select("course_id").eq("area", currentArea),
       ]);
 
@@ -483,6 +483,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
       await Promise.all([
         supabase.from("user_progress").delete().in("user_id", userIds),
         supabase.from("lesson_responses").delete().in("user_id", userIds),
+        supabase.from("lesson_progress").delete().in("user_id", userIds),
         supabase.from("devotional_progress").delete().in("user_id", userIds),
         supabase.from("achievement_unlocks").delete().in("user_id", userIds),
         supabase.from("attendance").delete().in("user_id", userIds),

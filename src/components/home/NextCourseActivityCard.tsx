@@ -147,7 +147,7 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
     if (!user) { setLoading(false); return; }
 
     const [{ data: responses }, { data: devContent }, { data: devProgress }] = await Promise.all([
-      supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
+      supabase.from("lesson_progress").select("lesson_id").eq("user_id", user.id).eq("is_completed", true),
       supabase.from("devotional_content").select("id, lesson_id, day_number, title, bible_reference").not("lesson_id", "is", null),
       supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
     ]);

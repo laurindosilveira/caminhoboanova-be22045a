@@ -24,15 +24,16 @@ export default function PersonalizedGreeting() {
         .eq("user_id", user.id)
         .order("completed_at", { ascending: false })
         .limit(1),
-      supabase.from("lesson_responses")
-        .select("created_at, lesson_id")
+      supabase.from("lesson_progress")
+        .select("completed_at, lesson_id")
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
+        .eq("is_completed", true)
+        .order("completed_at", { ascending: false })
         .limit(1),
     ]);
 
     const devDate = devProg?.[0]?.completed_at ? new Date(devProg[0].completed_at) : null;
-    const lessonDate = lessonResp?.[0]?.created_at ? new Date(lessonResp[0].created_at) : null;
+    const lessonDate = lessonResp?.[0]?.completed_at ? new Date(lessonResp[0].completed_at) : null;
 
     if (devDate && (!lessonDate || devDate > lessonDate)) {
       setLastActivity("devocional");

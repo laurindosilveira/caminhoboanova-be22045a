@@ -81,7 +81,7 @@ export default function AdminOverviewTab({
     const [{ data: att }, { data: dev }, { data: les }, { data: prog }] = await Promise.all([
       applyChurchScope(supabase.from("attendance").select("user_id, status, created_at, church_id").in("user_id", userIds)),
       applyChurchScope(supabase.from("devotional_progress").select("user_id, completed_at, church_id").in("user_id", userIds)),
-      applyChurchScope(supabase.from("lesson_responses").select("user_id, lesson_id, created_at, church_id").in("user_id", userIds)),
+      applyChurchScope(supabase.from("lesson_progress").select("user_id, lesson_id, created_at:completed_at, church_id").in("user_id", userIds).eq("is_completed", true)),
       applyChurchScope(supabase.from("user_progress").select("user_id, activity_id, created_at, church_id").in("user_id", userIds)),
     ]);
     setAttRows(att ?? []);

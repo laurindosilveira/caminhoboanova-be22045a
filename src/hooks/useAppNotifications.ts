@@ -238,14 +238,19 @@ async function checkLessonCompletion() {
 
     const since = new Date(Date.now() - 86400000).toISOString();
     const { data: recentResponses } = await supabase
-      .from("lesson_responses")
-      .select("lesson_id, created_at")
+      .from("lesson_progress")
+      .select("lesson_id, completed_at")
       .eq("user_id", user.id)
-      .gte("created_at", since);
+      .eq("is_completed", true)
+      .gte("completed_at", since);
 
     if (!recentResponses || recentResponses.length === 0) return;
 
-    const recentLessonIds = [...new Set(recentResponses.map((response) => response.lesson_id))];
+    const recentLessonIds = [
+      ...new Set<string>(
+        recentResponses.map((response: { lesson_id: string }) => response.lesson_id),
+      ),
+    ];
     const { data: lessons } = await supabase
       .from("lessons")
       .select("id, title, order_num")

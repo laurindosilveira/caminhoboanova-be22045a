@@ -128,7 +128,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       supabase.from("discipleship_plans").select("objectives,challenges,recommendations,next_steps,health_status").eq("user_id", user.id).maybeSingle(),
       profile?.church_id ? supabase.from("courses").select("*").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("courses").select("*").is("church_id", null).order("order_num"),
       profile?.church_id ? supabase.from("lessons").select("id, title, order_num, objective, topics, course_id, church_id, module_id").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("lessons").select("id, title, order_num, objective, topics, course_id, church_id, module_id").is("church_id", null).order("order_num"),
-      supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
+      supabase.from("lesson_progress").select("lesson_id").eq("user_id", user.id).eq("is_completed", true),
       supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false }).limit(10),
       supabase.from("attendance").select("event_id, status").eq("user_id", user.id),
       supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).order("year", { ascending: true }).order("month", { ascending: true }),
@@ -145,7 +145,9 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     setAssessment(assess ?? null);
     setPlan(planData ?? null);
 
-    const lessonIdsWithResponses = new Set((responsesData ?? []).map(r => r.lesson_id));
+    const lessonIdsWithResponses = new Set<string>(
+      (responsesData ?? []).map((response: { lesson_id: string }) => response.lesson_id),
+    );
     setCompletedLessonIds(lessonIdsWithResponses);
 
     const devsByLesson: Record<string, string[]> = {};
@@ -409,6 +411,9 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
             isLateAccess={isLateAccessStudy}
             overrideId={manualLessonOverrideMap.get(selectedLesson.id)?.id}
             awardedPoints={manualLessonOverrideMap.get(selectedLesson.id)?.custom_points ?? null}
+            onComplete={(lessonId) => {
+              setCompletedLessonIds((current) => new Set(current).add(lessonId));
+            }}
           />
         </div>
       );

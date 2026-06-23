@@ -98,7 +98,7 @@ export default function ReportsTab() {
       supabase.from("attendance").select("user_id, event_id, status, created_at"),
       supabase.from("devotional_progress").select("user_id, completed_at"),
       supabase.from("lessons").select("id, title, course_id, order_num").order("order_num"),
-      supabase.from("lesson_responses").select("user_id, lesson_id"),
+      supabase.from("lesson_progress").select("user_id, lesson_id").eq("is_completed", true),
       supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false }).limit(20),
     ]);
 

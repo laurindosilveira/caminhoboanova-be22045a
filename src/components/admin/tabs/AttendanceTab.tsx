@@ -1565,6 +1565,7 @@ export default function AttendanceTab({ participants, activities, communities, i
     const resetOperations = await Promise.all([
       supabase.from("user_progress").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
       supabase.from("lesson_responses").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
+      supabase.from("lesson_progress").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
       supabase.from("devotional_progress").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
       supabase.from("achievement_unlocks").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
       supabase.from("attendance").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),

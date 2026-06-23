@@ -578,7 +578,10 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
       if (item.source === "manual_bonus" && item.tableId) {
         await supabase.from("achievement_unlocks").delete().eq("id", item.tableId);
       } else if (item.type === "lesson" && item.tableId) {
-        await supabase.from("lesson_responses").delete().eq("user_id", userId).eq("lesson_id", item.tableId);
+        await Promise.all([
+          supabase.from("lesson_responses").delete().eq("user_id", userId).eq("lesson_id", item.tableId),
+          supabase.from("lesson_progress").delete().eq("user_id", userId).eq("lesson_id", item.tableId),
+        ]);
       } else if (item.type === "devotional" && item.tableId) {
         await supabase.from("devotional_progress").delete().eq("id", item.tableId);
       } else if (item.type === "attendance" && item.tableId) {

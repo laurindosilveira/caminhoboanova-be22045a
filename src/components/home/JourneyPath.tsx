@@ -87,7 +87,7 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
     ] = await Promise.all([
       supabase.from("courses").select("*").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null").order("order_num"),
       supabase.from("lessons").select("id, title, order_num, objective, course_id").order("order_num"),
-      supabase.from("lesson_responses").select("lesson_id").eq("user_id", user.id),
+      supabase.from("lesson_progress").select("lesson_id").eq("user_id", user.id).eq("is_completed", true),
       supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null),
       supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
       supabase.from("events").select("id, linked_lesson_id, area, event_date").not("linked_lesson_id", "is", null),
@@ -97,7 +97,9 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
     ]);
 
     const lessons = lessonsData ?? [];
-    const lessonIdsWithResponses = new Set((responsesData ?? []).map(r => r.lesson_id));
+    const lessonIdsWithResponses = new Set<string>(
+      (responsesData ?? []).map((response: { lesson_id: string }) => response.lesson_id),
+    );
     setCompletedLessonIds(lessonIdsWithResponses);
 
     // Compute fully completed lessons (study + all devotionals)

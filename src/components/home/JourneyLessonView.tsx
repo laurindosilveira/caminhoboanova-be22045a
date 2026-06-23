@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import BibleModal from "./BibleModal";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -14,6 +14,7 @@ import confetti from "canvas-confetti";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
 import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
+import { canCompleteLesson, getLessonRequiredKeys } from "@/lib/learningCompletion";
 
 type Lesson = {
   id: string;
@@ -66,9 +67,10 @@ type Props = {
   isLateAccess?: boolean;
   overrideId?: string | null;
   awardedPoints?: number | null;
+  onComplete?: (lessonId: string) => void;
 };
 
-export default function JourneyLessonView({ lesson, onBack, isAdmin = false, targetUserId, isLateAccess = false, overrideId = null, awardedPoints = null }: Props) {
+export default function JourneyLessonView({ lesson, onBack, isAdmin = false, targetUserId, isLateAccess = false, overrideId = null, awardedPoints = null, onComplete }: Props) {
   const { profile, role } = useAuth();
   const { effectiveArea } = useAreaSwitch();
   const [content, setContent] = useState<LessonContent>(getDefaultContent(lesson.order_num));
@@ -76,6 +78,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
   const [bibleRef, setBibleRef] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
   const [contentLoaded, setContentLoaded] = useState(false);
   const [videoWatched, setVideoWatched] = useState(false);
   const [audioListened, setAudioListened] = useState(false);
@@ -200,97 +203,78 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
       const { data: { user } } = await supabase.auth.getUser();
       const uid = targetUserId ?? user?.id;
       if (!uid) return;
-      const { data } = await supabase
-        .from("lesson_responses")
-        .select("question_key, response")
-        .eq("lesson_id", lesson.id)
-        .eq("user_id", uid);
-      if (data) {
+      const [{ data, error }, { data: progress, error: progressError }] = await Promise.all([
+        supabase
+          .from("lesson_responses")
+          .select("question_key, response")
+          .eq("lesson_id", lesson.id)
+          .eq("user_id", uid),
+        supabase
+          .from("lesson_progress")
+          .select("video_watched, audio_listened, updated_at")
+          .eq("lesson_id", lesson.id)
+          .eq("user_id", uid)
+          .maybeSingle(),
+      ]);
+      if (error) {
+        toast.error("Não foi possível carregar as respostas da lição.", {
+          description: error.message,
+        });
+      } else if (data) {
         const map: Response = {};
         data.forEach(r => { map[r.question_key] = r.response; });
         setResponses(map);
+      }
+      if (!progressError && progress) {
+        setVideoWatched(!!progress.video_watched);
+        setAudioListened(!!progress.audio_listened);
+        if (progress.updated_at) setLastSaved(new Date(progress.updated_at));
       }
       hasLoadedResponses.current = true;
     }
     loadResponses();
   }, [lesson.id, targetUserId]);
 
-  const saveResponse = useCallback(async (key: string, value: string) => {
-    if (isAdmin) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    let { error } = await supabase.from("lesson_responses").upsert({
-      user_id: user.id,
-      lesson_id: lesson.id,
-      question_key: key,
-      response: value,
-    }, { onConflict: "user_id,lesson_id,question_key" });
-    if (error && /awarded_points|override_release_id/i.test(error.message)) {
-      const fallback = await supabase.from("lesson_responses").upsert({
-        user_id: user.id,
-        lesson_id: lesson.id,
-        question_key: key,
-        response: value,
-      }, { onConflict: "user_id,lesson_id,question_key" });
-      error = fallback.error;
-    }
-    if (error) {
-      toast.error("Falha ao salvar a resposta da lição.", {
-        description: error.message,
-      });
-      return;
-    }
-    setLastSaved(new Date());
-  }, [lesson.id, isAdmin]);
-
   useEffect(() => {
     if (isAdmin || !contentLoaded || !hasLoadedResponses.current) return;
 
     const entries = Object.entries(responses);
-    if (entries.length === 0) return;
+    if (entries.length === 0 && !videoWatched && !audioListened) return;
 
     const timeoutId = window.setTimeout(async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const { error } = await supabase.rpc("save_lesson_draft", {
+        p_lesson_id: lesson.id,
+        p_responses: Object.fromEntries(entries),
+        p_video_watched: videoWatched,
+        p_audio_listened: audioListened,
+      });
 
-      const upserts = entries.map(([key, response]) => ({
-        user_id: user.id,
-        lesson_id: lesson.id,
-        question_key: key,
-        response,
-      }));
-
-      let { error } = await supabase
-        .from("lesson_responses")
-        .upsert(upserts, { onConflict: "user_id,lesson_id,question_key" });
-      if (error && /awarded_points|override_release_id/i.test(error.message)) {
-        const fallback = await supabase
-          .from("lesson_responses")
-          .upsert(entries.map(([key, response]) => ({
-            user_id: user.id,
-            lesson_id: lesson.id,
-            question_key: key,
-            response,
-          })), { onConflict: "user_id,lesson_id,question_key" });
-        error = fallback.error;
-      }
-
-      if (!error) {
+      if (error) {
+        setDraftError(error.message);
+      } else {
+        setDraftError(null);
         setLastSaved(new Date());
       }
     }, 1200);
 
     return () => window.clearTimeout(timeoutId);
-  }, [responses, lesson.id, isAdmin, contentLoaded]);
+  }, [responses, lesson.id, isAdmin, contentLoaded, videoWatched, audioListened]);
 
   // Validation: check all required fields
-  const requiredKeys = ["icebreaker", ...content.questions.map((_, i) => `q${i}`), "practice", "prayer"];
+  const requiredKeys = getLessonRequiredKeys(content.questions.length);
   const allResponsesFilled = requiredKeys.every(k => (responses[k] ?? "").trim().length > 0);
   const videoRequired = !!content.video_link;
   const audioRequired = !!content.audio_link;
   const videoOk = !videoRequired || videoWatched;
   const audioOk = !audioRequired || audioListened;
-  const canSave = allResponsesFilled && videoOk && audioOk;
+  const canSave = canCompleteLesson({
+    responses,
+    questionCount: content.questions.length,
+    videoRequired,
+    videoWatched,
+    audioRequired,
+    audioListened,
+  });
 
   const missingItems: string[] = [];
   if (!allResponsesFilled) missingItems.push("responder todas as perguntas");
@@ -325,41 +309,26 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
       return;
     }
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setSaving(false); return; }
-    const upserts = Object.entries(responses).map(([key, response]) => ({
-      user_id: user.id,
-      lesson_id: lesson.id,
-      question_key: key,
-      response,
-      awarded_points: isLateAccess ? 0 : awardedPoints,
-      override_release_id: overrideId,
-    }));
-    if (upserts.length > 0) {
-      let { error } = await supabase
-        .from("lesson_responses")
-        .upsert(upserts, { onConflict: "user_id,lesson_id,question_key" });
-      if (error && /awarded_points|override_release_id/i.test(error.message)) {
-        const fallback = await supabase
-          .from("lesson_responses")
-          .upsert(Object.entries(responses).map(([key, response]) => ({
-            user_id: user.id,
-            lesson_id: lesson.id,
-            question_key: key,
-            response,
-          })), { onConflict: "user_id,lesson_id,question_key" });
-        error = fallback.error;
-      }
-      if (error) {
-        setSaving(false);
-        toast.error("Não foi possível salvar as respostas da lição.", {
-          description: error.message,
-        });
-        return;
-      }
+    const { error } = await supabase.rpc("complete_lesson", {
+      p_lesson_id: lesson.id,
+      p_responses: responses,
+      p_video_watched: videoWatched,
+      p_audio_listened: audioListened,
+      p_awarded_points: isLateAccess ? 0 : awardedPoints,
+      p_override_release_id: overrideId,
+    });
+    if (error) {
+      setSaving(false);
+      setDraftError(error.message);
+      toast.error("Não foi possível concluir a lição.", {
+        description: error.message,
+      });
+      return;
     }
     setSaving(false);
+    setDraftError(null);
     setLastSaved(new Date());
+    onComplete?.(lesson.id);
 
     if (!isLateAccess) {
       // Celebration animation
@@ -373,7 +342,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
       setTimeout(() => setShowCompletionAnim(false), 3500);
     }
 
-    toast.success(isLateAccess ? "Respostas salvas! (sem pontuação — prazo encerrado)" : "Respostas salvas com sucesso! +20 pontos de fé ⭐");
+    toast.success(isLateAccess ? "Respostas salvas! (sem pontuação — prazo encerrado)" : "Lição concluída e respostas salvas!");
   }
 
   function updateResponse(key: string, value: string) {
@@ -952,7 +921,11 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
           <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <Pen className="w-4 h-4 text-primary" />
             <p className="font-montserrat font-bold text-foreground text-sm">💬 Perguntas para Diálogo</p>
-            {!isAdmin && <span className="ml-auto text-muted-foreground font-inter text-[10px]">Salvo automaticamente</span>}
+            {!isAdmin && (
+              <span className={`ml-auto font-inter text-[10px] ${draftError ? "text-destructive" : "text-muted-foreground"}`}>
+                {draftError ? "Falha no salvamento automático" : lastSaved ? "Rascunho salvo" : "Salvamento automático"}
+              </span>
+            )}
           </div>
           <div className="p-4 space-y-4">
             {content.questions.map((question, i) => (
@@ -1039,6 +1012,14 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
             <Save className="w-4 h-4" />
             {saving ? "Salvando..." : lastSaved ? `✅ Salvo às ${lastSaved.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "Salvar respostas"}
           </button>
+          {draftError && (
+            <div className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2.5">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-destructive" />
+              <p className="font-inter text-xs text-destructive">
+                Não foi possível salvar no servidor. Verifique a conexão e tente novamente.
+              </p>
+            </div>
+          )}
 
           {Object.keys(responses).length > 0 && (
             <div className="space-y-2">

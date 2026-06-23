@@ -89,8 +89,11 @@ export default function Login() {
     localStorage.setItem('caminho_app_active', 'true');
 
     // Race all DB queries against a 5s timeout — if DB is slow, go to /home anyway
-    const withTimeout = <T,>(p: Promise<T>): Promise<T | null> =>
-      Promise.race([p, new Promise<null>(res => setTimeout(() => res(null), 5000))]);
+    const withTimeout = <T,>(operation: PromiseLike<T>): Promise<T | null> =>
+      Promise.race([
+        Promise.resolve(operation),
+        new Promise<null>(resolve => setTimeout(() => resolve(null), 5000)),
+      ]);
 
     const [profileRes, isAdminRes, isLiderRes] = await Promise.all([
       withTimeout(supabase.from('profiles').select('church_id').eq('id', user.id).single()),

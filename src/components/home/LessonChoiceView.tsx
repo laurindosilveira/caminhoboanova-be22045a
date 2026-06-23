@@ -318,13 +318,25 @@ export default function LessonChoiceView({
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
-      const [{ data: devs }, { data: prog }, { data: gameConfig }] = await Promise.all([
+      const [
+        { data: devs, error: devsError },
+        { data: prog, error: progressError },
+        { data: gameConfig, error: gameConfigError },
+      ] = await Promise.all([
         supabase.from("devotional_content").select("*").eq("lesson_id", lesson.id).order("day_number"),
         user
           ? supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery").eq("user_id", user.id)
-          : Promise.resolve({ data: [] }),
+          : Promise.resolve({ data: [], error: null }),
         supabase.rpc("get_game_config" as any),
       ]);
+      const loadError = devsError ?? progressError ?? gameConfigError;
+      if (loadError) {
+        toast.error("Não foi possível carregar o progresso da lição.", {
+          description: loadError.message,
+        });
+        setLoading(false);
+        return;
+      }
       const cfgMap = new Map<string, number>((gameConfig ?? []).map((r: any) => [r.key, Number(r.value)]));
       setDevPts(cfgMap.get("devotional_points") ?? 5);
 
