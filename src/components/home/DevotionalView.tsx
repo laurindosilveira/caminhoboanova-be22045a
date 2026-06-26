@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { ChevronLeft, BookOpen, Heart, CheckCircle2, AlertCircle, Music } from "lucide-react";
 import { toast } from "sonner";
 import WorshipCard from "./WorshipCard";
-import { buildDevotionalResponsePayload } from "@/lib/learningCompletion";
 
 type WorshipSong = {
   id: string;
@@ -115,9 +114,12 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
     loadAnswers();
   }, [activity.id]);
 
-  const activeQuestions = (content?.questions ?? []).filter((question) => question.trim());
+  const visibleQuestions = (content?.questions ?? [])
+    .map((question, index) => ({ question, index }))
+    .filter(({ question }) => question.trim());
+  const activeQuestions = visibleQuestions.map(({ question }) => question);
   const hasQuestions = activeQuestions.length > 0;
-  const allQuestionsAnswered = hasQuestions && activeQuestions.every((_, index) => (answers[index] ?? "").trim().length > 0);
+  const allQuestionsAnswered = hasQuestions && visibleQuestions.every(({ index }) => (answers[index] ?? "").trim().length > 0);
   // When there are no questions, require an explicit read confirmation instead
   const canComplete = hasQuestions ? allQuestionsAnswered : readConfirmed;
 
@@ -139,7 +141,9 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
       return;
     }
 
-    const responsePayload = buildDevotionalResponsePayload(answers, activeQuestions.length);
+    const responsePayload = Object.fromEntries(
+      visibleQuestions.map(({ index }) => [String(index), answers[index] ?? ""]),
+    );
     const { error } = await supabase.rpc("complete_devotional", {
       p_devotional_id: activity.id,
       p_responses: responsePayload,
@@ -277,7 +281,7 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
             )}
           </div>
           <div className="p-4 space-y-4">
-            {activeQuestions.map((question, index) => {
+            {visibleQuestions.map(({ question, index }, displayIndex) => {
               const answered = (answers[index] ?? "").trim().length > 0;
               const showError = attempted && !answered && !isCompleted;
 
@@ -287,7 +291,7 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
                     <span className={`w-6 h-6 rounded-full flex items-center justify-center font-montserrat font-bold text-xs flex-shrink-0 mt-0.5 ${
                       answered ? "bg-brand-green/20 text-brand-green" : showError ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"
                     }`}>
-                      {index + 1}
+                      {displayIndex + 1}
                     </span>
                     <p className="text-foreground font-inter text-sm">{question}</p>
                   </div>
