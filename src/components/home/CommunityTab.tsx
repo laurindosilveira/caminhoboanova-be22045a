@@ -174,7 +174,12 @@ export default function CommunityTab() {
         return copy;
       });
     } else {
-      await supabase.from("message_reactions").insert({ message_id: messageId, user_id: user.id, emoji });
+      await supabase.from("message_reactions").insert({
+        message_id: messageId,
+        user_id: user.id,
+        emoji,
+        church_id: profile?.church_id ?? null,
+      });
       setReactions(prev => {
         const copy = { ...prev };
         if (!copy[messageId]) copy[messageId] = {};
@@ -195,6 +200,7 @@ export default function CommunityTab() {
       user_name: profile.full_name,
       community: profile.community,
       content: newTestimony.trim(),
+      church_id: profile.church_id ?? null,
     }).select().single();
     if (data && !error) {
       setTestimonies(prev => [data as Testimony, ...prev]);
@@ -211,7 +217,11 @@ export default function CommunityTab() {
   async function joinChallenge(challengeId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from("challenge_participants").insert({ challenge_id: challengeId, user_id: user.id });
+    await supabase.from("challenge_participants").insert({
+      challenge_id: challengeId,
+      user_id: user.id,
+      church_id: profile?.church_id ?? null,
+    });
     setChallenges(prev => prev.map(c => c.id === challengeId ? { ...c, has_joined: true, participant_count: c.participant_count + 1 } : c));
   }
 

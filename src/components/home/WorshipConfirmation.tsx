@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { EVENT_TYPES, getEventEmoji, getEventLabel } from "@/config/eventTypes";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 type EventItem = {
   id: string;
@@ -57,6 +58,7 @@ const ATT_STATUS_CFG: Record<string, { icon: string; label: string; cls: string 
 
 export default function WorshipConfirmation({ events, attendanceRecords, onCheckIn }: Props) {
   const { toast } = useToast();
+  const { profile } = useAuth();
   const [open, setOpen] = useState(false);
 
   // Selected agenda event
@@ -142,6 +144,7 @@ export default function WorshipConfirmation({ events, attendanceRecords, onCheck
       worship_time: manualTime,
       preacher_name: getEventLabel(manualType),
       event_type: manualType,
+      church_id: profile?.church_id ?? null,
     });
 
     if (error) {

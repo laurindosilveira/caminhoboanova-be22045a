@@ -213,9 +213,10 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       prayer_score: form.prayer_score, presence_score: form.presence_score,
       struggle_score: form.struggle_score, doubt_score: form.doubt_score,
       needs_pastor: form.needs_pastor, notes: form.notes || null,
+      church_id: profile?.church_id ?? null,
     }, { onConflict: "user_id,month,year" });
     await supabase.from("discipleship_plans").upsert({
-      user_id: user.id, health_status: health,
+      user_id: user.id, health_status: health, church_id: profile?.church_id ?? null,
     }, { onConflict: "user_id" });
     setSaving(false);
     setShowAssessment(false);
@@ -231,11 +232,13 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       user_id: user.id, month, year,
       needs_pastor: true,
       notes: `[PEDIDO DE AJUDA - ${helpType.toUpperCase()}] ${helpMessage}`.trim(),
+      church_id: profile?.church_id ?? null,
     }, { onConflict: "user_id,month,year" });
     await supabase.from("discipleship_plans").upsert({
       user_id: user.id,
       health_status: helpType === "crise" ? "critico" : "atencao",
       is_priority: true,
+      church_id: profile?.church_id ?? null,
     }, { onConflict: "user_id" });
     setHelpSending(false);
     setHelpSent(true);

@@ -374,6 +374,7 @@ export default function ClassroomTab() {
       reply_to_text: replyTarget ? replyTarget.message.slice(0, 80) : null,
       file_url: fileUrl,
       file_type: fileType,
+      church_id: profile?.church_id ?? null,
     } as any);
     setChatInput("");
     setReplyTo(null);
@@ -402,7 +403,8 @@ export default function ClassroomTab() {
       content: prayerInput.trim(),
       visibility: isAnonymous ? 'anonymous' : 'public',
       status: 'open',
-      turma_id: profile?.turma_id
+      turma_id: profile?.turma_id,
+      church_id: profile?.church_id ?? null,
     });
     setPrayerInput("");
     setIsAnonymous(false);

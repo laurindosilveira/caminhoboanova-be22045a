@@ -373,6 +373,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
           user_id: user.id,
           achievement_key: a.key,
           bonus_points: a.bonusPoints,
+          church_id: profile?.church_id ?? null,
         });
       }
 

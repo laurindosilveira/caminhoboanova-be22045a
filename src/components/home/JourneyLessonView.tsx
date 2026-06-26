@@ -14,7 +14,6 @@ import confetti from "canvas-confetti";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
 import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
-import { canCompleteLesson, getLessonRequiredKeys } from "@/lib/learningCompletion";
 
 type Lesson = {
   id: string;
@@ -261,20 +260,21 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
   }, [responses, lesson.id, isAdmin, contentLoaded, videoWatched, audioListened]);
 
   // Validation: check all required fields
-  const requiredKeys = getLessonRequiredKeys(content.questions.length);
+  const visibleQuestions = content.questions
+    .map((question, index) => ({ question, index }))
+    .filter(({ question }) => question.trim());
+  const requiredKeys = [
+    "icebreaker",
+    ...visibleQuestions.map(({ index }) => `q${index}`),
+    "practice",
+    "prayer",
+  ];
   const allResponsesFilled = requiredKeys.every(k => (responses[k] ?? "").trim().length > 0);
   const videoRequired = !!content.video_link;
   const audioRequired = !!content.audio_link;
   const videoOk = !videoRequired || videoWatched;
   const audioOk = !audioRequired || audioListened;
-  const canSave = canCompleteLesson({
-    responses,
-    questionCount: content.questions.length,
-    videoRequired,
-    videoWatched,
-    audioRequired,
-    audioListened,
-  });
+  const canSave = allResponsesFilled && videoOk && audioOk;
 
   const missingItems: string[] = [];
   if (!allResponsesFilled) missingItems.push("responder todas as perguntas");
@@ -451,10 +451,10 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
       addLabel("Quebra-gelo:", responses["icebreaker"]);
     }
 
-    content.questions.forEach((q, i) => {
-      const answer = responses[`q${i}`];
+    visibleQuestions.forEach(({ question, index }, displayIndex) => {
+      const answer = responses[`q${index}`];
       if (answer) {
-        addLabel(`${i + 1}. ${q}`, answer);
+        addLabel(`${displayIndex + 1}. ${question}`, answer);
       }
     });
 
@@ -525,9 +525,9 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     if (responses["icebreaker"]) {
       lines.push(`\n🔗 *Quebra-gelo:*\n${responses["icebreaker"]}`);
     }
-    content.questions.forEach((q, i) => {
-      const answer = responses[`q${i}`];
-      if (answer) lines.push(`\n${i + 1}. *${q}*\n${answer}`);
+    visibleQuestions.forEach(({ question, index }, displayIndex) => {
+      const answer = responses[`q${index}`];
+      if (answer) lines.push(`\n${displayIndex + 1}. *${question}*\n${answer}`);
     });
     if (responses["practice"]) {
       lines.push(`\n🧭 *Prática da Semana:*\n${responses["practice"]}`);
@@ -584,11 +584,11 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     }
 
     // Questions
-    if (content.questions.length > 0) {
+    if (visibleQuestions.length > 0) {
       sections.push(new Paragraph({ children: [new TextRun({ text: "💬 Perguntas para Diálogo", bold: true, size: 26, font: "Calibri" })], spacing: { before: 300, after: 100 } }));
-      content.questions.forEach((q, i) => {
-        sections.push(new Paragraph({ children: [new TextRun({ text: `${i + 1}. ${q}`, bold: true, size: 22, font: "Calibri" })], spacing: { after: 50 } }));
-        const answer = responses[`q${i}`];
+      visibleQuestions.forEach(({ question, index }, displayIndex) => {
+        sections.push(new Paragraph({ children: [new TextRun({ text: `${displayIndex + 1}. ${question}`, bold: true, size: 22, font: "Calibri" })], spacing: { after: 50 } }));
+        const answer = responses[`q${index}`];
         sections.push(new Paragraph({ children: [new TextRun({ text: answer ? `Resposta: ${answer}` : "(Sem resposta)", size: 22, font: "Calibri", color: answer ? "2563EB" : "999999" })], spacing: { after: 150 } }));
       });
     }
@@ -916,7 +916,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
       )}
 
       {/* 7. Perguntas para Diálogo */}
-      {content.questions.length > 0 && (
+      {visibleQuestions.length > 0 && (
         <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
           <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <Pen className="w-4 h-4 text-primary" />
@@ -928,10 +928,10 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
             )}
           </div>
           <div className="p-4 space-y-4">
-            {content.questions.map((question, i) => (
-              <div key={i}>
-                <p className="font-inter text-sm text-foreground mb-2 font-medium">{i + 1}. {question}</p>
-                {renderResponseField(`q${i}`, "Escreva sua reflexão aqui...")}
+            {visibleQuestions.map(({ question, index }, displayIndex) => (
+              <div key={index}>
+                <p className="font-inter text-sm text-foreground mb-2 font-medium">{displayIndex + 1}. {question}</p>
+                {renderResponseField(`q${index}`, "Escreva sua reflexão aqui...")}
               </div>
             ))}
           </div>
