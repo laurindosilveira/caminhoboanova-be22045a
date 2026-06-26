@@ -7,6 +7,7 @@ import { z } from "zod";
 import {
   diagnoseLoginFailure,
   formatLoginDiagnostic,
+  getPasswordLoginErrorMessage,
   type LoginDiagnostic,
 } from "@/lib/loginDiagnostics";
 import { ignoreAsyncError } from "@/lib/safeAsync";
@@ -197,6 +198,7 @@ export default function Login() {
 
       if (authError) {
         const msg = authError.message?.toLowerCase() || "";
+        const friendlyError = getPasswordLoginErrorMessage(authError);
 
         ignoreAsyncError(supabase.rpc('log_login_event', {
           p_email: email,
@@ -207,8 +209,8 @@ export default function Login() {
 
         if (msg.includes("failed to fetch") || msg.includes("network") || msg.includes("fetch")) {
           await showNetworkDiagnostic(authError);
-        } else if (msg.includes("invalid login credentials")) {
-          setError("Email ou senha incorretos. Verifique seus dados e tente novamente.");
+        } else if (friendlyError || msg.includes("invalid login credentials")) {
+          setError(friendlyError ?? "Email ou senha incorretos. Verifique seus dados e tente novamente.");
         } else if (msg.includes("email not confirmed")) {
           setError("Seu email ainda não foi confirmado. Verifique sua caixa de entrada.");
         } else if (msg.includes("too many requests") || msg.includes("rate limit")) {
@@ -224,9 +226,10 @@ export default function Login() {
       }
     } catch (err: any) {
       console.error("Login exception:", err?.message || err);
+      const friendlyError = getPasswordLoginErrorMessage(err);
       const errMsg = (err?.message || "").toLowerCase();
-      if (errMsg.includes("invalid login") || errMsg.includes("invalid credentials")) {
-        setError("Email ou senha incorretos. Verifique seus dados e tente novamente.");
+      if (friendlyError || errMsg.includes("invalid login") || errMsg.includes("invalid credentials")) {
+        setError(friendlyError ?? "Email ou senha incorretos. Verifique seus dados e tente novamente.");
       } else {
         await showNetworkDiagnostic(err, err?.name === "AuthTimeoutError");
       }

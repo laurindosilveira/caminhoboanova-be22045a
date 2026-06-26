@@ -24,12 +24,58 @@ export type LoginDiagnostic = {
 };
 
 const PROBE_TIMEOUT_MS = 6000;
+export const INVALID_LOGIN_CREDENTIALS_MESSAGE =
+  "Email ou senha incorretos. Verifique seus dados e tente novamente.";
 
 function errorText(error: unknown) {
   if (error instanceof Error) {
     return `${error.name}: ${error.message}`.slice(0, 300);
   }
   return String(error || "Erro desconhecido").slice(0, 300);
+}
+
+function normalizeErrorText(value: unknown) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function getErrorField(error: unknown, field: "message" | "code" | "status") {
+  if (!error || typeof error !== "object") return "";
+  return (error as Record<string, unknown>)[field];
+}
+
+export function getPasswordLoginErrorMessage(error: unknown): string | null {
+  const message = normalizeErrorText(
+    error instanceof Error ? error.message : getErrorField(error, "message"),
+  );
+  const code = normalizeErrorText(getErrorField(error, "code"));
+  const status = Number(getErrorField(error, "status"));
+
+  const isInvalidCredentials =
+    code.includes("invalid_credentials") ||
+    code.includes("invalid_grant") ||
+    message.includes("invalid login credentials") ||
+    message.includes("invalid credentials") ||
+    message.includes("email or password") ||
+    message.includes("credenciais invalidas") ||
+    message.includes("login invalido") ||
+    (status === 400 && message.includes("invalid"));
+
+  if (isInvalidCredentials) {
+    return INVALID_LOGIN_CREDENTIALS_MESSAGE;
+  }
+
+  if (message.includes("email not confirmed")) {
+    return "Seu email ainda nao foi confirmado. Verifique sua caixa de entrada.";
+  }
+
+  if (message.includes("too many requests") || message.includes("rate limit")) {
+    return "Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.";
+  }
+
+  return null;
 }
 
 async function probe(url: string, headers?: Record<string, string>): Promise<ProbeResult> {

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { classifyLoginDiagnostic, formatLoginDiagnostic } from "@/lib/loginDiagnostics";
+import {
+  INVALID_LOGIN_CREDENTIALS_MESSAGE,
+  classifyLoginDiagnostic,
+  formatLoginDiagnostic,
+  getPasswordLoginErrorMessage,
+} from "@/lib/loginDiagnostics";
 
 describe("login diagnostic classification", () => {
   it("identifies an offline device first", () => {
@@ -65,5 +70,26 @@ describe("login diagnostic report", () => {
     expect(report).toContain("Supabase: falhou");
     expect(report).toContain("Build: 2026-06-22T11:55:00.000Z");
     expect(report).not.toContain("senha");
+  });
+});
+
+describe("password login error messages", () => {
+  it("shows a clear message for invalid credentials returned by message", () => {
+    expect(getPasswordLoginErrorMessage({
+      message: "Invalid login credentials",
+      status: 400,
+    })).toBe(INVALID_LOGIN_CREDENTIALS_MESSAGE);
+  });
+
+  it("shows a clear message for invalid credentials returned by auth code", () => {
+    expect(getPasswordLoginErrorMessage({
+      message: "Bad request",
+      code: "invalid_credentials",
+      status: 400,
+    })).toBe(INVALID_LOGIN_CREDENTIALS_MESSAGE);
+  });
+
+  it("keeps unknown password login errors available for generic handling", () => {
+    expect(getPasswordLoginErrorMessage({ message: "Unexpected auth failure" })).toBeNull();
   });
 });
