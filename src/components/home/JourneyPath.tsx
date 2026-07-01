@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2, Lock, BookOpen, ChevronDown, ChevronRight, CalendarDays, Heart, GraduationCap } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
+import { getBusinessDaysBefore } from "@/hooks/useAgendaSchedule";
 
 type Lesson = {
   id: string;
@@ -90,7 +91,7 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
       supabase.from("lesson_progress").select("lesson_id").eq("user_id", user.id).eq("is_completed", true),
       supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null),
       supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
-      supabase.from("events").select("id, linked_lesson_id, area, event_date").not("linked_lesson_id", "is", null),
+      supabase.from("events").select("id, linked_lesson_id, area, event_date").not("linked_lesson_id", "is", null).order("event_date"),
       supabase.from("attendance").select("event_id, status").eq("user_id", user.id),
       supabase.from("worship_attendance").select("id, status").eq("user_id", user.id).eq("status", "aprovado"),
       supabase.from("course_unlocks").select("course_id").eq("area", currentArea),
@@ -131,12 +132,20 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
     // Lessons are unlocked if they are scheduled in the agenda for this area
     const now = new Date();
     const scheduled = new Set<string>();
-    (eventsData ?? []).forEach((e: any) => {
+    const applicableEvents = (eventsData ?? []).filter((e: any) => {
       if (e.area && e.area !== currentArea) return;
-      // Unlock if event is in the past OR if we are within 10 days of it
+      return true;
+    });
+    applicableEvents.forEach((e: any, index: number) => {
+      // Unlock if event is in the past OR if we are within its devotional window.
       const eventDate = new Date(e.event_date);
-      const windowStart = new Date(eventDate);
-      windowStart.setDate(windowStart.getDate() - 14); // 14 calendar days roughly covers 10 business days
+      const prevEvent = index > 0 ? applicableEvents[index - 1] : null;
+      const prevEventDate = prevEvent ? new Date(prevEvent.event_date) : null;
+      const autoLimited = prevEventDate
+        ? Math.round((eventDate.getTime() - prevEventDate.getTime()) / 86400000) < 10
+        : false;
+      const devotionalDates = getBusinessDaysBefore(eventDate, 10);
+      const windowStart = autoLimited ? devotionalDates[5] : devotionalDates[0];
       if (now >= windowStart) {
         scheduled.add(e.linked_lesson_id);
       }

@@ -3,7 +3,10 @@ import {
   computeDevotionalStatuses,
   type DevotionalItem,
 } from "@/components/home/LessonChoiceView";
-import { getStudyOpenLessonIds } from "@/hooks/useAgendaSchedule";
+import {
+  getEffectiveDevotionalDates,
+  getStudyOpenLessonIds,
+} from "@/hooks/useAgendaSchedule";
 
 function devotional(id: string, day: number): DevotionalItem {
   return {
@@ -52,24 +55,43 @@ describe("devotional daily release", () => {
   });
 });
 
-describe("overlapping lesson windows", () => {
-  it("releases every lesson whose window is currently open", () => {
-    const now = new Date(2026, 5, 22, 12, 0, 0);
+describe("weekly lesson windows", () => {
+  it("starts an auto-limited weekly lesson on the final 5 business days before the event", () => {
+    const dates = getEffectiveDevotionalDates(
+      new Date(2026, 6, 11, 19, 0, 0),
+      true,
+    );
+
+    expect(dates.map((date) => date.toLocaleDateString("pt-BR"))).toEqual([
+      "06/07/2026",
+      "07/07/2026",
+      "08/07/2026",
+      "09/07/2026",
+      "10/07/2026",
+    ]);
+  });
+
+  it("keeps the following weekly lesson locked until its 5-day window starts", () => {
+    const now = new Date(2026, 6, 1, 12, 0, 0);
+    const lessonSevenDates = getEffectiveDevotionalDates(
+      new Date(2026, 6, 11, 19, 0, 0),
+      true,
+    );
     const entries = [
       {
-        lessonId: "lesson-a",
-        windowStart: new Date(2026, 5, 15),
-        eventDate: new Date(2026, 5, 25, 19, 0, 0),
+        lessonId: "lesson-6",
+        windowStart: new Date(2026, 5, 22),
+        eventDate: new Date(2026, 6, 4, 19, 0, 0),
       },
       {
-        lessonId: "lesson-b",
-        windowStart: new Date(2026, 5, 18),
-        eventDate: new Date(2026, 5, 27, 19, 0, 0),
+        lessonId: "lesson-7",
+        windowStart: lessonSevenDates[0],
+        eventDate: new Date(2026, 6, 11, 19, 0, 0),
       },
     ];
 
     expect(getStudyOpenLessonIds(entries, now)).toEqual(
-      new Set(["lesson-a", "lesson-b"]),
+      new Set(["lesson-6"]),
     );
   });
 });

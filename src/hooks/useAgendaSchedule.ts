@@ -14,7 +14,7 @@ export type ScheduleEntry = {
   courseTitle: string;
   courseOrder: number;
   windowStart: Date;
-  /** 10 business-day dates before event. [0..4] = primary week, [5..9] = recovery week. */
+  /** Business-day release dates before event. Auto-limited weekly lessons include only the final 5 dates. */
   devotionalDates: Date[];
   /** Day numbers the leader chose to release. null = all released. */
   releasedDayNumbers: number[] | null;
@@ -57,6 +57,14 @@ export function getStudyOpenLessonIds(
       .filter((entry) => today >= entry.windowStart && now < entry.eventDate)
       .map((entry) => entry.lessonId),
   );
+}
+
+export function getEffectiveDevotionalDates(
+  eventDate: Date,
+  autoLimited: boolean,
+): Date[] {
+  const devotionalDates = getBusinessDaysBefore(eventDate, 10);
+  return autoLimited ? devotionalDates.slice(5) : devotionalDates;
 }
 
 export function useAgendaSchedule() {
@@ -177,13 +185,12 @@ export function useAgendaSchedule() {
       const rawDate = event.event_date as string;
       const eventDate = new Date(rawDate.includes("T") ? rawDate : `${rawDate}T12:00:00`);
 
-      const devotionalDates = getBusinessDaysBefore(eventDate, 10);
-      const windowStart = devotionalDates[0];
-
       const prevEntry = entries[entries.length - 1];
       const autoLimited = prevEntry
         ? Math.round((eventDate.getTime() - prevEntry.eventDate.getTime()) / 86400000) < 10
         : false;
+      const devotionalDates = getEffectiveDevotionalDates(eventDate, autoLimited);
+      const windowStart = devotionalDates[0];
 
       const rawReleased: number[] | null = (event as any).released_devotional_days ?? null;
       let releasedDayNumbers: number[] | null;
