@@ -15,6 +15,7 @@ type Participant = {
 type Activity = { id: string; type: string; title: string; points: number; order_num: number; subtitle: string | null };
 
 type Props = { participant: Participant; activities: Activity[] };
+type ReportMode = "summary" | "complete";
 
 function parseLocalDate(value?: string | null) {
   if (!value) return null;
@@ -55,6 +56,7 @@ const APTIDAO_CFG = {
 };
 
 export default function PastoralReportPDF({ participant: p, activities }: Props) {
+  const [reportMode, setReportMode] = useState<ReportMode>("summary");
   const [aptidao, setAptidao] = useState<"apto" | "acompanhamento" | "nao_apto">("acompanhamento");
   const [observations, setObservations] = useState("");
   const [loading, setLoading] = useState(false);
@@ -150,6 +152,7 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
       const margin = 16;
       let y = 20;
       const pageH = 297;
+      const isComplete = reportMode === "complete";
 
       const checkPage = (needed: number) => {
         if (y + needed > pageH - 20) {
@@ -185,6 +188,14 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
         y += Math.max(6, lines.length * 4.5);
       };
 
+      const addMetric = (x: number, top: number, width: number, label: string, value: string, color: string) => {
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        doc.roundedRect(x, top, width, 22, 2, 2, "FD");
+        addText(value, x + 4, top + 9, 14, true, color);
+        addText(label, x + 4, top + 16, 8, false, "#64748B");
+      };
+
       // Try to load avatar image
       let avatarDataUrl: string | null = null;
       if (p.avatar_url) {
@@ -217,13 +228,64 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(255, 255, 255);
-      doc.text("Relatorio Confirmatorio Completo", margin, 16);
+      doc.text(isComplete ? "Relatório Pastoral Completo" : "Resumo de Acompanhamento", margin, 16);
       doc.setFontSize(11);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(200, 210, 255);
       doc.text(`${p.full_name}`, margin, 26);
       doc.text(`Gerado em ${new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}`, margin, 33);
       y = 48;
+
+      addSection("RESUMO EXECUTIVO");
+      const attendPct = attendanceData?.total
+        ? Math.round((attendanceData.present / attendanceData.total) * 100)
+        : 0;
+      const spiritualScores: number[] = assessment
+        ? [assessment.prayer_score, assessment.presence_score, assessment.struggle_score, assessment.doubt_score]
+            .filter((score: unknown): score is number => typeof score === "number")
+        : [];
+      const spiritualAvg = spiritualScores.length
+        ? (spiritualScores.reduce((sum, score) => sum + score, 0) / spiritualScores.length).toFixed(1)
+        : "—";
+      const metricGap = 4;
+      const metricWidth = (W - margin * 2 - metricGap * 2) / 3;
+      addMetric(margin, y, metricWidth, "Progresso", `${pct}%`, "#1F3C88");
+      addMetric(margin + metricWidth + metricGap, y, metricWidth, "Frequência", `${attendPct}%`, attendPct >= 75 ? "#047857" : "#B45309");
+      addMetric(margin + (metricWidth + metricGap) * 2, y, metricWidth, "Vida espiritual", spiritualAvg === "—" ? "—" : `${spiritualAvg}/5`, "#7C3AED");
+      y += 28;
+
+      const alertItems: string[] = [];
+      if (attendanceData && attendanceData.absent >= 3) alertItems.push(`${attendanceData.absent} faltas registradas`);
+      if (assessment?.needs_pastor) alertItems.push("Solicitou conversa pastoral");
+      if (assessment && spiritualScores.length && Number(spiritualAvg) <= 2.5) alertItems.push("Autoavaliação espiritual requer atenção");
+      if (plan?.is_priority) alertItems.push("Marcado como prioridade pastoral");
+      if (pct < 50) alertItems.push("Progresso abaixo de 50%");
+
+      addRow("Situação", APTIDAO_CFG[aptidao].label.replace(/^[^A-Za-zÀ-ɏ]+\s*/, ""));
+      addRow("Ponto forte", pct >= 75 ? "Bom avanço na jornada" : attendanceData && attendPct >= 75 ? "Boa participação nos encontros" : "Caminhada em construção");
+      addRow("Pontos de atenção", alertItems.length ? alertItems.join("; ") : "Nenhum alerta relevante no momento");
+      addRow("Próxima ação", plan?.next_steps || plan?.recommendations || "Definir no próximo encontro de acompanhamento");
+
+      if (!isComplete) {
+        addSection("IDENTIFICAÇÃO");
+        addRow("Nome", p.full_name);
+        addRow("Comunidade", p.community);
+        addRow("Área", p.area);
+
+        addSection("CAMINHADA");
+        addRow("Lições e formações", `${doneForm}/${formacoes.length}`);
+        addRow("Devocionais", `${doneDev}/${devocionais.length}`);
+        addRow("Encontros no app", `${doneEnc}/${encontros.length}`);
+        addRow("Presenças", attendanceData ? `${attendanceData.present}/${attendanceData.total}` : "Sem registros");
+
+        addSection("PLANO E PRÓXIMOS PASSOS");
+        addRow("Objetivo atual", plan?.objectives || "Ainda não definido");
+        addRow("Próximos passos", plan?.next_steps || "Ainda não definidos");
+        addRow("Recomendações", plan?.recommendations || "Sem recomendações registradas");
+        if (plan?.last_contact_at) addRow("Último contato", formatPtDate(plan.last_contact_at));
+      }
+
+      if (isComplete) {
 
       // 1. Dados pessoais
       addSection("DADOS PESSOAIS");
@@ -245,7 +307,7 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
       }
 
       // 2. Aptidão
-      addSection("APTIDAO PARA A PROFISSAO DE FE");
+      addSection("APTIDÃO PARA A PROFISSÃO DE FÉ");
       const aptCfg = APTIDAO_CFG[aptidao];
       doc.setFillColor(aptidao === "apto" ? 209 : aptidao === "acompanhamento" ? 254 : 254,
         aptidao === "apto" ? 250 : aptidao === "acompanhamento" ? 243 : 226,
@@ -256,7 +318,7 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
       y += 14;
 
       // 3. Progresso da Jornada
-      addSection("PROGRESSO DA JORNADA");
+      addSection("PROGRESSO DETALHADO DA JORNADA");
       addRow("Progresso geral", `${p.completed_count}/${activities.length} (${pct}%)`);
       addRow("Devocionais", `${doneDev}/${devocionais.length}`);
       addRow("Formacoes", `${doneForm}/${formacoes.length}`);
@@ -387,6 +449,7 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
           y += 4.5;
         }
       }
+      }
 
       // Footer on each page
       const pageCount = doc.getNumberOfPages();
@@ -397,11 +460,12 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
         doc.setFontSize(8);
         doc.setFont("helvetica", "normal");
         doc.setTextColor(200, 210, 255);
-        doc.text("Caminho Boa Nova — Relatorio Confirmatorio Completo", margin, 292);
+        doc.text(isComplete ? "CONFIDENCIAL · Caminho Boa Nova · Relatório Pastoral" : "Caminho Boa Nova · Resumo de Acompanhamento", margin, 292);
         doc.text(`Pag. ${i}/${pageCount}`, W - margin - 20, 292);
       }
 
-      doc.save(`Relatorio_${p.full_name.replace(/\s+/g, "_")}.pdf`);
+      const modeLabel = isComplete ? "Pastoral_Completo" : "Resumo_Acompanhamento";
+      doc.save(`${modeLabel}_${p.full_name.replace(/\s+/g, "_")}.pdf`);
     } catch (err) {
       console.error("PDF generation error:", err);
     }
@@ -412,7 +476,7 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
     <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
       <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
         <FileText className="w-4 h-4 text-primary" />
-        <p className="font-montserrat font-bold text-foreground text-sm">📄 Relatório Confirmatório Completo</p>
+        <p className="font-montserrat font-bold text-foreground text-sm">Relatórios de acompanhamento</p>
       </div>
       <div className="p-4 space-y-4">
         {!loaded ? (
@@ -422,20 +486,38 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
           </button>
         ) : (
           <>
+            <div>
+              <p className="font-inter text-xs font-medium text-foreground mb-2">Formato do relatório</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setReportMode("summary")}
+                  className={`rounded-xl border-2 p-3 text-left transition-colors ${reportMode === "summary" ? "border-primary bg-primary/5" : "border-border bg-muted/20"}`}>
+                  <span className="block font-inter text-sm font-semibold text-foreground">Resumo</span>
+                  <span className="block mt-1 font-inter text-[11px] text-muted-foreground">Para reunião ou família, sem notas sensíveis</span>
+                </button>
+                <button type="button" onClick={() => setReportMode("complete")}
+                  className={`rounded-xl border-2 p-3 text-left transition-colors ${reportMode === "complete" ? "border-primary bg-primary/5" : "border-border bg-muted/20"}`}>
+                  <span className="block font-inter text-sm font-semibold text-foreground">Pastoral completo</span>
+                  <span className="block mt-1 font-inter text-[11px] text-muted-foreground">Confidencial, com histórico e notas</span>
+                </button>
+              </div>
+            </div>
+
             {/* Resumo do que será incluído */}
             <div className="bg-muted/30 rounded-xl p-3 space-y-1">
-              <p className="font-inter text-xs font-medium text-foreground">O relatório incluirá:</p>
+              <p className="font-inter text-xs font-medium text-foreground">
+                {reportMode === "complete" ? "O relatório confidencial incluirá:" : "O resumo incluirá:"}
+              </p>
               <div className="grid grid-cols-2 gap-1 text-xs font-inter text-muted-foreground">
-                <span>✅ Dados pessoais</span>
-                <span>✅ Foto do discípulo</span>
-                <span>✅ Dados dos pais</span>
-                <span>✅ Progresso ({pct}%)</span>
-                <span>✅ Presença ({attendanceData ? `${attendanceData.present}/${attendanceData.total}` : "—"})</span>
-                <span>✅ Autoavaliação</span>
-                <span>✅ {meetingEvals.length} avaliação(ões) de encontro</span>
-                <span>✅ {pastoralNotes.length} nota(s) pastoral(is)</span>
-                <span>✅ Plano de discipulado</span>
-                <span>✅ Checklist de atividades</span>
+                <span>Resumo executivo</span>
+                <span>Indicadores principais</span>
+                <span>Pontos de atenção</span>
+                <span>Próximos passos</span>
+                <span>Progresso ({pct}%)</span>
+                <span>Presença ({attendanceData ? `${attendanceData.present}/${attendanceData.total}` : "—"})</span>
+                {reportMode === "complete" && <span>Dados pessoais e familiares</span>}
+                {reportMode === "complete" && <span>{pastoralNotes.length} nota(s) pastoral(is)</span>}
+                {reportMode === "complete" && <span>{meetingEvals.length} avaliação(ões)</span>}
+                {reportMode === "complete" && <span>Histórico detalhado</span>}
               </div>
             </div>
 
@@ -464,7 +546,7 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
             </div>
 
             {/* Observações pastorais */}
-            <div>
+            {reportMode === "complete" && <div>
               <p className="font-inter text-xs font-medium text-foreground mb-1.5">📝 Observações finais (incluídas no relatório)</p>
               <textarea
                 value={observations}
@@ -473,7 +555,7 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
                 rows={3}
                 className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
               />
-            </div>
+            </div>}
 
             {/* Download button */}
             <button
@@ -483,7 +565,7 @@ export default function PastoralReportPDF({ participant: p, activities }: Props)
               style={{ background: "var(--gradient-hero)" }}
             >
               <Download className="w-4 h-4" />
-              {loading ? "Gerando PDF..." : "📄 Baixar Relatório Completo"}
+              {loading ? "Gerando PDF..." : reportMode === "complete" ? "Baixar relatório pastoral" : "Baixar resumo de acompanhamento"}
             </button>
           </>
         )}
