@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCustomEventTypes } from "@/hooks/useCustomEventTypes";
-import { X, Trash2, ChevronRight, ChevronDown, ChevronUp, BookOpen, Calendar, Church, Trophy, Star, AlertTriangle, Gift, Plus, MessageCircle } from "lucide-react";
+import { X, Trash2, ChevronRight, ChevronDown, ChevronUp, BookOpen, Calendar, Church, Trophy, Star, AlertTriangle, Gift, Plus, MessageCircle, Target } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -17,7 +17,7 @@ interface Props {
 
 interface ActivityItem {
   id: string;
-  type: "lesson" | "devotional" | "attendance" | "worship" | "achievement" | "activity";
+  type: "lesson" | "devotional" | "attendance" | "worship" | "achievement" | "activity" | "challenge";
   source?: "native" | "manual_bonus";
   title: string;
   subtitle?: string;
@@ -158,11 +158,11 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
   async function fetchActivities() {
     setLoading(true);
 
-    const { data: profile } = await supabase.from("profiles").select("church_id, community").eq("user_id", userId).maybeSingle();
+    const { data: profile } = await supabase.from("profiles").select("church_id, community, area").eq("user_id", userId).maybeSingle();
     const churchId = profile?.church_id;
 
     const [
-      { data: lessonResps },
+      { data: lessonProgress },
       { data: devProgress },
       { data: attendance },
       { data: worship },
@@ -177,9 +177,10 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
       { data: customEventTypesData },
       { data: profileData },
       { data: courses },
+      { data: challengeParticipants },
     ] = await Promise.all([
-      supabase.from("lesson_responses").select("id, lesson_id, question_key, response, created_at").eq("user_id", userId).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
-      supabase.from("devotional_progress").select("id, devotional_id, completed_at").eq("user_id", userId).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
+      supabase.from("lesson_progress").select("id, lesson_id, completed_at, awarded_points").eq("user_id", userId).eq("is_completed", true).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
+      supabase.from("devotional_progress").select("id, devotional_id, completed_at, awarded_points, is_recovery").eq("user_id", userId).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
       supabase.from("attendance").select("id, event_id, status, created_at").eq("user_id", userId).in("status", ["presente", "faltou", "falta", "justificou", "justificado"]).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
       supabase.from("worship_attendance").select("id, worship_date, preacher_name, worship_time, status, created_at").eq("user_id", userId).eq("status", "aprovado").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
       supabase.from("achievement_unlocks").select("id, achievement_key, bonus_points, unlocked_at").eq("user_id", userId).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
@@ -193,6 +194,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
       supabase.from("custom_event_types").select("value, label, gives_points, points, area, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
       supabase.from("profiles").select("phone").eq("user_id", userId).maybeSingle(),
       supabase.from("courses").select("id, title, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
+      supabase.from("challenge_participants").select("id, challenge_id, completed_at").eq("user_id", userId).eq("completed", true),
     ]);
 
     // Carrega pontuações dinâmicas do game_config
@@ -203,18 +205,19 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
     const attPts       = cfgMap.get("attendance_points")         ?? 10;
     const worshipPts   = cfgMap.get("worship_points")            ?? 5;
     const courseBonusPts = cfgMap.get("course_completion_bonus")  ?? 100;
+    const challengePts = cfgMap.get("challenge_points") ?? 15;
 
-    const customTypeMap = new Map<string, { label: string; gives_points: boolean; points: number; area: string | null }>(
-      (customEventTypesData ?? []).map((type: any) => [
-        type.value,
-        {
-          label: type.label,
-          gives_points: !!type.gives_points,
-          points: Number(type.points ?? 0),
-          area: type.area ?? null,
-        },
-      ])
-    );
+    const customTypeRows = (customEventTypesData ?? []) as Array<any>;
+    const customTypeMap = new Map<string, { label: string; gives_points: boolean; points: number; area: string | null }>();
+    customTypeRows
+      .filter((type) => !type.area || type.area === profile?.area)
+      .sort((a, b) => Number(!!a.church_id) - Number(!!b.church_id) || Number(!!a.area) - Number(!!b.area))
+      .forEach((type) => customTypeMap.set(type.value, {
+        label: type.label,
+        gives_points: !!type.gives_points,
+        points: Number(type.points ?? 0),
+        area: type.area ?? null,
+      }));
 
     const nextBonusOptions: BonusOption[] = [
       { value: "conquista", label: "Conquista", type: "achievement" },
@@ -254,18 +257,18 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
 
     const allItems: ActivityItem[] = [];
 
-    const lessonIds = new Set((lessonResps ?? []).map((response) => response.lesson_id));
+    const lessonIds = new Set((lessonProgress ?? []).map((progress) => progress.lesson_id));
     lessonIds.forEach((lessonId) => {
       const lesson = lessonMap.get(lessonId);
-      const firstResp = (lessonResps ?? []).find((response) => response.lesson_id === lessonId);
+      const progress = (lessonProgress ?? []).find((item) => item.lesson_id === lessonId);
       allItems.push({
         id: `lesson-${lessonId}`,
         type: "lesson",
         source: "native",
         title: lesson?.title ?? "Lição",
         subtitle: "Estudo de lição",
-        points: lessonPts,
-        date: firstResp?.created_at ?? "",
+        points: progress?.awarded_points ?? lessonPts,
+        date: progress?.completed_at ?? "",
         deletable: true,
         tableId: lessonId,
       });
@@ -274,9 +277,10 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
     (devProgress ?? []).forEach((progress) => {
       const devotional = devotionalMap.get(progress.devotional_id);
       const lesson = devotional?.lesson_id ? lessonMap.get(devotional.lesson_id) : null;
-      const dayOfWeek = new Date(progress.completed_at).getDay();
-      const points = dayOfWeek === 0 || dayOfWeek === 6 ? devWkPts : devPts;
-      const completionLabel = dayOfWeek === 0 || dayOfWeek === 6 ? "Recuperado no fim de semana" : "Devocional diario";
+      const weekday = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "America/Sao_Paulo" }).format(new Date(progress.completed_at));
+      const isWeekend = weekday === "Sat" || weekday === "Sun";
+      const points = progress.awarded_points ?? (progress.is_recovery ? (cfgMap.get("devotional_recovery_points") ?? 2) : isWeekend ? devWkPts : devPts);
+      const completionLabel = progress.is_recovery ? "Devocional recuperado" : isWeekend ? "Concluído no fim de semana" : "Devocional diário";
       const lessonLabel = lesson ? `Licao ${lesson.order_num}: ${lesson.title}` : "Sem licao vinculada";
       allItems.push({
         id: `dev-${progress.id}`,
@@ -361,7 +365,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
 
     (userProgress ?? []).forEach((progress) => {
       const activity = activityMap.get(progress.activity_id);
-      if (activity && activity.type !== "devocional" && activity.type !== "formacao" && activity.type !== "encontro") {
+      if (activity) {
         allItems.push({
           id: `act-${progress.id}`,
           type: "activity",
@@ -374,6 +378,20 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
           tableId: progress.id,
         });
       }
+    });
+
+    (challengeParticipants ?? []).forEach((participation) => {
+      allItems.push({
+        id: `challenge-${participation.id}`,
+        type: "challenge",
+        source: "native",
+        title: "Desafio concluído",
+        subtitle: "Bônus de desafio",
+        points: challengePts,
+        date: participation.completed_at ?? "",
+        deletable: false,
+        tableId: participation.challenge_id,
+      });
     });
     
     // Calculate course bonus
@@ -638,6 +656,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
       case "achievement": return <Trophy className="w-4 h-4 text-amber-500" />;
       case "worship": return <Church className="w-4 h-4 text-accent" />;
       case "activity": return <Star className="w-4 h-4 text-muted-foreground" />;
+      case "challenge": return <Target className="w-4 h-4 text-primary" />;
       default:
         // attendance sub-types keyed as "att_<eventType>"
         if (type.startsWith("att_")) {
@@ -655,6 +674,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
       case "achievement": return "Conquista";
       case "worship": return "Culto";
       case "activity": return "Atividade";
+      case "challenge": return "Desafio";
       default:
         if (type.startsWith("att_")) {
           const evType = type.slice(4);

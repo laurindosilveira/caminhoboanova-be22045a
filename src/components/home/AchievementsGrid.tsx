@@ -162,7 +162,10 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     try {
       const rankingResults = await Promise.all(
         communities.map((community) =>
-          supabase.rpc("get_community_ranking" as any, { _community: community as any })
+          supabase.rpc("get_community_ranking" as any, {
+            _community: community as any,
+            _church_id: profile?.church_id ?? null,
+          })
         )
       );
 
@@ -193,7 +196,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     } finally {
       setLoadingMembers(false);
     }
-  }, [activeCommunities]);
+  }, [activeCommunities, profile?.church_id]);
 
   const fireCelebration = useCallback(() => {
     if (celebrationFired) return;
