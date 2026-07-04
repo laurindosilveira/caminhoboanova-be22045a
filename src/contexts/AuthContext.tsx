@@ -59,7 +59,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function fetchProfileAndRole(userId: string) {
     const results = await Promise.allSettled([
-      supabase.from("profiles").select("*, churches(name)").eq("user_id", userId).maybeSingle(),
+      // Keep the essential profile load independent from embedded relationships.
+      // If PostgREST cannot resolve profiles -> churches after a schema refresh,
+      // the user must still retain turma_id and access to the application.
+      supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
       supabase.rpc("is_super_admin", { _user_id: userId }),
       supabase.from("user_roles").select("role, admin_area").eq("user_id", userId).in("role", ["admin", "lider"]),
     ]);
@@ -71,7 +74,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (profileRes.error) console.error("Error fetching profile:", profileRes.error);
     if (isSuperRes.error) console.error("Error checking super admin:", isSuperRes.error);
     if (roleRowsRes.error) console.error("Error fetching user roles:", roleRowsRes.error);
-    setProfile((profileRes.data as any) ?? null);
+
+    let profileData = (profileRes.data as any) ?? null;
+    if (profileData?.church_id) {
+      const { data: church, error: churchError } = await supabase
+        .from("churches")
+        .select("name")
+        .eq("id", profileData.church_id)
+        .maybeSingle();
+      if (churchError) console.error("Error fetching profile church:", churchError);
+      profileData = { ...profileData, churches: church ?? null };
+    }
+    setProfile(profileData);
     setIsSuper(isSuperRes.data === true);
     const roleRows = roleRowsRes.data ?? [];
     const selectedRoleRow = roleRows.find((row) => row.role === "admin") ?? roleRows[0] ?? null;
