@@ -86,7 +86,8 @@ GRANT EXECUTE ON FUNCTION public.set_ranking_participation(uuid, boolean) TO aut
 DO $$
 DECLARE
   function_sql text;
-  marker text := 'AND NOT EXISTS (' || chr(10) || '        SELECT 1 FROM public.user_roles ur';
+  role_marker text := 'AND NOT EXISTS (' || chr(10) || '        SELECT 1 FROM public.user_roles ur';
+  simple_marker text := 'WHERE p.community = _community AND (_church_id IS NULL OR p.church_id = _church_id)';
   addition text := 'AND NOT EXISTS (' || chr(10) ||
     '        SELECT 1 FROM public.ranking_exclusions re' || chr(10) ||
     '        WHERE re.user_id = p.user_id AND re.church_id = p.church_id' || chr(10) ||
@@ -95,11 +96,18 @@ BEGIN
   SELECT pg_get_functiondef('public.get_community_ranking(public.community_name,uuid)'::regprocedure)
   INTO function_sql;
 
-  IF position(marker IN function_sql) = 0 THEN
+  IF position(role_marker IN function_sql) > 0 THEN
+    function_sql := replace(function_sql, role_marker, addition || role_marker);
+  ELSIF position(simple_marker IN function_sql) > 0 THEN
+    function_sql := replace(
+      function_sql,
+      simple_marker,
+      simple_marker || chr(10) || '      ' || addition
+    );
+  ELSE
     RAISE EXCEPTION 'Nao foi possivel localizar o filtro de papeis em get_community_ranking';
   END IF;
 
-  function_sql := replace(function_sql, marker, addition || marker);
   EXECUTE function_sql;
 END;
 $$;
