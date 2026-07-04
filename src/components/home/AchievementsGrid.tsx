@@ -14,7 +14,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { Trophy, Lock, Flame, RefreshCw, Share2, AlertTriangle } from "lucide-react";
+import { Trophy, Lock, Flame, RefreshCw, Share2, AlertTriangle, UserMinus, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import GameRulesDialog from "./GameRulesDialog";
@@ -99,6 +99,8 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
   [currentArea, profile?.community]);
   const [seasons, setSeasons] = useState<RankingSeason[]>([]);
   const [members, setMembers] = useState<RankingMember[]>([]);
+  const [excludedMembers, setExcludedMembers] = useState<RankingMember[]>([]);
+  const [updatingRankingUserId, setUpdatingRankingUserId] = useState<string | null>(null);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [celebrationFired, setCelebrationFired] = useState(false);
   const winnerBannerRef = useRef<HTMLDivElement>(null);
@@ -125,6 +127,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
 
   useEffect(() => {
     setMembers([]);
+    setExcludedMembers([]);
     setSeasons([]);
     setLoadingMembers(true);
     setCelebrationFired(false);
@@ -189,6 +192,44 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
           return getSafeName(a.full_name).localeCompare(getSafeName(b.full_name), "pt-BR");
         })
       );
+
+      if (canManage && profile?.church_id) {
+        const { data: exclusions, error: exclusionsError } = await supabase
+          .from("ranking_exclusions" as any)
+          .select("user_id")
+          .eq("church_id", profile.church_id);
+        if (exclusionsError) {
+          console.error("Erro ao carregar participantes fora do ranking:", exclusionsError);
+          setExcludedMembers([]);
+          return;
+        }
+
+        const excludedIds = (exclusions ?? []).map((row: any) => row.user_id);
+        if (excludedIds.length === 0) {
+          setExcludedMembers([]);
+        } else {
+          const { data: profiles, error: profilesError } = await supabase
+            .from("profiles")
+            .select("user_id, full_name, community, area")
+            .in("user_id", excludedIds);
+          if (profilesError) {
+            console.error("Erro ao carregar perfis fora do ranking:", profilesError);
+            setExcludedMembers([]);
+            return;
+          }
+          setExcludedMembers((profiles ?? [])
+            .filter((item: any) => activeCommunities.includes(item.community))
+            .map((item: any) => ({
+              user_id: item.user_id,
+              full_name: getSafeName(item.full_name),
+              completed_count: 0,
+              faith_points: 0,
+            }))
+            .sort((a, b) => a.full_name.localeCompare(b.full_name, "pt-BR")));
+        }
+      } else {
+        setExcludedMembers([]);
+      }
     } catch (error: any) {
       console.error("Erro ao carregar ranking da area:", error);
       setMembers([]);
@@ -196,7 +237,22 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     } finally {
       setLoadingMembers(false);
     }
-  }, [activeCommunities, profile?.church_id]);
+  }, [activeCommunities, profile?.church_id, canManage]);
+
+  const setRankingParticipation = useCallback(async (member: RankingMember, included: boolean) => {
+    setUpdatingRankingUserId(member.user_id);
+    const { error } = await supabase.rpc("set_ranking_participation" as any, {
+      _user_id: member.user_id,
+      _included: included,
+    });
+    if (error) {
+      toast.error(error.message || "Não foi possível alterar o ranking.");
+    } else {
+      toast.success(included ? `${member.full_name} voltou ao ranking.` : `${member.full_name} foi removido do ranking.`);
+      await fetchAreaRanking();
+    }
+    setUpdatingRankingUserId(null);
+  }, [fetchAreaRanking]);
 
   const fireCelebration = useCallback(() => {
     if (celebrationFired) return;
@@ -709,9 +765,67 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
                   <div className="text-right flex-shrink-0">
                     <span className="font-montserrat font-black text-accent text-sm">{Number(m.faith_points)} pts</span>
                   </div>
+                  {canManage && !isMe && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={(event) => event.stopPropagation()}
+                          disabled={updatingRankingUserId === m.user_id}
+                          className="p-2 rounded-lg text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                          title="Remover do ranking"
+                          aria-label={`Remover ${displayName} do ranking`}
+                        >
+                          <UserMinus className="w-4 h-4" />
+                        </button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="rounded-2xl max-w-sm">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Remover do ranking?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {displayName} deixará de aparecer no ranking, mas a conta e os pontos serão preservados.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            onClick={() => setRankingParticipation(m, false)}
+                          >
+                            Remover
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {canManage && excludedMembers.length > 0 && (
+          <div className="mt-4 bg-card rounded-2xl border border-dashed border-border overflow-hidden">
+            <div className="px-4 py-3 bg-muted/40">
+              <p className="font-montserrat font-bold text-sm text-foreground">Fora do ranking</p>
+              <p className="font-inter text-[11px] text-muted-foreground">Contas e pontuações continuam preservadas.</p>
+            </div>
+            {excludedMembers.map((member, index) => (
+              <div key={member.user_id} className={`flex items-center gap-3 px-4 py-3 ${index < excludedMembers.length - 1 ? "border-b border-border" : ""}`}>
+                <div className="flex-1 min-w-0">
+                  <p className="font-montserrat font-bold text-sm text-card-foreground truncate">{member.full_name}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRankingParticipation(member, true)}
+                  disabled={updatingRankingUserId === member.user_id}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary/10 text-primary text-xs font-inter font-bold hover:bg-primary/20 disabled:opacity-50"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  {updatingRankingUserId === member.user_id ? "Adicionando..." : "Adicionar"}
+                </button>
+              </div>
+            ))}
           </div>
         )}
       </div>
