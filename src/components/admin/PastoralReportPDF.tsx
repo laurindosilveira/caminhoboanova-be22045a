@@ -1,571 +1,583 @@
 import { useState } from "react";
+import { Download, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { FileText, Download, CheckCircle2, XCircle, Clock } from "lucide-react";
 
 type Participant = {
-  user_id: string; full_name: string; community: string; area: string;
-  birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
-  avatar_url?: string | null;
-  father_name?: string | null;
-  mother_name?: string | null;
-  father_phone?: string | null;
-  mother_phone?: string | null;
-  address?: string | null;
+  user_id: string;
+  full_name: string;
+  community: string;
+  area: string;
+  birth_date: string;
+  phone: string;
+  completed_count: number;
+  completed_activity_ids: string[];
 };
-type Activity = { id: string; type: string; title: string; points: number; order_num: number; subtitle: string | null };
+
+type Activity = {
+  id: string;
+  type: string;
+  title: string;
+  points: number;
+  order_num: number;
+  subtitle: string | null;
+};
 
 type Props = { participant: Participant; activities: Activity[] };
 type ReportMode = "summary" | "complete";
 
-function parseLocalDate(value?: string | null) {
-  if (!value) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return new Date(`${value}T12:00:00`);
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function formatPtDate(value?: string | null) {
-  const parsed = parseLocalDate(value);
-  return parsed ? parsed.toLocaleDateString("pt-BR") : "—";
-}
-
-function getTimeOrMax(value?: string | null) {
-  const parsed = parseLocalDate(value);
-  return parsed ? parsed.getTime() : Number.MAX_SAFE_INTEGER;
-}
-
-function normalizeAttendanceStatus(status: string) {
-  if (status === "falta") return "faltou";
-  if (status === "justificado") return "justificou";
-  return status;
-}
-
-function calcAge(birthDate: string) {
-  const birth = parseLocalDate(birthDate);
-  if (!birth) return null;
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  if (today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
-  return age;
-}
-
-const APTIDAO_CFG = {
-  apto: { label: "🟢 Apto para a Profissão de Fé", color: "#2ECC71", bg: "#d1fae5" },
-  acompanhamento: { label: "🟡 Em Acompanhamento", color: "#F59E0B", bg: "#fef3c7" },
-  nao_apto: { label: "🔴 Não Apto no Momento", color: "#EF4444", bg: "#fee2e2" },
+type CategoryItem = {
+  id: string;
+  title: string;
+  subtitle: string;
+  date?: string | null;
+  points: number;
 };
 
-export default function PastoralReportPDF({ participant: p, activities }: Props) {
-  const [reportMode, setReportMode] = useState<ReportMode>("summary");
-  const [aptidao, setAptidao] = useState<"apto" | "acompanhamento" | "nao_apto">("acompanhamento");
-  const [observations, setObservations] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [loadingData, setLoadingData] = useState(false);
-  const [plan, setPlan] = useState<any>(null);
-  const [assessment, setAssessment] = useState<any>(null);
-  const [attendanceData, setAttendanceData] = useState<{ present: number; absent: number; justified: number; total: number } | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [pastoralNotes, setPastoralNotes] = useState<any[]>([]);
-  const [meetingEvals, setMeetingEvals] = useState<any[]>([]);
-  const [attendanceDetails, setAttendanceDetails] = useState<any[]>([]);
+type ReportCategory = {
+  key: string;
+  label: string;
+  count: number;
+  points: number;
+  color: string;
+  items: CategoryItem[];
+};
 
-  const completedIds = new Set(p.completed_activity_ids);
-  const formacoes = activities.filter(a => a.type === "formacao");
-  const devocionais = activities.filter(a => a.type === "devocional");
-  const encontros = activities.filter(a => a.type === "encontro");
-  const doneForm = formacoes.filter(a => completedIds.has(a.id)).length;
-  const doneDev = devocionais.filter(a => completedIds.has(a.id)).length;
-  const doneEnc = encontros.filter(a => completedIds.has(a.id)).length;
-  const pct = activities.length > 0 ? Math.round((p.completed_count / activities.length) * 100) : 0;
-  const age = calcAge(p.birth_date);
+type LessonAnswerGroup = {
+  lessonId: string;
+  courseTitle: string;
+  lessonTitle: string;
+  lessonOrder: number;
+  completedAt?: string | null;
+  points: number;
+  answers: Array<{ label: string; response: string }>;
+};
+
+type DevotionalAnswerGroup = {
+  devotionalId: string;
+  lessonTitle: string;
+  lessonOrder: number;
+  devotionalTitle: string;
+  dayNumber: number;
+  completedAt?: string | null;
+  points: number;
+  answers: Array<{ label: string; response: string }>;
+};
+
+type LoadedReport = {
+  totalPoints: number;
+  completedCount: number;
+  categories: ReportCategory[];
+  lessonGroups: LessonAnswerGroup[];
+  devotionalGroups: DevotionalAnswerGroup[];
+};
+
+function formatDate(value?: string | null) {
+  if (!value) return "Sem data";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Sem data" : date.toLocaleDateString("pt-BR");
+}
+
+function lessonQuestionLabel(
+  key: string,
+  content?: { icebreaker?: string | null; practice?: string | null; prayer_prompt?: string | null; questions?: string[] | null },
+) {
+  if (key === "icebreaker") return content?.icebreaker || "Quebra-gelo";
+  if (key === "practice") return content?.practice || "Prática da semana";
+  if (key === "prayer") return content?.prayer_prompt || "Oração final";
+  if (/^q\d+$/.test(key)) {
+    const index = Number(key.slice(1));
+    return content?.questions?.[index] || `Pergunta ${index + 1}`;
+  }
+  return key;
+}
+
+function responseOrder(key: string) {
+  if (key === "icebreaker") return 0;
+  if (/^q\d+$/.test(key)) return 1 + Number(key.slice(1));
+  if (key === "practice") return 1000;
+  if (key === "prayer") return 1001;
+  return 2000;
+}
+
+export default function PastoralReportPDF({ participant: p }: Props) {
+  const [reportMode, setReportMode] = useState<ReportMode>("summary");
+  const [loadingData, setLoadingData] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [report, setReport] = useState<LoadedReport | null>(null);
 
   async function loadData() {
-    if (loaded) return;
     setLoadingData(true);
-    const now = new Date();
-    const [{ data: planData }, { data: assessData }, { data: attendRec }, { data: notesData }, { data: evalsData }] = await Promise.all([
-      supabase.from("discipleship_plans").select("*").eq("user_id", p.user_id).maybeSingle(),
-      supabase.from("spiritual_assessments").select("*")
-        .eq("user_id", p.user_id).eq("month", now.getMonth() + 1).eq("year", now.getFullYear()).maybeSingle(),
-      supabase.from("attendance").select("status, event_id").eq("user_id", p.user_id),
-      supabase.from("pastoral_notes").select("*").eq("user_id", p.user_id).order("created_at", { ascending: false }),
-      supabase.from("meeting_evaluations").select("*").eq("user_id", p.user_id),
-    ]);
-    if (planData) {
-      setPlan(planData);
-      if (planData.aptidao) setAptidao(planData.aptidao as any);
-      if (planData.pastor_notes) setObservations(planData.pastor_notes);
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("church_id, community, area")
+        .eq("user_id", p.user_id)
+        .maybeSingle();
+      const churchId = profile?.church_id ?? null;
+      const churchScope = churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null";
+
+      const [
+        { data: rankingRows },
+        { data: gameConfig },
+        { data: lessons },
+        { data: courses },
+        { data: lessonProgress },
+        { data: lessonResponses },
+        { data: lessonContents },
+        { data: devotionals },
+        { data: devotionalProgress },
+        { data: devotionalResponses },
+        { data: attendance },
+        { data: events },
+        { data: worship },
+        { data: achievements },
+        { data: userProgress },
+        { data: activityCatalog },
+        { data: challenges },
+        { data: challengeCatalog },
+        { data: customEventTypes },
+      ] = await Promise.all([
+        supabase.rpc("get_community_ranking" as any, { _community: profile?.community ?? p.community, _church_id: churchId }),
+        supabase.rpc("get_game_config" as any),
+        supabase.from("lessons").select("id, title, course_id, order_num").or(churchScope),
+        supabase.from("courses").select("id, title, order_num").or(churchScope),
+        supabase.from("lesson_progress").select("lesson_id, completed_at, awarded_points").eq("user_id", p.user_id).eq("is_completed", true).or(churchScope),
+        supabase.from("lesson_responses").select("lesson_id, question_key, response, created_at").eq("user_id", p.user_id).or(churchScope),
+        supabase.from("lesson_content").select("lesson_id, icebreaker, practice, prayer_prompt, questions").or(churchScope),
+        supabase.from("devotional_content").select("id, title, day_number, lesson_id, questions").or(churchScope),
+        supabase.from("devotional_progress").select("id, devotional_id, completed_at, awarded_points, is_recovery").eq("user_id", p.user_id).or(churchScope),
+        supabase.from("devotional_responses").select("devotional_id, question_index, response, created_at").eq("user_id", p.user_id).or(churchScope),
+        supabase.from("attendance").select("id, event_id, status, created_at").eq("user_id", p.user_id).or(churchScope),
+        supabase.from("events").select("id, title, event_date, type").or(churchScope),
+        supabase.from("worship_attendance").select("id, worship_date, preacher_name, status, created_at").eq("user_id", p.user_id).eq("status", "aprovado").or(churchScope),
+        supabase.from("achievement_unlocks").select("id, achievement_key, bonus_points, unlocked_at").eq("user_id", p.user_id).or(churchScope),
+        supabase.from("user_progress").select("id, activity_id, completed_at").eq("user_id", p.user_id).or(churchScope),
+        supabase.from("activities").select("id, title, points, type").or(churchScope),
+        supabase.from("challenge_participants").select("id, challenge_id, completed_at").eq("user_id", p.user_id).eq("completed", true),
+        supabase.from("community_challenges").select("id, title, emoji"),
+        supabase.from("custom_event_types").select("value, gives_points, points, area, church_id").or(churchScope),
+      ]);
+
+      const cfg = new Map<string, number>((gameConfig ?? []).map((row: any) => [row.key, Number(row.value)]));
+      const lessonDefault = cfg.get("lesson_points") ?? 20;
+      const devotionalDefault = cfg.get("devotional_points") ?? 5;
+      const devotionalWeekend = cfg.get("devotional_weekend_points") ?? 2;
+      const devotionalRecovery = cfg.get("devotional_recovery_points") ?? 2;
+      const attendanceDefault = cfg.get("attendance_points") ?? 15;
+      const worshipDefault = cfg.get("worship_points") ?? 5;
+      const challengeDefault = cfg.get("challenge_points") ?? 15;
+
+      const lessonMap = new Map((lessons ?? []).map((item: any) => [item.id, item]));
+      const courseMap = new Map((courses ?? []).map((item: any) => [item.id, item]));
+      const lessonContentMap = new Map((lessonContents ?? []).map((item: any) => [item.lesson_id, item]));
+      const devotionalMap = new Map((devotionals ?? []).map((item: any) => [item.id, item]));
+      const eventMap = new Map((events ?? []).map((item: any) => [item.id, item]));
+      const activityMap = new Map((activityCatalog ?? []).map((item: any) => [item.id, item]));
+      const challengeMap = new Map((challengeCatalog ?? []).map((item: any) => [item.id, item]));
+
+      const eventTypeMap = new Map<string, { gives_points: boolean; points: number }>();
+      (customEventTypes ?? [])
+        .filter((item: any) => !item.area || item.area === (profile?.area ?? p.area))
+        .sort((a: any, b: any) => Number(!!a.church_id) - Number(!!b.church_id) || Number(!!a.area) - Number(!!b.area))
+        .forEach((item: any) => eventTypeMap.set(item.value, { gives_points: !!item.gives_points, points: Number(item.points ?? 0) }));
+
+      const lessonItems: CategoryItem[] = (lessonProgress ?? []).map((progress: any) => {
+        const lesson = lessonMap.get(progress.lesson_id) as any;
+        const course = lesson ? courseMap.get(lesson.course_id) as any : null;
+        return {
+          id: progress.lesson_id,
+          title: lesson?.title ?? "Lição",
+          subtitle: course?.title ?? "Curso",
+          date: progress.completed_at,
+          points: Number(progress.awarded_points ?? lessonDefault),
+        };
+      });
+
+      const devotionalItems: CategoryItem[] = (devotionalProgress ?? []).map((progress: any) => {
+        const devotional = devotionalMap.get(progress.devotional_id) as any;
+        const completedDate = new Date(progress.completed_at);
+        const weekend = [0, 6].includes(completedDate.getDay());
+        const points = progress.awarded_points ?? (progress.is_recovery ? devotionalRecovery : weekend ? devotionalWeekend : devotionalDefault);
+        return {
+          id: progress.devotional_id,
+          title: devotional?.title ?? "Devocional",
+          subtitle: progress.is_recovery ? "Recuperado" : `Dia ${devotional?.day_number ?? "—"}`,
+          date: progress.completed_at,
+          points: Number(points),
+        };
+      });
+
+      const attendanceItems: CategoryItem[] = (attendance ?? []).map((record: any) => {
+        const event = eventMap.get(record.event_id) as any;
+        const custom = eventTypeMap.get(event?.type ?? "");
+        const present = record.status === "presente";
+        return {
+          id: record.id,
+          title: event?.title ?? "Encontro",
+          subtitle: present ? "Presente" : ["justificou", "justificado"].includes(record.status) ? "Falta justificada" : "Faltou",
+          date: event?.event_date ?? record.created_at,
+          points: present ? Number(custom?.gives_points ? custom.points : attendanceDefault) : 0,
+        };
+      });
+
+      const worshipItems: CategoryItem[] = (worship ?? []).map((record: any) => ({
+        id: record.id,
+        title: `Culto · ${record.preacher_name}`,
+        subtitle: "Presença aprovada",
+        date: record.worship_date ?? record.created_at,
+        points: worshipDefault,
+      }));
+
+      const achievementItems: CategoryItem[] = (achievements ?? []).map((record: any) => ({
+        id: record.id,
+        title: record.achievement_key.startsWith("bonus_lider|") ? "Bônus do líder" : record.achievement_key,
+        subtitle: "Conquista ou bônus",
+        date: record.unlocked_at,
+        points: Number(record.bonus_points ?? 0),
+      }));
+
+      const extraItems: CategoryItem[] = (userProgress ?? []).map((record: any) => {
+        const activity = activityMap.get(record.activity_id) as any;
+        return {
+          id: record.id,
+          title: activity?.title ?? "Atividade extra",
+          subtitle: "Atividade concluída",
+          date: record.completed_at,
+          points: Number(activity?.points ?? 0),
+        };
+      });
+
+      const challengeItems: CategoryItem[] = (challenges ?? []).map((record: any) => {
+        const challenge = challengeMap.get(record.challenge_id) as any;
+        return {
+          id: record.id,
+          title: `${challenge?.emoji ?? ""} ${challenge?.title ?? "Desafio"}`.trim(),
+          subtitle: "Desafio concluído",
+          date: record.completed_at,
+          points: challengeDefault,
+        };
+      });
+
+      const ranking = (rankingRows ?? []).find((row: any) => row.user_id === p.user_id) as any;
+      const courseBonus = Number(ranking?.course_bonus ?? 0);
+      if (courseBonus > 0) {
+        achievementItems.push({ id: "course-bonus", title: "Bônus por curso concluído", subtitle: "Conclusão de curso", points: courseBonus });
+      }
+
+      const makeCategory = (key: string, label: string, color: string, items: CategoryItem[]): ReportCategory => ({
+        key,
+        label,
+        color,
+        items,
+        count: items.length,
+        points: items.reduce((sum, item) => sum + item.points, 0),
+      });
+
+      const categories = [
+        makeCategory("lessons", "Lições", "#2563EB", lessonItems),
+        makeCategory("devotionals", "Devocionais", "#7C3AED", devotionalItems),
+        makeCategory("attendance", "Presenças e encontros", "#059669", attendanceItems),
+        makeCategory("worship", "Cultos", "#D97706", worshipItems),
+        makeCategory("achievements", "Conquistas e bônus", "#CA8A04", achievementItems),
+        makeCategory("extras", "Atividades e desafios", "#475569", [...extraItems, ...challengeItems]),
+      ];
+
+      const lessonProgressMap = new Map((lessonProgress ?? []).map((item: any) => [item.lesson_id, item]));
+      const responsesByLesson = new Map<string, any[]>();
+      (lessonResponses ?? []).forEach((answer: any) => {
+        const current = responsesByLesson.get(answer.lesson_id) ?? [];
+        current.push(answer);
+        responsesByLesson.set(answer.lesson_id, current);
+      });
+      const lessonGroups: LessonAnswerGroup[] = [...responsesByLesson.entries()].map(([lessonId, answers]) => {
+        const lesson = lessonMap.get(lessonId) as any;
+        const course = lesson ? courseMap.get(lesson.course_id) as any : null;
+        const content = lessonContentMap.get(lessonId) as any;
+        const progress = lessonProgressMap.get(lessonId) as any;
+        return {
+          lessonId,
+          courseTitle: course?.title ?? "Curso",
+          lessonTitle: lesson?.title ?? "Lição",
+          lessonOrder: Number(lesson?.order_num ?? 9999),
+          completedAt: progress?.completed_at ?? answers[0]?.created_at,
+          points: Number(progress?.awarded_points ?? lessonDefault),
+          answers: answers
+            .sort((a, b) => responseOrder(a.question_key) - responseOrder(b.question_key))
+            .map((answer) => ({ label: lessonQuestionLabel(answer.question_key, content), response: answer.response || "Sem resposta" })),
+        };
+      }).sort((a, b) => a.courseTitle.localeCompare(b.courseTitle, "pt-BR") || a.lessonOrder - b.lessonOrder);
+
+      const devotionalProgressMap = new Map((devotionalProgress ?? []).map((item: any) => [item.devotional_id, item]));
+      const responsesByDevotional = new Map<string, any[]>();
+      (devotionalResponses ?? []).forEach((answer: any) => {
+        const current = responsesByDevotional.get(answer.devotional_id) ?? [];
+        current.push(answer);
+        responsesByDevotional.set(answer.devotional_id, current);
+      });
+      const devotionalGroups: DevotionalAnswerGroup[] = [...responsesByDevotional.entries()].map(([devotionalId, answers]) => {
+        const devotional = devotionalMap.get(devotionalId) as any;
+        const lesson = devotional?.lesson_id ? lessonMap.get(devotional.lesson_id) as any : null;
+        const progress = devotionalProgressMap.get(devotionalId) as any;
+        const completedDate = progress?.completed_at ? new Date(progress.completed_at) : null;
+        const weekend = completedDate ? [0, 6].includes(completedDate.getDay()) : false;
+        return {
+          devotionalId,
+          lessonTitle: lesson?.title ?? "Sem lição vinculada",
+          lessonOrder: Number(lesson?.order_num ?? 9999),
+          devotionalTitle: devotional?.title ?? "Devocional",
+          dayNumber: Number(devotional?.day_number ?? 0),
+          completedAt: progress?.completed_at ?? answers[0]?.created_at,
+          points: Number(progress?.awarded_points ?? (progress?.is_recovery ? devotionalRecovery : weekend ? devotionalWeekend : devotionalDefault)),
+          answers: answers
+            .sort((a, b) => a.question_index - b.question_index)
+            .map((answer) => ({
+              label: devotional?.questions?.[answer.question_index] || `Pergunta ${answer.question_index + 1}`,
+              response: answer.response || "Sem resposta",
+            })),
+        };
+      }).sort((a, b) => a.lessonOrder - b.lessonOrder || a.dayNumber - b.dayNumber);
+
+      setReport({
+        totalPoints: Number(ranking?.faith_points ?? categories.reduce((sum, category) => sum + category.points, 0)),
+        completedCount: Number(ranking?.completed_count ?? categories.reduce((sum, category) => sum + category.count, 0)),
+        categories,
+        lessonGroups,
+        devotionalGroups,
+      });
+    } finally {
+      setLoadingData(false);
     }
-    setAssessment(assessData);
-    setPastoralNotes(notesData ?? []);
-
-    // Enrich attendance with event details
-    const attArr = attendRec ?? [];
-    if (attArr.length > 0) {
-      const present = attArr.filter(a => normalizeAttendanceStatus(a.status) === "presente").length;
-      const absent = attArr.filter(a => normalizeAttendanceStatus(a.status) === "faltou").length;
-      const justified = attArr.filter(a => normalizeAttendanceStatus(a.status) === "justificou").length;
-      setAttendanceData({ present, absent, justified, total: attArr.length });
-
-      const eventIds = [...new Set(attArr.map(a => a.event_id))];
-      const { data: eventsData } = await supabase.from("events").select("id, title, event_date").in("id", eventIds);
-      const evMap = new Map((eventsData ?? []).map(e => [e.id, e]));
-      setAttendanceDetails(attArr.map(a => ({
-        ...a,
-        event_title: evMap.get(a.event_id)?.title ?? "Evento",
-        event_date: evMap.get(a.event_id)?.event_date ?? "",
-      })).sort((a: any, b: any) => getTimeOrMax(a.event_date) - getTimeOrMax(b.event_date)));
-    }
-
-    // Enrich meeting evaluations with event details
-    if ((evalsData ?? []).length > 0) {
-      const evalEventIds = [...new Set((evalsData ?? []).map(e => e.event_id))];
-      const { data: evalEventsData } = await supabase.from("events").select("id, title, event_date").in("id", evalEventIds);
-      const evMap = new Map((evalEventsData ?? []).map(e => [e.id, e]));
-      setMeetingEvals((evalsData ?? []).map(e => ({
-        ...e,
-        event_title: evMap.get(e.event_id)?.title ?? "Encontro",
-        event_date: evMap.get(e.event_id)?.event_date ?? "",
-      })).sort((a: any, b: any) => getTimeOrMax(a.event_date) - getTimeOrMax(b.event_date)));
-    }
-
-    setLoaded(true);
-    setLoadingData(false);
-  }
-
-  async function saveAptidao() {
-    await supabase.from("discipleship_plans").upsert({
-      user_id: p.user_id,
-      aptidao,
-      pastor_notes: observations,
-      health_status: plan?.health_status ?? "atencao",
-    }, { onConflict: "user_id" });
   }
 
   async function generatePDF() {
-    setLoading(true);
-    await saveAptidao();
+    if (!report) return;
+    setGenerating(true);
     try {
       const { jsPDF } = await import("jspdf");
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const W = 210;
-      const margin = 16;
-      let y = 20;
-      const pageH = 297;
-      const isComplete = reportMode === "complete";
+      const width = 210;
+      const height = 297;
+      const margin = 15;
+      const contentWidth = width - margin * 2;
+      let y = 18;
 
-      const checkPage = (needed: number) => {
-        if (y + needed > pageH - 20) {
-          doc.addPage();
-          y = 20;
+      const addPage = () => {
+        doc.addPage();
+        y = 18;
+      };
+      const ensure = (needed: number) => {
+        if (y + needed > height - 18) addPage();
+      };
+      const text = (value: string, x: number, top: number, size = 9, bold = false, color = "#1E293B") => {
+        doc.setFont("helvetica", bold ? "bold" : "normal");
+        doc.setFontSize(size);
+        doc.setTextColor(color);
+        doc.text(value, x, top);
+      };
+      const wrapped = (value: string, x: number, maxWidth: number, size = 9, color = "#334155") => {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(size);
+        doc.setTextColor(color);
+        const lines = doc.splitTextToSize(value || "Sem resposta", maxWidth);
+        for (const line of lines) {
+          ensure(5);
+          doc.text(line, x, y);
+          y += 4.2;
         }
       };
-
-      const addText = (text: string, x: number, yPos: number, size: number, bold = false, color = "#1a1a1a") => {
-        doc.setFontSize(size);
-        doc.setFont("helvetica", bold ? "bold" : "normal");
-        doc.setTextColor(color);
-        doc.text(text, x, yPos);
+      const section = (title: string, color = "#1F3C88") => {
+        ensure(16);
+        y += 4;
+        doc.setFillColor(color);
+        doc.roundedRect(margin, y, contentWidth, 9, 2, 2, "F");
+        text(title, margin + 4, y + 6, 11, true, "#FFFFFF");
+        y += 14;
       };
-
-      const addSection = (title: string) => {
-        checkPage(20);
-        y += 5;
-        doc.setFillColor(245, 247, 255);
-        doc.roundedRect(margin, y, W - margin * 2, 8, 2, 2, "F");
-        addText(title, margin + 3, y + 5.5, 11, true, "#1F3C88");
-        y += 13;
-      };
-
-      const addRow = (label: string, value: string) => {
-        checkPage(8);
-        addText(`${label}:`, margin, y, 9, true, "#555");
-        const lines = doc.splitTextToSize(value || "—", W - margin * 2 - 48);
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor("#111");
-        doc.text(lines, margin + 45, y);
-        y += Math.max(6, lines.length * 4.5);
-      };
-
-      const addMetric = (x: number, top: number, width: number, label: string, value: string, color: string) => {
+      const itemHeader = (title: string, subtitle: string) => {
+        ensure(16);
         doc.setFillColor(248, 250, 252);
         doc.setDrawColor(226, 232, 240);
-        doc.roundedRect(x, top, width, 22, 2, 2, "FD");
-        addText(value, x + 4, top + 9, 14, true, color);
-        addText(label, x + 4, top + 16, 8, false, "#64748B");
+        doc.roundedRect(margin, y, contentWidth, 13, 2, 2, "FD");
+        text(title, margin + 4, y + 5, 9, true);
+        text(subtitle, margin + 4, y + 10, 7.5, false, "#64748B");
+        y += 17;
+      };
+      const answer = (label: string, value: string) => {
+        ensure(12);
+        text(label, margin + 3, y, 8.5, true, "#475569");
+        y += 4.5;
+        wrapped(value, margin + 6, contentWidth - 9, 8.5);
+        y += 2;
       };
 
-      // Try to load avatar image
-      let avatarDataUrl: string | null = null;
-      if (p.avatar_url) {
-        try {
-          const response = await fetch(p.avatar_url);
-          const blob = await response.blob();
-          avatarDataUrl = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.readAsDataURL(blob);
-          });
-        } catch (e) {
-          console.warn("Could not load avatar for PDF:", e);
-        }
-      }
-
-      // Header
       doc.setFillColor(31, 60, 136);
-      doc.rect(0, 0, W, 38, "F");
-
-      // Avatar in header
-      if (avatarDataUrl) {
-        try {
-          doc.addImage(avatarDataUrl, "JPEG", W - margin - 22, 6, 26, 26);
-        } catch (e) {
-          console.warn("Could not embed avatar image:", e);
-        }
-      }
-
-      doc.setFontSize(18);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(255, 255, 255);
-      doc.text(isComplete ? "Relatório Pastoral Completo" : "Resumo de Acompanhamento", margin, 16);
-      doc.setFontSize(11);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(200, 210, 255);
-      doc.text(`${p.full_name}`, margin, 26);
-      doc.text(`Gerado em ${new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}`, margin, 33);
+      doc.rect(0, 0, width, 39, "F");
+      text(reportMode === "complete" ? "RELATÓRIO COMPLETO" : "RELATÓRIO BÁSICO", margin, 15, 17, true, "#FFFFFF");
+      text(p.full_name, margin, 25, 11, true, "#DBEAFE");
+      text(`${p.community} · ${p.area} · Gerado em ${new Date().toLocaleDateString("pt-BR")}`, margin, 33, 8.5, false, "#BFDBFE");
       y = 48;
 
-      addSection("RESUMO EXECUTIVO");
-      const attendPct = attendanceData?.total
-        ? Math.round((attendanceData.present / attendanceData.total) * 100)
-        : 0;
-      const spiritualScores: number[] = assessment
-        ? [assessment.prayer_score, assessment.presence_score, assessment.struggle_score, assessment.doubt_score]
-            .filter((score: unknown): score is number => typeof score === "number")
-        : [];
-      const spiritualAvg = spiritualScores.length
-        ? (spiritualScores.reduce((sum, score) => sum + score, 0) / spiritualScores.length).toFixed(1)
-        : "—";
-      const metricGap = 4;
-      const metricWidth = (W - margin * 2 - metricGap * 2) / 3;
-      addMetric(margin, y, metricWidth, "Progresso", `${pct}%`, "#1F3C88");
-      addMetric(margin + metricWidth + metricGap, y, metricWidth, "Frequência", `${attendPct}%`, attendPct >= 75 ? "#047857" : "#B45309");
-      addMetric(margin + (metricWidth + metricGap) * 2, y, metricWidth, "Vida espiritual", spiritualAvg === "—" ? "—" : `${spiritualAvg}/5`, "#7C3AED");
-      y += 28;
+      section("DADOS GERAIS");
+      const cardGap = 4;
+      const cardWidth = (contentWidth - cardGap) / 2;
+      const cards = [
+        { label: "Pontos da fé", value: String(report.totalPoints) },
+        { label: "Atividades concluídas", value: String(report.completedCount) },
+      ];
+      cards.forEach((card, index) => {
+        const x = margin + index * (cardWidth + cardGap);
+        doc.setFillColor(241, 245, 249);
+        doc.roundedRect(x, y, cardWidth, 21, 2, 2, "F");
+        text(card.value, x + 4, y + 9, 15, true, "#1F3C88");
+        text(card.label, x + 4, y + 16, 8, false, "#64748B");
+      });
+      y += 27;
 
-      const alertItems: string[] = [];
-      if (attendanceData && attendanceData.absent >= 3) alertItems.push(`${attendanceData.absent} faltas registradas`);
-      if (assessment?.needs_pastor) alertItems.push("Solicitou conversa pastoral");
-      if (assessment && spiritualScores.length && Number(spiritualAvg) <= 2.5) alertItems.push("Autoavaliação espiritual requer atenção");
-      if (plan?.is_priority) alertItems.push("Marcado como prioridade pastoral");
-      if (pct < 50) alertItems.push("Progresso abaixo de 50%");
-
-      addRow("Situação", APTIDAO_CFG[aptidao].label.replace(/^[^A-Za-zÀ-ɏ]+\s*/, ""));
-      addRow("Ponto forte", pct >= 75 ? "Bom avanço na jornada" : attendanceData && attendPct >= 75 ? "Boa participação nos encontros" : "Caminhada em construção");
-      addRow("Pontos de atenção", alertItems.length ? alertItems.join("; ") : "Nenhum alerta relevante no momento");
-      addRow("Próxima ação", plan?.next_steps || plan?.recommendations || "Definir no próximo encontro de acompanhamento");
-
-      if (!isComplete) {
-        addSection("IDENTIFICAÇÃO");
-        addRow("Nome", p.full_name);
-        addRow("Comunidade", p.community);
-        addRow("Área", p.area);
-
-        addSection("CAMINHADA");
-        addRow("Lições e formações", `${doneForm}/${formacoes.length}`);
-        addRow("Devocionais", `${doneDev}/${devocionais.length}`);
-        addRow("Encontros no app", `${doneEnc}/${encontros.length}`);
-        addRow("Presenças", attendanceData ? `${attendanceData.present}/${attendanceData.total}` : "Sem registros");
-
-        addSection("PLANO E PRÓXIMOS PASSOS");
-        addRow("Objetivo atual", plan?.objectives || "Ainda não definido");
-        addRow("Próximos passos", plan?.next_steps || "Ainda não definidos");
-        addRow("Recomendações", plan?.recommendations || "Sem recomendações registradas");
-        if (plan?.last_contact_at) addRow("Último contato", formatPtDate(plan.last_contact_at));
+      section("RESUMO POR CATEGORIA");
+      for (const category of report.categories) {
+        ensure(18);
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        doc.roundedRect(margin, y, contentWidth, 14, 2, 2, "FD");
+        doc.setFillColor(category.color);
+        doc.roundedRect(margin, y, 3, 14, 1, 1, "F");
+        text(category.label, margin + 7, y + 6, 9.5, true);
+        text(`${category.count} registro(s)`, margin + 7, y + 11, 7.5, false, "#64748B");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(category.color);
+        doc.text(`${category.points} pts`, width - margin - 5, y + 8, { align: "right" });
+        y += 18;
       }
 
-      if (isComplete) {
-
-      // 1. Dados pessoais
-      addSection("DADOS PESSOAIS");
-      addRow("Nome completo", p.full_name);
-      addRow("Comunidade", p.community);
-      addRow("Area", p.area);
-      addRow("Idade", age ? `${age} anos` : "—");
-      addRow("Telefone", p.phone);
-      addRow("Data de nascimento", formatPtDate(p.birth_date));
-      if (p.address) addRow("Endereco", p.address);
-
-      // 2. Dados dos pais / responsáveis
-      if (p.father_name || p.mother_name) {
-        addSection("PAIS / RESPONSAVEIS");
-        if (p.father_name) addRow("Pai", p.father_name);
-        if (p.father_phone) addRow("Telefone do pai", p.father_phone);
-        if (p.mother_name) addRow("Mae", p.mother_name);
-        if (p.mother_phone) addRow("Telefone da mae", p.mother_phone);
-      }
-
-      // 2. Aptidão
-      addSection("APTIDÃO PARA A PROFISSÃO DE FÉ");
-      const aptCfg = APTIDAO_CFG[aptidao];
-      doc.setFillColor(aptidao === "apto" ? 209 : aptidao === "acompanhamento" ? 254 : 254,
-        aptidao === "apto" ? 250 : aptidao === "acompanhamento" ? 243 : 226,
-        aptidao === "apto" ? 229 : aptidao === "acompanhamento" ? 199 : 226);
-      doc.roundedRect(margin, y - 2, W - margin * 2, 10, 2, 2, "F");
-      addText(aptCfg.label, margin + 4, y + 5, 12, true,
-        aptidao === "apto" ? "#065F46" : aptidao === "acompanhamento" ? "#92400E" : "#991B1B");
-      y += 14;
-
-      // 3. Progresso da Jornada
-      addSection("PROGRESSO DETALHADO DA JORNADA");
-      addRow("Progresso geral", `${p.completed_count}/${activities.length} (${pct}%)`);
-      addRow("Devocionais", `${doneDev}/${devocionais.length}`);
-      addRow("Formacoes", `${doneForm}/${formacoes.length}`);
-      addRow("Encontros (app)", `${doneEnc}/${encontros.length}`);
-
-      // Activity checklist
-      checkPage(10);
-      y += 2;
-      addText("Atividades concluidas:", margin, y, 9, true, "#555");
-      y += 5;
-      for (const act of activities) {
-        checkPage(6);
-        const done = completedIds.has(act.id);
-        addText(`${done ? "[X]" : "[ ]"} ${act.title}`, margin + 4, y, 8, false, done ? "#065F46" : "#999");
-        y += 4.5;
-      }
-
-      // 4. Vida Espiritual
-      addSection("VIDA ESPIRITUAL");
-      if (assessment) {
-        const EMOJIS_TEXT = ["Fraco", "Regular", "Bom", "Muito bom", "Excelente"];
-        addRow("Vida de oracao", assessment.prayer_score ? `${EMOJIS_TEXT[assessment.prayer_score-1]} (${assessment.prayer_score}/5)` : "Nao avaliado");
-        addRow("Sente Deus perto", assessment.presence_score ? `${EMOJIS_TEXT[assessment.presence_score-1]} (${assessment.presence_score}/5)` : "Nao avaliado");
-        addRow("Lutas espirituais", assessment.struggle_score ? `${EMOJIS_TEXT[assessment.struggle_score-1]} (${assessment.struggle_score}/5)` : "Nao avaliado");
-        addRow("Duvidas de fe", assessment.doubt_score ? `${EMOJIS_TEXT[assessment.doubt_score-1]} (${assessment.doubt_score}/5)` : "Nao avaliado");
-        addRow("Pediu conversa pastoral", assessment.needs_pastor ? "Sim" : "Nao");
-        if (assessment.notes) addRow("Observacao pessoal", assessment.notes);
-      } else {
-        addText("Nenhuma autoavaliacao registrada neste mes.", margin, y, 9, false, "#999");
-        y += 6;
-      }
-
-      // 5. Presença nos encontros
-      addSection("PRESENCA NOS ENCONTROS");
-      if (attendanceData) {
-        addRow("Presente", `${attendanceData.present} encontro(s)`);
-        addRow("Faltou", `${attendanceData.absent} encontro(s)`);
-        addRow("Justificou", `${attendanceData.justified} encontro(s)`);
-        const attendPct = attendanceData.total > 0 ? Math.round((attendanceData.present / attendanceData.total) * 100) : 0;
-        addRow("Taxa de presenca", `${attendPct}%`);
-
-        // Detail per event
-        if (attendanceDetails.length > 0) {
-          y += 2;
-          addText("Historico detalhado:", margin, y, 9, true, "#555");
-          y += 5;
-          for (const att of attendanceDetails) {
-            checkPage(6);
-            const normalizedStatus = normalizeAttendanceStatus(att.status);
-            const statusTxt = normalizedStatus === "presente" ? "Presente" : normalizedStatus === "faltou" ? "Faltou" : "Justificou";
-            const dateStr = formatPtDate(att.event_date);
-            addText(`${dateStr} - ${att.event_title}: ${statusTxt}`, margin + 4, y, 8, false, 
-              normalizedStatus === "presente" ? "#065F46" : normalizedStatus === "faltou" ? "#991B1B" : "#92400E");
-            y += 4.5;
+      if (reportMode === "complete") {
+        for (const category of report.categories) {
+          section(category.label.toUpperCase(), category.color);
+          if (category.items.length === 0) {
+            text("Nenhum registro nesta categoria.", margin + 3, y, 9, false, "#94A3B8");
+            y += 8;
+            continue;
+          }
+          for (const item of category.items) {
+            itemHeader(item.title, `${item.subtitle} · ${formatDate(item.date)} · ${item.points} pts`);
           }
         }
-      } else {
-        addText("Nenhum registro de presenca.", margin, y, 9, false, "#999");
-        y += 6;
-      }
 
-      // 6. Avaliações dos encontros presenciais
-      if (meetingEvals.length > 0) {
-        addSection("AVALIACOES DOS ENCONTROS PRESENCIAIS");
-        const SCORE_LABELS = ["", "Fraco", "Regular", "Bom", "Muito bom", "Excelente"];
-        for (const ev of meetingEvals) {
-          checkPage(25);
-          const dateStr = formatPtDate(ev.event_date);
-          addText(`${ev.event_title} (${dateStr})`, margin, y, 9, true, "#333");
-          y += 5;
-          if (ev.participation_score) addRow("  Participacao", `${SCORE_LABELS[ev.participation_score]} (${ev.participation_score}/5)`);
-          if (ev.understanding_score) addRow("  Compreensao", `${SCORE_LABELS[ev.understanding_score]} (${ev.understanding_score}/5)`);
-          if (ev.engagement_score) addRow("  Engajamento", `${SCORE_LABELS[ev.engagement_score]} (${ev.engagement_score}/5)`);
-          if (ev.notes) addRow("  Observacoes", ev.notes);
-          y += 2;
+        section("RESPOSTAS DAS LIÇÕES", "#2563EB");
+        if (report.lessonGroups.length === 0) {
+          text("Nenhuma resposta de lição registrada.", margin + 3, y, 9, false, "#94A3B8");
+          y += 8;
         }
-      }
-
-      // 7. Plano de discipulado
-      if (plan) {
-        addSection("PLANO DE DISCIPULADO");
-        const healthLabels: Record<string,string> = { saudavel: "Saudavel", atencao: "Atencao", critico: "Critico" };
-        addRow("Status de saude", healthLabels[plan.health_status] ?? plan.health_status);
-        addRow("Prioridade pastoral", plan.is_priority ? "Sim" : "Nao");
-        if (plan.objectives) addRow("Objetivos", plan.objectives);
-        if (plan.next_steps) addRow("Proximos passos", plan.next_steps);
-        if (plan.challenges) addRow("Desafios", plan.challenges);
-        if (plan.recommendations) addRow("Recomendacoes", plan.recommendations);
-        if (plan.last_contact_at) addRow("Ultimo contato", formatPtDate(plan.last_contact_at));
-      }
-
-      // 8. Notas pastorais
-      if (pastoralNotes.length > 0) {
-        addSection("NOTAS PASTORAIS");
-        const NOTE_LABELS: Record<string,string> = {
-          acompanhamento: "Acompanhamento", conversa: "Conversa pastoral",
-          encontro_individual: "Encontro individual", observacao: "Observacao",
-        };
-        for (const note of pastoralNotes) {
-          checkPage(12);
-          const dateStr = formatPtDate(note.created_at);
-          const typeLabel = NOTE_LABELS[note.note_type] ?? note.note_type;
-          addText(`${dateStr} - ${typeLabel}`, margin, y, 8, true, "#555");
-          y += 4;
-          const lines = doc.splitTextToSize(note.content, W - margin * 2 - 8);
-          doc.setFontSize(8);
-          doc.setFont("helvetica", "normal");
-          doc.setTextColor("#333");
-          for (const line of lines) {
-            checkPage(5);
-            doc.text(line, margin + 4, y);
-            y += 3.5;
+        let currentCourse = "";
+        for (const group of report.lessonGroups) {
+          if (group.courseTitle !== currentCourse) {
+            currentCourse = group.courseTitle;
+            ensure(10);
+            text(currentCourse, margin, y, 11, true, "#1D4ED8");
+            y += 7;
           }
+          itemHeader(group.lessonTitle, `${formatDate(group.completedAt)} · ${group.points} pts · ${group.answers.length} resposta(s)`);
+          for (const item of group.answers) answer(item.label, item.response);
+          y += 3;
+        }
+
+        section("RESPOSTAS DOS DEVOCIONAIS", "#7C3AED");
+        if (report.devotionalGroups.length === 0) {
+          text("Nenhuma resposta de devocional registrada.", margin + 3, y, 9, false, "#94A3B8");
+          y += 8;
+        }
+        let currentLesson = "";
+        for (const group of report.devotionalGroups) {
+          if (group.lessonTitle !== currentLesson) {
+            currentLesson = group.lessonTitle;
+            ensure(10);
+            text(currentLesson, margin, y, 11, true, "#6D28D9");
+            y += 7;
+          }
+          itemHeader(group.devotionalTitle, `Dia ${group.dayNumber || "—"} · ${formatDate(group.completedAt)} · ${group.points} pts`);
+          for (const item of group.answers) answer(item.label, item.response);
           y += 3;
         }
       }
 
-      // 9. Observações pastorais finais
-      if (observations) {
-        addSection("OBSERVACOES FINAIS DO DISCIPULADOR");
-        const lines = doc.splitTextToSize(observations, W - margin * 2 - 6);
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "italic");
-        doc.setTextColor("#444");
-        for (const line of lines) {
-          checkPage(5);
-          doc.text(line, margin + 3, y);
-          y += 4.5;
-        }
-      }
-      }
-
-      // Footer on each page
       const pageCount = doc.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
+      for (let page = 1; page <= pageCount; page++) {
+        doc.setPage(page);
         doc.setFillColor(31, 60, 136);
-        doc.rect(0, 285, W, 12, "F");
-        doc.setFontSize(8);
+        doc.rect(0, 286, width, 11, "F");
+        text("Caminho Boa Nova · Relatório por categorias", margin, 293, 8, false, "#DBEAFE");
         doc.setFont("helvetica", "normal");
-        doc.setTextColor(200, 210, 255);
-        doc.text(isComplete ? "CONFIDENCIAL · Caminho Boa Nova · Relatório Pastoral" : "Caminho Boa Nova · Resumo de Acompanhamento", margin, 292);
-        doc.text(`Pag. ${i}/${pageCount}`, W - margin - 20, 292);
+        doc.setFontSize(8);
+        doc.setTextColor("#DBEAFE");
+        doc.text(`Pág. ${page}/${pageCount}`, width - margin, 293, { align: "right" });
       }
 
-      const modeLabel = isComplete ? "Pastoral_Completo" : "Resumo_Acompanhamento";
-      doc.save(`${modeLabel}_${p.full_name.replace(/\s+/g, "_")}.pdf`);
-    } catch (err) {
-      console.error("PDF generation error:", err);
+      const prefix = reportMode === "complete" ? "Relatorio_Completo" : "Relatorio_Basico";
+      doc.save(`${prefix}_${p.full_name.replace(/\s+/g, "_")}.pdf`);
+    } finally {
+      setGenerating(false);
     }
-    setLoading(false);
   }
 
   return (
-    <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
-      <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
-        <FileText className="w-4 h-4 text-primary" />
-        <p className="font-montserrat font-bold text-foreground text-sm">Relatórios de acompanhamento</p>
+    <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-4 py-3">
+        <FileText className="h-4 w-4 text-primary" />
+        <p className="font-montserrat text-sm font-bold text-foreground">Relatório por categorias</p>
       </div>
-      <div className="p-4 space-y-4">
-        {!loaded ? (
-          <button onClick={loadData} disabled={loadingData}
-            className="w-full py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm font-medium hover:bg-muted/70 transition-colors">
+      <div className="space-y-4 p-4">
+        {!report ? (
+          <button
+            onClick={loadData}
+            disabled={loadingData}
+            className="w-full rounded-xl bg-muted py-2.5 font-inter text-sm font-medium text-foreground transition-colors hover:bg-muted/70 disabled:opacity-60"
+          >
             {loadingData ? "Carregando dados..." : "Carregar dados do relatório"}
           </button>
         ) : (
           <>
-            <div>
-              <p className="font-inter text-xs font-medium text-foreground mb-2">Formato do relatório</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => setReportMode("summary")}
-                  className={`rounded-xl border-2 p-3 text-left transition-colors ${reportMode === "summary" ? "border-primary bg-primary/5" : "border-border bg-muted/20"}`}>
-                  <span className="block font-inter text-sm font-semibold text-foreground">Resumo</span>
-                  <span className="block mt-1 font-inter text-[11px] text-muted-foreground">Para reunião ou família, sem notas sensíveis</span>
-                </button>
-                <button type="button" onClick={() => setReportMode("complete")}
-                  className={`rounded-xl border-2 p-3 text-left transition-colors ${reportMode === "complete" ? "border-primary bg-primary/5" : "border-border bg-muted/20"}`}>
-                  <span className="block font-inter text-sm font-semibold text-foreground">Pastoral completo</span>
-                  <span className="block mt-1 font-inter text-[11px] text-muted-foreground">Confidencial, com histórico e notas</span>
-                </button>
-              </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setReportMode("summary")}
+                className={`rounded-xl border-2 p-3 text-left ${reportMode === "summary" ? "border-primary bg-primary/5" : "border-border"}`}
+              >
+                <span className="block font-inter text-sm font-semibold text-foreground">Relatório básico</span>
+                <span className="mt-1 block font-inter text-[11px] text-muted-foreground">Dados gerais e resumo por categoria</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setReportMode("complete")}
+                className={`rounded-xl border-2 p-3 text-left ${reportMode === "complete" ? "border-primary bg-primary/5" : "border-border"}`}
+              >
+                <span className="block font-inter text-sm font-semibold text-foreground">Relatório completo</span>
+                <span className="mt-1 block font-inter text-[11px] text-muted-foreground">Categorias, detalhes e todas as respostas</span>
+              </button>
             </div>
 
-            {/* Resumo do que será incluído */}
-            <div className="bg-muted/30 rounded-xl p-3 space-y-1">
-              <p className="font-inter text-xs font-medium text-foreground">
-                {reportMode === "complete" ? "O relatório confidencial incluirá:" : "O resumo incluirá:"}
+            <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/30 p-3 sm:grid-cols-3">
+              {report.categories.map((category) => (
+                <div key={category.key} className="rounded-lg bg-background p-2">
+                  <p className="truncate font-inter text-[11px] text-muted-foreground">{category.label}</p>
+                  <p className="font-montserrat text-sm font-bold text-foreground">{category.count} · {category.points} pts</p>
+                </div>
+              ))}
+            </div>
+
+            {reportMode === "complete" && (
+              <p className="rounded-xl bg-primary/5 p-3 font-inter text-xs text-muted-foreground">
+                O PDF completo incluirá {report.lessonGroups.reduce((sum, group) => sum + group.answers.length, 0)} resposta(s) de lições e {report.devotionalGroups.reduce((sum, group) => sum + group.answers.length, 0)} resposta(s) de devocionais, agrupadas por curso e lição.
               </p>
-              <div className="grid grid-cols-2 gap-1 text-xs font-inter text-muted-foreground">
-                <span>Resumo executivo</span>
-                <span>Indicadores principais</span>
-                <span>Pontos de atenção</span>
-                <span>Próximos passos</span>
-                <span>Progresso ({pct}%)</span>
-                <span>Presença ({attendanceData ? `${attendanceData.present}/${attendanceData.total}` : "—"})</span>
-                {reportMode === "complete" && <span>Dados pessoais e familiares</span>}
-                {reportMode === "complete" && <span>{pastoralNotes.length} nota(s) pastoral(is)</span>}
-                {reportMode === "complete" && <span>{meetingEvals.length} avaliação(ões)</span>}
-                {reportMode === "complete" && <span>Histórico detalhado</span>}
-              </div>
-            </div>
+            )}
 
-            {/* Aptidão selector */}
-            <div>
-              <p className="font-inter text-xs font-medium text-foreground mb-2">🏁 Aptidão para a Profissão de Fé</p>
-              <div className="grid grid-cols-1 gap-2">
-                {(["apto", "acompanhamento", "nao_apto"] as const).map(key => {
-                  const cfg = APTIDAO_CFG[key];
-                  const isSelected = aptidao === key;
-                  return (
-                    <button key={key} onClick={() => setAptidao(key)}
-                      className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${
-                        isSelected ? "border-primary/50 bg-primary/5" : "border-border bg-muted/30"
-                      }`}>
-                      {key === "apto" ? <CheckCircle2 className="w-5 h-5 text-brand-green flex-shrink-0" /> :
-                       key === "acompanhamento" ? <Clock className="w-5 h-5 text-accent-foreground flex-shrink-0" /> :
-                       <XCircle className="w-5 h-5 text-destructive flex-shrink-0" />}
-                      <span className={`font-inter text-sm font-medium ${isSelected ? "text-foreground" : "text-muted-foreground"}`}>
-                        {cfg.label}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Observações pastorais */}
-            {reportMode === "complete" && <div>
-              <p className="font-inter text-xs font-medium text-foreground mb-1.5">📝 Observações finais (incluídas no relatório)</p>
-              <textarea
-                value={observations}
-                onChange={e => setObservations(e.target.value)}
-                placeholder="Registre a maturidade espiritual, dúvidas, desafios e recomendações..."
-                rows={3}
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-              />
-            </div>}
-
-            {/* Download button */}
             <button
               onClick={generatePDF}
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-inter text-sm font-medium text-primary-foreground disabled:opacity-70 transition-all"
+              disabled={generating}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 font-inter text-sm font-medium text-primary-foreground disabled:opacity-70"
               style={{ background: "var(--gradient-hero)" }}
             >
-              <Download className="w-4 h-4" />
-              {loading ? "Gerando PDF..." : reportMode === "complete" ? "Baixar relatório pastoral" : "Baixar resumo de acompanhamento"}
+              <Download className="h-4 w-4" />
+              {generating ? "Gerando PDF..." : reportMode === "complete" ? "Baixar relatório completo" : "Baixar relatório básico"}
             </button>
           </>
         )}
