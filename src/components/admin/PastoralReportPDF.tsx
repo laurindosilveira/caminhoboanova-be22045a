@@ -99,6 +99,17 @@ function responseOrder(key: string) {
   return 2000;
 }
 
+function parseManualBonus(rawKey: string) {
+  if (!rawKey.startsWith("bonus_lider|")) return null;
+  const parts = rawKey.split("|");
+  return {
+    category: parts.length >= 3 ? parts[1] || "conquista" : "conquista",
+    justification: parts.length >= 3
+      ? decodeURIComponent(parts.slice(2).join("|"))
+      : rawKey.slice("bonus_lider|".length),
+  };
+}
+
 export default function PastoralReportPDF({ participant: p }: Props) {
   const [reportMode, setReportMode] = useState<ReportMode>("summary");
   const [loadingData, setLoadingData] = useState(false);
@@ -207,7 +218,7 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         };
       });
 
-      const attendanceItems: CategoryItem[] = (attendance ?? []).map((record: any) => {
+      const buildAttendanceItem = (record: any): CategoryItem => {
         const event = eventMap.get(record.event_id) as any;
         const custom = eventTypeMap.get(event?.type ?? "");
         const present = record.status === "presente";
@@ -218,23 +229,50 @@ export default function PastoralReportPDF({ participant: p }: Props) {
           date: event?.event_date ?? record.created_at,
           points: present ? Number(custom?.gives_points ? custom.points : attendanceDefault) : 0,
         };
+      };
+
+      // O relatório do Ranking separa cada tipo de presença. Mantemos o mesmo
+      // agrupamento aqui para que as quantidades possam ser comparadas diretamente.
+      const eventCategoryItems = new Map<string, CategoryItem[]>();
+      (attendance ?? []).forEach((record: any) => {
+        const event = eventMap.get(record.event_id) as any;
+        const category = event?.type || "encontro";
+        const current = eventCategoryItems.get(category) ?? [];
+        current.push(buildAttendanceItem(record));
+        eventCategoryItems.set(category, current);
       });
 
-      const worshipItems: CategoryItem[] = (worship ?? []).map((record: any) => ({
+      const worshipItems: CategoryItem[] = [...(eventCategoryItems.get("culto") ?? []), ...(worship ?? []).map((record: any) => ({
         id: record.id,
         title: `Culto · ${record.preacher_name}`,
         subtitle: "Presença aprovada",
         date: record.worship_date ?? record.created_at,
         points: worshipDefault,
-      }));
+      }))];
+      eventCategoryItems.delete("culto");
 
-      const achievementItems: CategoryItem[] = (achievements ?? []).map((record: any) => ({
-        id: record.id,
-        title: record.achievement_key.startsWith("bonus_lider|") ? "Bônus do líder" : record.achievement_key,
-        subtitle: "Conquista ou bônus",
-        date: record.unlocked_at,
-        points: Number(record.bonus_points ?? 0),
-      }));
+      const achievementItems: CategoryItem[] = [];
+      (achievements ?? []).forEach((record: any) => {
+        const manual = parseManualBonus(record.achievement_key);
+        const item: CategoryItem = {
+          id: record.id,
+          title: manual ? "Bônus do líder" : record.achievement_key,
+          subtitle: manual?.justification || "Conquista ou bônus",
+          date: record.unlocked_at,
+          points: Number(record.bonus_points ?? 0),
+        };
+
+        if (!manual || manual.category === "conquista") achievementItems.push(item);
+        else if (manual.category === "lesson") lessonItems.push(item);
+        else if (manual.category === "devotional") devotionalItems.push(item);
+        else if (manual.category === "worship") worshipItems.push(item);
+        else if (manual.category === "culto") worshipItems.push(item);
+        else {
+          const current = eventCategoryItems.get(manual.category) ?? [];
+          current.push(item);
+          eventCategoryItems.set(manual.category, current);
+        }
+      });
 
       const extraItems: CategoryItem[] = (userProgress ?? []).map((record: any) => {
         const activity = activityMap.get(record.activity_id) as any;
@@ -273,14 +311,30 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         points: items.reduce((sum, item) => sum + item.points, 0),
       });
 
+      const eventMeta: Record<string, { label: string; color: string; order: number }> = {
+        jemiac: { label: "JEMIAC", color: "#059669", order: 1 },
+        confirmatorio: { label: "Ensino Confirmatório", color: "#0D9488", order: 2 },
+        encontro: { label: "Encontro", color: "#16A34A", order: 3 },
+        retiro: { label: "Retiro", color: "#EA580C", order: 4 },
+        evento: { label: "Evento", color: "#0284C7", order: 5 },
+      };
+      const eventCategories = [...eventCategoryItems.entries()]
+        .sort(([left], [right]) => (eventMeta[left]?.order ?? 99) - (eventMeta[right]?.order ?? 99))
+        .map(([key, items]) => makeCategory(
+          `attendance-${key}`,
+          eventMeta[key]?.label ?? key,
+          eventMeta[key]?.color ?? "#059669",
+          items,
+        ));
+
       const categories = [
-        makeCategory("lessons", "Lições", "#2563EB", lessonItems),
         makeCategory("devotionals", "Devocionais", "#7C3AED", devotionalItems),
-        makeCategory("attendance", "Presenças e encontros", "#059669", attendanceItems),
+        ...eventCategories,
         makeCategory("worship", "Cultos", "#D97706", worshipItems),
-        makeCategory("achievements", "Conquistas e bônus", "#CA8A04", achievementItems),
+        makeCategory("lessons", "Lições", "#2563EB", lessonItems),
+        makeCategory("achievements", "Conquistas", "#CA8A04", achievementItems),
         makeCategory("extras", "Atividades e desafios", "#475569", [...extraItems, ...challengeItems]),
-      ];
+      ].filter((category) => category.count > 0);
 
       const lessonProgressMap = new Map((lessonProgress ?? []).map((item: any) => [item.lesson_id, item]));
       const responsesByLesson = new Map<string, any[]>();
@@ -339,7 +393,9 @@ export default function PastoralReportPDF({ participant: p }: Props) {
 
       setReport({
         totalPoints: Number(ranking?.faith_points ?? categories.reduce((sum, category) => sum + category.points, 0)),
-        completedCount: Number(ranking?.completed_count ?? categories.reduce((sum, category) => sum + category.count, 0)),
+        // A janela do Ranking mostra todos os itens detalhados, inclusive conquistas,
+        // bônus e conclusão de curso. A RPC não inclui todos eles no completed_count.
+        completedCount: categories.reduce((sum, category) => sum + category.count, 0),
         categories,
         lessonGroups,
         devotionalGroups,
@@ -394,18 +450,48 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         y += 14;
       };
       const itemHeader = (title: string, subtitle: string) => {
-        ensure(16);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        const titleLines = doc.splitTextToSize(title, contentWidth - 8);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        const subtitleLines = doc.splitTextToSize(subtitle, contentWidth - 8);
+        const boxHeight = 5 + titleLines.length * 4 + subtitleLines.length * 3.5;
+        ensure(boxHeight + 4);
         doc.setFillColor(248, 250, 252);
         doc.setDrawColor(226, 232, 240);
-        doc.roundedRect(margin, y, contentWidth, 13, 2, 2, "FD");
-        text(title, margin + 4, y + 5, 9, true);
-        text(subtitle, margin + 4, y + 10, 7.5, false, "#64748B");
-        y += 17;
+        doc.roundedRect(margin, y, contentWidth, boxHeight, 2, 2, "FD");
+        let lineY = y + 5;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor("#1E293B");
+        titleLines.forEach((line: string) => {
+          doc.text(line, margin + 4, lineY);
+          lineY += 4;
+        });
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor("#64748B");
+        subtitleLines.forEach((line: string) => {
+          doc.text(line, margin + 4, lineY);
+          lineY += 3.5;
+        });
+        y += boxHeight + 4;
       };
       const answer = (label: string, value: string) => {
-        ensure(12);
-        text(label, margin + 3, y, 8.5, true, "#475569");
-        y += 4.5;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.setTextColor("#475569");
+        const labelLines = doc.splitTextToSize(label || "Pergunta", contentWidth - 6);
+        for (const line of labelLines) {
+          ensure(5);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8.5);
+          doc.setTextColor("#475569");
+          doc.text(line, margin + 3, y);
+          y += 4.2;
+        }
+        y += 1;
         wrapped(value, margin + 6, contentWidth - 9, 8.5);
         y += 2;
       };
