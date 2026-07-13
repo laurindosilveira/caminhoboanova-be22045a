@@ -108,10 +108,12 @@ export function useAgendaSchedule() {
 
     let eventsResult: any = null;
     for (const selectClause of eventSelectFallbacks) {
-      const result = await (supabase.from as any)("events")
+      let query = (supabase.from as any)("events")
         .select(selectClause)
         .not("linked_lesson_id", "is", null)
         .order("event_date", { ascending: true });
+      if (profile?.church_id) query = query.eq("church_id", profile.church_id);
+      const result = await query;
 
       if (!result.error) {
         eventsResult = result;

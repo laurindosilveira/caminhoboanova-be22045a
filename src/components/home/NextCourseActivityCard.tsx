@@ -62,11 +62,13 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
 
     let events: any[] = [];
     for (const selectClause of eventSelectFallbacks) {
-      const result = await supabase
+      let query = supabase
         .from("events")
         .select(selectClause)
         .not("linked_lesson_id", "is", null)
         .order("event_date");
+      if (profile?.church_id) query = query.eq("church_id", profile.church_id);
+      const result = await query;
       if (!result.error) {
         events = result.data ?? [];
         break;

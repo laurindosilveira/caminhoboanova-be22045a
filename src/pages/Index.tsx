@@ -222,7 +222,11 @@ export default function Index() {
               animate={{ opacity: 1 }}
               transition={{ duration: 0.4, delay: 0.3 }}
             >
-              <NextMeetingCard onNavigateToAgenda={() => setActiveTab("agenda")} />
+              <NextMeetingCard
+                churchId={profile?.church_id}
+                currentArea={currentArea}
+                onNavigateToAgenda={() => setActiveTab("agenda")}
+              />
               <AnnouncementsSection />
             </motion.div>
 

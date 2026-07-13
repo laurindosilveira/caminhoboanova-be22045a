@@ -41,22 +41,26 @@ export default function EventPhotoGallery() {
 
   useEffect(() => {
     fetchAlbums();
-  }, [currentArea]);
+  }, [currentArea, profile?.church_id]);
 
   async function fetchAlbums() {
     setLoading(true);
     // Get events that have photos (or are past events)
-    const { data: events } = await supabase
+    let eventsQuery = supabase
       .from("events")
       .select("id, title, event_date, area")
       .order("event_date", { ascending: false });
+    if (profile?.church_id) eventsQuery = eventsQuery.eq("church_id", profile.church_id);
+    const { data: events } = await eventsQuery;
 
     if (!events) { setLoading(false); return; }
 
     // Get photo counts per event
-    const { data: photosData } = await supabase
+    let photosQuery = supabase
       .from("event_photos")
-      .select("id, event_id, file_url, status");
+      .select("id, event_id, file_url, status, user_id");
+    if (profile?.church_id) photosQuery = photosQuery.eq("church_id", profile.church_id);
+    const { data: photosData } = await photosQuery;
 
     const photosByEvent = new Map<string, { count: number; cover: string | null }>();
     (photosData ?? []).forEach((p: any) => {
@@ -108,18 +112,22 @@ export default function EventPhotoGallery() {
   async function openAlbum(album: EventAlbum) {
     setSelectedAlbum(album);
     setLoadingPhotos(true);
-    const { data } = await supabase
+    let photoQuery = supabase
       .from("event_photos")
       .select("id, file_url, caption, status, user_id, created_at")
       .eq("event_id", album.id)
       .order("created_at", { ascending: false });
+    if (profile?.church_id) photoQuery = photoQuery.eq("church_id", profile.church_id);
+    const { data } = await photoQuery;
 
     // Get user names
     const userIds = [...new Set((data ?? []).map((p: any) => p.user_id))];
-    const { data: profiles } = await supabase
+    let profilesQuery = supabase
       .from("profiles")
       .select("user_id, full_name")
       .in("user_id", userIds);
+    if (profile?.church_id) profilesQuery = profilesQuery.eq("church_id", profile.church_id);
+    const { data: profiles } = await profilesQuery;
 
     const nameMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p.full_name]));
 
@@ -156,6 +164,7 @@ export default function EventPhotoGallery() {
       await supabase.from("event_photos").insert({
         event_id: selectedAlbum.id,
         user_id: user.id,
+        church_id: profile?.church_id ?? null,
         file_url: urlData.publicUrl,
         status: isLeaderOrAdmin ? "aprovado" : "pendente",
       });
@@ -177,11 +186,13 @@ export default function EventPhotoGallery() {
   async function handleApprove(photoId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from("event_photos").update({
+    let updateQuery = supabase.from("event_photos").update({
       status: "aprovado",
       reviewed_by: user.id,
       reviewed_at: new Date().toISOString(),
     }).eq("id", photoId);
+    if (profile?.church_id) updateQuery = updateQuery.eq("church_id", profile.church_id);
+    await updateQuery;
     toast.success("Foto aprovada!");
     if (selectedAlbum) openAlbum(selectedAlbum);
   }
@@ -189,17 +200,21 @@ export default function EventPhotoGallery() {
   async function handleReject(photoId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from("event_photos").update({
+    let updateQuery = supabase.from("event_photos").update({
       status: "rejeitado",
       reviewed_by: user.id,
       reviewed_at: new Date().toISOString(),
     }).eq("id", photoId);
+    if (profile?.church_id) updateQuery = updateQuery.eq("church_id", profile.church_id);
+    await updateQuery;
     toast.info("Foto rejeitada.");
     if (selectedAlbum) openAlbum(selectedAlbum);
   }
 
   async function handleDelete(photo: Photo) {
-    await supabase.from("event_photos").delete().eq("id", photo.id);
+    let deleteQuery = supabase.from("event_photos").delete().eq("id", photo.id);
+    if (profile?.church_id) deleteQuery = deleteQuery.eq("church_id", profile.church_id);
+    await deleteQuery;
     toast.info("Foto removida.");
     if (selectedAlbum) openAlbum(selectedAlbum);
     fetchAlbums();

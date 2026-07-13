@@ -26,6 +26,7 @@ type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
   confirmation_year?: number | null;
+  church_id?: string | null;
   completed_lesson_count?: number;
   completed_devotional_count?: number;
   completed_event_count?: number;
@@ -236,6 +237,9 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
 
   async function fetchRealData() {
     setLoading(true);
+    const churchId = (p as any).church_id ?? null;
+    let eventsQuery = supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false });
+    if (churchId) eventsQuery = eventsQuery.eq("church_id", churchId);
 
     const [
       { data: lessonResps, error: lessonRespsError },
@@ -257,7 +261,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       supabase.from("courses").select("id, title, order_num").order("order_num"),
       supabase.from("lesson_content").select("lesson_id, questions"),
       supabase.from("devotional_content").select("id, lesson_id, title, day_number, bible_reference, questions"),
-      supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false }),
+      eventsQuery,
       supabase.from("lesson_progress").select("lesson_id, completed_at, awarded_points").eq("user_id", p.user_id).eq("is_completed", true),
     ]);
 
@@ -1153,9 +1157,11 @@ export default function ParticipantsTab({ participants, activities, communities 
   // Fetch course unlocks
   useEffect(() => {
     async function fetchCourseUnlocks() {
+      let unlocksQuery = supabase.from("course_unlocks").select("course_id, area").eq("area", myArea);
+      if (profile?.church_id) unlocksQuery = unlocksQuery.eq("church_id", profile.church_id);
       const [{ data: coursesData }, { data: unlocksData }] = await Promise.all([
         supabase.from("courses").select("id, title, order_num").order("order_num"),
-        supabase.from("course_unlocks").select("course_id, area").eq("area", myArea),
+        unlocksQuery,
       ]);
       setCourses(coursesData ?? []);
       setUnlockedCourseIds(new Set((unlocksData ?? []).map((u: any) => u.course_id)));
@@ -1168,14 +1174,21 @@ export default function ParticipantsTab({ participants, activities, communities 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setUnlockLoading(null); return; }
     if (unlockedCourseIds.has(courseId)) {
-      const { error } = await supabase.from("course_unlocks").delete().eq("course_id", courseId).eq("area", myArea);
+      let deleteQuery = supabase.from("course_unlocks").delete().eq("course_id", courseId).eq("area", myArea);
+      if (profile?.church_id) deleteQuery = deleteQuery.eq("church_id", profile.church_id);
+      const { error } = await deleteQuery;
       if (error) {
         toast({ title: "Erro ao bloquear curso", description: error.message, variant: "destructive" });
       } else {
         setUnlockedCourseIds(prev => { const n = new Set(prev); n.delete(courseId); return n; });
       }
     } else {
-      const { error } = await supabase.from("course_unlocks").insert({ course_id: courseId, area: myArea, unlocked_by: user.id } as any);
+      const { error } = await supabase.from("course_unlocks").insert({
+        course_id: courseId,
+        area: myArea,
+        unlocked_by: user.id,
+        church_id: profile?.church_id ?? null,
+      } as any);
       if (error) {
         toast({ title: "Erro ao liberar curso", description: error.message, variant: "destructive" });
       } else {

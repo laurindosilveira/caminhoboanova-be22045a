@@ -276,7 +276,9 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
   useEffect(() => {
     if (!profile || activeCommunities.length === 0) return;
     async function fetchSeasons() {
-      const { data } = await supabase.from("ranking_seasons").select("*");
+      let query = supabase.from("ranking_seasons").select("*");
+      if (profile?.church_id) query = query.eq("church_id", profile.church_id);
+      const { data } = await query;
       const filtered = ((data ?? []) as unknown as RankingSeason[]).filter((season) =>
         season?.community && activeCommunities.includes(season.community)
       );
@@ -290,6 +292,26 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const fifteenDaysAgo = new Date(Date.now() - 15 * 86400000).toISOString();
+      const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000).toISOString();
+      let totalEventsQuery = supabase
+        .from("events")
+        .select("id", { count: "exact", head: true })
+        .gte("event_date", ninetyDaysAgo)
+        .or(`area.eq.${currentArea},area.is.null`);
+      let recentEventsQuery = supabase
+        .from("events")
+        .select("id, linked_lesson_id")
+        .gte("event_date", fifteenDaysAgo)
+        .or(`area.eq.${currentArea},area.is.null`);
+      let courseUnlocksQuery = supabase
+        .from("course_unlocks")
+        .select("course_id")
+        .eq("area", currentArea);
+      if (profile?.church_id) {
+        totalEventsQuery = totalEventsQuery.eq("church_id", profile.church_id);
+        recentEventsQuery = recentEventsQuery.eq("church_id", profile.church_id);
+        courseUnlocksQuery = courseUnlocksQuery.eq("church_id", profile.church_id);
+      }
       const [{ count: devC }, { count: worC }, { data: attD }, { count: chatC }, { count: prayerC }, { data: planData }, { data: existingUnlocks }, { data: allLessons }, { data: allDevContent }, { count: totalEventsC }, { data: lessonResps }, { data: allActs }, { data: userProg }, { data: achUnlocks },
         // Biweekly streak data
         { data: recentEvents }, { data: recentAttendance }, { data: recentDevContent }, { data: recentDevProgress }, { data: recentLessonResps },
@@ -304,19 +326,19 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
         supabase.from("achievement_unlocks").select("achievement_key").eq("user_id", user.id),
         supabase.from("lessons").select("id, course_id"),
         supabase.from("devotional_content").select("id, lesson_id"),
-        supabase.from("events").select("id", { count: "exact", head: true }).gte("event_date", new Date(Date.now() - 90 * 86400000).toISOString()).or(`area.eq.${currentArea},area.is.null`),
+        totalEventsQuery,
         supabase.from("lesson_progress").select("lesson_id").eq("user_id", user.id).eq("is_completed", true),
         supabase.from("activities").select("id, points"),
         supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
         supabase.from("achievement_unlocks").select("bonus_points").eq("user_id", user.id),
         // Biweekly: events in last 15 days for user's area
-        supabase.from("events").select("id, linked_lesson_id").gte("event_date", fifteenDaysAgo).or(`area.eq.${currentArea},area.is.null`),
+        recentEventsQuery,
         supabase.from("attendance").select("event_id, status").eq("user_id", user.id).eq("status", "presente"),
         // Devotionals linked to lessons that have events in last 15 days
         supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null),
         supabase.from("devotional_progress").select("devotional_id, completed_at").eq("user_id", user.id).gte("completed_at", fifteenDaysAgo),
         supabase.from("lesson_progress").select("lesson_id, completed_at").eq("user_id", user.id).eq("is_completed", true).gte("completed_at", fifteenDaysAgo),
-        supabase.from("course_unlocks").select("course_id").eq("area", currentArea),
+        courseUnlocksQuery,
       ]);
 
       // Filter lessons/devotionals to only those belonging to courses unlocked for this area
