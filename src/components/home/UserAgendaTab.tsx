@@ -20,6 +20,13 @@ import { cn } from "@/lib/utils";
 import CalendarView from "./CalendarView";
 import emptyAgendaImg from "@/assets/empty-agenda.png";
 import { getSubsequentLessonEvents } from "@/lib/lessonScheduleCascade";
+import {
+  cachedStudentQuery,
+  enqueueStudentAction,
+  getPendingStudentOverlay,
+  isStudentOffline,
+  mergeByKey,
+} from "@/lib/studentOffline";
 
 type Event = {
   id: string;
@@ -230,16 +237,22 @@ export default function UserAgendaTab() {
     async function fetch() {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-      const [{ data: eventsData }, attResult, { data: coursesData }, { data: lessonsData }, { data: lessonContentData }] = await Promise.all([
-        supabase.from("events").select("*").order("event_date", { ascending: false }),
+      const scope = `student-agenda:${user?.id ?? "anon"}:${profile?.church_id ?? "global"}:${currentArea || "all"}`;
+      const [eventsRes, attResult, coursesRes, lessonsRes, lessonContentRes, overlay] = await Promise.all([
+        cachedStudentQuery(`${scope}:events`, () => supabase.from("events").select("*").order("event_date", { ascending: false }), [] as any[]),
         user
-          ? supabase.from("attendance").select("event_id, status, confirmation_source, user_requested_at, leader_confirmed_at").eq("user_id", user.id)
-          : Promise.resolve({ data: [] }),
-        supabase.from("courses").select("id, title, order_num").order("order_num"),
-        supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
-        supabase.from("lesson_content").select("lesson_id, summary, bible_texts, prayer_prompt"),
+          ? cachedStudentQuery(`${scope}:attendance`, () => supabase.from("attendance").select("event_id, status, confirmation_source, user_requested_at, leader_confirmed_at").eq("user_id", user.id), [] as any[])
+          : Promise.resolve({ data: [] as any[] }),
+        cachedStudentQuery(`${scope}:courses`, () => supabase.from("courses").select("id, title, order_num").order("order_num"), [] as any[]),
+        cachedStudentQuery(`${scope}:lessons`, () => supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"), [] as any[]),
+        cachedStudentQuery(`${scope}:lesson-content`, () => supabase.from("lesson_content").select("lesson_id, summary, bible_texts, prayer_prompt"), [] as any[]),
+        user ? getPendingStudentOverlay(user.id) : Promise.resolve(null),
       ]);
-      const { data: attendanceData } = attResult;
+      const eventsData = eventsRes.data;
+      const attendanceData = user && overlay ? mergeByKey(attResult.data, overlay.attendance as any[], "event_id") : attResult.data;
+      const coursesData = coursesRes.data;
+      const lessonsData = lessonsRes.data;
+      const lessonContentData = lessonContentRes.data;
       const all = (eventsData ?? []) as Event[];
       const isManager = role === "admin" || role === "lider";
       const filtered = all.filter(e => {
@@ -393,6 +406,27 @@ export default function UserAgendaTab() {
       user_requested_at: requestedAt,
     };
     if (justification) payload.justification = justification;
+    if (isStudentOffline()) {
+      await enqueueStudentAction({
+        type: "attendance_upsert",
+        userId: user.id,
+        churchId: (profile as any)?.church_id ?? null,
+        payload: {
+          eventId,
+          status,
+          confirmationSource: "user",
+          requestedAt,
+          justification,
+        },
+      });
+      setAttendanceRecords(prev => {
+        const filtered = prev.filter(a => a.event_id !== eventId);
+        return [...filtered, { event_id: eventId, status, confirmation_source: "user", user_requested_at: requestedAt }];
+      });
+      toast.success(status === "pendente_presente" ? "Presenca salva offline para sincronizar!" : "Justificativa salva offline para sincronizar!");
+      return;
+    }
+
     let error = null;
     if (existing) {
       const result = await supabase

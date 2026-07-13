@@ -9,6 +9,13 @@ import {
   Pen, Heart, CheckCircle2, Save, Play, Link, Volume2, Download, FileText, Share2, AlertCircle, Clock, ChevronDown, ChevronUp, Edit3
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  cachedStudentQuery,
+  enqueueStudentAction,
+  getPendingStudentOverlay,
+  isStudentOffline,
+  mergeByKey,
+} from "@/lib/studentOffline";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
@@ -132,11 +139,15 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
       const defaults = getDefaultContent(lesson.order_num);
 
       // 1. Load global content
-      const { data: globalData } = await supabase
-        .from("lesson_content")
-        .select("*")
-        .eq("lesson_id", lesson.id)
-        .maybeSingle();
+      const { data: globalData } = await cachedStudentQuery(
+        `lesson-content:${lesson.id}`,
+        () => supabase
+          .from("lesson_content")
+          .select("*")
+          .eq("lesson_id", lesson.id)
+          .maybeSingle(),
+        null as any,
+      );
 
       const global: LessonContent = globalData ? {
         greeting: globalData.greeting || defaults.greeting,
@@ -162,12 +173,16 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
           .maybeSingle();
 
         if (profileData?.turma_id) {
-          const { data: ov } = await supabase
-            .from("turma_lesson_content" as any)
-            .select("*")
-            .eq("turma_id", profileData.turma_id)
-            .eq("lesson_id", lesson.id)
-            .maybeSingle();
+          const { data: ov } = await cachedStudentQuery(
+            `turma-lesson-content:${profileData.turma_id}:${lesson.id}`,
+            () => supabase
+              .from("turma_lesson_content" as any)
+              .select("*")
+              .eq("turma_id", profileData.turma_id)
+              .eq("lesson_id", lesson.id)
+              .maybeSingle(),
+            null as any,
+          );
 
           if (ov) {
             const override = ov as any;
@@ -202,32 +217,45 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
       const { data: { user } } = await supabase.auth.getUser();
       const uid = targetUserId ?? user?.id;
       if (!uid) return;
-      const [{ data, error }, { data: progress, error: progressError }] = await Promise.all([
-        supabase
-          .from("lesson_responses")
-          .select("question_key, response")
-          .eq("lesson_id", lesson.id)
-          .eq("user_id", uid),
-        supabase
-          .from("lesson_progress")
-          .select("video_watched, audio_listened, updated_at")
-          .eq("lesson_id", lesson.id)
-          .eq("user_id", uid)
-          .maybeSingle(),
+      const [{ data, error }, { data: progress, error: progressError }, overlay] = await Promise.all([
+        cachedStudentQuery(
+          `lesson-responses:${uid}:${lesson.id}`,
+          () => supabase
+            .from("lesson_responses")
+            .select("question_key, response")
+            .eq("lesson_id", lesson.id)
+            .eq("user_id", uid),
+          [] as any[],
+        ),
+        cachedStudentQuery(
+          `lesson-progress-detail:${uid}:${lesson.id}`,
+          () => supabase
+            .from("lesson_progress")
+            .select("lesson_id, video_watched, audio_listened, updated_at")
+            .eq("lesson_id", lesson.id)
+            .eq("user_id", uid)
+            .maybeSingle(),
+          null as any,
+        ),
+        getPendingStudentOverlay(uid),
       ]);
-      if (error) {
+      const mergedResponses = mergeByKey(data ?? [], overlay.lessonResponses.filter((item) => item.lesson_id === lesson.id) as any[], "question_key");
+      const pendingProgress = overlay.lessonProgress.find((item) => item.lesson_id === lesson.id);
+      if (error && !isStudentOffline()) {
         toast.error("Não foi possível carregar as respostas da lição.", {
-          description: error.message,
+          description: String((error as any)?.message ?? error),
         });
-      } else if (data) {
+      } else if (mergedResponses) {
         const map: Response = {};
-        data.forEach(r => { map[r.question_key] = r.response; });
+        mergedResponses.forEach(r => { map[r.question_key] = r.response; });
         setResponses(map);
       }
-      if (!progressError && progress) {
-        setVideoWatched(!!progress.video_watched);
-        setAudioListened(!!progress.audio_listened);
-        if (progress.updated_at) setLastSaved(new Date(progress.updated_at));
+      const effectiveProgress = pendingProgress ?? progress;
+      if ((!progressError || pendingProgress) && effectiveProgress) {
+        setVideoWatched(!!effectiveProgress.video_watched);
+        setAudioListened(!!effectiveProgress.audio_listened);
+        const savedAt = effectiveProgress.updated_at ?? effectiveProgress.completed_at;
+        if (savedAt) setLastSaved(new Date(savedAt));
       }
       hasLoadedResponses.current = true;
     }
@@ -241,6 +269,27 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     if (entries.length === 0 && !videoWatched && !audioListened) return;
 
     const timeoutId = window.setTimeout(async () => {
+      if (isStudentOffline()) {
+        const { data: { user } } = await supabase.auth.getUser();
+        const uid = targetUserId ?? user?.id;
+        if (uid) {
+          await enqueueStudentAction({
+            type: "save_lesson_draft",
+            userId: uid,
+            churchId: profile?.church_id ?? null,
+            payload: {
+              lessonId: lesson.id,
+              responses: Object.fromEntries(entries),
+              videoWatched,
+              audioListened,
+            },
+          });
+          setDraftError(null);
+          setLastSaved(new Date());
+        }
+        return;
+      }
+
       const { error } = await supabase.rpc("save_lesson_draft", {
         p_lesson_id: lesson.id,
         p_responses: Object.fromEntries(entries),
@@ -309,6 +358,32 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
       return;
     }
     setSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    const uid = targetUserId ?? user?.id;
+
+    if (isStudentOffline() && uid) {
+      await enqueueStudentAction({
+        type: "complete_lesson",
+        userId: uid,
+        churchId: profile?.church_id ?? null,
+        payload: {
+          lessonId: lesson.id,
+          responses,
+          videoWatched,
+          audioListened,
+          awardedPoints,
+          overrideId,
+          isLateAccess,
+        },
+      });
+      setSaving(false);
+      setDraftError(null);
+      setLastSaved(new Date());
+      onComplete?.(lesson.id);
+      toast.success("Licao salva offline. Ela sera sincronizada quando a internet voltar.");
+      return;
+    }
+
     const { error } = await supabase.rpc("complete_lesson", {
       p_lesson_id: lesson.id,
       p_responses: responses,

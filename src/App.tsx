@@ -3,6 +3,7 @@ import { Suspense, lazy, useEffect, useState } from "react";
 
 import { Toaster } from "@/components/ui/toaster";
 import OfflineBanner from "@/components/home/OfflineBanner";
+import StudentOfflineSync from "@/components/home/StudentOfflineSync";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -214,6 +215,7 @@ const App = () => {
           <Sonner />
           <BrowserRouter>
             <AuthProvider>
+              <StudentOfflineSync />
               <AreaSwitchProvider>
                 <AppRoutes />
               </AreaSwitchProvider>
