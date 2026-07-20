@@ -148,32 +148,7 @@ export default function FocusSection({ onNavigateToDiscipulado }: FocusSectionPr
         }
       }
 
-      // 2. No active devotional — check for next lesson to study
-      const { data: lessonResponses, error: lessonProgressError } = await supabase
-        .from("lesson_progress")
-        .select("lesson_id")
-        .eq("user_id", user.id)
-        .eq("is_completed", true);
-
-      if (lessonProgressError) throw lessonProgressError;
-
-      const studiedLessons = new Set(lessonResponses?.map(r => r.lesson_id) || []);
-
-      const pendingLessonEntry = agenda.schedule.find(e =>
-        !studiedLessons.has(e.lessonId) && today.getTime() >= new Date(e.eventDate).setHours(0, 0, 0, 0)
-      );
-
-      if (pendingLessonEntry) {
-        setNextActivity({
-          type: "lesson",
-          title: pendingLessonEntry.lessonTitle,
-          subtitle: "Estude esta lição para avançar",
-          lessonId: pendingLessonEntry.lessonId,
-          mode: "choice"
-        });
-      } else {
-        setNextActivity(null);
-      }
+      setNextActivity(null);
       setLoading(false);
     }
 

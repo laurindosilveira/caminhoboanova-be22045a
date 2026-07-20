@@ -184,12 +184,15 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
           overrideId: overrideId ?? null,
         },
       });
-      window.dispatchEvent(new CustomEvent("show-celebration", {
-        detail: {
-          type: "devotional",
-          points: awardedPoints ?? activity.points
-        }
-      }));
+      const points = awardedPoints ?? activity.points;
+      if (points > 0) {
+        window.dispatchEvent(new CustomEvent("show-celebration", {
+          detail: {
+            type: "devotional",
+            points
+          }
+        }));
+      }
       await onComplete(activity.id);
       setCompleting(false);
       toast.success("Devocional salvo offline. Ele sera sincronizado quando a internet voltar.");
@@ -213,12 +216,15 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
     }
     
     // Dispatch celebration event
-    window.dispatchEvent(new CustomEvent("show-celebration", {
-      detail: {
-        type: "devotional",
-        points: awardedPoints ?? activity.points
-      }
-    }));
+    const points = awardedPoints ?? activity.points;
+    if (points > 0) {
+      window.dispatchEvent(new CustomEvent("show-celebration", {
+        detail: {
+          type: "devotional",
+          points
+        }
+      }));
+    }
 
     await onComplete(activity.id);
     setCompleting(false);
@@ -421,7 +427,7 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
           {(() => {
             const now = new Date();
             const isWeekend = now.getDay() === 0 || now.getDay() === 6;
-            const points = isWeekend ? 2 : activity.points;
+            const points = awardedPoints ?? (isWeekend ? 2 : activity.points);
 
             return (
               <>
@@ -435,7 +441,7 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
                 >
                   {completing ? "Marcando..." : `Concluir Devocional · +${points} pts →`}
                 </button>
-                {isWeekend && (
+                {isWeekend && points > 0 && (
                   <p className="text-center text-accent-foreground font-inter text-[10px]">
                     ⚠️ Recuperação de fim de semana: 2 pts ao invés de {activity.points} pts
                   </p>
@@ -444,7 +450,7 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
             );
           })()}
           <p className="text-center text-muted-foreground font-inter text-[10px]">
-            ⭐ Responda as perguntas para ganhar seus pontos de fé!
+            {activity.points > 0 ? "⭐ Responda as perguntas para ganhar seus pontos de fé!" : "Prazo encerrado: suas respostas serão salvas sem pontuação."}
           </p>
         </div>
       )}

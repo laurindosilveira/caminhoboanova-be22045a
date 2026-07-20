@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { Heart, GraduationCap, Sparkles, Lock, ClipboardList, BookOpen, ArrowLeft, ChevronRight } from "lucide-react";
+import { Heart, GraduationCap, Sparkles, Lock, ClipboardList, BookOpen, ArrowLeft, ChevronRight, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import JourneyLessonView from "@/components/home/JourneyLessonView";
 import LessonContentEditor from "@/components/admin/tabs/LessonContentEditor";
@@ -69,6 +69,8 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
   const [fullyCompletedLessonIds, setFullyCompletedLessonIds] = useState<Set<string>>(new Set());
+  const [devotionalsByLesson, setDevotionalsByLesson] = useState<Map<string, any[]>>(new Map());
+  const [completedDevotionalIds, setCompletedDevotionalIds] = useState<Set<string>>(new Set());
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [recentEvents, setRecentEvents] = useState<EventRecord[]>([]);
   const [allAssessments, setAllAssessments] = useState<Assessment[]>([]);
@@ -82,6 +84,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
   const [helpSending, setHelpSending] = useState(false);
   const [helpSent, setHelpSent] = useState(false);
   const [showLeaderRoom, setShowLeaderRoom] = useState(false);
+  const [showLatePendingList, setShowLatePendingList] = useState(false);
 
   const [form, setForm] = useState({
     prayer_score: null as number | null,
@@ -150,7 +153,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       cachedStudentQuery(`${scope}:events:recent`, () => supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false }).limit(10), [] as any[]),
       cachedStudentQuery(`${scope}:attendance`, () => supabase.from("attendance").select("event_id, status").eq("user_id", user.id), [] as any[]),
       cachedStudentQuery(`${scope}:spiritual_assessments`, () => supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).order("year", { ascending: true }).order("month", { ascending: true }), [] as any[]),
-      cachedStudentQuery(`${scope}:devotional_content:index`, () => supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null), [] as any[]),
+      cachedStudentQuery(`${scope}:devotional_content:index`, () => supabase.from("devotional_content").select("id, lesson_id, day_number, title").not("lesson_id", "is", null), [] as any[]),
       cachedStudentQuery(`${scope}:devotional_progress`, () => supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id), [] as any[]),
       cachedStudentQuery(`${scope}:worship_attendance`, () => supabase.from("worship_attendance").select("id").eq("user_id", user.id).eq("status", "aprovado"), [] as any[]),
       cachedStudentQuery(`${scope}:course_unlocks`, () => supabase.from("course_unlocks").select("course_id").eq("area", currentArea), [] as any[]),
@@ -194,6 +197,16 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       }
     });
     const completedDevIds = new Set((devProgressData ?? []).map((p: any) => p.devotional_id));
+    setCompletedDevotionalIds(completedDevIds);
+    const nextDevotionalsByLesson = new Map<string, any[]>();
+    (devContentData ?? []).forEach((dev: any) => {
+      if (!dev.lesson_id) return;
+      const list = nextDevotionalsByLesson.get(dev.lesson_id) ?? [];
+      list.push(dev);
+      nextDevotionalsByLesson.set(dev.lesson_id, list);
+    });
+    nextDevotionalsByLesson.forEach((list) => list.sort((a, b) => (a.day_number ?? 0) - (b.day_number ?? 0)));
+    setDevotionalsByLesson(nextDevotionalsByLesson);
     const fullyDone = new Set<string>();
     (lessonsData ?? []).forEach((l: any) => {
       const hasStudy = lessonIdsWithResponses.has(l.id);
@@ -425,6 +438,31 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
   }
 
   // ── Lesson selected view ──
+  const lessonsById = new Map(courses.flatMap((course) => course.lessons).map((lesson) => [lesson.id, lesson]));
+  const latePendingItems = !isLeaderOrAdmin
+    ? agendaSchedule.schedule
+        .filter((entry) => entry.eventDate <= now)
+        .map((entry) => {
+          const lesson = lessonsById.get(entry.lessonId);
+          if (!lesson || fullyCompletedLessonIds.has(entry.lessonId)) return null;
+          const pendingDevotionals = (devotionalsByLesson.get(entry.lessonId) ?? [])
+            .filter((devotional) => !completedDevotionalIds.has(devotional.id));
+          const studyPending = !completedLessonIds.has(entry.lessonId);
+          if (!studyPending && pendingDevotionals.length === 0) return null;
+          return { entry, lesson, studyPending, pendingDevotionals };
+        })
+        .filter((item): item is NonNullable<typeof item> => item !== null)
+    : [];
+
+  function openLatePendingLesson(lesson: Lesson, openDevotional = false) {
+    setSelectedLesson(lesson);
+    setSelectedLessonMode("choice");
+    setAutoOpenDevotionalLessonId(openDevotional ? lesson.id : null);
+    setSubTab("trilha");
+    const course = courses.find((item) => item.lessons.some((courseLesson) => courseLesson.id === lesson.id));
+    if (course) setExpandedCourse(course.id);
+  }
+
   if (selectedLesson) {
     if (selectedLessonMode === "edit" && isLeaderOrAdmin) {
       return (
@@ -544,6 +582,63 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
           </div>
           <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
         </button>
+      )}
+
+      {latePendingItems.length > 0 && (
+        <div className="rounded-2xl border border-accent/30 bg-accent/10 shadow-sm overflow-hidden">
+          <button
+            onClick={() => setShowLatePendingList((value) => !value)}
+            className="w-full flex items-center gap-3 p-4 text-left hover:bg-accent/10 transition-colors"
+          >
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center bg-accent/20 text-accent-foreground flex-shrink-0">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-montserrat font-bold text-foreground text-sm">Pendências em aberto</p>
+              <p className="text-muted-foreground text-xs font-inter">
+                Você tem lição ou devocionais de encontros passados para finalizar sem pontuação.
+              </p>
+            </div>
+            <ChevronRight className={`w-4 h-4 text-accent-foreground/70 flex-shrink-0 transition-transform ${showLatePendingList ? "rotate-90" : ""}`} />
+          </button>
+
+          {showLatePendingList && (
+            <div className="border-t border-accent/20 bg-card/60">
+              {latePendingItems.map(({ entry, lesson, studyPending, pendingDevotionals }) => (
+                <div key={entry.eventId} className="p-4 border-b border-border last:border-b-0 space-y-3">
+                  <div>
+                    <p className="font-montserrat font-bold text-foreground text-sm">
+                      Lição {lesson.order_num} - {lesson.title}
+                    </p>
+                    <p className="font-inter text-[10px] text-muted-foreground">
+                      Encontro em {entry.eventDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {studyPending && (
+                      <button
+                        onClick={() => openLatePendingLesson(lesson)}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-secondary/10 px-3 py-2 text-xs font-montserrat font-bold text-secondary hover:bg-secondary/20 transition-colors"
+                      >
+                        <GraduationCap className="w-3.5 h-3.5" />
+                        Fazer lição
+                      </button>
+                    )}
+                    {pendingDevotionals.length > 0 && (
+                      <button
+                        onClick={() => openLatePendingLesson(lesson, true)}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-brand-green/10 px-3 py-2 text-xs font-montserrat font-bold text-brand-green hover:bg-brand-green/20 transition-colors"
+                      >
+                        <BookOpen className="w-3.5 h-3.5" />
+                        {pendingDevotionals.length} devocional{pendingDevotionals.length > 1 ? "is" : ""}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Sub-tab pills */}

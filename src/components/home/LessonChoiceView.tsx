@@ -374,12 +374,7 @@ export default function LessonChoiceView({
       } else if (isLateAccess) {
         const lateStatuses = new Map<string, DevotionalStatus>();
         devList.forEach(d => {
-          if (completedMap.has(d.id)) {
-            lateStatuses.set(d.id, "completed");
-            return;
-          }
-          const activeOverride = overrideMap.get(d.id);
-          lateStatuses.set(d.id, isOverrideActive(activeOverride, new Date()) ? "available" : "locked");
+          lateStatuses.set(d.id, completedMap.has(d.id) ? "completed" : "available");
         });
         setDevStatuses(lateStatuses);
         setDevRecoverySet(new Set());
@@ -440,12 +435,7 @@ export default function LessonChoiceView({
     } else if (isLateAccess) {
       const lateStatuses = new Map<string, DevotionalStatus>();
       devotionals.forEach(d => {
-        if (newCompletedMap.has(d.id)) {
-          lateStatuses.set(d.id, "completed");
-          return;
-        }
-        const activeOverride = devOverrideMap.get(d.id);
-        lateStatuses.set(d.id, isOverrideActive(activeOverride, now) ? "available" : "locked");
+        lateStatuses.set(d.id, newCompletedMap.has(d.id) ? "completed" : "available");
       });
       setDevStatuses(lateStatuses);
       setDevRecoverySet(new Set());
@@ -655,7 +645,7 @@ export default function LessonChoiceView({
         <div className="rounded-2xl p-3 bg-accent/10 border border-accent/20 flex items-start gap-2">
           <span className="text-sm">⚠️</span>
           <p className="font-inter text-xs text-accent-foreground">
-            O prazo desta lição já encerrou. Você ainda pode completar o <strong>estudo</strong>, mas <strong>sem pontuação</strong>. Os devocionais não realizados estão bloqueados.
+            O prazo desta lição já encerrou. Você ainda pode completar o <strong>estudo</strong> e os <strong>devocionais</strong>, mas <strong>sem pontuação</strong>.
           </p>
         </div>
       )}
