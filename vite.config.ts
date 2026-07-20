@@ -27,7 +27,8 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         cacheId: "v3",
         navigateFallbackDenylist: [/^\/~oauth/],
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,webp,jpg,jpeg}"],
+        globPatterns: ["**/*.{css,html,ico,svg,woff2,webmanifest}"],
+        globIgnores: ["migration-export/**", "**/*.zip", "**/*.sql"],
         importScripts: ["/push-sw.js"],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         skipWaiting: true,
@@ -98,6 +99,19 @@ export default defineConfig(({ mode }) => ({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
+          {
+            // Same-origin build assets are cached after first use instead of
+            // being downloaded in a huge PWA install-time precache.
+            urlPattern: ({ request, url }) =>
+              url.origin === self.location.origin &&
+              ["script", "style", "font"].includes(request.destination),
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "static-assets-runtime-cache",
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
         ],
       },
       manifest: {
@@ -125,5 +139,22 @@ export default defineConfig(({ mode }) => ({
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
     __APP_BUILD_DATE__: JSON.stringify(appBuildDate),
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          const normalizedId = id.replace(/\\/g, "/");
+          if (!normalizedId.includes("node_modules")) return undefined;
+          if (normalizedId.includes("react-dom") || normalizedId.includes("react-router-dom") || normalizedId.includes("react/")) return "vendor-react";
+          if (normalizedId.includes("@supabase")) return "vendor-supabase";
+          if (normalizedId.includes("@tanstack/react-query")) return "vendor-query";
+          if (normalizedId.includes("@radix-ui")) return "vendor-radix";
+          if (normalizedId.includes("framer-motion")) return "vendor-motion";
+          if (normalizedId.includes("lucide-react")) return "vendor-icons";
+          return undefined;
+        },
+      },
+    },
   },
 }));

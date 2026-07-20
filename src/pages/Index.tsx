@@ -40,6 +40,7 @@ const WorshipPlayerSection = lazy(() => import("@/components/home/WorshipPlayerS
 type ProfileSubTab = "meu-perfil" | "minha-jornada" | "configuracoes";
 type LessonNavigationMode = "choice" | "devotional";
 type CelebrationItem = { type: CelebrationType; points?: number };
+type NavigatorWithStandalone = Navigator & { standalone?: boolean };
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>("jornada");
@@ -84,7 +85,8 @@ export default function Index() {
 
   // Redirect to presentation if not standalone/installed and not logged in
   useEffect(() => {
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    const navigatorWithStandalone = window.navigator as NavigatorWithStandalone;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigatorWithStandalone.standalone === true;
     if (!isStandalone && !authLoading && !user) {
       navigate("/apresentacao", { replace: true });
     }
@@ -92,6 +94,24 @@ export default function Index() {
 
   const stats = useUserStats(user?.id, profile?.church_id, currentArea);
   useAppNotifications();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+    const profileTab = params.get("profileTab");
+    const validTabs: Tab[] = ["jornada", "conquistas", "agenda", "comunidade", "perfil", "discipulado", "adoracao"];
+    const validProfileTabs: ProfileSubTab[] = ["meu-perfil", "minha-jornada", "configuracoes"];
+
+    if (profileTab && validProfileTabs.includes(profileTab as ProfileSubTab)) {
+      setActiveTab("perfil");
+      setProfileSubTab(profileTab as ProfileSubTab);
+      return;
+    }
+
+    if (tab && validTabs.includes(tab as Tab)) {
+      setActiveTab(tab as Tab);
+    }
+  }, []);
 
   // Load confetti preference
   useEffect(() => {
