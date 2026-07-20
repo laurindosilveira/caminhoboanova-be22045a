@@ -4,6 +4,7 @@ import {
   CalendarClock, History, Clock, Bell, Calendar, Edit2, Trash2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -14,29 +15,14 @@ import { AREAS, ALL_COMMUNITIES as COMMUNITIES } from "@/config/areas";
 type TargetType = "all" | "area" | "community" | "turma";
 type SendMode   = "agora" | "agendar";
 type SubTab     = "enviar" | "automacoes" | "historico";
+type SupabaseFunctions = Database["public"]["Functions"];
+type AutomationConfig = SupabaseFunctions["get_push_automation_config"]["Returns"][number];
+type ScheduledPush = SupabaseFunctions["get_push_scheduled_pending"]["Returns"][number];
+type LogEntry = Database["public"]["Tables"]["push_notification_log"]["Row"];
 
 interface Props {
   turmas?: Array<{ id: string; name: string; area: string | null }>;
   churchId?: string | null;
-}
-
-interface AutomationConfig {
-  key:         string;
-  title:       string;
-  body:        string;
-  enabled:     boolean;
-  description: string;
-}
-
-interface ScheduledPush {
-  id:           string;
-  title:        string;
-  body:         string;
-  target:       string;
-  target_value: string | null;
-  scheduled_at: string;
-  sent:         boolean;
-  created_at:   string;
 }
 
 const AUTOMATION_LABELS: Record<string, string> = {
@@ -47,6 +33,15 @@ const AUTOMATION_LABELS: Record<string, string> = {
   event_attendance:    "Confirmar presenca",
   prayer_pairs:        "Dupla de oracao",
 };
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return fallback;
+}
 
 // ─── Root component ────────────────────────────────────────────────────────────
 
@@ -112,12 +107,12 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
 
   async function loadScheduled() {
     setLoadingScheduled(true);
-    const { data, error } = await supabase.rpc("get_push_scheduled_pending" as any);
+    const { data, error } = await supabase.rpc("get_push_scheduled_pending");
     if (error) {
       setError(error.message);
       setScheduledList([]);
     } else {
-      setScheduledList((data as any as ScheduledPush[]) ?? []);
+      setScheduledList(data ?? []);
     }
     setLoadingScheduled(false);
   }
@@ -144,8 +139,8 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
         if (fnError) throw fnError;
         setResult({ sent: data.sent, failed: data.failed });
         if (data.sent > 0) { setTitle(""); setBody(""); }
-      } catch (err: any) {
-        setError(err.message || "Erro ao enviar.");
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, "Erro ao enviar."));
       }
     } else {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -154,11 +149,11 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
         setSending(false);
         return;
       }
-      const { error: insertError } = await supabase.rpc("insert_push_scheduled" as any, {
+      const { error: insertError } = await supabase.rpc("insert_push_scheduled", {
         _title:        title,
         _body:         body,
         _target:       target,
-        _target_value: target === "all" ? null : targetValue,
+        _target_value: target === "all" ? "" : targetValue,
         _scheduled_at: new Date(scheduledAt).toISOString(),
         _created_by:   user.id,
       });
@@ -175,7 +170,7 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
   }
 
   async function cancelScheduled(id: string) {
-    const { error } = await supabase.rpc("delete_push_scheduled" as any, { _id: id });
+    const { error } = await supabase.rpc("delete_push_scheduled", { _id: id });
     if (error) {
       toast.error("Erro ao cancelar: " + error.message);
       return;
@@ -450,12 +445,12 @@ function AutomationsSection() {
 
   async function loadConfigs() {
     setLoading(true);
-    const { data, error } = await supabase.rpc("get_push_automation_config" as any);
+    const { data, error } = await supabase.rpc("get_push_automation_config");
     if (error) {
       toast.error("Erro ao carregar automacoes: " + error.message);
       setConfigs([]);
     } else {
-      setConfigs((data as any as AutomationConfig[]) ?? []);
+      setConfigs(data ?? []);
     }
     setLoading(false);
   }
@@ -463,7 +458,7 @@ function AutomationsSection() {
   async function toggleEnabled(key: string, current: boolean) {
     const cfg = configs.find(c => c.key === key);
     if (!cfg) return;
-    const { error } = await supabase.rpc("update_push_automation_config" as any, {
+    const { error } = await supabase.rpc("update_push_automation_config", {
       _key:     key,
       _title:   cfg.title,
       _body:    cfg.body,
@@ -484,7 +479,7 @@ function AutomationsSection() {
     if (!editTitle.trim() || !editBody.trim()) return;
     setSaving(true);
     const cfg = configs.find(c => c.key === key);
-    const { error } = await supabase.rpc("update_push_automation_config" as any, {
+    const { error } = await supabase.rpc("update_push_automation_config", {
       _key:     key,
       _title:   editTitle.trim(),
       _body:    editBody.trim(),
@@ -655,8 +650,8 @@ function EventRemindersTrigger() {
       const { data, error: fnError } = await supabase.functions.invoke("event-reminders", { body: {} });
       if (fnError) throw fnError;
       setResult(data);
-    } catch (err: any) {
-      setError(err.message || "Erro ao disparar lembretes.");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Erro ao disparar lembretes."));
     } finally {
       setSending(false);
     }
@@ -714,18 +709,6 @@ function EventRemindersTrigger() {
 
 // ─── Push Log History ──────────────────────────────────────────────────────────
 
-interface LogEntry {
-  id:           string;
-  type:         string;
-  title:        string;
-  body:         string;
-  target:       string;
-  target_value: string | null;
-  sent_count:   number;
-  failed_count: number;
-  created_at:   string;
-}
-
 function PushLogHistory() {
   const [logs,    setLogs]    = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -743,7 +726,7 @@ function PushLogHistory() {
       toast.error("Erro ao carregar historico: " + error.message);
       setLogs([]);
     } else {
-      setLogs((data as any as LogEntry[]) ?? []);
+      setLogs(data ?? []);
     }
     setLoading(false);
   }
@@ -753,6 +736,11 @@ function PushLogHistory() {
     event_reminder:       { label: "Lembrete de evento", emoji: "E" },
     attendance_reminder:  { label: "Presenca",           emoji: "A" },
     prayer_pairs:         { label: "Dupla de oracao",    emoji: "O" },
+    automation_run:       { label: "Rotina automatica",  emoji: "R" },
+    birthday:             { label: "Aniversario",        emoji: "N" },
+    devotional_reminder:  { label: "Devocional",         emoji: "D" },
+    streak_risk:          { label: "Sequencia em risco", emoji: "S" },
+    pastor_message:       { label: "Mensagem do pastor", emoji: "M" },
   };
 
   function formatDate(iso: string) {

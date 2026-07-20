@@ -6,6 +6,27 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+type PendingPushNotification = {
+  title: string;
+  body: string;
+  tag: string;
+  type: string;
+  url?: string;
+  target?: string;
+  targetValue?: string | null;
+  birthdayLogKey?: string;
+};
+
+type DeliveryLogStat = {
+  type: string;
+  title: string;
+  body: string;
+  target: string;
+  targetValue: string | null;
+  sent: number;
+  failed: number;
+};
+
 /**
  * Web Push notification sender.
  * Called by cron EVERY HOUR. Sends:
@@ -42,6 +63,15 @@ Deno.serve(async (req) => {
 
     if (subErr) throw subErr;
     if (!subscriptions || subscriptions.length === 0) {
+      await insertPushLogs(supabase, [{
+        type: "automation_run",
+        title: "Rotina de push executada",
+        body: "Nenhuma inscricao push encontrada.",
+        target: "auto",
+        target_value: new Date().toISOString(),
+        sent_count: 0,
+        failed_count: 0,
+      }]);
       return new Response(
         JSON.stringify({ message: "No subscriptions found" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -70,6 +100,7 @@ Deno.serve(async (req) => {
       if (!lessonToDevs.has(d.lesson_id)) lessonToDevs.set(d.lesson_id, new Set());
       lessonToDevs.get(d.lesson_id)!.add(d.id);
     }
+    const totalDevotionalCount = allDevContent?.length ?? 0;
 
     // All devotional progress for subscribed users (desc → first entry = most recent)
     const { data: allDevProgress } = await supabase
@@ -172,6 +203,7 @@ Deno.serve(async (req) => {
       : { data: [] as any[] };
     const existingBirthdayLogKeys = new Set((existingBirthdayLogs ?? []).map((log: any) => log.target_value));
     const birthdayLogStats = new Map<string, { title: string; body: string; area: string; sent: number; failed: number }>();
+    const deliveryLogStats = new Map<string, DeliveryLogStat>();
 
     let sent = 0, failed = 0, skipped = 0;
     const failedEndpoints: string[] = [];
@@ -190,7 +222,7 @@ Deno.serve(async (req) => {
       const currentHourInTz = getCurrentHourInTimezone(nowUtc, tz);
       const isPreferredHour = currentHourInTz === preferredHour;
 
-      const notifications: Array<{ title: string; body: string; tag: string; birthdayLogKey?: string }> = [];
+      const notifications: PendingPushNotification[] = [];
 
       // ── 3b. Upcoming events ────────────────────────────────────────────────
       const eventosOn = prefs ? prefs.eventos : true;
@@ -208,6 +240,10 @@ Deno.serve(async (req) => {
             title: "📅 Evento Próximo!",
             body:  `"${evt.title}" em ${hoursUntil}h. Não falte!`,
             tag:   `event-${evt.id}`,
+            type:  "event_reminder",
+            url:   "/?tab=agenda",
+            target: "event",
+            targetValue: evt.id,
           });
         }
       }
@@ -223,11 +259,38 @@ Deno.serve(async (req) => {
             title: streakCfg.title,
             body:  streakCfg.body,
             tag:   "streak-risk",
+            type:  "streak_risk",
+            url:   "/?tab=discipulado",
           });
         }
       }
 
       // ── 3d. New pastor messages ────────────────────────────────────────────
+      const devocionalOn = prefs ? prefs.devocional : true;
+      const devotionalCfg = getAutom(
+        "devotional_reminder",
+        "Hora do devocional",
+        "Seu devocional de hoje esta esperando por voce."
+      );
+      if (isPreferredHour && devocionalOn && devotionalCfg.enabled && !notifications.some((n) => n.type === "streak_risk")) {
+        const ud = userDevData.get(sub.user_id);
+        const todayInTz = getDatePartsInTimezone(nowUtc, tz).date;
+        const latestDevDate = ud?.mostRecentAt ? getDatePartsInTimezone(ud.mostRecentAt, tz).date : null;
+
+        if (latestDevDate !== todayInTz && (totalDevotionalCount === 0 || (ud?.completedIds.size ?? 0) < totalDevotionalCount)) {
+          const hasStarted = (ud?.completedIds.size ?? 0) > 0;
+          notifications.push({
+            title: devotionalCfg.title,
+            body: hasStarted
+              ? devotionalCfg.body.replaceAll("{N}", "1")
+              : "Comece sua caminhada devocional hoje. O primeiro passo ja esta disponivel.",
+            tag: `devotional-${todayInTz}`,
+            type: "devotional_reminder",
+            url: "/?tab=discipulado",
+          });
+        }
+      }
+
       const mensagensOn = prefs ? prefs.mensagens : true;
       const msgCfg = getAutom("pastor_message", "💬 Nova Mensagem do Pastor", "");
       if (isPreferredHour && mensagensOn && msgCfg.enabled && recentMessages && profile) {
@@ -244,6 +307,8 @@ Deno.serve(async (req) => {
             title: msgCfg.title,
             body:  bodyText,
             tag:   "pastor-message",
+            type:  "pastor_message",
+            url:   "/?tab=comunidade",
           });
         }
       }
@@ -266,6 +331,10 @@ Deno.serve(async (req) => {
             title,
             body,
             tag: `birthday-${brtParts.date}-${birthday.user_id}`,
+            type: "birthday",
+            url: "/?tab=comunidade",
+            target: "area",
+            targetValue: birthday.area,
             birthdayLogKey,
           });
 
@@ -285,7 +354,7 @@ Deno.serve(async (req) => {
           icon:   "/pwa-192x192.png",
           badge:  "/pwa-192x192.png",
           tag:    notif.tag,
-          data:   { url: "/" },
+          data:   { url: notif.url ?? "/" },
         });
         try {
           await sendWebPush(
@@ -298,6 +367,8 @@ Deno.serve(async (req) => {
           if (notif.birthdayLogKey) {
             const stat = birthdayLogStats.get(notif.birthdayLogKey);
             if (stat) stat.sent++;
+          } else {
+            recordDeliveryLog(deliveryLogStats, notif, true);
           }
         } catch (err: any) {
           console.error(`Push failed for ${sub.endpoint}:`, err.message);
@@ -305,6 +376,8 @@ Deno.serve(async (req) => {
           if (notif.birthdayLogKey) {
             const stat = birthdayLogStats.get(notif.birthdayLogKey);
             if (stat) stat.failed++;
+          } else {
+            recordDeliveryLog(deliveryLogStats, notif, false);
           }
           if (err.status === 410 || err.status === 404) failedEndpoints.push(sub.endpoint);
         }
@@ -328,9 +401,21 @@ Deno.serve(async (req) => {
         failed_count: stat.failed,
       }));
 
-    if (birthdayLogEntries.length > 0) {
-      await supabase.from("push_notification_log").insert(birthdayLogEntries);
-    }
+    await insertPushLogs(supabase, birthdayLogEntries);
+
+    const deliveryLogEntries = [...deliveryLogStats.values()]
+      .filter((stat) => stat.sent > 0 || stat.failed > 0)
+      .map((stat) => ({
+        type: stat.type,
+        title: stat.title,
+        body: stat.body,
+        target: stat.target,
+        target_value: stat.targetValue,
+        sent_count: stat.sent,
+        failed_count: stat.failed,
+      }));
+
+    await insertPushLogs(supabase, deliveryLogEntries);
 
     // ── 5. Process scheduled pushes that are now due ──────────────────────────
     const { data: pendingScheduled } = await supabase
@@ -364,6 +449,16 @@ Deno.serve(async (req) => {
       }
     }
 
+    await insertPushLogs(supabase, [{
+      type: "automation_run",
+      title: "Rotina de push executada",
+      body: `${sent} enviado(s), ${failed} falha(s), ${skipped} pulado(s), ${failedEndpoints.length} assinatura(s) removida(s), ${(pendingScheduled ?? []).length} agendamento(s) processado(s).`,
+      target: "auto",
+      target_value: nowUtc.toISOString(),
+      sent_count: sent,
+      failed_count: failed,
+    }]);
+
     return new Response(
       JSON.stringify({
         sent,
@@ -384,6 +479,37 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+function recordDeliveryLog(
+  stats: Map<string, DeliveryLogStat>,
+  notif: PendingPushNotification,
+  ok: boolean
+) {
+  const target = notif.target ?? "auto";
+  const targetValue = notif.targetValue ?? notif.tag;
+  const key = `${notif.type}|${target}|${targetValue}|${notif.tag}`;
+  const current = stats.get(key) ?? {
+    type: notif.type,
+    title: notif.title,
+    body: notif.body,
+    target,
+    targetValue,
+    sent: 0,
+    failed: 0,
+  };
+
+  if (ok) current.sent++;
+  else current.failed++;
+  stats.set(key, current);
+}
+
+async function insertPushLogs(supabase: any, entries: any[]) {
+  if (entries.length === 0) return;
+  const { error } = await supabase.from("push_notification_log").insert(entries);
+  if (error) {
+    console.error("Failed to insert push logs:", error.message);
+  }
+}
 
 function getCurrentHourInTimezone(date: Date, tz: string): number {
   try {
