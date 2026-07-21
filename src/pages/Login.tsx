@@ -8,6 +8,7 @@ import {
   diagnoseLoginFailure,
   formatLoginDiagnostic,
   getPasswordLoginErrorMessage,
+  isNetworkLikeAuthFailure,
   type LoginDiagnostic,
 } from "@/lib/loginDiagnostics";
 import { ignoreAsyncError } from "@/lib/safeAsync";
@@ -16,6 +17,83 @@ const loginSchema = z.object({
   email: z.string().trim().email("Email inválido").max(255),
   password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres").max(128),
 });
+
+type PasskeyAuthClient = typeof supabase.auth & {
+  signInWithPasskey: () => Promise<{
+    data: { user?: { id: string; email?: string | null } } | null;
+    error: { message?: string } | null;
+  }>;
+};
+
+const passkeyAuth = supabase.auth as unknown as PasskeyAuthClient;
+const PASSWORD_LOGIN_MAX_ATTEMPTS = 7;
+const PASSWORD_LOGIN_TIMEOUT_MS = 12000;
+const PASSWORD_LOGIN_RETRY_BASE_MS = 800;
+const PASSWORD_LOGIN_RETRY_MAX_MS = 5000;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function loginRetryDelayMs(attempt: number) {
+  return Math.min(
+    PASSWORD_LOGIN_RETRY_MAX_MS,
+    (PASSWORD_LOGIN_RETRY_BASE_MS * attempt * attempt) + Math.floor(Math.random() * 250),
+  );
+}
+
+async function signInWithPasswordAttempt(email: string, password: string) {
+  let loginTimeoutId: number | undefined;
+
+  try {
+    const loginTimeout = new Promise<never>((_, reject) => {
+      loginTimeoutId = window.setTimeout(() => {
+        const timeoutError = new Error("A autenticação excedeu 12 segundos");
+        timeoutError.name = "AuthTimeoutError";
+        reject(timeoutError);
+      }, PASSWORD_LOGIN_TIMEOUT_MS);
+    });
+
+    return await Promise.race([
+      supabase.auth.signInWithPassword({ email, password }),
+      loginTimeout,
+    ]);
+  } finally {
+    if (loginTimeoutId !== undefined) {
+      window.clearTimeout(loginTimeoutId);
+    }
+  }
+}
+
+async function signInWithPasswordRetry(email: string, password: string) {
+  let lastResult: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>> | null = null;
+
+  for (let attempt = 1; attempt <= PASSWORD_LOGIN_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const result = await signInWithPasswordAttempt(email, password);
+      lastResult = result;
+
+      if (!result.error) {
+        return result;
+      }
+
+      if (!isNetworkLikeAuthFailure(result.error) || attempt === PASSWORD_LOGIN_MAX_ATTEMPTS) {
+        return result;
+      }
+    } catch (error) {
+      if (!isNetworkLikeAuthFailure(error) || attempt === PASSWORD_LOGIN_MAX_ATTEMPTS) {
+        throw error;
+      }
+    }
+
+    await sleep(loginRetryDelayMs(attempt));
+  }
+
+  return lastResult ?? {
+    data: { user: null, session: null },
+    error: new Error("Não foi possível concluir o login."),
+  };
+}
 
 export default function Login() {
   const navigate = useNavigate();
@@ -47,8 +125,7 @@ export default function Login() {
     setError(null);
     setLoading(true);
     try {
-      // @ts-ignore - experimental API
-      const { data, error: authError } = await supabase.auth.signInWithPasskey();
+      const { data, error: authError } = await passkeyAuth.signInWithPasskey();
       
       if (authError) {
         const isCancelled = authError.message?.toLowerCase().includes("cancelled") || 
@@ -97,7 +174,7 @@ export default function Login() {
       ]);
 
     const [profileRes, isAdminRes, isLiderRes] = await Promise.all([
-      withTimeout(supabase.from('profiles').select('church_id').eq('id', user.id).single()),
+      withTimeout(supabase.from('profiles').select('church_id').eq('user_id', user.id).maybeSingle()),
       withTimeout(supabase.rpc("has_role", { _user_id: user.id, _role: "admin" })),
       withTimeout(supabase.rpc("has_role", { _user_id: user.id, _role: "lider" })),
     ]);
@@ -177,24 +254,11 @@ export default function Login() {
     }
 
     setLoading(true);
-    let loginTimeoutId: number | undefined;
-
     try {
-      const loginTimeout = new Promise<never>((_, reject) => {
-        loginTimeoutId = window.setTimeout(() => {
-          const timeoutError = new Error("A autenticação excedeu 12 segundos");
-          timeoutError.name = "AuthTimeoutError";
-          reject(timeoutError);
-        }, 12000);
-      });
-
-      const { data: authData, error: authError } = await Promise.race([
-        supabase.auth.signInWithPassword({
-          email: parsed.data.email,
-          password: parsed.data.password,
-        }),
-        loginTimeout,
-      ]);
+      const { data: authData, error: authError } = await signInWithPasswordRetry(
+        parsed.data.email,
+        parsed.data.password,
+      );
 
       if (authError) {
         const msg = authError.message?.toLowerCase() || "";
@@ -207,7 +271,7 @@ export default function Login() {
           p_details: { error: authError.message }
         }), "Login failure audit");
 
-        if (msg.includes("failed to fetch") || msg.includes("network") || msg.includes("fetch")) {
+        if (isNetworkLikeAuthFailure(authError)) {
           await showNetworkDiagnostic(authError);
         } else if (friendlyError || msg.includes("invalid login credentials")) {
           setError(friendlyError ?? "Email ou senha incorretos. Verifique seus dados e tente novamente.");
@@ -234,9 +298,6 @@ export default function Login() {
         await showNetworkDiagnostic(err, err?.name === "AuthTimeoutError");
       }
     } finally {
-      if (loginTimeoutId !== undefined) {
-        window.clearTimeout(loginTimeoutId);
-      }
       setLoading(false);
     }
   }

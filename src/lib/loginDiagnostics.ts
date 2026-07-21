@@ -41,7 +41,7 @@ function normalizeErrorText(value: unknown) {
     .toLowerCase();
 }
 
-function getErrorField(error: unknown, field: "message" | "code" | "status") {
+function getErrorField(error: unknown, field: "message" | "code" | "status" | "name") {
   if (!error || typeof error !== "object") return "";
   return (error as Record<string, unknown>)[field];
 }
@@ -76,6 +76,41 @@ export function getPasswordLoginErrorMessage(error: unknown): string | null {
   }
 
   return null;
+}
+
+export function isRetryableAuthFailure(error: unknown): boolean {
+  const message = normalizeErrorText(
+    error instanceof Error ? error.message : getErrorField(error, "message"),
+  );
+  const name = normalizeErrorText(
+    error instanceof Error ? error.name : getErrorField(error, "name"),
+  );
+  const status = Number(getErrorField(error, "status"));
+
+  return (
+    status >= 500 ||
+    name.includes("authretryablefetcherror") ||
+    name.includes("retryable") ||
+    message === "{}" ||
+    message.includes("retryable")
+  );
+}
+
+export function isNetworkLikeAuthFailure(error: unknown): boolean {
+  const message = normalizeErrorText(
+    error instanceof Error ? error.message : getErrorField(error, "message"),
+  );
+  const name = normalizeErrorText(
+    error instanceof Error ? error.name : getErrorField(error, "name"),
+  );
+
+  return (
+    isRetryableAuthFailure(error) ||
+    name.includes("authtimeouterror") ||
+    message.includes("failed to fetch") ||
+    message.includes("network") ||
+    message.includes("fetch")
+  );
 }
 
 async function probe(url: string, headers?: Record<string, string>): Promise<ProbeResult> {

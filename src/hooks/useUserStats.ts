@@ -143,7 +143,7 @@ async function fetchUserStats(
 
   const presentAttendance = (attendance ?? []).filter((a: any) => a.status === "presente");
   const attendedEventIds = presentAttendance.map((a: any) => a.event_id).filter(Boolean);
-  let eventTypeById = new Map<string, string>();
+  const eventTypeById = new Map<string, string>();
   if (attendedEventIds.length > 0) {
     const { data: eventsData } = await supabase
       .from("events")

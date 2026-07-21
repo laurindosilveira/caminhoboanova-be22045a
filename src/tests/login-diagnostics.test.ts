@@ -4,6 +4,8 @@ import {
   classifyLoginDiagnostic,
   formatLoginDiagnostic,
   getPasswordLoginErrorMessage,
+  isNetworkLikeAuthFailure,
+  isRetryableAuthFailure,
 } from "@/lib/loginDiagnostics";
 
 describe("login diagnostic classification", () => {
@@ -91,5 +93,22 @@ describe("password login error messages", () => {
 
   it("keeps unknown password login errors available for generic handling", () => {
     expect(getPasswordLoginErrorMessage({ message: "Unexpected auth failure" })).toBeNull();
+  });
+
+  it("classifies retryable auth server failures for diagnostic handling", () => {
+    expect(isRetryableAuthFailure({
+      message: "{}",
+      name: "AuthRetryableFetchError",
+      status: 500,
+    })).toBe(true);
+  });
+
+  it("classifies fetch and timeout failures as network-like auth failures", () => {
+    const timeout = new Error("A autenticação excedeu 12 segundos");
+    timeout.name = "AuthTimeoutError";
+
+    expect(isNetworkLikeAuthFailure(timeout)).toBe(true);
+    expect(isNetworkLikeAuthFailure({ message: "Failed to fetch" })).toBe(true);
+    expect(isNetworkLikeAuthFailure({ message: "Invalid login credentials", status: 400 })).toBe(false);
   });
 });

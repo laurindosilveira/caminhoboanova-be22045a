@@ -12,6 +12,17 @@ interface Passkey {
   last_used_at?: string;
 }
 
+type PasskeyAuthClient = typeof supabase.auth & {
+  passkey: {
+    list: () => Promise<{ data: Passkey[] | null; error: Error | null }>;
+    delete: (params: { passkeyId: string }) => Promise<{ error: Error | null }>;
+    update: (params: { passkeyId: string; friendlyName: string }) => Promise<{ error: Error | null }>;
+  };
+  registerPasskey: () => Promise<{ data: unknown; error: Error | null }>;
+};
+
+const passkeyAuth = supabase.auth as unknown as PasskeyAuthClient;
+
 export default function PasskeySettings() {
   const [passkeys, setPasskeys] = useState<Passkey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,8 +37,7 @@ export default function PasskeySettings() {
   async function fetchPasskeys() {
     try {
       setLoading(true);
-      // @ts-ignore - experimental API
-      const { data, error } = await supabase.auth.passkey.list();
+      const { data, error } = await passkeyAuth.passkey.list();
       if (error) throw error;
       setPasskeys(data || []);
     } catch (err: any) {
@@ -40,8 +50,7 @@ export default function PasskeySettings() {
   async function handleAddPasskey() {
     try {
       setRegistering(true);
-      // @ts-ignore - experimental API
-      const { data, error } = await supabase.auth.registerPasskey();
+      const { error } = await passkeyAuth.registerPasskey();
       
       if (error) throw error;
       
@@ -59,8 +68,7 @@ export default function PasskeySettings() {
     if (!confirm("Tem certeza que deseja remover esta biometria?")) return;
     
     try {
-      // @ts-ignore - experimental API
-      const { error } = await supabase.auth.passkey.delete({ passkeyId: id });
+      const { error } = await passkeyAuth.passkey.delete({ passkeyId: id });
       if (error) throw error;
       
       toast.success("Biometria removida.");
@@ -74,8 +82,7 @@ export default function PasskeySettings() {
     if (!newName.trim()) return;
     
     try {
-      // @ts-ignore - experimental API
-      const { error } = await supabase.auth.passkey.update({
+      const { error } = await passkeyAuth.passkey.update({
         passkeyId: id,
         friendlyName: newName.trim()
       });

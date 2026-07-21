@@ -191,7 +191,8 @@ Deno.serve(async (req) => {
     const checkinCfg = getConfig("checkin_late",    "Oi, {nome}! ðŸ“‹ Confirme sua presenÃ§a no *{evento}* de {data_evento} no app!", 1);
 
     const logs: LogEntry[] = [];
-    let sent = 0, failed = 0, blocked = 0, skipped = 0;
+    let sent = 0, failed = 0, blocked = 0;
+    const skipped = 0;
 
     // â”€â”€ Helper: processar um usuÃ¡rio com validaÃ§Ã£o antes do envio â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     async function processUser(
@@ -238,7 +239,11 @@ Deno.serve(async (req) => {
         error_detail:  result.error,
         blocked_reason_code: result.ok ? undefined : "api_error",
       });
-      result.ok ? sent++ : failed++;
+      if (result.ok) {
+        sent++;
+      } else {
+        failed++;
+      }
     }
 
     // â”€â”€ 1. DEVOCIONAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -356,7 +361,7 @@ async function sendWhatsApp(
     const phoneDigits = e164.replace("+", "");
     let url: string;
     let body: unknown;
-    let headers: Record<string, string> = { "Content-Type": "application/json" };
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
 
     if (provider === "zapi") {
       url  = `${apiUrl}/send-text`;
