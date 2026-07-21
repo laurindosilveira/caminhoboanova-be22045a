@@ -30,7 +30,7 @@ const LIDER_TAB_DEFS: TabDef[] = [
 type Props = { active: AdminTab; onChange: (tab: AdminTab) => void; userRole?: "admin" | "lider" | null; isSuper?: boolean };
 
 export default function AdminBottomNav({ active, onChange, userRole, isSuper }: Props) {
-  let tabs = userRole === "lider" ? LIDER_TAB_DEFS : [...ALL_TABS];
+  const tabs = userRole === "lider" ? LIDER_TAB_DEFS : [...ALL_TABS];
   if (isSuper && userRole !== "lider") {
     tabs.unshift({ id: "admin_global", label: "Global", icon: Globe });
   }

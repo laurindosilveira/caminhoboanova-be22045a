@@ -10,6 +10,9 @@
     "lint": "eslint .",
     "migration:backup": "node scripts/migrate-supabase.mjs",
     "preview": "vite preview",
+    "test:staging:readiness": "node scripts/staging-scale-readiness-check.mjs",
+    "test:staging:db-audit": "node scripts/staging-db-exposure-audit.mjs",
+    "test:staging:pre-release": "npm run test:staging:readiness && npm run test:staging:db-audit",
     "test": "vitest run",
     "test:watch": "vitest"
   },

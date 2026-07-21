@@ -317,7 +317,11 @@ export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) 
             <button
               onClick={() => {
                 if (isGlobalAdmin) {
-                  courseScope === "church" ? setStep("church-select") : setStep("scope");
+                  if (courseScope === "church") {
+                    setStep("church-select");
+                  } else {
+                    setStep("scope");
+                  }
                 } else {
                   setStep("choose");
                 }
