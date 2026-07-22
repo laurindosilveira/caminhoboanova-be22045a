@@ -1,4 +1,4 @@
-import { LogOut, ChevronLeft, RefreshCw, Zap, Church, AlertTriangle, CreditCard, BellOff, X } from "lucide-react";
+import { LogOut, ChevronLeft, RefreshCw, Zap, Church, AlertTriangle, BellOff, Users, CircleCheck, CircleAlert } from "lucide-react";
 import { isUnlimitedChurch } from "@/lib/planFeatures";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import TurmaReportPDF from "./TurmaReportPDF";
 import { useAuth } from "@/contexts/AuthContext";
+import CircularProgressBar from "@/components/ui/CircularProgressBar";
 
 type Stats = {
   total: number;
@@ -14,6 +15,27 @@ type Stats = {
   semAtividade: number;
   mediaProgresso: number;
   totalLabel?: string;
+  memberLimit?: number | null;
+};
+
+type ReportParticipant = {
+  area: string;
+  birth_date: string;
+  community: string;
+  completed_activity_ids: string[];
+  completed_count: number;
+  full_name: string;
+  phone: string;
+  user_id: string;
+};
+
+type ReportActivity = {
+  id: string;
+  order_num: number;
+  points: number;
+  subtitle: string | null;
+  title: string;
+  type: string;
 };
 
 type Props = {
@@ -24,8 +46,8 @@ type Props = {
   onBackToUser: () => void;
   selectedCommunity?: string | null;
   onChangeCommunity?: () => void;
-  participants?: any[];
-  activities?: any[];
+  participants?: ReportParticipant[];
+  activities?: ReportActivity[];
   turmaLabel?: string;
 };
 
@@ -51,7 +73,7 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
 
       if (profile?.church_id) {
         setChurchId(profile.church_id);
-        const { data: sub } = await (supabase.from as any)('church_subscriptions')
+        const { data: sub } = await supabase.from('church_subscriptions')
           .select('subscription_status, trial_ends_at, trial_alert_snoozed_until')
           .eq('church_id', profile.church_id)
           .single();
@@ -66,37 +88,24 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
             const days = Math.ceil((new Date(sub.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
             setTrialDaysLeft(days);
 
-            // Audit: alert shown (if not snoozed)
-            if (days <= 5 && (!sub.trial_alert_snoozed_until || new Date(sub.trial_alert_snoozed_until) <= new Date())) {
-              await supabase.rpc('log_church_audit', { 
-                p_church_id: profile.church_id, 
-                p_action: 'trial_alert_shown',
-                p_details: { days_left: days }
-              });
-            }
           }
         }
       }
     }
-    checkTrial();
-  }, []);
+    void checkTrial();
+  }, [user]);
   
   const handleSnooze = async () => {
     if (!churchId) return;
     const snoozeUntil = new Date();
     snoozeUntil.setHours(snoozeUntil.getHours() + 24);
 
-    const { error } = await (supabase.from as any)('church_subscriptions')
+    const { error } = await supabase.from('church_subscriptions')
       .update({ trial_alert_snoozed_until: snoozeUntil.toISOString() })
       .eq('church_id', churchId);
 
     if (!error) {
       setIsSnoozed(true);
-      await supabase.rpc('log_church_audit', { 
-        p_church_id: churchId, 
-        p_action: 'alert_snoozed',
-        p_details: { until: snoozeUntil.toISOString() }
-      });
       toast({ title: "Aviso ocultado", description: "O banner aparecerá novamente em 24h." });
     }
   };
@@ -104,10 +113,6 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
   const handleCancelTrial = async () => {
     if (!churchId) return;
     try {
-      await supabase.rpc('log_church_audit', { 
-        p_church_id: churchId, 
-        p_action: 'portal_opened_for_cancel'
-      });
       const { data, error } = await supabase.functions.invoke("customer-portal");
       if (error) throw error;
       if (data?.url) window.open(data.url, "_blank");
@@ -143,7 +148,7 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
         <div className="bg-[#f59e0b] text-white px-4 py-2.5 flex items-center justify-between gap-3 sticky top-0 z-[50] animate-in fade-in slide-in-from-top duration-500 shadow-lg">
           <div className="flex items-center gap-2 min-w-0">
             <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-            <p className="text-xs font-inter font-bold leading-tight truncate">
+            <p className="truncate font-inter text-xs font-bold leading-tight">
               {trialDaysLeft <= 0 
                 ? "Seu período de teste vence hoje!" 
                 : `Teste vence em ${trialDaysLeft} ${trialDaysLeft === 1 ? 'dia' : 'dias'}.`}
@@ -153,7 +158,7 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
             <Button 
               size="sm" 
               variant="secondary" 
-              className="h-7 px-2 text-[10px] font-bold rounded-lg bg-white text-[#f59e0b] hover:bg-white/90"
+              className="h-8 rounded-md bg-white px-3 text-xs font-bold text-[#b45309] hover:bg-white/90"
               onClick={handleCancelTrial}
             >
               Cancelar
@@ -169,32 +174,32 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
         </div>
       )}
 
-      <header className="px-4 pt-8 pb-5" style={{ background: "var(--gradient-hero)" }}>
-        <div className="max-w-2xl mx-auto">
+      <header className="bg-slate-950 px-4 pb-5 pt-6 sm:px-6">
+        <div className="mx-auto max-w-[1440px]">
           <button
             onClick={onBackToUser}
-            className="flex items-center gap-1.5 text-primary-foreground/70 font-inter text-xs mb-3 hover:text-primary-foreground transition-colors"
+            className="mb-3 flex items-center gap-1.5 font-inter text-xs text-white/70 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
             Voltar para área geral
           </button>
 
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-white/15 border border-white/30 flex items-center justify-center">
-                <span className="text-xl">✝️</span>
+          <div className="mb-5 flex items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-emerald-300/30 bg-emerald-400/10">
+                <Church className="h-5 w-5 text-emerald-300" />
               </div>
-              <div>
-                <p className="text-primary-foreground/60 font-inter text-xs font-bold uppercase tracking-widest">CAMINHO DO DISCIPULADO</p>
-                <h1 className="font-montserrat font-black text-primary-foreground text-lg">{areaName}</h1>
-                {subtitle && <p className="text-primary-foreground/60 font-inter text-xs mt-0.5">📍 {subtitle}</p>}
+              <div className="min-w-0">
+                <p className="font-inter text-xs font-bold uppercase text-white/60">Caminho do Discipulado</p>
+                <h1 className="break-words font-montserrat text-lg font-black leading-tight text-white sm:text-xl">{areaName}</h1>
+                {subtitle && <p className="mt-1 truncate font-inter text-xs text-white/60">{subtitle}</p>}
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
               {role === "admin" && (
                 <button
                   onClick={() => navigate("/minha-igreja")}
-                  className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center border border-white/20"
+                  className="flex h-9 w-9 items-center justify-center rounded-md border border-white/20 bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                   title="Gestão da Igreja e Assinatura"
                 >
                   <Church className="w-5 h-5 text-primary-foreground" />
@@ -203,7 +208,7 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
               {role === "admin" && (
                 <button
                   onClick={handleForceRefresh}
-                  className="w-9 h-9 rounded-xl bg-amber-500/20 flex items-center justify-center border border-amber-500/30"
+                  className="flex h-9 w-9 items-center justify-center rounded-md border border-amber-500/30 bg-amber-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                   title="Limpar Cache e Recarregar"
                 >
                   <Zap className="w-4.5 h-4.5 text-amber-400" />
@@ -219,7 +224,7 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
               {selectedCommunity && onChangeCommunity && (
                 <button
                   onClick={onChangeCommunity}
-                  className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center"
+                  className="flex h-9 w-9 items-center justify-center rounded-md bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                   title="Trocar turma"
                 >
                   <RefreshCw className="w-4.5 h-4.5 text-primary-foreground" style={{ width: 18, height: 18 }} />
@@ -227,7 +232,7 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
               )}
               <button
                 onClick={onSignOut}
-                className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center"
+                className="flex h-9 w-9 items-center justify-center rounded-md bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                 title="Sair"
               >
                 <LogOut className="w-5 h-5 text-primary-foreground" />
@@ -235,19 +240,41 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-2">
-            {[
-              { label: "Participantes", value: stats.totalLabel || stats.total, icon: "👥" },
-              { label: "Avançados", value: stats.avancados, icon: "🏆" },
-              { label: "Sem atividade", value: stats.semAtividade, icon: "⚠️" },
-              { label: "Progresso médio", value: `${stats.mediaProgresso}%`, icon: "📊" },
-            ].map((s) => (
-              <div key={s.label} className="bg-white/10 backdrop-blur rounded-2xl p-2.5 text-center">
-                <span className="text-lg">{s.icon}</span>
-                <p className="font-montserrat font-black text-primary-foreground text-lg leading-none mt-1">{s.value}</p>
-                <p className="text-primary-foreground/50 text-[10px] font-inter mt-0.5 leading-tight">{s.label}</p>
+          <div className="grid grid-cols-1 gap-4 border-y border-white/15 py-4 sm:grid-cols-3 lg:grid-cols-[1.15fr_.8fr_1.35fr]">
+            {/* Total de Participantes */}
+            <div className="px-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Users className="h-5 w-5 shrink-0 text-cyan-300" />
+                  <p className="font-inter text-xs font-semibold text-white/70">Ocupação da turma</p>
+                </div>
+                <p className="font-montserrat text-lg font-black leading-none text-white">{stats.totalLabel || stats.total}</p>
               </div>
-            ))}
+              <div className="h-2 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-label="Ocupação da turma" aria-valuemin={0} aria-valuemax={stats.memberLimit ?? Math.max(stats.total, 1)} aria-valuenow={stats.total}>
+                <div className="h-full rounded-full bg-cyan-300 transition-[width] duration-500" style={{ width: `${stats.memberLimit ? Math.min(100, (stats.total / stats.memberLimit) * 100) : stats.total > 0 ? 100 : 0}%` }} />
+              </div>
+              <p className="mt-1.5 font-inter text-[11px] text-white/50">
+                {stats.memberLimit ? `${Math.max(stats.memberLimit - stats.total, 0)} vaga${stats.memberLimit - stats.total === 1 ? "" : "s"} disponível${stats.memberLimit - stats.total === 1 ? "" : "is"}` : `${stats.total} participante${stats.total === 1 ? "" : "s"}`}
+              </p>
+            </div>
+
+            {/* Progresso Médio */}
+            <div className="flex items-center justify-center gap-3 border-white/15 px-3 sm:border-x">
+                <CircularProgressBar progress={stats.mediaProgresso} />
+                <div><p className="font-inter text-xs font-semibold leading-tight text-white/70">Progresso médio</p><p className="mt-1 text-[11px] text-white/50">da turma</p></div>
+            </div>
+
+            {/* Status dos Participantes */}
+            <div className="grid grid-cols-2 gap-2 px-3">
+              <div className="flex items-center gap-2 rounded-lg border border-emerald-300/20 bg-emerald-400/10 px-3 py-2.5">
+                <CircleCheck className="h-5 w-5 shrink-0 text-emerald-300" />
+                <div><p className="font-montserrat text-lg font-black leading-none text-white">{stats.avancados}</p><p className="mt-1 text-[11px] text-emerald-100/70">Avançados</p></div>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg border border-amber-300/20 bg-amber-400/10 px-3 py-2.5">
+                <CircleAlert className="h-5 w-5 shrink-0 text-amber-300" />
+                <div><p className="font-montserrat text-lg font-black leading-none text-white">{stats.semAtividade}</p><p className="mt-1 text-[11px] text-amber-100/70">Em alerta</p></div>
+              </div>
+            </div>
           </div>
         </div>
       </header>
