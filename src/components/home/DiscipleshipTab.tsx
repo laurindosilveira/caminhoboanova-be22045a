@@ -13,6 +13,7 @@ import LeaderRoomSection from "@/components/home/LeaderRoomSection";
 import NovoCursoModal from "@/components/home/NovoCursoModal";
 import { useAgendaSchedule } from "@/hooks/useAgendaSchedule";
 import { toast } from "sonner";
+import { cachedStudentQuery, getPendingStudentOverlay, mergeByKey } from "@/lib/studentOffline";
 
 import { computeHealth, type Assessment, type Plan, type Activity, type Progress, type Lesson, type Course, type AttendanceRecord, type EventRecord } from "./discipleship/shared";
 import DiscipleshipHero from "./discipleship/DiscipleshipHero";
@@ -97,6 +98,18 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
 
   useEffect(() => { fetchAll(); }, [currentArea]);
 
+  useEffect(() => {
+    const refresh = () => {
+      if (!loading) void fetchAll(true);
+    };
+    window.addEventListener("student-offline-queue-changed", refresh);
+    window.addEventListener("student-offline-queue-synced", refresh);
+    return () => {
+      window.removeEventListener("student-offline-queue-changed", refresh);
+      window.removeEventListener("student-offline-queue-synced", refresh);
+    };
+  }, [loading, currentArea]);
+
   // Auto-open lesson when navigating from agenda.
   // Wait for agendaSchedule to finish loading so scheduledDevotionalDates
   // are available before the lesson view mounts (prevents the fallback path
@@ -121,24 +134,47 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }, { data: responsesData }, { data: eventsData }, { data: attendanceData }, { data: allAssess }, { data: devContentData }, { data: devProgressData }, { data: worshipData }, { data: unlocksData }, { data: lessonOverrideData }, { data: modulesData }] = await Promise.all([
-      supabase.from("activities").select("id, type, title, points"),
-      supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
-      supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).eq("month", month).eq("year", year).maybeSingle(),
-      supabase.from("discipleship_plans").select("objectives,challenges,recommendations,next_steps,health_status").eq("user_id", user.id).maybeSingle(),
-      profile?.church_id ? supabase.from("courses").select("*").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("courses").select("*").is("church_id", null).order("order_num"),
-      profile?.church_id ? supabase.from("lessons").select("id, title, order_num, objective, topics, course_id, church_id, module_id").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("lessons").select("id, title, order_num, objective, topics, course_id, church_id, module_id").is("church_id", null).order("order_num"),
-      supabase.from("lesson_progress").select("lesson_id").eq("user_id", user.id).eq("is_completed", true),
-      supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false }).limit(10),
-      supabase.from("attendance").select("event_id, status").eq("user_id", user.id),
-      supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).order("year", { ascending: true }).order("month", { ascending: true }),
-      supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null),
-      supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
-      supabase.from("worship_attendance").select("id").eq("user_id", user.id).eq("status", "aprovado"),
-      supabase.from("course_unlocks").select("course_id").eq("area", currentArea),
-      supabase.from("user_lesson_overrides" as any).select("id, lesson_id, custom_points, available_from, available_until, is_unlocked").eq("user_id", user.id),
-      profile?.church_id ? supabase.from("modules" as any).select("id, course_id, title, order_num, church_id").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("modules" as any).select("id, course_id, title, order_num, church_id").is("church_id", null).order("order_num"),
+    const scope = `student:${user.id}:${profile?.church_id ?? "global"}:${currentArea || "all"}`;
+    const [
+      actsRes, progRes, assessRes, planRes, coursesRes, lessonsRes, responsesRes, eventsRes,
+      attendanceRes, allAssessRes, devContentRes, devProgressRes, worshipRes, unlocksRes,
+      lessonOverrideRes, modulesRes,
+    ] = await Promise.all([
+      cachedStudentQuery(`${scope}:activities`, () => supabase.from("activities").select("id, type, title, points"), [] as any[]),
+      cachedStudentQuery(`${scope}:user_progress`, () => supabase.from("user_progress").select("activity_id").eq("user_id", user.id), [] as any[]),
+      cachedStudentQuery(`${scope}:spiritual_assessment:${month}:${year}`, () => supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).eq("month", month).eq("year", year).maybeSingle(), null as any),
+      cachedStudentQuery(`${scope}:discipleship_plan`, () => supabase.from("discipleship_plans").select("objectives,challenges,recommendations,next_steps,health_status").eq("user_id", user.id).maybeSingle(), null as any),
+      cachedStudentQuery(`${scope}:courses`, () => profile?.church_id ? supabase.from("courses").select("*").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("courses").select("*").is("church_id", null).order("order_num"), [] as any[]),
+      cachedStudentQuery(`${scope}:lessons`, () => profile?.church_id ? supabase.from("lessons").select("id, title, order_num, objective, topics, course_id, church_id, module_id").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("lessons").select("id, title, order_num, objective, topics, course_id, church_id, module_id").is("church_id", null).order("order_num"), [] as any[]),
+      cachedStudentQuery(`${scope}:lesson_progress`, () => supabase.from("lesson_progress").select("lesson_id").eq("user_id", user.id).eq("is_completed", true), [] as any[]),
+      cachedStudentQuery(`${scope}:events:recent`, () => supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false }).limit(10), [] as any[]),
+      cachedStudentQuery(`${scope}:attendance`, () => supabase.from("attendance").select("event_id, status").eq("user_id", user.id), [] as any[]),
+      cachedStudentQuery(`${scope}:spiritual_assessments`, () => supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).order("year", { ascending: true }).order("month", { ascending: true }), [] as any[]),
+      cachedStudentQuery(`${scope}:devotional_content:index`, () => supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null), [] as any[]),
+      cachedStudentQuery(`${scope}:devotional_progress`, () => supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id), [] as any[]),
+      cachedStudentQuery(`${scope}:worship_attendance`, () => supabase.from("worship_attendance").select("id").eq("user_id", user.id).eq("status", "aprovado"), [] as any[]),
+      cachedStudentQuery(`${scope}:course_unlocks`, () => supabase.from("course_unlocks").select("course_id").eq("area", currentArea), [] as any[]),
+      cachedStudentQuery(`${scope}:lesson_overrides`, () => supabase.from("user_lesson_overrides" as any).select("id, lesson_id, custom_points, available_from, available_until, is_unlocked").eq("user_id", user.id), [] as any[]),
+      cachedStudentQuery(`${scope}:modules`, () => profile?.church_id ? supabase.from("modules" as any).select("id, course_id, title, order_num, church_id").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("modules" as any).select("id, course_id, title, order_num, church_id").is("church_id", null).order("order_num"), [] as any[]),
     ]);
+
+    const overlay = await getPendingStudentOverlay(user.id);
+    const acts = actsRes.data;
+    const prog = progRes.data;
+    const assess = assessRes.data;
+    const planData = planRes.data;
+    const coursesData = coursesRes.data;
+    const lessonsData = lessonsRes.data;
+    const responsesData = mergeByKey(responsesRes.data, overlay.lessonProgress as any[], "lesson_id");
+    const eventsData = eventsRes.data;
+    const attendanceData = mergeByKey(attendanceRes.data, overlay.attendance as any[], "event_id");
+    const allAssess = allAssessRes.data;
+    const devContentData = devContentRes.data;
+    const devProgressData = mergeByKey(devProgressRes.data, overlay.devotionalProgress as any[], "devotional_id");
+    const worshipData = [...worshipRes.data, ...overlay.worshipAttendance];
+    const unlocksData = unlocksRes.data;
+    const lessonOverrideData = lessonOverrideRes.data;
+    const modulesData = modulesRes.data;
 
     setActivities(acts ?? []);
     setProgress(prog ?? []);

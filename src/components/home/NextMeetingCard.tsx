@@ -4,21 +4,30 @@ import { CalendarDays } from "lucide-react";
 import { format, isToday, isTomorrow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-export default function NextMeetingCard({ onNavigateToAgenda }: { onNavigateToAgenda: () => void }) {
+type Props = {
+  churchId?: string | null;
+  currentArea?: string;
+  onNavigateToAgenda: () => void;
+};
+
+export default function NextMeetingCard({ churchId, currentArea, onNavigateToAgenda }: Props) {
   const [event, setEvent] = useState<{ title: string; event_date: string; location: string | null } | null>(null);
 
   useEffect(() => {
     async function fetch() {
-      const { data } = await supabase
+      let query = supabase
         .from("events")
         .select("title, event_date, location")
         .gte("event_date", new Date().toISOString())
         .order("event_date", { ascending: true })
         .limit(1);
+      if (churchId) query = query.eq("church_id", churchId);
+      if (currentArea) query = query.or(`area.is.null,area.eq.${currentArea}`);
+      const { data } = await query;
       if (data && data.length > 0) setEvent(data[0]);
     }
     fetch();
-  }, []);
+  }, [churchId, currentArea]);
 
   if (!event) return null;
 

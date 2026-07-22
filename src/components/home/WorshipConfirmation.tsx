@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { EVENT_TYPES, getEventEmoji, getEventLabel } from "@/config/eventTypes";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { enqueueStudentAction, isStudentOffline } from "@/lib/studentOffline";
 
 type EventItem = {
   id: string;
@@ -137,6 +138,25 @@ export default function WorshipConfirmation({ events, attendanceRecords, onCheck
     setSubmittingManual(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSubmittingManual(false); return; }
+
+    if (isStudentOffline()) {
+      await enqueueStudentAction({
+        type: "worship_manual",
+        userId: user.id,
+        churchId: profile?.church_id ?? null,
+        payload: {
+          worshipDate: format(manualDate, "yyyy-MM-dd"),
+          worshipTime: manualTime,
+          preacherName: getEventLabel(manualType),
+          eventType: manualType,
+        },
+      });
+      toast({ title: "Presenca salva offline!", description: "Ela sera enviada quando a internet voltar." });
+      setOpen(false);
+      reset();
+      setSubmittingManual(false);
+      return;
+    }
 
     const { error } = await supabase.from("worship_attendance").insert({
       user_id: user.id,

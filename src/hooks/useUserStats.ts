@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { cachedStudentQuery, getPendingStudentOverlay, mergeByKey } from "@/lib/studentOffline";
 
 export type UserStats = {
   faithPoints: number;
@@ -56,21 +57,22 @@ async function fetchUserStats(
   churchId: string | null | undefined,
   currentArea?: string,
 ): Promise<StatsData> {
+  const scope = `student-stats:${userId}:${churchId ?? "global"}:${currentArea || "all"}`;
   const results = await Promise.allSettled([
-    supabase.from("activities").select("id, type, title, subtitle, order_num, points, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null').order("order_num"),
-    churchId ? supabase.from("user_progress").select("activity_id, completed_at, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("user_progress").select("activity_id, completed_at, church_id").eq("user_id", userId),
-    churchId ? supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery, awarded_points, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery, awarded_points, church_id").eq("user_id", userId),
+    cachedStudentQuery(`${scope}:activities`, () => supabase.from("activities").select("id, type, title, subtitle, order_num, points, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null').order("order_num"), [] as any[]),
+    cachedStudentQuery(`${scope}:user_progress`, () => churchId ? supabase.from("user_progress").select("activity_id, completed_at, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("user_progress").select("activity_id, completed_at, church_id").eq("user_id", userId), [] as any[]),
+    cachedStudentQuery(`${scope}:devotional_progress`, () => churchId ? supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery, awarded_points, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery, awarded_points, church_id").eq("user_id", userId), [] as any[]),
     churchId
-      ? supabase.from("lesson_progress").select("lesson_id, church_id").eq("user_id", userId).eq("is_completed", true).or(`church_id.is.null,church_id.eq.${churchId}`)
-      : supabase.from("lesson_progress").select("lesson_id, church_id").eq("user_id", userId).eq("is_completed", true),
-    churchId ? supabase.from("attendance").select("event_id, status, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("attendance").select("event_id, status, church_id").eq("user_id", userId),
-    churchId ? supabase.from("worship_attendance").select("id, status, church_id").eq("user_id", userId).eq("status", "aprovado").eq("church_id", churchId) : supabase.from("worship_attendance").select("id, status, church_id").eq("user_id", userId).eq("status", "aprovado"),
-    churchId ? supabase.from("achievement_unlocks").select("achievement_key, bonus_points, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("achievement_unlocks").select("achievement_key, bonus_points, church_id").eq("user_id", userId),
-    supabase.from("courses").select("id, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
-    supabase.from("lessons").select("id, course_id, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
-    supabase.from("challenge_participants").select("id, completed").eq("user_id", userId).eq("completed", true),
+      ? cachedStudentQuery(`${scope}:lesson_progress`, () => supabase.from("lesson_progress").select("lesson_id, church_id").eq("user_id", userId).eq("is_completed", true).or(`church_id.is.null,church_id.eq.${churchId}`), [] as any[])
+      : cachedStudentQuery(`${scope}:lesson_progress`, () => supabase.from("lesson_progress").select("lesson_id, church_id").eq("user_id", userId).eq("is_completed", true), [] as any[]),
+    cachedStudentQuery(`${scope}:attendance`, () => churchId ? supabase.from("attendance").select("event_id, status, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("attendance").select("event_id, status, church_id").eq("user_id", userId), [] as any[]),
+    cachedStudentQuery(`${scope}:worship`, () => churchId ? supabase.from("worship_attendance").select("id, status, church_id").eq("user_id", userId).eq("status", "aprovado").eq("church_id", churchId) : supabase.from("worship_attendance").select("id, status, church_id").eq("user_id", userId).eq("status", "aprovado"), [] as any[]),
+    cachedStudentQuery(`${scope}:achievement_unlocks`, () => churchId ? supabase.from("achievement_unlocks").select("achievement_key, bonus_points, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("achievement_unlocks").select("achievement_key, bonus_points, church_id").eq("user_id", userId), [] as any[]),
+    cachedStudentQuery(`${scope}:courses`, () => supabase.from("courses").select("id, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'), [] as any[]),
+    cachedStudentQuery(`${scope}:lessons`, () => supabase.from("lessons").select("id, course_id, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'), [] as any[]),
+    cachedStudentQuery(`${scope}:challenges`, () => supabase.from("challenge_participants").select("id, completed").eq("user_id", userId).eq("completed", true), [] as any[]),
     (supabase as any).rpc("get_game_config"),
-    supabase.from("custom_event_types").select("value, gives_points, points, area, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
+    cachedStudentQuery(`${scope}:custom_event_types`, () => supabase.from("custom_event_types").select("value, gives_points, points, area, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'), [] as any[]),
   ]);
 
   const [
@@ -79,12 +81,13 @@ async function fetchUserStats(
     challengeDataRes, gameConfigRes, customEventTypesDataRes
   ] = results.map(r => r.status === 'fulfilled' ? r.value : { data: null, error: (r as any).reason });
 
+  const overlay = await getPendingStudentOverlay(userId);
   const activities = activitiesRes.data ?? [];
   const progress = progressRes.data ?? [];
-  const devProgress = devProgressRes.data ?? [];
-  const lessonResponses = lessonResponsesRes.data ?? [];
-  const attendance = attendanceRes.data ?? [];
-  const worshipData = worshipDataRes.data ?? [];
+  const devProgress = mergeByKey(devProgressRes.data ?? [], overlay.devotionalProgress as any[], "devotional_id");
+  const lessonResponses = mergeByKey(lessonResponsesRes.data ?? [], overlay.lessonProgress as any[], "lesson_id");
+  const attendance = mergeByKey(attendanceRes.data ?? [], overlay.attendance as any[], "event_id");
+  const worshipData = [...(worshipDataRes.data ?? []), ...overlay.worshipAttendance];
   const achievementUnlocks = achievementUnlocksRes.data ?? [];
   const coursesData = coursesDataRes.data ?? [];
   const lessonsData = lessonsDataRes.data ?? [];

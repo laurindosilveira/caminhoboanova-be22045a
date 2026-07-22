@@ -76,6 +76,7 @@ export type Participant = {
   mother_phone?: string | null;
   address?: string | null;
   email?: string | null;
+  church_id?: string | null;
 };
 
 export type Activity = { id: string; type: string; points: number; title: string; order_num: number; subtitle: string | null };
@@ -205,6 +206,10 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
     async function load() {
+      const churchId = p.church_id ?? null;
+      let unlocksQuery = supabase.from("course_unlocks").select("course_id").eq("area", p.area);
+      if (churchId) unlocksQuery = unlocksQuery.eq("church_id", churchId);
+
       const [
         { data: ass },
         { data: planData },
@@ -237,7 +242,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         supabase.from("worship_attendance").select("id, worship_date, worship_time, preacher_name, status, event_type, created_at").eq("user_id", p.user_id).order("worship_date", { ascending: false }),
         supabase.from("challenge_participants").select("challenge_id, completed, completed_at, joined_at, response_text, file_url").eq("user_id", p.user_id),
         supabase.from("courses").select("id, title, order_num").order("order_num"),
-        supabase.from("course_unlocks").select("course_id").eq("area", p.area),
+        unlocksQuery,
         supabase.rpc("get_game_config" as any),
       ]);
 
@@ -306,7 +311,9 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       );
 
       // Fetch turmas
-      const { data: turmasData } = await supabase.from("turmas").select("id, name, area").eq("is_active", true).order("area").order("name");
+      let turmasQuery = supabase.from("turmas").select("id, name, area").eq("is_active", true).order("area").order("name");
+      if (churchId) turmasQuery = turmasQuery.eq("church_id", churchId);
+      const { data: turmasData } = await turmasQuery;
       setTurmas(turmasData ?? []);
       if (p.turma_id) {
         const t = (turmasData ?? []).find(t => t.id === p.turma_id);
@@ -317,7 +324,9 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       const attArr = attendanceData ?? [];
       if (attArr.length > 0) {
         const eventIds = [...new Set(attArr.map(a => a.event_id))];
-        const { data: eventsData } = await supabase.from("events").select("id, title, event_date").in("id", eventIds);
+        let eventsQuery = supabase.from("events").select("id, title, event_date").in("id", eventIds);
+        if (churchId) eventsQuery = eventsQuery.eq("church_id", churchId);
+        const { data: eventsData } = await eventsQuery;
         const eventsMap = new Map((eventsData ?? []).map(e => [e.id, e]));
         const enriched = attArr.map(a => ({
           ...a,
@@ -379,7 +388,9 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       // Attendance — detect consecutive absences as crises
       if (attArr.length > 0) {
         const eventIds = [...new Set(attArr.map(a => a.event_id))];
-        const { data: eventsData } = await supabase.from("events").select("id, title, event_date").in("id", eventIds);
+        let eventsQuery = supabase.from("events").select("id, title, event_date").in("id", eventIds);
+        if (churchId) eventsQuery = eventsQuery.eq("church_id", churchId);
+        const { data: eventsData } = await eventsQuery;
         const eventsMap = new Map((eventsData ?? []).map(e => [e.id, e]));
         const sortedAtt = [...attArr].sort((a, b) => {
           const da = eventsMap.get(a.event_id)?.event_date ?? a.created_at;
@@ -416,7 +427,9 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       const evalsArr = evalData ?? [];
       if (evalsArr.length > 0) {
         const evalEventIds = [...new Set(evalsArr.map(e => e.event_id))];
-        const { data: evalEventsData } = await supabase.from("events").select("id, title, event_date").in("id", evalEventIds);
+        let evalEventsQuery = supabase.from("events").select("id, title, event_date").in("id", evalEventIds);
+        if (churchId) evalEventsQuery = evalEventsQuery.eq("church_id", churchId);
+        const { data: evalEventsData } = await evalEventsQuery;
         const evalEventsMap = new Map((evalEventsData ?? []).map(e => [e.id, e]));
         const enrichedEvals: MeetingEval[] = evalsArr.map(e => ({
           ...e,
@@ -1214,6 +1227,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                     event_date: eventDate,
                     type: "conversa",
                     area: p.area,
+                    church_id: p.church_id ?? null,
                     target_user_id: p.user_id,
                     created_by: user.id,
                   } as any);

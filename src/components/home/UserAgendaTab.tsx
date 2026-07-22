@@ -20,6 +20,13 @@ import { cn } from "@/lib/utils";
 import CalendarView from "./CalendarView";
 import emptyAgendaImg from "@/assets/empty-agenda.png";
 import { getSubsequentLessonEvents } from "@/lib/lessonScheduleCascade";
+import {
+  cachedStudentQuery,
+  enqueueStudentAction,
+  getPendingStudentOverlay,
+  isStudentOffline,
+  mergeByKey,
+} from "@/lib/studentOffline";
 
 type Event = {
   id: string;
@@ -230,16 +237,27 @@ export default function UserAgendaTab() {
     async function fetch() {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-      const [{ data: eventsData }, attResult, { data: coursesData }, { data: lessonsData }, { data: lessonContentData }] = await Promise.all([
-        supabase.from("events").select("*").order("event_date", { ascending: false }),
+      const scope = `student-agenda:${user?.id ?? "anon"}:${profile?.church_id ?? "global"}:${currentArea || "all"}`;
+      const churchId = profile?.church_id;
+      const [eventsRes, attResult, coursesRes, lessonsRes, lessonContentRes, overlay] = await Promise.all([
+        cachedStudentQuery(`${scope}:events`, () => {
+          let query = supabase.from("events").select("*").order("event_date", { ascending: false });
+          if (churchId) query = query.eq("church_id", churchId);
+          return query;
+        }, [] as any[]),
         user
-          ? supabase.from("attendance").select("event_id, status, confirmation_source, user_requested_at, leader_confirmed_at").eq("user_id", user.id)
-          : Promise.resolve({ data: [] }),
-        supabase.from("courses").select("id, title, order_num").order("order_num"),
-        supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
-        supabase.from("lesson_content").select("lesson_id, summary, bible_texts, prayer_prompt"),
+          ? cachedStudentQuery(`${scope}:attendance`, () => supabase.from("attendance").select("event_id, status, confirmation_source, user_requested_at, leader_confirmed_at").eq("user_id", user.id), [] as any[])
+          : Promise.resolve({ data: [] as any[] }),
+        cachedStudentQuery(`${scope}:courses`, () => supabase.from("courses").select("id, title, order_num").order("order_num"), [] as any[]),
+        cachedStudentQuery(`${scope}:lessons`, () => supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"), [] as any[]),
+        cachedStudentQuery(`${scope}:lesson-content`, () => supabase.from("lesson_content").select("lesson_id, summary, bible_texts, prayer_prompt"), [] as any[]),
+        user ? getPendingStudentOverlay(user.id) : Promise.resolve(null),
       ]);
-      const { data: attendanceData } = attResult;
+      const eventsData = eventsRes.data;
+      const attendanceData = user && overlay ? mergeByKey(attResult.data, overlay.attendance as any[], "event_id") : attResult.data;
+      const coursesData = coursesRes.data;
+      const lessonsData = lessonsRes.data;
+      const lessonContentData = lessonContentRes.data;
       const all = (eventsData ?? []) as Event[];
       const isManager = role === "admin" || role === "lider";
       const filtered = all.filter(e => {
@@ -293,7 +311,9 @@ export default function UserAgendaTab() {
         () => {
           async function refetch() {
             const { data: { user: currentUser } } = await supabase.auth.getUser();
-            const { data: eventsData } = await supabase.from("events").select("*").order("event_date", { ascending: false });
+            let eventsQuery = supabase.from("events").select("*").order("event_date", { ascending: false });
+            if (profile?.church_id) eventsQuery = eventsQuery.eq("church_id", profile.church_id);
+            const { data: eventsData } = await eventsQuery;
             const all = (eventsData ?? []) as Event[];
             const isManager = role === "admin" || role === "lider";
             const filtered = all.filter(e => {
@@ -393,6 +413,27 @@ export default function UserAgendaTab() {
       user_requested_at: requestedAt,
     };
     if (justification) payload.justification = justification;
+    if (isStudentOffline()) {
+      await enqueueStudentAction({
+        type: "attendance_upsert",
+        userId: user.id,
+        churchId: (profile as any)?.church_id ?? null,
+        payload: {
+          eventId,
+          status,
+          confirmationSource: "user",
+          requestedAt,
+          justification,
+        },
+      });
+      setAttendanceRecords(prev => {
+        const filtered = prev.filter(a => a.event_id !== eventId);
+        return [...filtered, { event_id: eventId, status, confirmation_source: "user", user_requested_at: requestedAt }];
+      });
+      toast.success(status === "pendente_presente" ? "Presenca salva offline para sincronizar!" : "Justificativa salva offline para sincronizar!");
+      return;
+    }
+
     let error = null;
     if (existing) {
       const result = await supabase
@@ -465,6 +506,7 @@ export default function UserAgendaTab() {
       community: form.community || null,
       type: form.type,
       linked_lesson_id: form.linked_lesson_id || null,
+      church_id: profile?.church_id ?? null,
     };
 
     if (editingEvent) {
@@ -476,10 +518,13 @@ export default function UserAgendaTab() {
         const subsequentEvents = getSubsequentLessonEvents(events, editingEvent);
         if (subsequentEvents.length > 0) {
           // Save other fields first (without lesson change), then handle cascade
-          const { error: prepareCascadeError } = await supabase
+          let prepareCascadeQuery = supabase
             .from("events")
             .update({ ...payload, linked_lesson_id: oldLessonId })
             .eq("id", editingEvent.id);
+          const editingChurchId = editingEvent.church_id ?? profile?.church_id ?? null;
+          if (editingChurchId) prepareCascadeQuery = prepareCascadeQuery.eq("church_id", editingChurchId);
+          const { error: prepareCascadeError } = await prepareCascadeQuery;
           if (prepareCascadeError) {
             toast.error("Erro ao preparar atualizacao em cascata");
             console.error(prepareCascadeError);
@@ -494,7 +539,13 @@ export default function UserAgendaTab() {
         }
       }
 
-      const { error } = await supabase.from("events").update(payload).eq("id", editingEvent.id);
+      let updateQuery = supabase
+        .from("events")
+        .update(payload)
+        .eq("id", editingEvent.id);
+      const editingChurchId = editingEvent.church_id ?? profile?.church_id ?? null;
+      if (editingChurchId) updateQuery = updateQuery.eq("church_id", editingChurchId);
+      const { error } = await updateQuery;
       if (error) {
         toast.error("Erro ao atualizar evento");
         console.error(error);
@@ -522,10 +573,13 @@ export default function UserAgendaTab() {
     const event = events.find(e => e.id === eventId);
     if (!event) return;
 
-    const { error: updateError } = await supabase
+    let updateEventQuery = supabase
       .from("events")
       .update({ linked_lesson_id: newLessonId })
       .eq("id", eventId);
+    const eventChurchId = event.church_id ?? profile?.church_id ?? null;
+    if (eventChurchId) updateEventQuery = updateEventQuery.eq("church_id", eventChurchId);
+    const { error: updateError } = await updateEventQuery;
     if (updateError) {
       toast.error("Erro ao atualizar a licao do evento");
       console.error(updateError);
@@ -552,9 +606,12 @@ export default function UserAgendaTab() {
             for (let i = 0; i < subsequent.length; i++) {
               const nextLessonIdx = newIdx + 1 + i;
               if (nextLessonIdx < allLessonsOrdered.length) {
-                const { error: cascadeError } = await supabase.from("events")
+                let cascadeQuery = supabase.from("events")
                   .update({ linked_lesson_id: allLessonsOrdered[nextLessonIdx].id })
                   .eq("id", subsequent[i].id);
+                const subsequentChurchId = subsequent[i].church_id ?? profile?.church_id ?? null;
+                if (subsequentChurchId) cascadeQuery = cascadeQuery.eq("church_id", subsequentChurchId);
+                const { error: cascadeError } = await cascadeQuery;
                 if (cascadeError) {
                   toast.error("Erro ao aplicar cascata de licoes");
                   console.error(cascadeError);
@@ -585,7 +642,11 @@ export default function UserAgendaTab() {
 
   async function handleDeleteEvent(eventId: string) {
     if (!confirm("Tem certeza que deseja excluir este evento?")) return;
-    const { error } = await supabase.from("events").delete().eq("id", eventId);
+    const event = events.find(e => e.id === eventId);
+    let deleteQuery = supabase.from("events").delete().eq("id", eventId);
+    const eventChurchId = event?.church_id ?? profile?.church_id ?? null;
+    if (eventChurchId) deleteQuery = deleteQuery.eq("church_id", eventChurchId);
+    const { error } = await deleteQuery;
     if (error) {
       toast.error("Erro ao excluir evento");
     } else {
@@ -613,9 +674,15 @@ export default function UserAgendaTab() {
     if (!data || data.length === 0) { setPendingAttendance([]); return; }
     const userIds = [...new Set(data.map(a => a.user_id))];
     const eventIds = [...new Set(data.map(a => a.event_id))];
+    let profilesQuery = supabase.from("profiles").select("user_id, full_name, community").in("user_id", userIds);
+    let eventsQuery = supabase.from("events").select("id, title, event_date").in("id", eventIds);
+    if (profile?.church_id) {
+      profilesQuery = profilesQuery.eq("church_id", profile.church_id);
+      eventsQuery = eventsQuery.eq("church_id", profile.church_id);
+    }
     const [{ data: profilesData }, { data: eventsData }] = await Promise.all([
-      supabase.from("profiles").select("user_id, full_name, community").in("user_id", userIds),
-      supabase.from("events").select("id, title, event_date").in("id", eventIds),
+      profilesQuery,
+      eventsQuery,
     ]);
     const profileMap = new Map((profilesData ?? []).map((p: any) => [p.user_id, p]));
     const evMap = new Map((eventsData ?? []).map((e: any) => [e.id, e]));

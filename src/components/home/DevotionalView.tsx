@@ -4,6 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { ChevronLeft, BookOpen, Heart, CheckCircle2, AlertCircle, Music } from "lucide-react";
 import { toast } from "sonner";
 import WorshipCard from "./WorshipCard";
+import {
+  cachedStudentQuery,
+  enqueueStudentAction,
+  getPendingStudentOverlay,
+  isStudentOffline,
+  mergeByKey,
+} from "@/lib/studentOffline";
 
 type WorshipSong = {
   id: string;
@@ -51,18 +58,26 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
     if (devotionalData && devotionalData.worship_songs && devotionalData.worship_songs.length > 0) return;
 
     async function load() {
-      const { data: contentData } = await supabase
-        .from("devotional_content")
-        .select("*")
-        .eq("activity_id", activity.id)
-        .maybeSingle();
+      const { data: contentData } = await cachedStudentQuery(
+        `devotional-content:${activity.id}`,
+        () => supabase
+          .from("devotional_content")
+          .select("*")
+          .eq("activity_id", activity.id)
+          .maybeSingle(),
+        null as any,
+      );
 
-      const { data: songsData } = await supabase
-        .from("devotional_worship_songs")
-        .select(`
-          worship_song:worship_songs(*)
-        `)
-        .eq("devotional_id", activity.id);
+      const { data: songsData } = await cachedStudentQuery(
+        `devotional-songs:${activity.id}`,
+        () => supabase
+          .from("devotional_worship_songs")
+          .select(`
+            worship_song:worship_songs(*)
+          `)
+          .eq("devotional_id", activity.id),
+        [] as any[],
+      );
 
       const songs = songsData?.map(s => s.worship_song).filter(Boolean) as WorshipSong[] || [];
 
@@ -89,23 +104,35 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
-        .from("devotional_responses")
-        .select("question_index, response")
-        .eq("user_id", user.id)
-        .eq("devotional_id", activity.id)
-        .order("question_index");
+      const [{ data, error }, overlay] = await Promise.all([
+        cachedStudentQuery(
+          `devotional-responses:${user.id}:${activity.id}`,
+          () => supabase
+            .from("devotional_responses")
+            .select("question_index, response")
+            .eq("user_id", user.id)
+            .eq("devotional_id", activity.id)
+            .order("question_index"),
+          [] as any[],
+        ),
+        getPendingStudentOverlay(user.id),
+      ]);
+      const mergedResponses = mergeByKey(
+        data ?? [],
+        overlay.devotionalResponses.filter((item) => item.devotional_id === activity.id) as any[],
+        "question_index",
+      );
 
-      if (error) {
+      if (error && !isStudentOffline()) {
         toast.error("Não foi possível carregar as respostas do devocional.", {
-          description: error.message,
+          description: String((error as any)?.message ?? error),
         });
         return;
       }
-      if (!data) return;
+      if (!mergedResponses) return;
 
       const nextAnswers: Record<number, string> = {};
-      data.forEach((row) => {
+      mergedResponses.forEach((row) => {
         nextAnswers[row.question_index] = row.response ?? "";
       });
       setAnswers(nextAnswers);
@@ -144,6 +171,31 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
     const responsePayload = Object.fromEntries(
       visibleQuestions.map(({ index }) => [String(index), answers[index] ?? ""]),
     );
+    if (isStudentOffline()) {
+      await enqueueStudentAction({
+        type: "complete_devotional",
+        userId: user.id,
+        churchId: null,
+        payload: {
+          devotionalId: activity.id,
+          responses: responsePayload,
+          isRecovery,
+          awardedPoints: awardedPoints ?? activity.points,
+          overrideId: overrideId ?? null,
+        },
+      });
+      window.dispatchEvent(new CustomEvent("show-celebration", {
+        detail: {
+          type: "devotional",
+          points: awardedPoints ?? activity.points
+        }
+      }));
+      await onComplete(activity.id);
+      setCompleting(false);
+      toast.success("Devocional salvo offline. Ele sera sincronizado quando a internet voltar.");
+      return;
+    }
+
     const { error } = await supabase.rpc("complete_devotional", {
       p_devotional_id: activity.id,
       p_responses: responsePayload,
