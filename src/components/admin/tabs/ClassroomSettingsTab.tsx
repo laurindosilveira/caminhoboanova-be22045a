@@ -127,7 +127,7 @@ export default function ClassroomSettingsTab() {
         <label className="text-xs font-montserrat font-bold text-muted-foreground uppercase tracking-wide mb-2 block">
           Comunidade
         </label>
-        <div className="flex flex-wrap gap-2">
+        <div className="scroll-menu gap-2 pb-1" aria-label="Selecionar comunidade">
           {COMMUNITIES.map((c) => (
             <button
               key={c}

@@ -296,7 +296,7 @@ export default function AdminSistema() {
 
       <div className="mx-auto max-w-7xl px-4 py-6">
         <Tabs defaultValue="igrejas" className="space-y-6">
-          <TabsList className="h-auto flex-wrap justify-start gap-2 rounded-2xl bg-muted/60 p-2">
+          <TabsList className="h-auto gap-2 rounded-2xl bg-muted/60 p-2">
             <TabsTrigger value="igrejas" className="rounded-xl px-4 py-2">Igrejas</TabsTrigger>
             <TabsTrigger value="atualizacoes" className="rounded-xl px-4 py-2">Atualizacoes do app</TabsTrigger>
             <TabsTrigger value="audit-logs" className="rounded-xl px-4 py-2">Seguranca</TabsTrigger>

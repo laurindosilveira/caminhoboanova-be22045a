@@ -187,7 +187,7 @@ export default function AdminAlertsTab({ participants }: { participants: any[] }
       </div>
 
       {/* Filters */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
+      <div className="scroll-menu gap-1.5 pb-1" aria-label="Filtros de alertas">
         {[
           { id: "all", label: "Todos" },
           { id: "consecutive_absences", label: "Faltas" },

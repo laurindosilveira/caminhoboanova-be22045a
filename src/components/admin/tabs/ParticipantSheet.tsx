@@ -1263,7 +1263,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       )}
 
 
-      <div className="flex gap-1 bg-muted rounded-xl p-1 overflow-x-auto">
+      <div className="scroll-menu gap-1 rounded-xl bg-muted p-1" aria-label="Seções do participante">
         {SECTIONS.map(s => (
           <button key={s.id} onClick={() => setActiveSection(s.id)}
             className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-inter font-medium transition-all ${activeSection === s.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
@@ -1669,7 +1669,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           </div>
 
           {/* Category filters */}
-          <div className="flex gap-1 overflow-x-auto pb-1">
+          <div className="scroll-menu gap-1 pb-1" aria-label="Histórico do participante">
             {FILTERS.map(f => (
               <button key={f.id} onClick={() => setTimelineFilter(f.id as any)}
                 className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-inter font-medium transition-all ${

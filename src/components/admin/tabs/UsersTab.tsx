@@ -457,7 +457,7 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Buscar por nome ou comunidade..." value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }} className="pl-9 rounded-2xl border-border" />
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="scroll-menu gap-2 pb-1" aria-label="Filtro por função">
           {["all", "admin", "lider", "user"].map(role => (
             <button
               key={role}
@@ -476,7 +476,7 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
       {availableYears.length > 0 && (
         <div className="flex items-center gap-2">
           <CalendarDays className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-          <div className="flex gap-1.5 flex-wrap">
+          <div className="scroll-menu gap-1.5 pb-1" aria-label="Filtro por ano">
             <button onClick={() => setSelectedYear(null)}
               className={`px-3 py-1.5 rounded-xl text-xs font-montserrat font-bold transition-all ${!selectedYear ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>
               Todos

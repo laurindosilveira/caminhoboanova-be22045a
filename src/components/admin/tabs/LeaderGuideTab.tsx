@@ -26,7 +26,7 @@ export default function LeaderGuideTab() {
       </div>
 
       {/* Sub-tab navigation */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+      <div className="scroll-menu gap-1.5 pb-1" aria-label="Seções do guia do líder">
         {SUB_TABS.map((tab) => {
           const isActive = activeSubTab === tab.id;
           return (

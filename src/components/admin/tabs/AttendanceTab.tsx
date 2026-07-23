@@ -759,7 +759,7 @@ export default function AttendanceTab({ participants, activities, communities, i
       {showEventForm && renderEventForm()}
 
       {/* Type filter */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
+      <div className="scroll-menu gap-1.5 pb-1" aria-label="Filtros de presença">
         {EVENT_TYPES_FILTER.map(t => (
           <button
             key={t.label}

@@ -342,7 +342,7 @@ export default function Index() {
 
             <div className="px-5">
               <Tabs value={profileSubTab} onValueChange={(value) => setProfileSubTab(value as ProfileSubTab)}>
-                <TabsList className="grid w-full grid-cols-3 h-11">
+                <TabsList className="w-full h-11 gap-1">
                   <TabsTrigger value="meu-perfil" className="text-[11px] sm:text-xs">Meu Perfil</TabsTrigger>
                   <TabsTrigger value="minha-jornada" className="text-[11px] sm:text-xs">Minha Jornada</TabsTrigger>
                   <TabsTrigger value="configuracoes" className="text-[11px] sm:text-xs">Configurações</TabsTrigger>

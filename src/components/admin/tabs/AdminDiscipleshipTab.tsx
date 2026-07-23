@@ -241,14 +241,14 @@ export default function AdminDiscipleshipTab({ participants, activities, initial
       )}
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="scroll-menu gap-2 pb-1" aria-label="Filtrar por saúde espiritual">
         {[
           { label: "Saudaveis", value: saudaveis.length, color: "text-brand-green", bg: "bg-brand-green/10", filter: "saudavel" as StatusFilter },
           { label: "Atencao", value: participants.length - saudaveis.length - criticos.length, color: "text-accent-foreground", bg: "bg-accent/20", filter: "atencao" as StatusFilter },
           { label: "Criticos", value: criticos.length, color: "text-destructive", bg: "bg-destructive/10", filter: "critico" as StatusFilter },
         ].map(s => (
           <button key={s.label} onClick={() => setStatusFilter(prev => prev === s.filter ? "all" : s.filter)}
-            className={`rounded-2xl p-3 text-center transition-all ${s.bg} ${statusFilter === s.filter ? "ring-2 ring-primary" : ""}`}>
+            className={`min-w-[7.5rem] rounded-2xl p-3 text-center transition-all ${s.bg} ${statusFilter === s.filter ? "ring-2 ring-primary" : ""}`}>
             <p className={`font-montserrat font-black text-2xl ${s.color}`}>{s.value}</p>
             <p className={`font-inter text-[10px] ${s.color} opacity-80 mt-0.5`}>{s.label}</p>
           </button>
