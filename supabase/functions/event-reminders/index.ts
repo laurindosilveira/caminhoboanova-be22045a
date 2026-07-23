@@ -7,9 +7,9 @@ const corsHeaders = {
 };
 
 /**
- * Event Reminders — runs daily via pg_cron.
- * 1. 2 days before event → push with event info
- * 2. 1 day after event → push reminding to confirm attendance or justify absence
+ * Event Reminders - runs daily via pg_cron.
+ * 1. 2 days before event: push with event info
+ * 2. 1 day after event: push reminding to confirm attendance or justify absence
  */
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -137,22 +137,22 @@ Deno.serve(async (req) => {
 
           const typeLabels: Record<string, string> = {
             encontro: "Encontro", culto: "Culto", jemiac: "JEMIAC",
-            retiro: "Retiro", confirmatorio: "Ens. Confirmatório", evento: "Evento",
+            retiro: "Retiro", confirmatorio: "Ens. Confirmat\u00f3rio", evento: "Evento",
           };
           const typeLabel = typeLabels[evt.type] ?? evt.type;
 
-          let bodyText = `📅 ${typeLabel}: "${evt.title}" — ${dayNum} de ${month} às ${hours}:${mins}`;
-          if (evt.location) bodyText += ` 📍 ${evt.location}`;
+          let bodyText = `\u{1f4c5} ${typeLabel}: "${evt.title}" \u2014 ${dayNum} de ${month} \u00e0s ${hours}:${mins}`;
+          if (evt.location) bodyText += ` \u{1f4cd} ${evt.location}`;
 
           notifications.push({
-            title: "🔔 Evento em 2 dias!",
+            title: "\u{1f514} Evento em 2 dias!",
             body: bodyText,
             tag: `event-reminder-${evt.id}`,
           });
         }
       }
 
-      // --- Past events (1 day after — attendance reminder) ---
+      // --- Past events (1 day after - attendance reminder) ---
       if (pastEvents && pastEvents.length > 0) {
         const relevant = pastEvents.filter((e: any) =>
           (!e.area && !e.community) ||
@@ -163,8 +163,8 @@ Deno.serve(async (req) => {
           // Only send if user hasn't confirmed attendance yet
           if (!attendanceSet.has(`${userId}-${evt.id}`)) {
             notifications.push({
-              title: "📋 Confirme sua presença!",
-              body: `O evento "${evt.title}" já aconteceu. Confirme sua presença ou justifique sua falta no app.`,
+              title: "\u{1f4cb} Confirme sua presen\u00e7a!",
+              body: `O evento "${evt.title}" j\u00e1 aconteceu. Confirme sua presen\u00e7a ou justifique sua falta no app.`,
               tag: `attendance-reminder-${evt.id}`,
             });
           }
@@ -213,8 +213,8 @@ Deno.serve(async (req) => {
       if ((upcomingEvents?.length ?? 0) > 0) {
         logEntries.push({
           type: "event_reminder",
-          title: "🔔 Evento em 2 dias!",
-          body: `Lembrete automático para ${upcomingEvents!.length} evento(s)`,
+          title: "\u{1f514} Evento em 2 dias!",
+          body: `Lembrete autom\u00e1tico para ${upcomingEvents!.length} evento(s)`,
           target: "auto",
           sent_count: sent,
           failed_count: failed,
@@ -223,8 +223,8 @@ Deno.serve(async (req) => {
       if ((pastEvents?.length ?? 0) > 0) {
         logEntries.push({
           type: "attendance_reminder",
-          title: "📋 Confirme sua presença!",
-          body: `Lembrete de presença para ${pastEvents!.length} evento(s)`,
+          title: "\u{1f4cb} Confirme sua presen\u00e7a!",
+          body: `Lembrete de presen\u00e7a para ${pastEvents!.length} evento(s)`,
           target: "auto",
           sent_count: sent,
           failed_count: failed,
@@ -253,7 +253,7 @@ Deno.serve(async (req) => {
   }
 });
 
-// ─── Web Push implementation (same as send-push-notifications) ───
+// --- Web Push implementation (same as send-push-notifications) ---
 
 async function sendWebPush(
   subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
