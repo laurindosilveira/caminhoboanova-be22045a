@@ -549,7 +549,7 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
           </div>
         </div>
 
-        <div className="mt-3 flex gap-1 overflow-x-auto border-b border-border pb-3">
+        <div className="scroll-menu mt-3 gap-1 border-b border-border pb-3" aria-label="Status dos participantes">
           {([
             ["all", "Todos", members.length],
             ["critical", "Criticos", counts.critical],

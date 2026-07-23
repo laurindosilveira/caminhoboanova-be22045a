@@ -120,6 +120,20 @@ All colors MUST be HSL.
 }
 
 @layer utilities {
+  .scroll-menu {
+    @apply flex w-full max-w-full flex-nowrap overflow-x-auto overscroll-x-contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .scroll-menu::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scroll-menu > * {
+    flex: 0 0 auto;
+  }
+
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;

@@ -285,7 +285,7 @@ export default function MinhaIgreja() {
 
       <div className="px-5 mb-6">
         <Tabs defaultValue="status" className="w-full">
-          <TabsList className="grid grid-cols-2 mb-4 h-12 bg-muted/50 rounded-xl p-1">
+          <TabsList className="mb-4 h-12 bg-muted/50 rounded-xl p-1">
             <TabsTrigger value="status" className="rounded-lg font-montserrat font-bold text-xs">Plano & Status</TabsTrigger>
             <TabsTrigger value="branding" className="rounded-lg font-montserrat font-bold text-xs">Customização</TabsTrigger>
           </TabsList>

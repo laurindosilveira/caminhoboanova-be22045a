@@ -410,7 +410,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
 
       {/* Area filter — hidden in leaderMode */}
       {!leaderMode && (
-        <div className="flex gap-1.5 flex-wrap">
+        <div className="scroll-menu gap-1.5 pb-1" aria-label="Filtro por área">
           {["all", ...AREAS].map(val => (
             <button
               key={val}

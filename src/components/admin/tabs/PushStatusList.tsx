@@ -327,7 +327,7 @@ export default function PushStatusList({ adminArea }: Props) {
         </button>
       </div>
 
-      <div className="grid grid-cols-4 gap-2">
+      <div className="scroll-menu gap-2 pb-1" aria-label="Filtros de notificações push">
         <SummaryButton label="Todos" value={users.length} active={filter === "all"} onClick={() => setFilter("all")} />
         <SummaryButton label="Ativos" value={enabledCount} active={filter === "active"} onClick={() => setFilter(filter === "active" ? "all" : "active")} icon={<Bell className="w-3.5 h-3.5" />} />
         <SummaryButton label="Sem push" value={disabledCount} active={filter === "inactive"} onClick={() => setFilter(filter === "inactive" ? "all" : "inactive")} icon={<BellOff className="w-3.5 h-3.5" />} />

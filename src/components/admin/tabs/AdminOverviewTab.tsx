@@ -235,7 +235,7 @@ export default function AdminOverviewTab({
         <div className="flex items-center gap-2 text-xs font-inter text-muted-foreground">
           <Filter className="w-3.5 h-3.5" /> Filtros
         </div>
-        <div className="flex gap-1.5 flex-wrap">
+        <div className="scroll-menu gap-1.5 pb-1" aria-label="Período do relatório">
           {PERIOD_OPTIONS.map(p => (
             <button
               key={p.id}

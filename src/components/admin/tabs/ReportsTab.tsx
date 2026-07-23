@@ -266,7 +266,7 @@ export default function ReportsTab() {
           </div>
         </div>
 
-        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+        <div className="scroll-menu gap-1.5 pb-1" aria-label="Tipos de relatório">
           {REPORT_OPTIONS.map((option) => {
             const Icon = option.icon;
             const isActive = reportType === option.id;

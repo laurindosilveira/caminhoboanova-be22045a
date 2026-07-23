@@ -842,7 +842,7 @@ export default function UserAgendaTab() {
       />
 
       {/* ── FILTROS DE TIPO ──── */}
-      <div className="flex flex-wrap gap-1.5">
+      <div className="scroll-menu gap-1.5 pb-1" aria-label="Tipos de evento">
         {FILTER_GROUPS.map(g => {
           const isActive = activeFilters.has(g.key);
           return (

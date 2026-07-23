@@ -104,7 +104,7 @@ export default function CalendarView({ events }: Props) {
 
       {/* Filter chips */}
       {activeTypes.length > 1 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="scroll-menu gap-1.5 pb-1" aria-label="Filtros do calendário">
           <button
             onClick={() => setFilterType(null)}
             className={`px-2.5 py-1 rounded-full text-[10px] font-montserrat font-bold transition-colors ${
