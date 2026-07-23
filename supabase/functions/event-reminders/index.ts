@@ -20,10 +20,17 @@ Deno.serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const PUSH_CRON_SECRET = Deno.env.get("PUSH_CRON_SECRET") ?? "";
     const VAPID_PUBLIC_KEY = (Deno.env.get("VAPID_PUBLIC_KEY") ?? "").replace(/["\s,]/g, "");
     const VAPID_PRIVATE_KEY = (Deno.env.get("VAPID_PRIVATE_KEY") ?? "").replace(/["\s,]/g, "");
 
-    const authResult = await authorizeServiceOrAdminLeader(req, SUPABASE_URL, ANON_KEY, SERVICE_ROLE_KEY);
+    const authResult = await authorizeServiceOrAdminLeader(
+      req,
+      SUPABASE_URL,
+      ANON_KEY,
+      SERVICE_ROLE_KEY,
+      PUSH_CRON_SECRET,
+    );
     if (!authResult.ok) {
       return new Response(JSON.stringify({ error: authResult.error }), {
         status: authResult.status,
@@ -383,8 +390,12 @@ async function authorizeServiceOrAdminLeader(
   req: Request,
   supabaseUrl: string,
   anonKey: string,
-  serviceRoleKey: string
+  serviceRoleKey: string,
+  cronSecret: string,
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const providedCronSecret = req.headers.get("x-caminho-cron-secret") ?? "";
+  if (cronSecret && providedCronSecret === cronSecret) return { ok: true };
+
   const authHeader = req.headers.get("Authorization") ?? "";
   if (authHeader === `Bearer ${serviceRoleKey}`) return { ok: true };
   if (!authHeader) return { ok: false, status: 401, error: "Missing Authorization header" };
