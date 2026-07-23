@@ -150,7 +150,14 @@ export default function Login() {
       }
     } catch (err: any) {
       console.error("Biometric login error:", err);
-      setError("Erro ao entrar com biometria: " + (err.message || "Tente novamente."));
+      const biometricMessage = String(err?.message ?? "").toLowerCase();
+      if (biometricMessage.includes("passkeys are disabled") || biometricMessage.includes("passkey_disabled")) {
+        setError("O acesso por biometria ainda não foi ativado para este aplicativo.");
+      } else if (biometricMessage.includes("credential") || biometricMessage.includes("not found")) {
+        setError("Nenhuma biometria cadastrada para esta conta. Entre com sua senha e cadastre-a nas configurações.");
+      } else {
+        setError("Erro ao entrar com biometria: " + (err.message || "Tente novamente."));
+      }
       
       // Log failure
       ignoreAsyncError(supabase.rpc('log_login_event', {
@@ -480,15 +487,20 @@ export default function Login() {
               </button>
 
               {passkeySupported !== false && (
-                <button
-                  type="button"
-                  onClick={handleBiometricLogin}
-                  disabled={loading}
-                  className="w-full py-3 rounded-xl border-2 border-primary/20 bg-primary/5 font-montserrat font-bold text-primary text-sm flex items-center justify-center gap-2 hover:bg-primary/10 transition-all active:scale-95 disabled:opacity-50"
-                >
-                  <Fingerprint className="w-5 h-5" />
-                  Entrar com Biometria
-                </button>
+                <div>
+                  <button
+                    type="button"
+                    onClick={handleBiometricLogin}
+                    disabled={loading}
+                    className="w-full py-3 rounded-xl border-2 border-primary/20 bg-primary/5 font-montserrat font-bold text-primary text-sm flex items-center justify-center gap-2 hover:bg-primary/10 transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    <Fingerprint className="w-5 h-5" />
+                    Entrar com Biometria
+                  </button>
+                  <p className="mt-1.5 px-2 text-center text-[10px] leading-relaxed text-muted-foreground">
+                    Primeiro acesso? Entre normalmente e cadastre sua digital em Configurações.
+                  </p>
+                </div>
               )}
             </form>
 

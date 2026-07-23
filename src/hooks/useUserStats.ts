@@ -1,38 +1,22 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  buildScheduledDevotionalDays,
+  calculateScheduledDevotionalStreak,
+} from "@/lib/devotionalStreak";
 
 export type UserStats = {
   faithPoints: number;
   faithLevel: number;
   streakDays: number;
+  streakFrozen: boolean;
+  streakAtRisk: boolean;
   faithEnergy: number;
   completedCount: number;
   nextActivity: { id: string; type: string; title: string; subtitle: string | null; points: number } | null;
   totalActivities: number;
   loading: boolean;
 };
-
-function calculateStreak(dates: string[]): number {
-  if (dates.length === 0) return 0;
-  const unique = [...new Set(dates.map(d => d.split("T")[0]))].sort((a, b) => b.localeCompare(a));
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  let streak = 0;
-  let check = new Date(today);
-
-  for (const dateStr of unique) {
-    const d = new Date(dateStr + "T00:00:00");
-    const diff = Math.round((check.getTime() - d.getTime()) / 86400000);
-    if (diff === 0 || diff === 1) {
-      streak++;
-      check = d;
-    } else {
-      break;
-    }
-  }
-  return streak;
-}
 
 function calculateLevel(points: number, thresholds: number[]): number {
   if (points >= thresholds[3]) return 5;
@@ -71,12 +55,16 @@ async function fetchUserStats(
     supabase.from("challenge_participants").select("id, completed").eq("user_id", userId).eq("completed", true),
     (supabase as any).rpc("get_game_config"),
     supabase.from("custom_event_types").select("value, gives_points, points, area, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
+    supabase.from("events").select("event_date, linked_lesson_id, released_devotional_days, area, community, turma_id, target_user_id, type").not("linked_lesson_id", "is", null).order("event_date"),
+    supabase.from("devotional_content").select("id, lesson_id, day_number"),
+    supabase.from("profiles").select("area, community, turma_id").eq("user_id", userId).maybeSingle(),
   ]);
 
   const [
     activitiesRes, progressRes, devProgressRes, lessonResponsesRes, attendanceRes,
     worshipDataRes, achievementUnlocksRes, coursesDataRes, lessonsDataRes,
-    challengeDataRes, gameConfigRes, customEventTypesDataRes
+    challengeDataRes, gameConfigRes, customEventTypesDataRes,
+    scheduledEventsRes, devotionalContentRes, profileRes,
   ] = results.map(r => r.status === 'fulfilled' ? r.value : { data: null, error: (r as any).reason });
 
   const activities = activitiesRes.data ?? [];
@@ -91,6 +79,9 @@ async function fetchUserStats(
   const challengeData = challengeDataRes.data ?? [];
   const gameConfig = gameConfigRes.data ?? [];
   const customEventTypesData = customEventTypesDataRes.data ?? [];
+  const scheduledEvents = scheduledEventsRes.data ?? [];
+  const devotionalContent = devotionalContentRes.data ?? [];
+  const streakProfile = profileRes.data ?? { area: currentArea ?? null, community: null, turma_id: null };
 
   const cfgMap = new Map<string, number>((gameConfig ?? []).map((r: any) => [r.key, Number(r.value)]));
   const cfg = {
@@ -115,6 +106,16 @@ async function fetchUserStats(
     ...progress.map((p: any) => p.completed_at),
     ...devProgress.map((p: any) => p.completed_at),
   ];
+  const devotionalSchedule = buildScheduledDevotionalDays(
+    scheduledEvents as any[],
+    devotionalContent as any[],
+    userId,
+    { ...streakProfile, area: currentArea || streakProfile.area },
+  );
+  const devotionalStreak = calculateScheduledDevotionalStreak(
+    devotionalSchedule,
+    devProgress as any[],
+  );
 
   const activityPoints = activities
     .filter((a: any) => completedIds.has(a.id) && a.type !== "devocional" && a.type !== "formacao" && a.type !== "encontro")
@@ -180,7 +181,9 @@ async function fetchUserStats(
   return {
     faithPoints,
     faithLevel: calculateLevel(faithPoints, levelThresholds),
-    streakDays: calculateStreak(allDates),
+    streakDays: devotionalStreak.streakDays,
+    streakFrozen: devotionalStreak.frozen,
+    streakAtRisk: devotionalStreak.atRisk,
     faithEnergy: calculateEnergy(allDates),
     completedCount: completedIds.size,
     nextActivity: activities.find((a: any) => !completedIds.has(a.id)) ?? null,
@@ -192,6 +195,8 @@ const DEFAULT_STATS: StatsData = {
   faithPoints: 0,
   faithLevel: 1,
   streakDays: 0,
+  streakFrozen: false,
+  streakAtRisk: false,
   faithEnergy: 0,
   completedCount: 0,
   nextActivity: null,

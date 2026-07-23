@@ -3,6 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { isNotificationEnabled, sendNotification } from "@/lib/notifications";
 import { subscribeToWebPush } from "@/lib/webPush";
+import {
+  buildScheduledDevotionalDays,
+  calculateScheduledDevotionalStreak,
+} from "@/lib/devotionalStreak";
 
 const NOTIF_SENT_PREFIX = "caminho_notif_sent_";
 const NOTIF_RUN_KEY = "caminho_notif_run_today";
@@ -192,28 +196,23 @@ async function checkStreak() {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+    const profile = await getCurrentUserProfile(user.id);
+    if (!profile) return;
 
-    const [{ data: progress }, { data: devProgress }] = await Promise.all([
-      supabase.from("user_progress").select("completed_at").eq("user_id", user.id).order("completed_at", { ascending: false }).limit(1),
-      supabase.from("devotional_progress").select("completed_at").eq("user_id", user.id).order("completed_at", { ascending: false }).limit(1),
+    const [{ data: events }, { data: devotionals }, { data: completions }] = await Promise.all([
+      supabase.from("events").select("event_date, linked_lesson_id, released_devotional_days, area, community, turma_id, target_user_id, type").not("linked_lesson_id", "is", null).order("event_date"),
+      supabase.from("devotional_content").select("id, lesson_id, day_number"),
+      supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery").eq("user_id", user.id),
     ]);
+    const schedule = buildScheduledDevotionalDays(events ?? [], devotionals ?? [], user.id, profile);
+    const streak = calculateScheduledDevotionalStreak(schedule, completions ?? []);
+    if (!streak.atRisk) return;
 
-    const dates: Date[] = [];
-    if (progress?.[0]?.completed_at) dates.push(new Date(progress[0].completed_at));
-    if (devProgress?.[0]?.completed_at) dates.push(new Date(devProgress[0].completed_at));
-    if (dates.length === 0) return;
-
-    const lastActivity = new Date(Math.max(...dates.map((date) => date.getTime())));
-    const diffDays = Math.floor((Date.now() - lastActivity.getTime()) / 86400000);
-
-    if (diffDays >= 2) {
-      const message = diffDays >= 5
-        ? `Sua chama esta se apagando. Ja sao ${diffDays} dias sem atividade. Volte e reacenda seu coracao.`
-        : `Nao perca sua sequencia. Ja sao ${diffDays} dias sem atividade. Um devocional por dia faz toda a diferenca.`;
-
-      await sendNotification("Sequencia em risco!", message);
-      markSentToday("streak");
-    }
+    await sendNotification(
+      "Sequência em risco!",
+      "Há um devocional agendado para hoje. Conclua-o até o fim do dia para manter sua sequência.",
+    );
+    markSentToday("streak");
   } catch (err) {
     console.warn("Streak notification check failed", err);
   }
