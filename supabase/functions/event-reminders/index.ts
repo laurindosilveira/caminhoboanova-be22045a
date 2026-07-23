@@ -20,7 +20,6 @@ Deno.serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const PUSH_CRON_SECRET = Deno.env.get("PUSH_CRON_SECRET") ?? "";
     const VAPID_PUBLIC_KEY = (Deno.env.get("VAPID_PUBLIC_KEY") ?? "").replace(/["\s,]/g, "");
     const VAPID_PRIVATE_KEY = (Deno.env.get("VAPID_PRIVATE_KEY") ?? "").replace(/["\s,]/g, "");
 
@@ -29,7 +28,6 @@ Deno.serve(async (req) => {
       SUPABASE_URL,
       ANON_KEY,
       SERVICE_ROLE_KEY,
-      PUSH_CRON_SECRET,
     );
     if (!authResult.ok) {
       return new Response(JSON.stringify({ error: authResult.error }), {
@@ -391,10 +389,15 @@ async function authorizeServiceOrAdminLeader(
   supabaseUrl: string,
   anonKey: string,
   serviceRoleKey: string,
-  cronSecret: string,
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const providedCronSecret = req.headers.get("x-caminho-cron-secret") ?? "";
-  if (cronSecret && providedCronSecret === cronSecret) return { ok: true };
+  const adminClient = createClient(supabaseUrl, serviceRoleKey);
+  if (providedCronSecret) {
+    const { data: validCronSecret } = await adminClient.rpc("verify_push_cron_secret", {
+      _candidate: providedCronSecret,
+    });
+    if (validCronSecret === true) return { ok: true };
+  }
 
   const authHeader = req.headers.get("Authorization") ?? "";
   if (authHeader === `Bearer ${serviceRoleKey}`) return { ok: true };
@@ -406,7 +409,6 @@ async function authorizeServiceOrAdminLeader(
   const { data: { user }, error } = await anonClient.auth.getUser();
   if (error || !user) return { ok: false, status: 401, error: "Unauthorized" };
 
-  const adminClient = createClient(supabaseUrl, serviceRoleKey);
   const [{ data: isAdmin }, { data: isLeader }] = await Promise.all([
     adminClient.rpc("has_role", { _user_id: user.id, _role: "admin" }),
     adminClient.rpc("has_role", { _user_id: user.id, _role: "lider" }),
