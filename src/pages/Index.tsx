@@ -225,10 +225,6 @@ export default function Index() {
               avatarUrl={profile?.avatar_url}
               phone={profile?.phone}
               whatsappNumber={profile?.whatsapp_number}
-              onOpenProfile={() => {
-                setProfileSubTab("configuracoes");
-                setActiveTab("perfil");
-              }}
             />
 
             {/* 1. Alertas Críticos e Notificações (PWA/Push) */}
