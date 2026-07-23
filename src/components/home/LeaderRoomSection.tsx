@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react"
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock, BookOpen, BarChart3, GraduationCap, FileText, BookMarked } from "lucide-react";
+import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock, BookOpen, BarChart3, GraduationCap, FileText, BookMarked, CircleCheck, CircleAlert } from "lucide-react";
+import CircularProgressBar from "@/components/ui/CircularProgressBar";
 
 const AttendanceTab = lazy(() => import("@/components/admin/tabs/AttendanceTab"));
 const MessagesTab = lazy(() => import("@/components/admin/tabs/MessagesTab"));
@@ -10,7 +11,7 @@ const ParticipantsTab = lazy(() => import("@/components/admin/tabs/ParticipantsT
 const AdminPushTab = lazy(() => import("@/components/admin/tabs/AdminPushTab"));
 const PushStatusList = lazy(() => import("@/components/admin/tabs/PushStatusList"));
 const CourseGuideSubTab = lazy(() => import("@/components/admin/tabs/leader/CourseGuideSubTab"));
-const OverviewTab = lazy(() => import("@/components/admin/tabs/OverviewTab"));
+const LeaderCareDashboard = lazy(() => import("@/components/admin/tabs/leader/LeaderCareDashboard"));
 const ReportsTab = lazy(() => import("@/components/admin/tabs/ReportsTab"));
 const LeaderTurmaManagement = lazy(() => import("@/components/admin/tabs/leader/LeaderTurmaManagement"));
 const LeaderGuideContent = lazy(() => import("@/components/home/LeaderGuideContent"));
@@ -112,9 +113,19 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [waitingCount, setWaitingCount] = useState(0);
+  const [memberLimit, setMemberLimit] = useState<number | null>(null);
 
   const turmaArea = effectiveArea || profile?.area || "";
   const churchId = profile?.church_id ?? null;
+
+  useEffect(() => {
+    if (!churchId) return;
+    void supabase.from("church_subscriptions")
+      .select("member_limit")
+      .eq("church_id", churchId)
+      .maybeSingle()
+      .then(({ data }) => setMemberLimit(data?.member_limit ?? null));
+  }, [churchId]);
 
   // Fetch waiting room count for the leader's area
   useEffect(() => {
@@ -275,6 +286,11 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
   if (!canView) return null;
 
   const communities = getCommunitiesForArea(turmaArea ?? "");
+  const advancedCount = participants.filter((participant) => activities.length > 0 && participant.completed_activity_ids.length / activities.length >= 0.7).length;
+  const alertCount = participants.filter((participant) => participant.completed_activity_ids.length === 0 || plans[participant.user_id]?.health_status === "critico" || plans[participant.user_id]?.needs_pastor).length;
+  const averageProgress = participants.length > 0
+    ? Math.round(participants.reduce((total, participant) => total + (activities.length > 0 ? participant.completed_activity_ids.length / activities.length * 100 : 0), 0) / participants.length)
+    : 0;
 
   return (
     <div className={asTab ? "" : "mx-5"}>
@@ -321,6 +337,33 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
 
       {expanded && (
         <div className={`${asTab ? "mt-2" : "mt-3"} animate-in slide-in-from-top-2 duration-200`}>
+          <section className="mb-4 rounded-2xl bg-slate-950 p-4 text-white shadow-sm" aria-label="Resumo da saúde da turma">
+            <div className="grid gap-4 sm:grid-cols-[1.15fr_.8fr_1.35fr]">
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-2 text-xs font-semibold text-white/70"><Users className="h-4 w-4 text-cyan-300" /> Ocupação da turma</span>
+                  <strong className="font-montserrat text-lg">{participants.length}{memberLimit ? `/${memberLimit}` : ""}</strong>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-label="Ocupação da turma" aria-valuemin={0} aria-valuemax={memberLimit ?? Math.max(participants.length, 1)} aria-valuenow={participants.length}>
+                  <div className="h-full rounded-full bg-cyan-300" style={{ width: `${memberLimit ? Math.min(100, participants.length / memberLimit * 100) : participants.length ? 100 : 0}%` }} />
+                </div>
+                <p className="mt-1.5 text-[11px] text-white/50">{memberLimit ? `${Math.max(memberLimit - participants.length, 0)} vagas disponíveis` : `${participants.length} participantes`}</p>
+              </div>
+              <div className="flex items-center justify-center gap-3 border-white/15 sm:border-x">
+                <CircularProgressBar progress={averageProgress} size={56} />
+                <div><p className="text-xs font-semibold text-white/70">Progresso médio</p><p className="mt-1 text-[11px] text-white/50">da turma</p></div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex items-center gap-2 rounded-xl border border-emerald-300/20 bg-emerald-400/10 px-3 py-2.5">
+                  <CircleCheck className="h-5 w-5 text-emerald-300" /><div><p className="font-montserrat text-lg font-black leading-none">{advancedCount}</p><p className="mt-1 text-[11px] text-emerald-100/70">Avançados</p></div>
+                </div>
+                <div className="flex items-center gap-2 rounded-xl border border-amber-300/20 bg-amber-400/10 px-3 py-2.5">
+                  <CircleAlert className="h-5 w-5 text-amber-300" /><div><p className="font-montserrat text-lg font-black leading-none">{alertCount}</p><p className="mt-1 text-[11px] text-amber-100/70">Em alerta</p></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* Sub-tab selector */}
           <div className="relative pb-4">
             {(() => {
@@ -435,14 +478,12 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                 className="animate-[tab-slide-in_0.35s_ease-out]"
               >
               {activeSubTab === "visao" && (
-                <OverviewTab
-                  participants={participants}
-                  activities={activities}
-                  plans={plans}
-                  onSelectParticipant={(p) => {
-                    setHighlightedParticipant(p);
-                    setActiveSubTab("encontros");
-                  }}
+                <LeaderCareDashboard
+                  area={turmaArea}
+                  churchId={churchId}
+                  turmaId={profile?.turma_id ?? null}
+                  participants={participants.map(({ user_id, full_name, birth_date }) => ({ user_id, full_name, birth_date }))}
+                  onNavigate={(tab) => setActiveSubTab(tab === "agenda" ? "encontros" : "roteiros")}
                 />
               )}
 
