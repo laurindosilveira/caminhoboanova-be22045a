@@ -89,7 +89,7 @@ export default function Index() {
     const navigatorWithStandalone = window.navigator as NavigatorWithStandalone;
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigatorWithStandalone.standalone === true;
     if (!isStandalone && !authLoading && !user) {
-      navigate("/apresentacao", { replace: true });
+      navigate("/portal", { replace: true });
     }
   }, [authLoading, user, navigate]);
 

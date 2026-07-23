@@ -57,22 +57,22 @@ describe('Minha Igreja RBAC and Functionality', () => {
 });
 
 describe('Routing Fallbacks', () => {
-  it('should redirect unauthenticated users to /apresentacao', () => {
+  it('should redirect unauthenticated users to /portal', () => {
     const user = null;
-    const redirect = !user ? '/apresentacao' : '/home';
-    expect(redirect).toBe('/apresentacao');
+    const redirect = !user ? '/portal' : '/home';
+    expect(redirect).toBe('/portal');
   });
 
   it('should redirect authenticated users to /home', () => {
     const user = { id: '123' };
-    const redirect = !user ? '/apresentacao' : '/home';
+    const redirect = !user ? '/portal' : '/home';
     expect(redirect).toBe('/home');
   });
 
   it('should redirect to /login if app is installed but user is not logged in', () => {
     const user = null;
     const installed = true;
-    let redirect = '/apresentacao';
+    let redirect = '/portal';
     if (user) {
       redirect = '/home';
     } else if (installed) {
@@ -84,14 +84,14 @@ describe('Routing Fallbacks', () => {
   it('should handle 404 catch-all for visitors', () => {
     const user = null;
     const path = '/random-path';
-    const redirect = !user ? '/apresentacao' : '/home';
-    expect(redirect).toBe('/apresentacao');
+    const redirect = !user ? '/portal' : '/home';
+    expect(redirect).toBe('/portal');
   });
 
   it('should handle 404 catch-all for logged-in users', () => {
     const user = { id: '123' };
     const path = '/random-path';
-    const redirect = !user ? '/apresentacao' : '/home';
+    const redirect = !user ? '/portal' : '/home';
     expect(redirect).toBe('/home');
   });
 });

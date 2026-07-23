@@ -24,7 +24,7 @@ function JsonLdScript() {
       operatingSystem: "Web",
       description:
         "Plataforma completa para engajar membros, acompanhar crescimento espiritual e simplificar a gestão pastoral da sua igreja.",
-      url: "https://caminhoboanova.lovable.app/apresentacao",
+      url: "https://www.caminhoboanova.com.br/portal",
       offers: [
         {
           "@type": "Offer",
@@ -109,7 +109,7 @@ function JsonLdScript() {
       canonical.setAttribute("rel", "canonical");
       document.head.appendChild(canonical);
     }
-    canonical.setAttribute("href", "https://caminhoboanova.lovable.app/apresentacao");
+    canonical.setAttribute("href", "https://www.caminhoboanova.com.br/portal");
 
     return () => {
       scripts.forEach((s) => s.remove());
@@ -205,10 +205,10 @@ export default function Apresentacao() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("checkout") === "success") {
       toast({ title: "🎉 Assinatura realizada!", description: "Bem-vindo ao Caminho Boa Nova! Você receberá um email de confirmação." });
-      window.history.replaceState({}, "", "/apresentacao");
+      window.history.replaceState({}, "", "/portal");
     } else if (params.get("checkout") === "cancel") {
       toast({ title: "Checkout cancelado", description: "Você pode assinar a qualquer momento." });
-      window.history.replaceState({}, "", "/apresentacao");
+      window.history.replaceState({}, "", "/portal");
     }
   }, []);
 

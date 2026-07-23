@@ -17,7 +17,7 @@ const NotFound = () => {
     const normalizedPath = normalizePath(location.pathname);
 
     if (normalizedPath.startsWith("/apresenta")) {
-      navigate("/apresentacao", { replace: true });
+      navigate("/portal", { replace: true });
       return;
     }
 
