@@ -42,7 +42,7 @@ export default function GameRulesDialog({ breakdown }: { breakdown: PointsBreakd
     { emoji: "⛪", label: "Culto confirmado", pts: "5 pts", desc: "cada culto aprovado" },
     { emoji: "✅", label: "Atividade completa", pts: "variável", desc: "pontos definidos por atividade" },
     { emoji: "🏆", label: "Conquista desbloqueada", pts: "+10 a +50", desc: "bônus por conquista" },
-    { emoji: "🔥", label: "Sequência (streak)", pts: "—", desc: "dias consecutivos com atividade" },
+    { emoji: "🔥", label: "Sequência (streak)", pts: "—", desc: "devocionais agendados concluídos; pausada nas semanas sem agenda" },
     { emoji: "🏅", label: "Quinzena perfeita", pts: "+30 pts", desc: "completar estudo + devocionais + presença nos últimos 15 dias" },
     { emoji: "📚", label: "Curso completo", pts: "+100 pts", desc: "bônus por concluir todas as lições de um curso" },
   ];

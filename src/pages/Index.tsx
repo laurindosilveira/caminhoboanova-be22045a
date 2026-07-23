@@ -204,6 +204,8 @@ export default function Index() {
       {/* Hero header — always visible */}
       <HeroHeader
         streakDays={stats.streakDays}
+        streakFrozen={stats.streakFrozen}
+        streakAtRisk={stats.streakAtRisk}
         faithPoints={stats.faithPoints}
         faithLevel={stats.faithLevel}
         faithEnergy={stats.faithEnergy}

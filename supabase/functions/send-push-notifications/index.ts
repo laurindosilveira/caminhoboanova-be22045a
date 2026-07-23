@@ -228,6 +228,9 @@ Deno.serve(async (req) => {
       const isPreferredHour = currentHourInTz === preferredHour;
 
       const notifications: PendingPushNotification[] = [];
+      const todaysDevotional = profile
+        ? findTodaysDevotional(scheduledLessonEvents ?? [], allDevContent ?? [], profile, sub.user_id, nowUtc, tz)
+        : null;
 
       // ── 3b. Upcoming events ────────────────────────────────────────────────
       const eventosOn = prefs ? prefs.eventos : true;
@@ -255,11 +258,10 @@ Deno.serve(async (req) => {
 
       // ── 3c. Streak risk (uses precomputed data — no extra DB query) ─────────
       const streakOn  = prefs ? prefs.streak : true;
-      const streakCfg = getAutom("streak_risk", "🔥 Sua sequência está em risco!", "Faz 2 dias sem devocional. Não deixe sua caminhada esfriar!");
+      const streakCfg = getAutom("streak_risk", "🔥 Sua sequência está em risco!", "Conclua o devocional agendado para hoje e mantenha sua sequência!");
       if (isPreferredHour && streakOn && streakCfg.enabled) {
-        const twoDaysAgo = new Date(nowUtc.getTime() - 2 * 24 * 60 * 60 * 1000);
         const ud = userDevData.get(sub.user_id);
-        if (ud && ud.completedIds.size > 0 && ud.mostRecentAt && ud.mostRecentAt < twoDaysAgo) {
+        if (todaysDevotional && !ud?.completedIds.has(todaysDevotional.id)) {
           notifications.push({
             title: streakCfg.title,
             body:  streakCfg.body,
@@ -281,10 +283,6 @@ Deno.serve(async (req) => {
         const ud = userDevData.get(sub.user_id);
         const todayInTz = getDatePartsInTimezone(nowUtc, tz).date;
         const latestDevDate = ud?.mostRecentAt ? getDatePartsInTimezone(ud.mostRecentAt, tz).date : null;
-
-        const todaysDevotional = profile
-          ? findTodaysDevotional(scheduledLessonEvents ?? [], allDevContent ?? [], profile, sub.user_id, nowUtc, tz)
-          : null;
 
         if (todaysDevotional && latestDevDate !== todayInTz && !ud?.completedIds.has(todaysDevotional.id)) {
           notifications.push({

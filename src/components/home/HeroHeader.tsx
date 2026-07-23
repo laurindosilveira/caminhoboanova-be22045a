@@ -6,12 +6,14 @@ import { toast } from "sonner";
 
 interface HeroHeaderProps {
   streakDays: number;
+  streakFrozen: boolean;
+  streakAtRisk: boolean;
   faithPoints: number;
   faithLevel: number;
   faithEnergy: number;
 }
 
-export default function HeroHeader({ streakDays, faithPoints, faithLevel, faithEnergy }: HeroHeaderProps) {
+export default function HeroHeader({ streakDays, streakFrozen, streakAtRisk, faithPoints, faithLevel, faithEnergy }: HeroHeaderProps) {
   const { profile, role, signOut } = useAuth();
   const { effectiveArea, setEffectiveArea, isOverriding } = useAreaSwitch();
   const firstName = profile?.full_name?.split(" ")[0] ?? "Bem-vindo";
@@ -80,12 +82,14 @@ export default function HeroHeader({ streakDays, faithPoints, faithLevel, faithE
 
         {/* Stats row */}
         <div className="grid grid-cols-3 gap-2.5" role="group" aria-label="Estatísticas de progresso">
-          <div className="bg-white/10 backdrop-blur rounded-2xl p-3 flex flex-col items-center gap-1" aria-label={`${streakDays} dias seguidos`}>
+          <div className="bg-white/10 backdrop-blur rounded-2xl p-3 flex flex-col items-center gap-1" aria-label={`${streakDays} dias de sequência${streakFrozen ? ", pausada até o próximo devocional" : streakAtRisk ? ", em risco hoje" : ""}`}>
             <div className="flex items-center gap-1">
               <Flame className="w-5 h-5 text-secondary" style={{ fill: "hsl(var(--secondary))" }} aria-hidden="true" />
               <span className="font-montserrat font-black text-primary-foreground text-xl">{streakDays}</span>
             </div>
-            <span className="text-primary-foreground/60 text-xs font-inter">dias seguidos</span>
+            <span className="text-primary-foreground/60 text-[11px] font-inter text-center leading-tight">
+              {streakFrozen ? "sequência pausada" : streakAtRisk ? "faça o de hoje" : "dias de sequência"}
+            </span>
           </div>
 
           <div className="bg-white/10 backdrop-blur rounded-2xl p-3 flex flex-col items-center gap-1" aria-label={`${faithPoints} pontos da fé`}>

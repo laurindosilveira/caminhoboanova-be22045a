@@ -29,8 +29,17 @@ export default function PasskeySettings() {
   const [registering, setRegistering] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
+  const [supported, setSupported] = useState(true);
 
   useEffect(() => {
+    if (!window.PublicKeyCredential) {
+      setSupported(false);
+      setLoading(false);
+      return;
+    }
+    void PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+      .then(setSupported)
+      .catch(() => setSupported(false));
     fetchPasskeys();
   }, []);
 
@@ -48,6 +57,10 @@ export default function PasskeySettings() {
   }
 
   async function handleAddPasskey() {
+    if (!supported) {
+      toast.error("Este aparelho ou navegador não oferece biometria compatível.");
+      return;
+    }
     try {
       setRegistering(true);
       const { error } = await passkeyAuth.registerPasskey();
@@ -58,7 +71,10 @@ export default function PasskeySettings() {
       fetchPasskeys();
     } catch (err: any) {
       console.error("Error registering passkey:", err);
-      toast.error("Erro ao cadastrar biometria: " + err.message);
+      const message = String(err?.message ?? "");
+      toast.error(/passkeys are disabled|passkey_disabled/i.test(message)
+        ? "A biometria ainda não foi ativada para este aplicativo."
+        : "Erro ao cadastrar biometria: " + message);
     } finally {
       setRegistering(false);
     }
@@ -120,7 +136,7 @@ export default function PasskeySettings() {
         <Button 
           size="sm" 
           onClick={handleAddPasskey}
-          disabled={registering}
+          disabled={registering || !supported}
           className="rounded-xl h-9"
         >
           {registering ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
@@ -129,6 +145,11 @@ export default function PasskeySettings() {
       </div>
 
       <div className="space-y-2">
+        {!supported && (
+          <p className="rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
+            A biometria não está disponível neste aparelho ou navegador.
+          </p>
+        )}
         {passkeys.length === 0 ? (
           <div className="bg-muted/30 border border-dashed border-border rounded-2xl p-6 text-center">
             <Fingerprint className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
