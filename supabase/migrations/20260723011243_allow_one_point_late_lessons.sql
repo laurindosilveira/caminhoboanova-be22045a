@@ -11,6 +11,9 @@ BEGIN
   ) INTO function_definition;
 
   IF position(old_branch IN function_definition) = 0 THEN
+    IF position(new_branch IN function_definition) > 0 THEN
+      RETURN;
+    END IF;
     RAISE EXCEPTION 'Expected reduced-points branch was not found in complete_lesson';
   END IF;
 
