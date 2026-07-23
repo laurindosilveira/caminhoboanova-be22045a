@@ -114,7 +114,7 @@ function RootRedirect() {
     return <Navigate to="/login" replace />;
   }
 
-  return <Navigate to="/apresentacao" replace />;
+  return <Navigate to="/portal" replace />;
 }
 
 function NotFoundRedirect() {
@@ -122,7 +122,7 @@ function NotFoundRedirect() {
   if (loading) return <LoadingFallback />;
   
   // For unauthenticated visitors or specific cases, always go to presentation
-  if (!user) return <Navigate to="/apresentacao" replace />;
+  if (!user) return <Navigate to="/portal" replace />;
   
   // Fallback for logged in users
   return <Navigate to="/home" replace />;
@@ -171,7 +171,8 @@ const AppRoutes = () => (
       <Route path="/verificar-email" element={<VerifyEmail />} />
       <Route path="/redefinir-senha" element={<ResetPassword />} />
       <Route path="/instalar" element={<Install />} />
-      <Route path="/apresentacao" element={<Apresentacao />} />
+      <Route path="/portal" element={<Apresentacao />} />
+      <Route path="/apresentacao" element={<Navigate to="/portal" replace />} />
       <Route path="/area-membros" element={<PublicRoute><AreaMembros /></PublicRoute>} />
       <Route path="/exportar-dados" element={<ProtectedRoute><PlanGate feature="advancedExport"><ExportData /></PlanGate></ProtectedRoute>} />
       <Route path="/minha-igreja" element={<ProtectedRoute><MinhaIgreja /></ProtectedRoute>} />

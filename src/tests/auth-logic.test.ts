@@ -47,13 +47,13 @@ describe('Routing Fallback', () => {
     const path = '/any-random-route';
     
     // Logic from NotFoundRedirect
-    const target = !user ? '/apresentacao' : '/home';
-    expect(target).toBe('/apresentacao');
+    const target = !user ? '/portal' : '/home';
+    expect(target).toBe('/portal');
   });
 
   it('should go to home for authenticated users on 404', () => {
     const user = { id: '123' };
-    const target = !user ? '/apresentacao' : '/home';
+    const target = !user ? '/portal' : '/home';
     expect(target).toBe('/home');
   });
 });
