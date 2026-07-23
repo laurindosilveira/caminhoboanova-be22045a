@@ -29,10 +29,21 @@ export async function subscribeToWebPush(vapidPublicKey: string): Promise<boolea
 
     // Check for existing subscription
     let subscription = await pushManager.getSubscription();
+    const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
+
+    if (subscription && !sameApplicationServerKey(subscription.options.applicationServerKey, applicationServerKey)) {
+      const staleEndpoint = subscription.endpoint;
+      await subscription.unsubscribe();
+      subscription = null;
+
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) {
+        await supabase.from("push_subscriptions").delete().eq("user_id", currentUser.id).eq("endpoint", staleEndpoint);
+      }
+    }
 
     if (!subscription) {
       // Subscribe with VAPID key
-      const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
       subscription = await pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: applicationServerKey as any,
@@ -65,6 +76,13 @@ export async function subscribeToWebPush(vapidPublicKey: string): Promise<boolea
     console.error("Web Push subscription failed:", err);
     return false;
   }
+}
+
+function sameApplicationServerKey(current: ArrayBuffer | null, expected: Uint8Array): boolean {
+  if (!current) return false;
+  const currentBytes = new Uint8Array(current);
+  if (currentBytes.length !== expected.length) return false;
+  return currentBytes.every((value, index) => value === expected[index]);
 }
 
 /**

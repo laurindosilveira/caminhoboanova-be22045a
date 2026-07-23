@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
     // Devotional content: id → lesson_id, lesson_id → Set<devId>
     const { data: allDevContent } = await supabase
       .from("devotional_content")
-      .select("id, lesson_id");
+      .select("id, lesson_id, day_number, title");
     const devToLesson  = new Map<string, string>();
     const lessonToDevs = new Map<string, Set<string>>();
     for (const d of allDevContent ?? []) {
@@ -100,7 +100,12 @@ Deno.serve(async (req) => {
       if (!lessonToDevs.has(d.lesson_id)) lessonToDevs.set(d.lesson_id, new Set());
       lessonToDevs.get(d.lesson_id)!.add(d.id);
     }
-    const totalDevotionalCount = allDevContent?.length ?? 0;
+    const { data: scheduledLessonEvents, error: scheduledEventsError } = await supabase
+      .from("events")
+      .select("event_date, linked_lesson_id, area, community, turma_id, target_user_id, released_devotional_days")
+      .not("linked_lesson_id", "is", null)
+      .order("event_date", { ascending: true });
+    if (scheduledEventsError) throw scheduledEventsError;
 
     // All devotional progress for subscribed users (desc → first entry = most recent)
     const { data: allDevProgress } = await supabase
@@ -163,11 +168,11 @@ Deno.serve(async (req) => {
     // without it instead of breaking the whole notification run.
     let { data: profiles, error: profilesError } = await supabase
       .from("profiles")
-      .select("user_id, full_name, community, area, birth_date, enrollment_status");
+      .select("user_id, full_name, community, area, turma_id, birth_date, enrollment_status");
     if (profilesError?.message?.includes("enrollment_status")) {
       const retry = await supabase
         .from("profiles")
-        .select("user_id, full_name, community, area, birth_date");
+        .select("user_id, full_name, community, area, turma_id, birth_date");
       profiles = retry.data;
       profilesError = retry.error;
     }
@@ -277,13 +282,16 @@ Deno.serve(async (req) => {
         const todayInTz = getDatePartsInTimezone(nowUtc, tz).date;
         const latestDevDate = ud?.mostRecentAt ? getDatePartsInTimezone(ud.mostRecentAt, tz).date : null;
 
-        if (latestDevDate !== todayInTz && (totalDevotionalCount === 0 || (ud?.completedIds.size ?? 0) < totalDevotionalCount)) {
-          const hasStarted = (ud?.completedIds.size ?? 0) > 0;
+        const todaysDevotional = profile
+          ? findTodaysDevotional(scheduledLessonEvents ?? [], allDevContent ?? [], profile, sub.user_id, nowUtc, tz)
+          : null;
+
+        if (todaysDevotional && latestDevDate !== todayInTz && !ud?.completedIds.has(todaysDevotional.id)) {
           notifications.push({
             title: devotionalCfg.title,
-            body: hasStarted
-              ? devotionalCfg.body.replaceAll("{N}", "1")
-              : "Comece sua caminhada devocional hoje. O primeiro passo ja esta disponivel.",
+            body: todaysDevotional.title
+              ? `${todaysDevotional.title} esta esperando por voce.`
+              : devotionalCfg.body.replaceAll("{N}", "1"),
             tag: `devotional-${todayInTz}`,
             type: "devotional_reminder",
             url: "/?tab=discipulado",
@@ -379,7 +387,7 @@ Deno.serve(async (req) => {
           } else {
             recordDeliveryLog(deliveryLogStats, notif, false);
           }
-          if (err.status === 410 || err.status === 404) failedEndpoints.push(sub.endpoint);
+          if ([400, 401, 403, 404, 410].includes(err.status)) failedEndpoints.push(sub.endpoint);
         }
       }
     }
@@ -562,6 +570,63 @@ function getDatePartsInTimezone(date: Date, tz: string): { date: string; month: 
 function parseDateOnly(date: string): { month: number; day: number } {
   const [, month, day] = date.split("-").map(Number);
   return { month, day };
+}
+
+function dateKeyToUtcNoon(dateKey: string): Date {
+  return new Date(`${dateKey}T12:00:00Z`);
+}
+
+function utcDateKey(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function businessDateKeysBefore(eventDateKey: string, count: number): string[] {
+  const days: string[] = [];
+  const cursor = dateKeyToUtcNoon(eventDateKey);
+  cursor.setUTCDate(cursor.getUTCDate() - 1);
+  while (days.length < count) {
+    if (cursor.getUTCDay() !== 0 && cursor.getUTCDay() !== 6) days.unshift(utcDateKey(cursor));
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+  }
+  return days;
+}
+
+function findTodaysDevotional(
+  events: any[],
+  devotionals: any[],
+  profile: any,
+  userId: string,
+  now: Date,
+  timezone: string,
+) {
+  const relevantEvents = events.filter((event) =>
+    (!event.target_user_id || event.target_user_id === userId)
+    && (!event.area || event.area === profile.area)
+    && (!event.turma_id || event.turma_id === profile.turma_id)
+    && (!event.community || event.community === profile.community)
+  );
+  const todayKey = getDatePartsInTimezone(now, timezone).date;
+
+  for (let index = 0; index < relevantEvents.length; index++) {
+    const event = relevantEvents[index];
+    if (!event.linked_lesson_id) continue;
+    const eventDateKey = getDatePartsInTimezone(new Date(event.event_date), timezone).date;
+    const previous = index > 0 ? relevantEvents[index - 1] : null;
+    const autoLimited = previous
+      ? Math.round((new Date(event.event_date).getTime() - new Date(previous.event_date).getTime()) / 86400000) < 10
+      : false;
+    const allDates = businessDateKeysBefore(eventDateKey, 10);
+    const effectiveDates = autoLimited ? allDates.slice(5) : allDates;
+    const dayIndex = effectiveDates.indexOf(todayKey);
+    if (dayIndex < 0) continue;
+    const dayNumber = dayIndex + 1;
+    const releasedDays = Array.isArray(event.released_devotional_days) ? event.released_devotional_days : null;
+    if (releasedDays && !releasedDays.includes(dayNumber)) return null;
+    return devotionals.find((devotional) =>
+      devotional.lesson_id === event.linked_lesson_id && devotional.day_number === dayNumber
+    ) ?? null;
+  }
+  return null;
 }
 
 async function sendWebPush(
