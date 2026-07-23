@@ -159,9 +159,15 @@ export default function FocusSection({ onNavigateToDiscipulado }: FocusSectionPr
 
       const studiedLessons = new Set(lessonResponses?.map(r => r.lesson_id) || []);
 
-      const pendingLessonEntry = agenda.schedule.find(e =>
-        !studiedLessons.has(e.lessonId) && today.getTime() >= new Date(e.eventDate).setHours(0, 0, 0, 0)
-      );
+      // Jornada mostra somente a lição que está na vez na agenda. Lições antigas
+      // pendentes são tratadas separadamente na aba Caminho.
+      const latestStartedEntry = [...agenda.schedule]
+        .reverse()
+        .find(e => today.getTime() >= new Date(e.eventDate).setHours(0, 0, 0, 0));
+      const scheduledFocusEntry = agenda.currentEntry ?? latestStartedEntry ?? null;
+      const pendingLessonEntry = scheduledFocusEntry && !studiedLessons.has(scheduledFocusEntry.lessonId)
+        ? scheduledFocusEntry
+        : null;
 
       if (pendingLessonEntry) {
         setNextActivity({
@@ -178,7 +184,7 @@ export default function FocusSection({ onNavigateToDiscipulado }: FocusSectionPr
     }
 
     checkStatus();
-  }, [agenda.loading, agenda.schedule, user]);
+  }, [agenda.currentEntry, agenda.loading, agenda.schedule, user]);
 
   if (loading) return null;
 

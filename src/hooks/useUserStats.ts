@@ -61,8 +61,8 @@ async function fetchUserStats(
     churchId ? supabase.from("user_progress").select("activity_id, completed_at, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("user_progress").select("activity_id, completed_at, church_id").eq("user_id", userId),
     churchId ? supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery, awarded_points, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery, awarded_points, church_id").eq("user_id", userId),
     churchId
-      ? supabase.from("lesson_progress").select("lesson_id, church_id").eq("user_id", userId).eq("is_completed", true).or(`church_id.is.null,church_id.eq.${churchId}`)
-      : supabase.from("lesson_progress").select("lesson_id, church_id").eq("user_id", userId).eq("is_completed", true),
+      ? supabase.from("lesson_progress").select("lesson_id, awarded_points, church_id").eq("user_id", userId).eq("is_completed", true).or(`church_id.is.null,church_id.eq.${churchId}`)
+      : supabase.from("lesson_progress").select("lesson_id, awarded_points, church_id").eq("user_id", userId).eq("is_completed", true),
     churchId ? supabase.from("attendance").select("event_id, status, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("attendance").select("event_id, status, church_id").eq("user_id", userId),
     churchId ? supabase.from("worship_attendance").select("id, status, church_id").eq("user_id", userId).eq("status", "aprovado").eq("church_id", churchId) : supabase.from("worship_attendance").select("id, status, church_id").eq("user_id", userId).eq("status", "aprovado"),
     churchId ? supabase.from("achievement_unlocks").select("achievement_key, bonus_points, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("achievement_unlocks").select("achievement_key, bonus_points, church_id").eq("user_id", userId),
@@ -153,7 +153,8 @@ async function fetchUserStats(
   }
 
   const completedLessonIds = new Set((lessonResponses ?? []).map((r: any) => r.lesson_id));
-  const lessonStudyPoints = completedLessonIds.size * cfg.lessonPoints;
+  const lessonStudyPoints = (lessonResponses ?? []).reduce((sum: number, lesson: any) =>
+    sum + (typeof lesson.awarded_points === "number" ? lesson.awarded_points : cfg.lessonPoints), 0);
 
   const attendancePoints = presentAttendance.reduce((sum: number, a: any) => {
     const eventType = eventTypeById.get(a.event_id);

@@ -393,7 +393,7 @@ function LessonButton({
   let lockMessage = "";
   if (isNotScheduled) lockMessage = "Aguardando agenda";
   else if (hasManualOverride) lockMessage = "Liberação manual do líder";
-  else if (isLateAccess) lockMessage = "Acesso tardio — sem pontuação";
+  else if (isLateAccess) lockMessage = "Lição atrasada — vale 1 ponto";
   else if (isLocked) {
     const entry = agendaSchedule.schedule.find(e => e.lessonId === lesson.id);
     lockMessage = entry
@@ -466,7 +466,7 @@ function LessonButton({
         </div>
         {isFullyDone
           ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-brand-green/15 text-brand-green px-2 py-0.5 rounded-full">✓ Completa</span>
-          : isLateAccess ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Prazo encerrado</span>
+          : isLateAccess ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Atrasada · +1 ponto</span>
           : isDone && !(isLocked || isNotScheduled) ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-secondary/15 text-secondary px-2 py-0.5 rounded-full">Em andamento</span>
           : (isLocked || isNotScheduled) ? <Lock className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
           : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
