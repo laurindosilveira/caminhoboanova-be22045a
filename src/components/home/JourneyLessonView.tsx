@@ -314,7 +314,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
       p_responses: responses,
       p_video_watched: videoWatched,
       p_audio_listened: audioListened,
-      p_awarded_points: isLateAccess ? 0 : awardedPoints,
+      p_awarded_points: isLateAccess ? 1 : awardedPoints,
       p_override_release_id: overrideId,
     });
     if (error) {
@@ -330,19 +330,14 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     setLastSaved(new Date());
     onComplete?.(lesson.id);
 
-    if (!isLateAccess) {
-      // Celebration animation
-      window.dispatchEvent(new CustomEvent("show-celebration", {
-        detail: {
-          type: "lesson",
-          points: 20
-        }
-      }));
-      setShowCompletionAnim(true);
-      setTimeout(() => setShowCompletionAnim(false), 3500);
-    }
+    const earnedPoints = isLateAccess ? 1 : (awardedPoints ?? 20);
+    window.dispatchEvent(new CustomEvent("show-celebration", {
+      detail: { type: "lesson", points: earnedPoints }
+    }));
+    setShowCompletionAnim(true);
+    setTimeout(() => setShowCompletionAnim(false), 3500);
 
-    toast.success(isLateAccess ? "Respostas salvas! (sem pontuação — prazo encerrado)" : "Lição concluída e respostas salvas!");
+    toast.success(isLateAccess ? "Lição atrasada concluída! Você ganhou 1 ponto." : "Lição concluída e respostas salvas!");
   }
 
   function updateResponse(key: string, value: string) {
