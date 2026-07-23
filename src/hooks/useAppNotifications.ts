@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { isNotificationEnabled, sendNotification } from "@/lib/notifications";
+import { subscribeToWebPush } from "@/lib/webPush";
 
 const NOTIF_SENT_PREFIX = "caminho_notif_sent_";
 const NOTIF_RUN_KEY = "caminho_notif_run_today";
@@ -26,12 +27,13 @@ function markSentToday(key: string) {
 type UserProfileLite = {
   area: string | null;
   community: string | null;
+  turma_id: string | null;
 };
 
 async function getCurrentUserProfile(userId: string): Promise<UserProfileLite | null> {
   const { data } = await supabase
     .from("profiles")
-    .select("area, community")
+    .select("area, community, turma_id")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -63,6 +65,11 @@ export function useAppNotifications() {
   useEffect(() => {
     if (!user) return;
     if (!isNotificationEnabled()) return;
+
+    void supabase.functions.invoke("get-vapid-key").then(({ data, error }) => {
+      if (!error && data?.publicKey) void subscribeToWebPush(data.publicKey);
+    });
+
     if (wasRunToday()) return;
 
     async function checkAndNotify() {
@@ -102,42 +109,83 @@ async function checkDevocional() {
     if (!user) return;
 
     const profile = await getCurrentUserProfile(user.id);
-    const userArea = profile?.area ?? "";
+    if (!profile) return;
 
-    const [{ data: lessons }, { data: devs }, { data: prog }, { data: unlocks }] = await Promise.all([
-      supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
-      supabase.from("devotional_content").select("id, lesson_id"),
+    const [{ data: events }, { data: devs }, { data: prog }] = await Promise.all([
+      supabase.from("events").select("event_date, linked_lesson_id, area, community, turma_id, target_user_id, released_devotional_days").not("linked_lesson_id", "is", null).order("event_date"),
+      supabase.from("devotional_content").select("id, lesson_id, day_number, title"),
       supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
-      supabase.from("course_unlocks").select("course_id").eq("area", userArea),
     ]);
-
-    const unlockedCourseIds = new Set((unlocks ?? []).map((unlock) => unlock.course_id));
     const completedSet = new Set((prog ?? []).map((item) => item.devotional_id));
+    const relevantEvents = (events ?? []).filter(event =>
+      (!event.target_user_id || event.target_user_id === user.id)
+      && (!event.area || event.area === profile.area)
+      && (!event.turma_id || event.turma_id === profile.turma_id)
+      && (!event.community || event.community === profile.community)
+    );
+    const today = startOfDay(new Date());
+    const current = findCurrentDevotional(relevantEvents, today);
+    if (!current) return;
 
-    const lessonDevMap: Record<string, { total: number; completed: number }> = {};
-    (devs ?? []).forEach((devotional) => {
-      if (!devotional.lesson_id) return;
-      if (!lessonDevMap[devotional.lesson_id]) lessonDevMap[devotional.lesson_id] = { total: 0, completed: 0 };
-      lessonDevMap[devotional.lesson_id].total++;
-      if (completedSet.has(devotional.id)) lessonDevMap[devotional.lesson_id].completed++;
-    });
+    const devotional = (devs ?? []).find(item =>
+      item.lesson_id === current.lessonId
+      && item.day_number === current.dayNumber
+      && !completedSet.has(item.id)
+    );
+    if (!devotional) return;
 
-    const accessibleLessons = (lessons ?? []).filter((lesson) => unlockedCourseIds.has(lesson.course_id));
-    for (const lesson of accessibleLessons) {
-      const info = lessonDevMap[lesson.id];
-      if (info && info.completed < info.total) {
-        const pending = info.total - info.completed;
-        await sendNotification(
-          "Devocional pendente!",
-          `Voce tem ${pending} devocional${pending > 1 ? "is" : ""} da Licao ${lesson.order_num} esperando. Nao perca sua caminhada!`,
-        );
-        markSentToday("devocional");
-        return;
-      }
-    }
+    await sendNotification(
+      "Devocional do dia",
+      devotional.title ? `${devotional.title} está esperando por você.` : "Seu devocional de hoje está esperando por você.",
+    );
+    markSentToday("devocional");
   } catch (err) {
     console.warn("Devocional notification check failed", err);
   }
+}
+
+type ScheduledDevotionalEvent = {
+  event_date: string;
+  linked_lesson_id: string | null;
+  released_devotional_days: number[] | null;
+};
+
+function startOfDay(value: Date) {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function businessDaysBefore(eventDate: Date, count: number) {
+  const days: Date[] = [];
+  const cursor = startOfDay(eventDate);
+  cursor.setDate(cursor.getDate() - 1);
+  while (days.length < count) {
+    if (cursor.getDay() !== 0 && cursor.getDay() !== 6) days.unshift(new Date(cursor));
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return days;
+}
+
+function findCurrentDevotional(events: ScheduledDevotionalEvent[], today: Date) {
+  for (let index = 0; index < events.length; index++) {
+    const event = events[index];
+    if (!event.linked_lesson_id) continue;
+    const eventDate = new Date(event.event_date);
+    const previousDate = index > 0 ? new Date(events[index - 1].event_date) : null;
+    const autoLimited = previousDate
+      ? Math.round((eventDate.getTime() - previousDate.getTime()) / 86400000) < 10
+      : false;
+    const dates = businessDaysBefore(eventDate, 10);
+    const effectiveDates = autoLimited ? dates.slice(5) : dates;
+    const dayIndex = effectiveDates.findIndex(date => date.getTime() === today.getTime());
+    if (dayIndex < 0) continue;
+    const dayNumber = dayIndex + 1;
+    const released = event.released_devotional_days;
+    if (released && !released.includes(dayNumber)) return null;
+    return { lessonId: event.linked_lesson_id, dayNumber };
+  }
+  return null;
 }
 
 async function checkStreak() {
