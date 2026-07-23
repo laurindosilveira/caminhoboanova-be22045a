@@ -28,6 +28,7 @@ import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import { supabase } from "@/integrations/supabase/client";
 import CelebrationModal, { type CelebrationType } from "@/components/gamification/CelebrationModal";
 import NextCourseActivityCard from "@/components/home/NextCourseActivityCard";
+import ProfileCompletionAlerts from "@/components/home/ProfileCompletionAlerts";
 
 // Lazy load tab contents for better performance
 const CommunityTab = lazy(() => import("@/components/home/CommunityTab"));
@@ -220,6 +221,16 @@ export default function Index() {
         {/* ===== JORNADA ===== */}
         {activeTab === "jornada" && (
           <>
+            <ProfileCompletionAlerts
+              avatarUrl={profile?.avatar_url}
+              phone={profile?.phone}
+              whatsappNumber={profile?.whatsapp_number}
+              onOpenProfile={() => {
+                setProfileSubTab("configuracoes");
+                setActiveTab("perfil");
+              }}
+            />
+
             {/* 1. Alertas Críticos e Notificações (PWA/Push) */}
             <PushActivationBanner />
 

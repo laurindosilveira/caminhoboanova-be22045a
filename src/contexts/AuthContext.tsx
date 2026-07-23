@@ -9,6 +9,7 @@ interface Profile {
   full_name: string;
   birth_date: string;
   phone: string;
+  whatsapp_number?: string | null;
   community: string;
   area: string;
   church_id?: string | null;

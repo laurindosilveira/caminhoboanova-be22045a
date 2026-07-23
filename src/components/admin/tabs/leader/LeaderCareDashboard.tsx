@@ -723,10 +723,23 @@ function QuickActions({ member, saving, onComplete, onContact, onSchedule, onWha
 }
 
 function MemberIdentity({ member }: { member: CareMember }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [member.avatar_url]);
+
+  const showPhoto = Boolean(member.avatar_url) && !imageFailed;
+
   return (
     <div className="flex min-w-0 items-center gap-3">
-      {member.avatar_url ? (
-        <img src={member.avatar_url} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
+      {showPhoto ? (
+        <img
+          src={member.avatar_url ?? undefined}
+          alt={`Foto de ${member.full_name}`}
+          className="h-9 w-9 shrink-0 rounded-full object-cover"
+          onError={() => setImageFailed(true)}
+        />
       ) : (
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
           {initials(member.full_name)}
