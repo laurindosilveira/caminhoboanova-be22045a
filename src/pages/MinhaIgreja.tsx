@@ -225,7 +225,7 @@ export default function MinhaIgreja() {
   const activeFeatures = [
     { label: "Membros", value: features.maxMembers || "Ilimitado", active: true },
     { label: "Exportação Avançada", active: features.advancedExport },
-    { label: "Multi-Áreas", active: features.multiAreaManagement },
+    { label: "Multi-GCs", active: features.multiAreaManagement },
     { label: "Relatórios Detalhados", active: features.detailedReports },
     { label: "Customização de Marca", active: features.customBranding },
   ];
@@ -256,7 +256,7 @@ export default function MinhaIgreja() {
         </button>
         <div>
           <h1 className="font-montserrat font-black text-xl text-foreground">⛪ {(profile as any)?.churches?.name || profile?.community || "Minha Igreja"}</h1>
-          <p className="text-muted-foreground text-[10px] font-inter uppercase font-bold tracking-wider">{role === 'admin' ? 'Administrador' : role === 'lider' ? 'Líder de Área' : 'Membro'}</p>
+          <p className="text-muted-foreground text-[10px] font-inter uppercase font-bold tracking-wider">{role === 'admin' ? 'Administrador' : role === 'lider' ? 'Líder de GC' : 'Membro'}</p>
         </div>
         <div className="ml-auto flex gap-2">
           {!isMembro && (

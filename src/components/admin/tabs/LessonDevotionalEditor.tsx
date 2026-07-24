@@ -555,7 +555,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="font-inter text-xs font-semibold text-foreground">
-                        {ev.area ?? "Sem área"} · {format(new Date(ev.event_date), "d 'de' MMM 'às' HH:mm", { locale: ptBR })}
+                        {ev.area ?? "Sem GC"} · {format(new Date(ev.event_date), "d 'de' MMM 'às' HH:mm", { locale: ptBR })}
                       </p>
                       {ev.intervalDays !== null && (
                         <p className="text-muted-foreground font-inter text-[10px] mt-0.5">

@@ -151,8 +151,8 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
     
     // Protection: If a lesson is linked, area must be selected (if scope is area)
     if (form.linked_lesson_id && form.scope === "area" && !form.area) {
-      toast.error("Selecione uma Área para esta lição!", {
-        description: "Lições vinculadas precisam de uma área definida para que os alunos consigam acessá-la.",
+      toast.error("Selecione um GC para esta lição!", {
+        description: "Lições vinculadas precisam de um Grupo de Crescimento definido para que os alunos consigam acessá-las.",
       });
       return;
     }
@@ -410,7 +410,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
 
       {/* Area filter — hidden in leaderMode */}
       {!leaderMode && (
-        <div className="scroll-menu gap-1.5 pb-1" aria-label="Filtro por área">
+        <div className="scroll-menu gap-1.5 pb-1" aria-label="Filtro por GC">
           {["all", ...AREAS].map(val => (
             <button
               key={val}
@@ -613,7 +613,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
               <div className="grid grid-cols-2 gap-2">
                 {[
                   ...(profile?.turma_id ? [{ value: "turma" as const, label: "Minha Turma", icon: "🎓" }] : []),
-                  { value: "area" as const, label: currentArea || "Minha Área", icon: "📍" },
+                  { value: "area" as const, label: currentArea || "Meu GC", icon: "📍" },
                 ].map(opt => (
                   <button
                     key={opt.value}

@@ -465,7 +465,7 @@ export default function Register() {
               </div>
               <div className="bg-secondary/10 border border-secondary/30 rounded-xl px-4 py-3">
                 <p className="text-secondary font-inter text-xs font-medium">
-                  Sua área e comunidade serão designadas pela liderança da igreja após o cadastro.
+                  Seu Grupo de Crescimento (GC) e sua comunidade serão designados pela liderança da igreja após o cadastro.
                 </p>
               </div>
               {error && (

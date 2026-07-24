@@ -385,11 +385,11 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
               {(leaderMode
                 ? [
                     ...(profile?.turma_id ? [{ value: "turma" as const, label: "Minha Turma", icon: GraduationCap }] : []),
-                    { value: "area" as const, label: effectiveArea || "Minha Área", icon: MapPin },
+                    { value: "area" as const, label: effectiveArea || "Meu GC", icon: MapPin },
                   ]
                 : [
                     { value: "all" as const, label: "Todos", icon: Globe },
-                    { value: "area" as const, label: effectiveArea || "Minha area", icon: MapPin },
+                    { value: "area" as const, label: effectiveArea || "Meu GC", icon: MapPin },
                     { value: "community" as const, label: "Comunidade", icon: Users },
                     ...(turmas.length > 0 ? [{ value: "turma" as const, label: "Turma", icon: GraduationCap }] : []),
                   ]

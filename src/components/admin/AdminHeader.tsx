@@ -181,7 +181,7 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
             className="mb-3 flex items-center gap-1.5 font-inter text-xs text-white/70 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
-            Voltar para área geral
+            Voltar para visão geral
           </button>
 
           <div className="mb-5 flex items-start justify-between gap-3">

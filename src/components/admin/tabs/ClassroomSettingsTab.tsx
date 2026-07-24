@@ -206,14 +206,14 @@ export default function ClassroomSettingsTab() {
             <Phone className="w-5 h-5 text-green-600" />
           </div>
           <div>
-            <h2 className="font-montserrat font-black text-foreground text-lg">Pastor por Área</h2>
+            <h2 className="font-montserrat font-black text-foreground text-lg">Pastor por GC</h2>
             <p className="text-muted-foreground text-xs font-inter">Contato que aparece no botão "Pedir ajuda" dos líderes</p>
           </div>
         </div>
 
         <div className="mb-4">
           <label className="text-xs font-montserrat font-bold text-muted-foreground uppercase tracking-wide mb-2 block">
-            Área
+            Grupo de Crescimento (GC)
           </label>
           <div className="flex gap-2">
             {AREAS.map((a) => (

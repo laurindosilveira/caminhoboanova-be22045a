@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { AREAS } from "@/config/areas";
+import { AREAS, formatGrowthGroupName } from "@/config/areas";
 import { supabase } from "@/integrations/supabase/client";
 import { Plus, Trash2, GraduationCap, Calendar, Pencil, Archive, CheckCircle2, RotateCcw, ChevronDown, ChevronUp, Download, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -272,7 +272,7 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
               <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ex: Confirmatório 2026/1" className="rounded-xl" />
             </div>
             <div>
-              <label className="text-xs font-inter font-medium text-muted-foreground mb-1 block">Área (opcional)</label>
+              <label className="text-xs font-inter font-medium text-muted-foreground mb-1 block">Grupo de Crescimento (opcional)</label>
               <div className="flex gap-2">
                 <button onClick={() => setForm(f => ({ ...f, area: "" }))}
                   className={`flex-1 py-2 rounded-xl text-xs font-montserrat font-bold transition-all border ${!form.area ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border"}`}>
@@ -281,7 +281,7 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
                 {AREAS.map(area => (
                   <button key={area} onClick={() => setForm(f => ({ ...f, area }))}
                     className={`flex-1 py-2 rounded-xl text-xs font-montserrat font-bold transition-all border ${form.area === area ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border"}`}>
-                    {area}
+                    {formatGrowthGroupName(area)}
                   </button>
                 ))}
               </div>
@@ -438,7 +438,7 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
                     <div className="flex-1 min-w-0">
                       <p className="font-montserrat font-bold text-foreground text-sm truncate">{turma.name}</p>
                       <p className="text-muted-foreground text-xs font-inter mt-0.5">
-                        {turma.year} · {turma.area || "Todas as áreas"} · {turma.member_count ?? 0} membro{(turma.member_count ?? 0) !== 1 ? "s" : ""}
+                        {turma.year} · {formatGrowthGroupName(turma.area) || "Todos os GCs"} · {turma.member_count ?? 0} membro{(turma.member_count ?? 0) !== 1 ? "s" : ""}
                       </p>
                       {turma.description && (
                         <p className="text-muted-foreground text-xs font-inter mt-0.5 truncate">{turma.description}</p>
@@ -524,7 +524,7 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
                               </span>
                             </div>
                             <p className="text-muted-foreground text-xs font-inter mt-0.5">
-                              {turma.year} · {turma.area || "Todas as áreas"} · {turma.member_count ?? 0} membro{(turma.member_count ?? 0) !== 1 ? "s" : ""}
+                              {turma.year} · {formatGrowthGroupName(turma.area) || "Todos os GCs"} · {turma.member_count ?? 0} membro{(turma.member_count ?? 0) !== 1 ? "s" : ""}
                             </p>
                           </div>
                           <div className="flex gap-1.5 flex-shrink-0">

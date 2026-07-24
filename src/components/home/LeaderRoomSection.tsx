@@ -330,7 +330,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
         >
           <Clock className="w-4 h-4 text-destructive flex-shrink-0" />
           <p className="text-destructive font-inter text-xs font-semibold text-left">
-            {waitingCount} pessoa{waitingCount !== 1 ? "s" : ""} aguardando na sala de espera da sua área
+            {waitingCount} pessoa{waitingCount !== 1 ? "s" : ""} aguardando na sala de espera do seu GC
           </p>
         </button>
       )}

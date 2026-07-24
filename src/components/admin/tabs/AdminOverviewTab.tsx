@@ -344,7 +344,7 @@ export default function AdminOverviewTab({
       {/* Area + turma summary */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
-          <p className="font-montserrat font-bold text-foreground text-xs mb-2">Distribuição por Área</p>
+          <p className="font-montserrat font-bold text-foreground text-xs mb-2">Distribuição por GC</p>
           <ResponsiveContainer width="100%" height={110}>
             <PieChart>
               <Pie data={areaData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={40} innerRadius={22}>

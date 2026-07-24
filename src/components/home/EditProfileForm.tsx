@@ -27,7 +27,7 @@ const profileSchema = z.object({
   birth_date: z.string().min(1, "Data de nascimento é obrigatória"),
   church_id: z.string().min(1, "Selecione uma igreja"),
   community: z.string().min(1, "Selecione uma comunidade"),
-  area: z.string().min(1, "Selecione uma área"),
+  area: z.string().min(1, "Selecione um GC"),
   father_name: z.string().max(100).optional(),
   mother_name: z.string().max(100).optional(),
   father_phone: z.string().max(20).optional(),
@@ -395,7 +395,7 @@ export default function EditProfileForm() {
               }
             />
             <InfoRow icon={<MapPin className="w-4 h-4 text-muted-foreground" />} label="Comunidade" value={profile?.community ?? "—"} />
-            <InfoRow icon={<MapPin className="w-4 h-4 text-muted-foreground" />} label="Área" value={profile?.area ?? "—"} />
+            <InfoRow icon={<MapPin className="w-4 h-4 text-muted-foreground" />} label="GC" value={profile?.area ?? "—"} />
             <InfoRow icon={<Home className="w-4 h-4 text-muted-foreground" />} label="Endereço" value={profile?.address || "—"} />
             <InfoRow icon={<GraduationCap className="w-4 h-4 text-muted-foreground" />} label="Ano Confirmatório" value={profile?.confirmation_year ? `${profile.confirmation_year}º Ano` : "Não definido"} />
           </div>
@@ -537,9 +537,9 @@ export default function EditProfileForm() {
               </div>
             </div>
 
-            {/* Área */}
+            {/* Grupo de Crescimento */}
             <div className="space-y-1">
-              <label className="text-xs font-inter font-medium text-muted-foreground">Área *</label>
+              <label className="text-xs font-inter font-medium text-muted-foreground">Grupo de Crescimento (GC) *</label>
               <div className="relative">
                 <select
                   {...register("area")}
@@ -547,7 +547,7 @@ export default function EditProfileForm() {
                   disabled={!watchedValues.church_id || loadingAreas}
                 >
                   <option value="">
-                    {!watchedValues.church_id ? "Selecione primeiro a igreja" : (loadingAreas ? "Carregando áreas..." : "Selecione sua área")}
+                    {!watchedValues.church_id ? "Selecione primeiro a igreja" : (loadingAreas ? "Carregando GCs..." : "Selecione seu GC")}
                   </option>
                   {areaOptions.map((a) => (
                     <option key={a.id} value={a.name}>{a.name}</option>
@@ -567,7 +567,7 @@ export default function EditProfileForm() {
                   disabled={!watchedValues.area || loadingCommunities}
                 >
                   <option value="">
-                    {!watchedValues.area ? "Selecione primeiro a área" : (loadingCommunities ? "Carregando..." : "Selecione sua comunidade")}
+                    {!watchedValues.area ? "Selecione primeiro o GC" : (loadingCommunities ? "Carregando..." : "Selecione sua comunidade")}
                   </option>
                   {communityOptions.map((c) => (
                     <option key={c} value={c}>{c}</option>

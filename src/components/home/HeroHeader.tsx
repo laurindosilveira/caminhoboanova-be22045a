@@ -1,5 +1,5 @@
 import { Flame, Star, Heart, LogOut, ArrowLeftRight } from "lucide-react";
-import { AREAS } from "@/config/areas";
+import { AREAS, formatGrowthGroupName } from "@/config/areas";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import { toast } from "sonner";
@@ -40,7 +40,7 @@ export default function HeroHeader({ streakDays, streakFrozen, streakAtRisk, fai
             {/* Area switcher for admins */}
             {isAdmin && (
               <div className="relative">
-                <label htmlFor="area-switcher" className="sr-only">Selecionar área</label>
+                <label htmlFor="area-switcher" className="sr-only">Selecionar Grupo de Crescimento</label>
                 <select
                   id="area-switcher"
                   value={effectiveArea}
@@ -48,13 +48,13 @@ export default function HeroHeader({ streakDays, streakFrozen, streakAtRisk, fai
                     try {
                       await setEffectiveArea(e.target.value);
                     } catch {
-                      toast.error("Nao foi possivel trocar a area agora.");
+                      toast.error("Não foi possível trocar o Grupo de Crescimento agora.");
                     }
                   }}
-                  aria-label="Selecionar área de visualização"
+                  aria-label="Selecionar Grupo de Crescimento para visualização"
                   className="appearance-none bg-white/15 backdrop-blur border border-white/30 text-primary-foreground rounded-full pl-3 pr-7 py-1.5 text-xs font-inter font-semibold focus:outline-none focus:ring-2 focus:ring-white/40 cursor-pointer"
                 >
-                  {AREAS.map(a => <option key={a} value={a} className="text-foreground">{a}</option>)}
+                  {AREAS.map(a => <option key={a} value={a} className="text-foreground">{formatGrowthGroupName(a)}</option>)}
                 </select>
                 <ArrowLeftRight className="w-3 h-3 text-primary-foreground/70 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
               </div>
@@ -74,7 +74,7 @@ export default function HeroHeader({ streakDays, streakFrozen, streakAtRisk, fai
           <div className="mb-3 bg-white/15 backdrop-blur rounded-xl px-3 py-2 flex items-center gap-2" role="status" aria-live="polite">
             <ArrowLeftRight className="w-3.5 h-3.5 text-secondary" aria-hidden="true" />
             <span className="text-primary-foreground/90 text-xs font-inter">
-              Visualizando como <strong>{effectiveArea}</strong>
+              Visualizando como <strong>{formatGrowthGroupName(effectiveArea)}</strong>
             </span>
           </div>
         )}

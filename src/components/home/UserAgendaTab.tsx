@@ -1430,7 +1430,7 @@ export default function UserAgendaTab() {
             {currentArea && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 text-primary text-xs font-inter">
                 <Users className="w-3.5 h-3.5" />
-                <span>Será criado para a área <strong>{currentArea}</strong></span>
+                <span>Será criado para o GC <strong>{currentArea}</strong></span>
               </div>
             )}
             <div className="flex gap-2 pt-1">
@@ -1494,7 +1494,7 @@ export default function UserAgendaTab() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Área</label>
+                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Grupo de Crescimento</label>
                 <select
                   value={form.area}
                   onChange={e => setForm(f => ({ ...f, area: e.target.value }))}

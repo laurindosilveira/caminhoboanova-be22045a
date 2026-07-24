@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { formatGrowthGroupName } from "@/config/areas";
 import { useAuth } from "@/contexts/AuthContext";
 import { MapPin, Users, Plus, Edit3, Trash2, ChevronDown, ChevronRight, X, Check } from "lucide-react";
 
@@ -55,7 +56,7 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
       areasQuery,
       communitiesQuery,
     ]);
-    if (areasErr) setError(`Erro ao carregar áreas: ${areasErr.message}`);
+    if (areasErr) setError(`Erro ao carregar Grupos de Crescimento: ${areasErr.message}`);
     if (commErr) setError(`Erro ao carregar comunidades: ${commErr.message}`);
     setAreas((areasData ?? []) as AreaRow[]);
     setCommunities((commData ?? []) as CommunityRow[]);
@@ -82,7 +83,7 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
   }
 
   async function saveArea() {
-    if (!areaForm.name.trim()) { setError("Nome da área é obrigatório."); return; }
+    if (!areaForm.name.trim()) { setError("Nome do Grupo de Crescimento é obrigatório."); return; }
     setSavingArea(true);
     setError(null);
     const { error: e } = editingAreaId
@@ -98,7 +99,7 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
   async function deleteArea(id: string) {
     const commCount = communities.filter(c => c.area_id === id).length;
     if (commCount > 0) {
-      setError(`Não é possível excluir: esta área possui ${commCount} comunidade${commCount > 1 ? "s" : ""}. Remova-as primeiro.`);
+      setError(`Não é possível excluir: este Grupo de Crescimento possui ${commCount} comunidade${commCount > 1 ? "s" : ""}. Remova-as primeiro.`);
       return;
     }
     const { error: e } = await supabase.from("areas").delete().eq("id", id);
@@ -166,12 +167,12 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
       <div className="bg-primary/10 rounded-2xl p-4 flex items-start gap-3">
         <MapPin className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
         <div>
-          <p className="font-montserrat font-bold text-foreground text-sm">Áreas e Comunidades</p>
+          <p className="font-montserrat font-bold text-foreground text-sm">Grupos de Crescimento e Comunidades</p>
           <p className="text-muted-foreground font-inter text-xs mt-0.5">
-            {areas.length} área{areas.length !== 1 ? "s" : ""} · {communities.length} comunidade{communities.length !== 1 ? "s" : ""}
+            {areas.length} GC{areas.length !== 1 ? "s" : ""} · {communities.length} comunidade{communities.length !== 1 ? "s" : ""}
           </p>
           <p className="text-muted-foreground font-inter text-[10px] mt-1">
-            Configure a estrutura geográfica da sua igreja. Novos membros serão vinculados a estas áreas e comunidades.
+            Configure a estrutura da sua igreja. Novos membros serão vinculados a estes Grupos de Crescimento e comunidades.
           </p>
         </div>
       </div>
@@ -191,11 +192,11 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
       {showAreaForm && (
         <div className="bg-card border border-primary/30 rounded-2xl p-4 space-y-3">
           <p className="font-montserrat font-bold text-foreground text-sm">
-            {editingAreaId ? "Editar Área" : "Nova Área"}
+            {editingAreaId ? "Editar Grupo de Crescimento" : "Novo Grupo de Crescimento"}
           </p>
           <input
             type="text"
-            placeholder="Nome da área (ex: Área Norte)"
+            placeholder="Nome do Grupo de Crescimento (ex: GC Norte)"
             value={areaForm.name}
             onChange={e => setAreaForm(f => ({ ...f, name: e.target.value }))}
             className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-inter"
@@ -244,7 +245,7 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
                   <MapPin className="w-4 h-4 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-montserrat font-bold text-foreground text-sm">{area.name}</p>
+                  <p className="font-montserrat font-bold text-foreground text-sm">{formatGrowthGroupName(area.name)}</p>
                   {area.description && (
                     <p className="text-muted-foreground font-inter text-xs truncate">{area.description}</p>
                   )}
@@ -380,7 +381,7 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
           className="w-full flex items-center justify-center gap-2 p-3 rounded-2xl border-2 border-dashed border-primary/30 text-primary hover:bg-primary/5 transition-colors"
         >
           <Plus className="w-4 h-4" />
-          <span className="font-inter text-sm font-medium">Adicionar nova área</span>
+          <span className="font-inter text-sm font-medium">Adicionar novo Grupo de Crescimento</span>
         </button>
       )}
     </div>
