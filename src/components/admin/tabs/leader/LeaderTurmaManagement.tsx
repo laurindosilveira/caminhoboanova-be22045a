@@ -410,7 +410,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
             <div className="space-y-3">
               <div className="bg-muted/50 rounded-xl px-3 py-2">
                 <p className="text-muted-foreground font-inter text-xs">
-                  Área: <span className="font-medium text-foreground">{defaultArea || effectiveArea || profile?.area || "—"}</span>
+                  GC: <span className="font-medium text-foreground">{defaultArea || effectiveArea || profile?.area || "—"}</span>
                   {" · "}Ano: <span className="font-medium text-foreground">{new Date().getFullYear()}</span>
                 </p>
               </div>
@@ -480,7 +480,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
           <div className="flex-1 min-w-0">
             <p className="font-montserrat font-bold text-foreground text-sm truncate">{turma.name}</p>
             <p className="text-muted-foreground text-xs font-inter mt-0.5">
-              {turma.year} · {turma.area || "Todas as áreas"} · {turma.member_count ?? 0} membro{(turma.member_count ?? 0) !== 1 ? "s" : ""}
+              {turma.year} · {turma.area || "Todos os GCs"} · {turma.member_count ?? 0} membro{(turma.member_count ?? 0) !== 1 ? "s" : ""}
             </p>
             {turma.description && (
               <p className="text-muted-foreground text-xs font-inter mt-0.5 truncate">{turma.description}</p>
@@ -525,7 +525,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
           <div className="space-y-3">
             <div className="bg-muted/50 rounded-xl px-3 py-2">
               <p className="text-muted-foreground font-inter text-xs">
-                Área: <span className="font-medium text-foreground">{turma.area || "—"}</span>
+                GC: <span className="font-medium text-foreground">{turma.area || "—"}</span>
                 {" · "}Ano: <span className="font-medium text-foreground">{turma.year}</span>
               </p>
             </div>

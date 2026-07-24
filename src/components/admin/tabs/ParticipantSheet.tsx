@@ -991,7 +991,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       {/* Edit community modal */}
       {editingCommunity && (
         <div className="bg-card rounded-2xl border border-border shadow-sm p-4 space-y-3">
-          <p className="font-montserrat font-bold text-foreground text-sm">Alterar Comunidade / Área</p>
+          <p className="font-montserrat font-bold text-foreground text-sm">Alterar Comunidade / GC</p>
           <select
             value={newCommunity}
             onChange={(e) => setNewCommunity(e.target.value)}
@@ -1002,7 +1002,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
             ))}
           </select>
           <p className="text-xs text-muted-foreground font-inter">
-            Nova área: <strong className="text-foreground">{getArea(newCommunity)}</strong>
+            Novo GC: <strong className="text-foreground">{getArea(newCommunity)}</strong>
           </p>
           <div className="flex gap-2">
             <button

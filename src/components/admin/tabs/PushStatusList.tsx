@@ -351,7 +351,7 @@ export default function PushStatusList({ adminArea }: Props) {
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Buscar aluno, comunidade ou area..."
+          placeholder="Buscar aluno, comunidade ou GC..."
           className="w-full pl-9 pr-3 py-2 rounded-xl border border-border bg-card text-sm font-inter text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
       </div>

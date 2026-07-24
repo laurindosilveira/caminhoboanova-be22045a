@@ -31,7 +31,7 @@ const WorshipTab = lazy(() => import("@/components/admin/tabs/WorshipTab"));
 const AdminGlobalDashboard = lazy(() => import("@/components/admin/AdminGlobalDashboard"));
 const LeaderCareDashboard = lazy(() => import("@/components/admin/tabs/leader/LeaderCareDashboard"));
 
-import { AREAS, AREA_COMMUNITIES, ALL_COMMUNITIES, getCommunitiesForArea } from "@/config/areas";
+import { AREAS, AREA_COMMUNITIES, ALL_COMMUNITIES, formatGrowthGroupName, getCommunitiesForArea } from "@/config/areas";
 
 type Activity = {
   id: string; type: string; title: string; subtitle: string | null; order_num: number; points: number; church_id?: string | null;
@@ -92,12 +92,12 @@ export default function AdminDashboard() {
           setSelectedTurma(myTurma);
         } else {
           // turma_id set but not found in active list — use placeholder so they can manage it
-          setSelectedTurma({ id: profile.turma_id || "", name: "Minha Área", area: profile.area ?? null, year: new Date().getFullYear(), is_active: true, description: null });
+          setSelectedTurma({ id: profile.turma_id || "", name: "Meu GC", area: profile.area ?? null, year: new Date().getFullYear(), is_active: true, description: null });
           setActiveTab("turma");
         }
       } else if (!profile?.turma_id) {
         // No turma yet — skip selector, go straight to turma management tab
-        setSelectedTurma({ id: "new-leader-turma", name: "Minha Área", area: profile?.area ?? null, year: new Date().getFullYear(), is_active: true, description: null });
+        setSelectedTurma({ id: "new-leader-turma", name: "Meu GC", area: profile?.area ?? null, year: new Date().getFullYear(), is_active: true, description: null });
         setActiveTab("turma");
       }
     }
@@ -221,7 +221,7 @@ export default function AdminDashboard() {
         ...p,
         full_name: p.full_name ?? "",
         community: p.community ?? "Aguardando definicao",
-        area: p.area ?? "Sem area",
+        area: p.area ?? "Sem GC",
         birth_date: p.birth_date ?? "",
         phone: p.phone ?? "",
         completed_count: userProgress.length,
@@ -460,7 +460,7 @@ function AdminSettingsPanel({
             view === "areas" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
           }`}
         >
-          Áreas e Comunidades
+          Grupos de Crescimento e Comunidades
         </button>
         <button
           onClick={() => setView("attendance")}
@@ -648,7 +648,7 @@ function TurmaSelector({
                       {areaInfo.icon}
                     </div>
                     <div className="text-left flex-1">
-                      <p className="font-montserrat font-bold text-foreground text-base">{areaInfo.name}</p>
+                      <p className="font-montserrat font-bold text-foreground text-base">{formatGrowthGroupName(areaInfo.name)}</p>
                       <p className="text-muted-foreground font-inter text-xs mt-1">
                         {areaParticipantsCount} participante{areaParticipantsCount !== 1 ? "s" : ""} · {areaInfo.turmas.length} turma{areaInfo.turmas.length !== 1 ? "s" : ""}
                       </p>
@@ -674,7 +674,7 @@ function TurmaSelector({
                       ) : (
                         <div className="py-4 text-center">
                           <p className="text-muted-foreground font-inter text-sm">
-                            {searchLower ? "Nenhuma turma encontrada." : "Nenhuma turma cadastrada nesta área."}
+                            {searchLower ? "Nenhuma turma encontrada." : "Nenhuma turma cadastrada neste GC."}
                           </p>
                           {!searchLower && (
                             <button
@@ -682,7 +682,7 @@ function TurmaSelector({
                               onClick={() => selectArea(areaInfo.name)}
                               className="mt-3 rounded-lg bg-primary px-5 py-2.5 font-inter text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90"
                             >
-                              Ver todos os participantes da área
+                              Ver todos os participantes do GC
                             </button>
                           )}
                         </div>

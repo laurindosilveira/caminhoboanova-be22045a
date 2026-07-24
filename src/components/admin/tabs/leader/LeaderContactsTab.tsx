@@ -197,7 +197,7 @@ export default function LeaderContactsTab() {
         <div>
           <h2 className="font-montserrat font-black text-foreground text-base">Contatos</h2>
           <p className="text-muted-foreground text-xs font-inter">
-            {profile?.turma_id ? "Membros da sua turma" : "Membros da sua área"} · {contacts.length} pessoa{contacts.length !== 1 ? "s" : ""}
+            {profile?.turma_id ? "Membros da sua turma" : "Membros do seu GC"} · {contacts.length} pessoa{contacts.length !== 1 ? "s" : ""}
           </p>
         </div>
       </div>

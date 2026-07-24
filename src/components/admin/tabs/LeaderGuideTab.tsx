@@ -19,7 +19,7 @@ export default function LeaderGuideTab() {
     <div className="space-y-4">
       {/* Header */}
       <div className="px-1">
-        <h2 className="font-montserrat font-black text-foreground text-lg">👤 Área do Líder</h2>
+        <h2 className="font-montserrat font-black text-foreground text-lg">👤 GC do Líder</h2>
         <p className="text-muted-foreground font-inter text-xs mt-1">
           Ferramentas para conduzir sua turma com excelência
         </p>

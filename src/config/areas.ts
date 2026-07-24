@@ -1,4 +1,4 @@
-// ─── Configuração de Áreas e Comunidades ──────────────────────────────────────
+// ─── Configuração de Grupos de Crescimento e Comunidades ──────────────────────────────────────
 // Antes hardcoded como ENUMs, agora carregado do banco de dados.
 // Use `useAreasConfig()` em componentes React para dados atualizados.
 // Os valores abaixo são fallback estático (bootstrap) — serão substituídos
@@ -14,6 +14,14 @@ export const AREA_COMMUNITIES: Record<string, string[]> = {
 
 export const AREAS = Object.keys(AREA_COMMUNITIES);
 export const ALL_COMMUNITIES = AREAS.flatMap(area => AREA_COMMUNITIES[area]);
+
+/** Converts legacy stored area names into the current UI nomenclature. */
+export function formatGrowthGroupName(area?: string | null): string {
+  if (!area) return "";
+  return area
+    .replace(/^Área\s*(\d+)$/i, "GC $1")
+    .replace(/^Area\s*(\d+)$/i, "GC $1");
+}
 
 export function getAreaForCommunity(community: string): string {
   for (const [area, communities] of Object.entries(AREA_COMMUNITIES)) {

@@ -55,7 +55,7 @@ const ROLE_CFG = {
   },
 };
 
-import { AREAS, AREA_COMMUNITIES } from "@/config/areas";
+import { AREAS, AREA_COMMUNITIES, formatGrowthGroupName } from "@/config/areas";
 
 type UsersTabProps = {
   onSelectTurma?: (turma: { id: string; name: string; area: string | null; year: number }) => void;
@@ -200,7 +200,7 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
     }
     setUsers(prev => prev.map(p => p.user_id === u.user_id ? { ...p, role: targetRole, admin_area: area } : p));
     const roleLabel = targetRole === "admin" ? "Administrador" : "Líder";
-    toast({ title: `✅ ${roleLabel} ativado`, description: `${u.full_name} agora é ${roleLabel}${area ? ` de ${area}` : ""}.` });
+    toast({ title: `✅ ${roleLabel} ativado`, description: `${u.full_name} agora é ${roleLabel}${area ? ` de ${formatGrowthGroupName(area)}` : ""}.` });
     setSaving(null);
     setPromotingUser(null);
     setPromotingRole(null);
@@ -522,12 +522,12 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
           <p className="font-montserrat font-bold text-foreground text-sm">
             Selecione a turma para <span className="text-primary">{promotingUser.full_name}</span>
           </p>
-          <p className="text-muted-foreground font-inter text-xs">Qual área este administrador vai liderar?</p>
+          <p className="text-muted-foreground font-inter text-xs">Qual Grupo de Crescimento este administrador vai liderar?</p>
           <div className="flex gap-2">
             {AREAS.map(area => (
               <button key={area} onClick={() => promoteToRole(promotingUser, "admin", area)} disabled={saving === promotingUser.user_id}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded-xl text-sm font-montserrat font-bold text-primary transition-all disabled:opacity-50">
-                <MapPin className="w-4 h-4" />{area}
+                <MapPin className="w-4 h-4" />{formatGrowthGroupName(area)}
               </button>
             ))}
           </div>
@@ -541,12 +541,12 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
           <p className="font-montserrat font-bold text-foreground text-sm">
             Selecione a turma para <span className="text-accent-foreground">{promotingUser.full_name}</span>
           </p>
-          <p className="text-muted-foreground font-inter text-xs">Qual área este líder vai acompanhar?</p>
+          <p className="text-muted-foreground font-inter text-xs">Qual Grupo de Crescimento este líder vai acompanhar?</p>
           <div className="flex gap-2">
             {AREAS.map(area => (
               <button key={area} onClick={() => promoteToRole(promotingUser, "lider", area)} disabled={saving === promotingUser.user_id}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-accent/10 hover:bg-accent/20 border border-accent/30 rounded-xl text-sm font-montserrat font-bold text-accent-foreground transition-all disabled:opacity-50">
-                <MapPin className="w-4 h-4" />{area}
+                <MapPin className="w-4 h-4" />{formatGrowthGroupName(area)}
               </button>
             ))}
           </div>
@@ -631,7 +631,7 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
             </div>
 
             <div>
-              <label className="text-xs font-inter font-medium text-muted-foreground mb-1 flex items-center gap-1"><MapPin className="w-3 h-3" /> Área</label>
+              <label className="text-xs font-inter font-medium text-muted-foreground mb-1 flex items-center gap-1"><MapPin className="w-3 h-3" /> Grupo de Crescimento</label>
               <div className="flex gap-2">
                 {AREAS.map(area => (
                   <button key={area} onClick={() => {
@@ -641,7 +641,7 @@ export default function UsersTab({ onSelectTurma }: UsersTabProps) {
                     className={`flex-1 py-2 rounded-xl text-xs font-montserrat font-bold transition-all border ${
                       editForm.area === area ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
                     }`}>
-                    {area}
+                    {formatGrowthGroupName(area)}
                   </button>
                 ))}
               </div>
@@ -812,12 +812,12 @@ function UserRow({
       <div className="flex-1 min-w-0 cursor-pointer" onClick={onEdit}>
         <p className="font-montserrat font-bold text-foreground text-sm truncate">{u.full_name}</p>
         <p className="text-muted-foreground text-xs font-inter truncate">
-          {u.community} · {u.area}
+          {u.community} · {formatGrowthGroupName(u.area)}
           {u.role === "admin" && u.admin_area && (
-            <span className="text-primary font-medium"> · Lidera {u.admin_area}</span>
+            <span className="text-primary font-medium"> · Lidera {formatGrowthGroupName(u.admin_area)}</span>
           )}
           {u.role === "lider" && u.admin_area && (
-            <span className="text-accent-foreground font-medium"> · Líder {u.admin_area}</span>
+            <span className="text-accent-foreground font-medium"> · Líder {formatGrowthGroupName(u.admin_area)}</span>
           )}
         </p>
         {u.email && (

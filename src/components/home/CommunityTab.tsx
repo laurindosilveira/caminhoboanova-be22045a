@@ -364,7 +364,7 @@ export default function CommunityTab() {
 
           {isOverriding && (
             <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
-              <p className="font-montserrat font-bold text-foreground text-sm">Visualização por área ativa</p>
+              <p className="font-montserrat font-bold text-foreground text-sm">Visualização por GC ativa</p>
               <p className="mt-1 text-xs font-inter text-muted-foreground">
                 Itens baseados em comunidade individual, como testemunhos e sala da turma, continuam limitados pela comunidade original do seu perfil.
               </p>

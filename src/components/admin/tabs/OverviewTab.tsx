@@ -191,13 +191,13 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
           backgroundImage: "radial-gradient(circle at 80% 20%, white 1px, transparent 1px)",
           backgroundSize: "20px 20px"
         }} />
-        <p className="text-primary-foreground/60 font-inter text-xs mb-1">Visão geral da área</p>
+        <p className="text-primary-foreground/60 font-inter text-xs mb-1">Visão geral do GC</p>
         <h2 className="font-montserrat font-black text-primary-foreground text-xl mb-3">
           Painel do Discipulador
         </h2>
         <div className="grid grid-cols-3 gap-2">
           {[
-            { label: "Total na área", value: participants.length },
+            { label: "Total no GC", value: participants.length },
             { label: "Ativos esta semana", value: activeThisWeek },
             { label: "Precisam de atenção", value: contactList.length },
           ].map(s => (

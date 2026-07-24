@@ -376,7 +376,7 @@ export default function Index() {
                       </div>
                       <div className="text-left">
                         <p className="font-montserrat font-bold text-foreground text-sm">
-                          {role === "admin" ? "Área do Administrador" : "Área do Líder"}
+                          {role === "admin" ? "GC do Administrador" : "GC do Líder"}
                         </p>
                         <p className="text-muted-foreground text-xs font-inter">
                           {role === "admin" ? "Gerenciar participantes e conteúdo" : "Gerenciar cursos e usuários"}

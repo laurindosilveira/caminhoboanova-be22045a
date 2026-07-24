@@ -136,7 +136,7 @@ const FEATURES = [
   { icon: MessageCircle, title: "Comunidade Digital", desc: "Chat, enquetes, pedidos de oração, testemunhos e duplas de oração semanais.", color: "bg-gradient-to-br from-[hsl(270,60%,55%)] to-[hsl(280,55%,45%)]" },
   { icon: Trophy, title: "Gamificação", desc: "Pontos de fé, ranking, conquistas e desafios que incentivam o engajamento diário.", color: "bg-gradient-to-br from-[hsl(var(--secondary))] to-[hsl(var(--accent))]" },
   { icon: BarChart3, title: "Painel Administrativo", desc: "Dashboard completo com relatórios, métricas de engajamento e gestão de turmas.", color: "bg-gradient-to-br from-[hsl(350,70%,55%)] to-[hsl(340,60%,50%)]" },
-  { icon: Bell, title: "Notificações Push", desc: "Lembretes inteligentes segmentados por comunidade, área ou turma.", color: "bg-gradient-to-br from-[hsl(190,70%,50%)] to-[hsl(var(--primary))]" },
+  { icon: Bell, title: "Notificações Push", desc: "Lembretes inteligentes segmentados por comunidade, GC ou turma.", color: "bg-gradient-to-br from-[hsl(190,70%,50%)] to-[hsl(var(--primary))]" },
   { icon: Heart, title: "Cuidado Pastoral", desc: "Termômetro espiritual, autoavaliações mensais e planos de crescimento individuais.", color: "bg-gradient-to-br from-[hsl(0,70%,55%)] to-[hsl(350,65%,50%)]" },
   { icon: Shield, title: "Segurança & Privacidade", desc: "Dados protegidos, acesso por papéis (admin, líder, membro) e controle total.", color: "bg-gradient-to-br from-[hsl(var(--muted-foreground))] to-[hsl(var(--brand-gray))]" },
 ];
@@ -181,7 +181,7 @@ const PLANS = [
     period: "/mês",
     desc: "Para igrejas maiores ou com múltiplas comunidades",
     members: "Membros ilimitados",
-    features: ["Tudo do plano Crescimento", "Termômetro espiritual", "Plano de crescimento individual", "Multi-comunidades / multi-áreas", "Relatórios pastorais completos", "Suporte prioritário"],
+    features: ["Tudo do plano Crescimento", "Termômetro espiritual", "Plano de crescimento individual", "Multi-comunidades / multi-GCs", "Relatórios pastorais completos", "Suporte prioritário"],
     highlight: false,
     priceId: STRIPE_PLANS.pastoral.price_id,
   },
@@ -407,7 +407,7 @@ export default function Apresentacao() {
                   { title: "Visibilidade pastoral completa", desc: "Veja o progresso espiritual de cada membro em tempo real. Identifique quem precisa de atenção." },
                   { title: "Comunicação centralizada", desc: "Chat, avisos e enquetes em um só lugar. Substitua os grupos dispersos de WhatsApp." },
                   { title: "Formação estruturada", desc: "Currículo didático com 28+ lições garante crescimento consistente e mensurável." },
-                  { title: "Multi-comunidade", desc: "Gerencie múltiplas comunidades e áreas com controle independente de uma só plataforma." },
+                  { title: "Multi-comunidade", desc: "Gerencie múltiplas comunidades e Grupos de Crescimento com controle independente em uma só plataforma." },
                 ].map((b, i) => (
                   <motion.div key={i} variants={fadeUp} custom={i + 2} className="flex gap-4">
                     <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -556,7 +556,7 @@ export default function Apresentacao() {
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
             {[
-              { step: 1, title: "Cadastre sua igreja", desc: "Crie sua conta e configure as comunidades, áreas e turmas da sua igreja.", icon: Church },
+              { step: 1, title: "Cadastre sua igreja", desc: "Crie sua conta e configure as comunidades, grupos de crescimento e turmas da sua igreja.", icon: Church },
               { step: 2, title: "Convide os membros", desc: "Compartilhe o link de cadastro com líderes e jovens da sua comunidade.", icon: Users },
               { step: 3, title: "Configure o conteúdo", desc: "Adicione cursos, lições, devocionais e eventos no painel administrativo.", icon: BookOpen },
               { step: 4, title: "Acompanhe o crescimento", desc: "Monitore o engajamento, presença e saúde espiritual em tempo real.", icon: TrendingUp },

@@ -295,7 +295,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     if (error) {
       toast.error("Erro ao salvar anotações: " + error.message);
     } else {
-      toast.success("✅ Anotações do líder salvas para a área!");
+      toast.success("✅ Anotações do líder salvas para o GC!");
     }
   }
 
@@ -750,7 +750,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
                         disabled={savingLeaderNotes}
                         className="w-full py-3 bg-amber-700 hover:bg-amber-800 text-white rounded-xl font-montserrat font-bold text-xs transition-colors disabled:opacity-50"
                       >
-                        {savingLeaderNotes ? "Salvando..." : "Salvar Anotações para a Área"}
+                        {savingLeaderNotes ? "Salvando..." : "Salvar Anotações para o GC"}
                       </button>
                     </div>
                   </div>
