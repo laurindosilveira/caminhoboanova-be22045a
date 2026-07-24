@@ -2,7 +2,7 @@ import { useState } from "react";
 import { GraduationCap, CalendarDays, ChevronDown, ChevronRight, CheckCircle2, Lock, Layers, Plus, X, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import type { Course, Lesson, Module } from "./shared";
+import type { Course, Lesson, LearningTrack, Module } from "./shared";
 
 type AgendaSchedule = {
   loading: boolean;
@@ -17,6 +17,7 @@ type AgendaSchedule = {
 
 type Props = {
   courses: Course[];
+  tracks: LearningTrack[];
   expandedCourse: string | null;
   onExpandCourse: (id: string | null) => void;
   unlockedCourseIds: Set<string>;
@@ -31,11 +32,12 @@ type Props = {
 };
 
 export default function CourseTrailSection({
-  courses, expandedCourse, onExpandCourse,
+  courses, tracks, expandedCourse, onExpandCourse,
   unlockedCourseIds, completedLessonIds, fullyCompletedLessonIds,
   agendaSchedule, manualLessonOverrideIds, isLeaderOrAdmin,
   isSuper, onRefresh, onSelectLesson,
 }: Props) {
+  const [selectedTrackId, setSelectedTrackId] = useState<string>("confirmatory");
   // ── create module state ──
   const [showNewModule, setShowNewModule] = useState<string | null>(null); // course id
   const [newModuleTitle, setNewModuleTitle] = useState("");
@@ -54,7 +56,7 @@ export default function CourseTrailSection({
     const course = courses.find(c => c.id === courseId);
     const existing = course?.modules ?? [];
     const orderNum = existing.length > 0 ? Math.max(...existing.map(m => m.order_num)) + 1 : 1;
-    const { error } = await supabase.from("modules" as any).insert({
+    const { error } = await supabase.from("modules").insert({
       course_id: courseId, title: newModuleTitle.trim(), order_num: orderNum, church_id: null,
     });
     setSavingModule(false);
@@ -86,18 +88,75 @@ export default function CourseTrailSection({
 
   if (courses.length === 0) return null;
 
+  const trackOptions = [
+    {
+      id: "confirmatory",
+      name: "Trilha Confirmatória",
+      description: "Fundamentos da vida cristã",
+      courseCount: courses.filter((course) => !course.track_id).length,
+    },
+    ...tracks.map((track) => ({
+      id: track.id,
+      name: track.name,
+      description: track.description,
+      courseCount: courses.filter((course) => course.track_id === track.id).length,
+    })),
+  ].filter((track) => track.courseCount > 0);
+  const activeTrack = trackOptions.find((track) => track.id === selectedTrackId) ?? trackOptions[0];
+  const effectiveTrackId = activeTrack?.id ?? "confirmatory";
+  const visibleCourses = courses.filter((course) =>
+    effectiveTrackId === "confirmatory"
+      ? !course.track_id
+      : course.track_id === effectiveTrackId
+  );
+
   return (
     <div className="space-y-3">
-      {/* Header */}
-      <div className="bg-secondary/10 rounded-2xl p-4 flex items-start gap-3">
-        <GraduationCap className="w-5 h-5 text-secondary flex-shrink-0 mt-0.5" />
-        <div className="flex-1">
-          <p className="font-montserrat font-bold text-foreground text-sm">Trilha Confirmatória</p>
-          <p className="text-muted-foreground font-inter text-xs mt-0.5">
-            {courses.reduce((s, c) => s + c.lessons.length, 0)} lições em {courses.length} cursos
-          </p>
-        </div>
+      {/* Seletor de trilha */}
+      <div className="grid gap-2">
+        {trackOptions.map((track) => {
+          const isActive = track.id === effectiveTrackId;
+          return (
+            <button
+              key={track.id}
+              type="button"
+              onClick={() => {
+                setSelectedTrackId(track.id);
+                onExpandCourse(null);
+              }}
+              className={`w-full rounded-2xl p-4 flex items-center gap-3 text-left border transition-all ${
+                isActive
+                  ? "bg-secondary/10 border-secondary/30 shadow-sm"
+                  : "bg-card border-border hover:bg-muted/30"
+              }`}
+            >
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                isActive ? "bg-secondary/15" : "bg-muted"
+              }`}>
+                <GraduationCap className={`w-5 h-5 ${isActive ? "text-secondary" : "text-muted-foreground"}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-montserrat font-bold text-foreground text-sm">{track.name}</p>
+                <p className="text-muted-foreground font-inter text-xs mt-0.5 truncate">
+                  {courses
+                    .filter((course) => track.id === "confirmatory" ? !course.track_id : course.track_id === track.id)
+                    .reduce((sum, course) => sum + course.lessons.length, 0)} lições em {track.courseCount} cursos
+                </p>
+              </div>
+              <ChevronRight className={`w-4 h-4 transition-transform ${
+                isActive ? "rotate-90 text-secondary" : "text-muted-foreground"
+              }`} />
+            </button>
+          );
+        })}
       </div>
+
+      {activeTrack && (
+        <div className="px-1">
+          <p className="font-montserrat font-bold text-foreground text-sm">{activeTrack.name}</p>
+          <p className="font-inter text-xs text-muted-foreground mt-0.5">{activeTrack.description}</p>
+        </div>
+      )}
 
       {/* Waiting message */}
       {!agendaSchedule.loading && !agendaSchedule.hasScheduledEvents && (
@@ -113,7 +172,7 @@ export default function CourseTrailSection({
       )}
 
       {/* Course accordion */}
-      {courses.map((course) => {
+      {visibleCourses.map((course) => {
         const isOpen = expandedCourse === course.id;
         const courseHasManualOverride = course.lessons.some((lesson) => manualLessonOverrideIds.has(lesson.id));
         const isCourseUnlocked = isLeaderOrAdmin || unlockedCourseIds.has(course.id) || courseHasManualOverride;
@@ -153,7 +212,7 @@ export default function CourseTrailSection({
                           background: coursePct === 100 ? "var(--gradient-green)" : "var(--gradient-hero)",
                         }} />
                       </div>
-                      <span className={`font-inter text-[10px] font-semibold flex-shrink-0 ${coursePct === 100 ? "text-brand-green" : "text-muted-foreground"}`}>
+                      <span className={`font-inter text-xs font-semibold flex-shrink-0 ${coursePct === 100 ? "text-brand-green" : "text-muted-foreground"}`}>
                         {doneLessons}/{totalLessons}
                       </span>
                     </div>
@@ -226,7 +285,7 @@ export default function CourseTrailSection({
                         <div className="flex items-center gap-2 px-4 py-2.5 bg-secondary/5 border-b border-border">
                           <Layers className="w-3.5 h-3.5 text-secondary flex-shrink-0" />
                           <p className="font-montserrat font-semibold text-secondary text-xs flex-1">{mod.title}</p>
-                          <span className="font-inter text-[10px] text-muted-foreground">{mod.lessons.length} lição(ões)</span>
+                          <span className="font-inter text-xs text-muted-foreground">{mod.lessons.length} lição(ões)</span>
                         </div>
 
                         {/* Lessons in this module */}
@@ -458,10 +517,10 @@ function LessonButton({
           <p className={`font-inter text-sm ${isFullyDone ? "text-brand-green font-medium" : (isLocked || isNotScheduled) ? "text-muted-foreground" : "text-foreground"}`}>
             {lesson.title}
           </p>
-          {lesson.objective && <p className="font-inter text-[10px] text-muted-foreground truncate mt-0.5">{lesson.objective}</p>}
-          {lockMessage && <p className="font-inter text-[10px] text-muted-foreground mt-0.5">{lockMessage}</p>}
+          {lesson.objective && <p className="font-inter text-xs text-muted-foreground truncate mt-0.5">{lesson.objective}</p>}
+          {lockMessage && <p className="font-inter text-xs text-muted-foreground mt-0.5">{lockMessage}</p>}
           {isDone && !isFullyDone && !isLateAccess && !(isLocked || isNotScheduled) && (
-            <p className="font-inter text-[10px] text-secondary mt-0.5">⏳ Faltam devocionais ou estudo</p>
+            <p className="font-inter text-xs text-secondary mt-0.5">⏳ Faltam devocionais ou estudo</p>
           )}
         </div>
         {isFullyDone

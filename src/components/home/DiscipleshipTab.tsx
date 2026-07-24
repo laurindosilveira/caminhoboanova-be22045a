@@ -15,7 +15,7 @@ import { useAgendaSchedule } from "@/hooks/useAgendaSchedule";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-import { computeHealth, type Assessment, type Plan, type Activity, type Progress, type Lesson, type Course, type AttendanceRecord, type EventRecord } from "./discipleship/shared";
+import { computeHealth, type Assessment, type Plan, type Activity, type Progress, type Lesson, type Course, type LearningTrack, type AttendanceRecord, type EventRecord } from "./discipleship/shared";
 import DiscipleshipHero from "./discipleship/DiscipleshipHero";
 import HelpSection from "./discipleship/HelpSection";
 import SpiritualHealthSection from "./discipleship/SpiritualHealthSection";
@@ -63,6 +63,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
   const [showAssessment, setShowAssessment] = useState(false);
   const [saving, setSaving] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [learningTracks, setLearningTracks] = useState<LearningTrack[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [selectedLessonMode, setSelectedLessonMode] = useState<"choice" | "study" | "edit" | "edit-devotionals">("choice");
   const [autoOpenDevotionalLessonId, setAutoOpenDevotionalLessonId] = useState<string | null>(null);
@@ -123,7 +124,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }, { data: responsesData }, { data: eventsData }, { data: attendanceData }, { data: allAssess }, { data: devContentData }, { data: devProgressData }, { data: worshipData }, { data: unlocksData }, { data: lessonOverrideData }, { data: modulesData }] = await Promise.all([
+    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }, { data: responsesData }, { data: eventsData }, { data: attendanceData }, { data: allAssess }, { data: devContentData }, { data: devProgressData }, { data: worshipData }, { data: unlocksData }, { data: lessonOverrideData }, { data: modulesData }, { data: tracksData }, { data: trackReleasesData }] = await Promise.all([
       supabase.from("activities").select("id, type, title, points"),
       supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
       supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).eq("month", month).eq("year", year).maybeSingle(),
@@ -140,6 +141,10 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       supabase.from("course_unlocks").select("course_id").eq("area", currentArea),
       supabase.from("user_lesson_overrides" as any).select("id, lesson_id, custom_points, available_from, available_until, is_unlocked").eq("user_id", user.id),
       profile?.church_id ? supabase.from("modules" as any).select("id, course_id, title, order_num, church_id").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("modules" as any).select("id, course_id, title, order_num, church_id").is("church_id", null).order("order_num"),
+      supabase.from("learning_tracks").select("id, name, description, order_num").order("order_num"),
+      profile?.church_id
+        ? supabase.from("track_church_releases").select("track_id").eq("church_id", profile.church_id)
+        : Promise.resolve({ data: [] as { track_id: string }[], error: null }),
     ]);
 
     setActivities(acts ?? []);
@@ -169,7 +174,11 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     });
     setFullyCompletedLessonIds(fullyDone);
 
-    const courseList = (coursesData ?? []).map(c => {
+    const releasedTrackIds = new Set((trackReleasesData ?? []).map((release) => release.track_id));
+    const visibleCourseRows = (coursesData ?? []).filter((course) =>
+      course.track_id === null || isSuper || releasedTrackIds.has(course.track_id)
+    );
+    const courseList = visibleCourseRows.map(c => {
       const courseModules = ((modulesData ?? []) as any[])
         .filter((m: any) => m.course_id === c.id)
         .map((m: any) => ({
@@ -183,6 +192,9 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       };
     });
     setCourses(courseList);
+    setLearningTracks((tracksData ?? []).filter((track) =>
+      isSuper || releasedTrackIds.has(track.id)
+    ));
     setUnlockedCourseIds(new Set((unlocksData ?? []).map((u: any) => u.course_id)));
     const nowIso = new Date();
     const activeLessonOverrides = new Map<string, { id: string; custom_points: number | null }>();
@@ -594,6 +606,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
 
             <CourseTrailSection
               courses={courses}
+              tracks={learningTracks}
               expandedCourse={expandedCourse}
               onExpandCourse={setExpandedCourse}
               unlockedCourseIds={unlockedCourseIds}
