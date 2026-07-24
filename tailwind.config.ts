@@ -15,8 +15,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        montserrat: ['Montserrat', 'sans-serif'],
-        inter: ['Inter', 'sans-serif'],
+        montserrat: ['League Spartan', 'sans-serif'],
+        inter: ['Nunito Sans', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",

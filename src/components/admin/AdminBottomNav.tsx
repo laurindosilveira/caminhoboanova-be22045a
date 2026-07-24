@@ -45,7 +45,7 @@ const LEADER_TABS: TabDef[] = [
   { id: "care", label: "Hoje na turma", icon: HeartHandshake },
   { id: "attendance", label: "Presenca", icon: ClipboardList },
   { id: "agenda", label: "Encontros", icon: CalendarDays },
-  { id: "turma", label: "Caminho", icon: GraduationCap },
+  { id: "turma", label: "Discipulado", icon: GraduationCap },
   { id: "avisos", label: "Avisos", icon: MessageSquare },
   { id: "contatos", label: "Contatos", icon: Phone },
   { id: "courses", label: "Cursos", icon: BookOpen },

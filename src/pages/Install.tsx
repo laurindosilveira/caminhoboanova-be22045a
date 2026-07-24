@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Smartphone, Download, ArrowLeft } from "lucide-react";
+import BrandLogo from "@/components/BrandLogo";
 
 const ANDROID_STEPS = [
   { icon: "🌐", title: "Abra no Chrome", desc: "Acesse o app pelo navegador Google Chrome no seu celular." },
@@ -97,13 +98,11 @@ export default function Install() {
             <ArrowLeft className="w-4 h-4" /> Voltar
           </button>
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-12 h-12 rounded-2xl bg-white/15 border border-white/30 flex items-center justify-center">
-              <Smartphone className="w-6 h-6 text-primary-foreground" />
-            </div>
+            <BrandLogo inverse compact markClassName="h-14 w-14" />
             <div>
-              <h1 className="font-montserrat font-black text-primary-foreground text-xl">Instalar o App</h1>
+              <h1 className="font-montserrat font-black text-primary-foreground text-xl">Instalar Discipulado 3M</h1>
               <p className="text-primary-foreground/60 font-inter text-xs">
-                Tenha o Caminho sempre à mão no seu celular
+                Tenha sua jornada de discipulado sempre à mão
               </p>
             </div>
           </div>
@@ -117,7 +116,7 @@ export default function Install() {
             <span className="text-2xl">✅</span>
             <div>
               <p className="font-montserrat font-bold text-foreground text-sm">App já instalado!</p>
-              <p className="font-inter text-xs text-muted-foreground">O Caminho Boa Nova já está na sua tela inicial.</p>
+              <p className="font-inter text-xs text-muted-foreground">O Discipulado 3M já está na sua tela inicial.</p>
             </div>
           </div>
         )}
