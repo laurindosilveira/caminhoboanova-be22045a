@@ -100,7 +100,7 @@ export default function Install() {
           <div className="flex items-center gap-3 mb-2">
             <BrandLogo inverse compact markClassName="h-14 w-14" />
             <div>
-              <h1 className="font-montserrat font-black text-primary-foreground text-xl">Instalar Discipulado 3M</h1>
+              <h1 className="font-montserrat font-black text-primary-foreground text-xl">Instalar Caminho 3M</h1>
               <p className="text-primary-foreground/60 font-inter text-xs">
                 Tenha sua jornada de discipulado sempre à mão
               </p>
@@ -116,7 +116,7 @@ export default function Install() {
             <span className="text-2xl">✅</span>
             <div>
               <p className="font-montserrat font-bold text-foreground text-sm">App já instalado!</p>
-              <p className="font-inter text-xs text-muted-foreground">O Discipulado 3M já está na sua tela inicial.</p>
+              <p className="font-inter text-xs text-muted-foreground">O Caminho 3M já está na sua tela inicial.</p>
             </div>
           </div>
         )}
