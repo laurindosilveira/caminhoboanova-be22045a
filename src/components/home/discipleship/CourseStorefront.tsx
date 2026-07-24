@@ -35,6 +35,7 @@ export default function CourseStorefront({ trackId, courses, institutionalAccess
   const [buyingId, setBuyingId] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [redeeming, setRedeeming] = useState(false);
+  const courseIdsKey = courses.map((course) => course.id).sort().join(",");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,7 +47,7 @@ export default function CourseStorefront({ trackId, courses, institutionalAccess
         .from("course_products" as never)
         .select("id,name,description,product_kind,course_id,track_id,price_cents,currency,display_order")
         .eq("is_active", true)
-        .or(`track_id.eq.${trackId},course_id.in.(${courses.map((course) => course.id).join(",")})`)
+        .or(`track_id.eq.${trackId},course_id.in.(${courseIdsKey})`)
         .order("display_order"),
       supabase
         .from("user_course_entitlements" as never)
@@ -60,7 +61,7 @@ export default function CourseStorefront({ trackId, courses, institutionalAccess
     setEntitledIds(ids);
     onEntitlementsChange(ids);
     setLoading(false);
-  }, [courses, onEntitlementsChange, trackId]);
+  }, [courseIdsKey, onEntitlementsChange, trackId]);
 
   useEffect(() => { void load(); }, [load]);
 
