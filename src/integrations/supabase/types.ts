@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -10,7 +10,32 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.5"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -195,6 +220,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      app_internal_secrets: {
+        Row: {
+          created_at: string
+          name: string
+          secret_hash: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          name: string
+          secret_hash: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          name?: string
+          secret_hash?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       area_pastors: {
         Row: {
@@ -386,6 +432,91 @@ export type Database = {
         }
         Relationships: []
       }
+      bonus_grant_log: {
+        Row: {
+          achievement_id: string
+          church_id: string
+          granted_at: string
+          granted_by: string
+          id: string
+          justification: string
+          points_granted: number
+          target_user_id: string
+        }
+        Insert: {
+          achievement_id: string
+          church_id: string
+          granted_at?: string
+          granted_by: string
+          id?: string
+          justification?: string
+          points_granted?: number
+          target_user_id: string
+        }
+        Update: {
+          achievement_id?: string
+          church_id?: string
+          granted_at?: string
+          granted_by?: string
+          id?: string
+          justification?: string
+          points_granted?: number
+          target_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonus_grant_log_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bonus_removal_log: {
+        Row: {
+          achievement_id: string | null
+          achievement_unlock_id: string | null
+          church_id: string
+          id: string
+          justification: string
+          points_removed: number
+          removed_at: string
+          removed_by: string
+          target_user_id: string
+        }
+        Insert: {
+          achievement_id?: string | null
+          achievement_unlock_id?: string | null
+          church_id: string
+          id?: string
+          justification?: string
+          points_removed?: number
+          removed_at?: string
+          removed_by: string
+          target_user_id: string
+        }
+        Update: {
+          achievement_id?: string | null
+          achievement_unlock_id?: string | null
+          church_id?: string
+          id?: string
+          justification?: string
+          points_removed?: number
+          removed_at?: string
+          removed_by?: string
+          target_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonus_removal_log_achievement_id_fkey"
+            columns: ["achievement_id"]
+            isOneToOne: false
+            referencedRelation: "achievement_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       challenge_participants: {
         Row: {
           challenge_id: string
@@ -473,6 +604,8 @@ export type Database = {
         Row: {
           activities: string | null
           average_age: string | null
+          checkout_attempt_count: number
+          checkout_started_at: string | null
           church_address: string | null
           church_email: string
           church_id: string | null
@@ -493,6 +626,7 @@ export type Database = {
           pastor_role: string | null
           preferences: string | null
           recommended_plan: string
+          stripe_checkout_session_id: string | null
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
           subscription_status: string
@@ -503,6 +637,8 @@ export type Database = {
         Insert: {
           activities?: string | null
           average_age?: string | null
+          checkout_attempt_count?: number
+          checkout_started_at?: string | null
           church_address?: string | null
           church_email: string
           church_id?: string | null
@@ -523,6 +659,7 @@ export type Database = {
           pastor_role?: string | null
           preferences?: string | null
           recommended_plan?: string
+          stripe_checkout_session_id?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           subscription_status?: string
@@ -533,6 +670,8 @@ export type Database = {
         Update: {
           activities?: string | null
           average_age?: string | null
+          checkout_attempt_count?: number
+          checkout_started_at?: string | null
           church_address?: string | null
           church_email?: string
           church_id?: string | null
@@ -553,6 +692,7 @@ export type Database = {
           pastor_role?: string | null
           preferences?: string | null
           recommended_plan?: string
+          stripe_checkout_session_id?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           subscription_status?: string
@@ -864,6 +1004,7 @@ export type Database = {
           order_num: number
           subtitle: string | null
           title: string
+          track_id: string | null
         }
         Insert: {
           church_id?: string | null
@@ -872,6 +1013,7 @@ export type Database = {
           order_num: number
           subtitle?: string | null
           title: string
+          track_id?: string | null
         }
         Update: {
           church_id?: string | null
@@ -880,6 +1022,7 @@ export type Database = {
           order_num?: number
           subtitle?: string | null
           title?: string
+          track_id?: string | null
         }
         Relationships: [
           {
@@ -887,6 +1030,13 @@ export type Database = {
             columns: ["church_id"]
             isOneToOne: false
             referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "courses_track_id_fkey"
+            columns: ["track_id"]
+            isOneToOne: false
+            referencedRelation: "learning_tracks"
             referencedColumns: ["id"]
           },
         ]
@@ -1217,6 +1367,7 @@ export type Database = {
           next_steps: string | null
           objectives: string | null
           pastor_notes: string | null
+          pastoral_request_resolved_at: string | null
           recommendations: string | null
           updated_at: string
           user_id: string
@@ -1233,6 +1384,7 @@ export type Database = {
           next_steps?: string | null
           objectives?: string | null
           pastor_notes?: string | null
+          pastoral_request_resolved_at?: string | null
           recommendations?: string | null
           updated_at?: string
           user_id: string
@@ -1249,6 +1401,7 @@ export type Database = {
           next_steps?: string | null
           objectives?: string | null
           pastor_notes?: string | null
+          pastoral_request_resolved_at?: string | null
           recommendations?: string | null
           updated_at?: string
           user_id?: string
@@ -1435,18 +1588,21 @@ export type Database = {
       game_config: {
         Row: {
           church_id: string | null
+          description: string | null
           key: string
           updated_at: string
           value: number
         }
         Insert: {
           church_id?: string | null
+          description?: string | null
           key: string
           updated_at?: string
           value: number
         }
         Update: {
           church_id?: string | null
+          description?: string | null
           key?: string
           updated_at?: string
           value?: number
@@ -1457,6 +1613,191 @@ export type Database = {
             columns: ["church_id"]
             isOneToOne: false
             referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      global_course_releases: {
+        Row: {
+          church_id: string
+          course_id: string
+          id: string
+          released_at: string | null
+          released_by: string | null
+        }
+        Insert: {
+          church_id: string
+          course_id: string
+          id?: string
+          released_at?: string | null
+          released_by?: string | null
+        }
+        Update: {
+          church_id?: string
+          course_id?: string
+          id?: string
+          released_at?: string | null
+          released_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "global_course_releases_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "global_course_releases_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      learning_tracks: {
+        Row: {
+          church_id: string | null
+          created_at: string
+          description: string
+          id: string
+          name: string
+          order_num: number
+        }
+        Insert: {
+          church_id?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          name: string
+          order_num?: number
+        }
+        Update: {
+          church_id?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          name?: string
+          order_num?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learning_tracks_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      track_church_releases: {
+        Row: {
+          church_id: string
+          id: string
+          released_at: string
+          released_by: string | null
+          track_id: string
+        }
+        Insert: {
+          church_id: string
+          id?: string
+          released_at?: string
+          released_by?: string | null
+          track_id: string
+        }
+        Update: {
+          church_id?: string
+          id?: string
+          released_at?: string
+          released_by?: string | null
+          track_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "track_church_releases_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "track_church_releases_track_id_fkey"
+            columns: ["track_id"]
+            isOneToOne: false
+            referencedRelation: "learning_tracks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leader_follow_ups: {
+        Row: {
+          assigned_to: string | null
+          church_id: string
+          completed_at: string | null
+          completed_by: string | null
+          contacted_at: string | null
+          created_at: string
+          created_by: string
+          due_at: string | null
+          id: string
+          kind: string
+          notes: string | null
+          status: string
+          title: string
+          turma_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          church_id: string
+          completed_at?: string | null
+          completed_by?: string | null
+          contacted_at?: string | null
+          created_at?: string
+          created_by: string
+          due_at?: string | null
+          id?: string
+          kind: string
+          notes?: string | null
+          status?: string
+          title: string
+          turma_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assigned_to?: string | null
+          church_id?: string
+          completed_at?: string | null
+          completed_by?: string | null
+          contacted_at?: string | null
+          created_at?: string
+          created_by?: string
+          due_at?: string | null
+          id?: string
+          kind?: string
+          notes?: string | null
+          status?: string
+          title?: string
+          turma_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leader_follow_ups_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leader_follow_ups_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
             referencedColumns: ["id"]
           },
         ]
@@ -1825,48 +2166,6 @@ export type Database = {
           },
         ]
       }
-      modules: {
-        Row: {
-          church_id: string | null
-          course_id: string
-          created_at: string
-          id: string
-          order_num: number
-          title: string
-        }
-        Insert: {
-          church_id?: string | null
-          course_id: string
-          created_at?: string
-          id?: string
-          order_num?: number
-          title: string
-        }
-        Update: {
-          church_id?: string | null
-          course_id?: string
-          created_at?: string
-          id?: string
-          order_num?: number
-          title?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "modules_church_id_fkey"
-            columns: ["church_id"]
-            isOneToOne: false
-            referencedRelation: "churches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "modules_course_id_fkey"
-            columns: ["course_id"]
-            isOneToOne: false
-            referencedRelation: "courses"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       login_audit_logs: {
         Row: {
           church_id: string | null
@@ -2097,16 +2396,70 @@ export type Database = {
           },
         ]
       }
+      modules: {
+        Row: {
+          church_id: string | null
+          course_id: string
+          created_at: string
+          id: string
+          order_num: number
+          title: string
+        }
+        Insert: {
+          church_id?: string | null
+          course_id: string
+          created_at?: string
+          id?: string
+          order_num?: number
+          title: string
+        }
+        Update: {
+          church_id?: string | null
+          course_id?: string
+          created_at?: string
+          id?: string
+          order_num?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modules_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modules_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_preferences: {
         Row: {
+          allowed_weekdays: number[]
+          attendance: boolean
+          birthday: boolean
+          chat_replies: boolean
           church_id: string | null
           created_at: string
           devocional: boolean
           eventos: boolean
           id: string
+          last_inactive_nudge_at: string | null
+          last_server_reminder_at: string | null
+          local_enabled: boolean
           master_enabled: boolean
           mensagens: boolean
+          prayer: boolean
           preferred_hour: number
+          push_enabled: boolean
+          quiet_hours_enabled: boolean
+          quiet_hours_end: number
+          quiet_hours_start: number
           streak: boolean
           timezone: string
           updated_at: string
@@ -2117,14 +2470,26 @@ export type Database = {
           whatsapp_enabled: boolean
         }
         Insert: {
+          allowed_weekdays?: number[]
+          attendance?: boolean
+          birthday?: boolean
+          chat_replies?: boolean
           church_id?: string | null
           created_at?: string
           devocional?: boolean
           eventos?: boolean
           id?: string
+          last_inactive_nudge_at?: string | null
+          last_server_reminder_at?: string | null
+          local_enabled?: boolean
           master_enabled?: boolean
           mensagens?: boolean
+          prayer?: boolean
           preferred_hour?: number
+          push_enabled?: boolean
+          quiet_hours_enabled?: boolean
+          quiet_hours_end?: number
+          quiet_hours_start?: number
           streak?: boolean
           timezone?: string
           updated_at?: string
@@ -2135,14 +2500,26 @@ export type Database = {
           whatsapp_enabled?: boolean
         }
         Update: {
+          allowed_weekdays?: number[]
+          attendance?: boolean
+          birthday?: boolean
+          chat_replies?: boolean
           church_id?: string | null
           created_at?: string
           devocional?: boolean
           eventos?: boolean
           id?: string
+          last_inactive_nudge_at?: string | null
+          last_server_reminder_at?: string | null
+          local_enabled?: boolean
           master_enabled?: boolean
           mensagens?: boolean
+          prayer?: boolean
           preferred_hour?: number
+          push_enabled?: boolean
+          quiet_hours_enabled?: boolean
+          quiet_hours_end?: number
+          quiet_hours_start?: number
           streak?: boolean
           timezone?: string
           updated_at?: string
@@ -2192,6 +2569,24 @@ export type Database = {
           title?: string
           type?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      onboarding_rate_limits: {
+        Row: {
+          created_at: string
+          id: number
+          key_hash: string
+        }
+        Insert: {
+          created_at?: string
+          id?: never
+          key_hash: string
+        }
+        Update: {
+          created_at?: string
+          id?: never
+          key_hash?: string
         }
         Relationships: []
       }
@@ -2685,7 +3080,7 @@ export type Database = {
           confirmation_year: number | null
           created_at: string
           email: string | null
-          enrollment_status: string | null
+          enrollment_status: string
           enrollment_status_updated_at: string | null
           enrollment_status_updated_by: string | null
           father_name: string | null
@@ -2715,7 +3110,7 @@ export type Database = {
           confirmation_year?: number | null
           created_at?: string
           email?: string | null
-          enrollment_status?: string | null
+          enrollment_status?: string
           enrollment_status_updated_at?: string | null
           enrollment_status_updated_by?: string | null
           father_name?: string | null
@@ -2745,7 +3140,7 @@ export type Database = {
           confirmation_year?: number | null
           created_at?: string
           email?: string | null
-          enrollment_status?: string | null
+          enrollment_status?: string
           enrollment_status_updated_at?: string | null
           enrollment_status_updated_by?: string | null
           father_name?: string | null
@@ -2784,28 +3179,40 @@ export type Database = {
       }
       push_activation_reminders: {
         Row: {
+          channel: string
           church_id: string | null
           created_at: string
           dismissed_at: string | null
           id: string
+          reason: string
           sent_by: string
+          status: string
           target_user_id: string
+          viewed_at: string | null
         }
         Insert: {
+          channel?: string
           church_id?: string | null
           created_at?: string
           dismissed_at?: string | null
           id?: string
+          reason?: string
           sent_by: string
+          status?: string
           target_user_id: string
+          viewed_at?: string | null
         }
         Update: {
+          channel?: string
           church_id?: string | null
           created_at?: string
           dismissed_at?: string | null
           id?: string
+          reason?: string
           sent_by?: string
+          status?: string
           target_user_id?: string
+          viewed_at?: string | null
         }
         Relationships: [
           {
@@ -2851,6 +3258,134 @@ export type Database = {
             columns: ["church_id"]
             isOneToOne: false
             referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      push_automation_overrides: {
+        Row: {
+          body: string
+          church_id: string
+          enabled: boolean
+          id: string
+          key: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          church_id: string
+          enabled?: boolean
+          id?: string
+          key: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          church_id?: string
+          enabled?: boolean
+          id?: string
+          key?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_automation_overrides_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      push_delivery_events: {
+        Row: {
+          body: string
+          church_id: string | null
+          clicked_at: string | null
+          closed_at: string | null
+          created_at: string
+          device_id: string | null
+          endpoint_hash: string
+          error: string | null
+          event_token_hash: string | null
+          failed_at: string | null
+          http_status: number | null
+          id: string
+          notification_tag: string | null
+          notification_url: string | null
+          provider: string | null
+          push_type: string
+          sent_at: string | null
+          sent_by: string | null
+          status: string
+          subscription_id: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body?: string
+          church_id?: string | null
+          clicked_at?: string | null
+          closed_at?: string | null
+          created_at?: string
+          device_id?: string | null
+          endpoint_hash: string
+          error?: string | null
+          event_token_hash?: string | null
+          failed_at?: string | null
+          http_status?: number | null
+          id?: string
+          notification_tag?: string | null
+          notification_url?: string | null
+          provider?: string | null
+          push_type?: string
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: string
+          subscription_id?: string | null
+          title?: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          church_id?: string | null
+          clicked_at?: string | null
+          closed_at?: string | null
+          created_at?: string
+          device_id?: string | null
+          endpoint_hash?: string
+          error?: string | null
+          event_token_hash?: string | null
+          failed_at?: string | null
+          http_status?: number | null
+          id?: string
+          notification_tag?: string | null
+          notification_url?: string | null
+          provider?: string | null
+          push_type?: string
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: string
+          subscription_id?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_delivery_events_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_delivery_events_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "push_subscriptions"
             referencedColumns: ["id"]
           },
         ]
@@ -2960,34 +3495,73 @@ export type Database = {
       }
       push_subscriptions: {
         Row: {
+          app_version: string | null
           auth: string
+          browser: string | null
           church_id: string | null
           created_at: string
+          device_id: string | null
+          disabled_reason: string | null
           endpoint: string
+          failure_count: number
           id: string
+          last_failure_at: string | null
+          last_seen_at: string | null
+          last_success_at: string | null
           p256dh: string
+          permission_status: string | null
+          platform: string | null
+          sw_version: string | null
           updated_at: string
+          user_agent: string | null
           user_id: string
+          vapid_public_key_hash: string | null
         }
         Insert: {
+          app_version?: string | null
           auth: string
+          browser?: string | null
           church_id?: string | null
           created_at?: string
+          device_id?: string | null
+          disabled_reason?: string | null
           endpoint: string
+          failure_count?: number
           id?: string
+          last_failure_at?: string | null
+          last_seen_at?: string | null
+          last_success_at?: string | null
           p256dh: string
+          permission_status?: string | null
+          platform?: string | null
+          sw_version?: string | null
           updated_at?: string
+          user_agent?: string | null
           user_id: string
+          vapid_public_key_hash?: string | null
         }
         Update: {
+          app_version?: string | null
           auth?: string
+          browser?: string | null
           church_id?: string | null
           created_at?: string
+          device_id?: string | null
+          disabled_reason?: string | null
           endpoint?: string
+          failure_count?: number
           id?: string
+          last_failure_at?: string | null
+          last_seen_at?: string | null
+          last_success_at?: string | null
           p256dh?: string
+          permission_status?: string | null
+          platform?: string | null
+          sw_version?: string | null
           updated_at?: string
+          user_agent?: string | null
           user_id?: string
+          vapid_public_key_hash?: string | null
         }
         Relationships: [
           {
@@ -2996,6 +3570,42 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "churches"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      ranking_exclusions: {
+        Row: {
+          church_id: string
+          excluded_at: string
+          excluded_by: string
+          user_id: string
+        }
+        Insert: {
+          church_id: string
+          excluded_at?: string
+          excluded_by: string
+          user_id: string
+        }
+        Update: {
+          church_id?: string
+          excluded_at?: string
+          excluded_by?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ranking_exclusions_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ranking_exclusions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -3225,6 +3835,39 @@ export type Database = {
           key?: string
           updated_at?: string | null
           value?: string
+        }
+        Relationships: []
+      }
+      system_update_log: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          details: string | null
+          id: string
+          summary: string
+          title: string
+          update_type: string
+          version: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          details?: string | null
+          id?: string
+          summary: string
+          title: string
+          update_type?: string
+          version?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          details?: string | null
+          id?: string
+          summary?: string
+          title?: string
+          update_type?: string
+          version?: string | null
         }
         Relationships: []
       }
@@ -3862,6 +4505,25 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      archive_turma_professions: { Args: { p_turma_id: string }; Returns: Json }
+      assert_same_church_reference: {
+        Args: {
+          allow_global?: boolean
+          parent_church_id: string
+          reference_name: string
+          row_church_id: string
+        }
+        Returns: undefined
+      }
+      backfill_church_id_from_user_profile: {
+        Args: { p_table: unknown }
+        Returns: undefined
+      }
+      can_manage_church: { Args: { _church_id: string }; Returns: boolean }
+      check_church_member_limit: {
+        Args: { p_church_id: string }
+        Returns: boolean
+      }
       complete_devotional: {
         Args: {
           p_awarded_points?: number
@@ -3871,6 +4533,10 @@ export type Database = {
           p_responses?: Json
         }
         Returns: undefined
+      }
+      complete_leader_follow_up: {
+        Args: { p_follow_up_id: string; p_resolution_notes?: string }
+        Returns: Json
       }
       complete_lesson: {
         Args: {
@@ -3883,16 +4549,74 @@ export type Database = {
         }
         Returns: undefined
       }
-      can_manage_church: { Args: { _church_id: string }; Returns: boolean }
-      check_church_member_limit: {
-        Args: { p_church_id: string }
+      confirm_whatsapp_resend: {
+        Args: { _error?: string; _log_id: string; _success: boolean }
+        Returns: undefined
+      }
+      consume_onboarding_rate_limit: {
+        Args: { p_key_hash: string; p_limit?: number }
         Returns: boolean
       }
-      delete_push_scheduled: { Args: { _id: string }; Returns: undefined }
-      delete_user_from_discipleship: {
-        Args: { _target_user_id: string }
-        Returns: Json
+      create_church_subscription_onboarding: {
+        Args: {
+          p_activities?: string
+          p_average_age?: string
+          p_church_address?: string
+          p_church_email?: string
+          p_church_name: string
+          p_church_phone?: string
+          p_member_count?: string
+          p_needs?: string
+          p_objectives?: string
+          p_pastor_email?: string
+          p_pastor_name?: string
+          p_pastor_phone?: string
+          p_pastor_role?: string
+          p_preferences?: string
+          p_recommended_plan?: string
+          p_trial_ends_at?: string
+        }
+        Returns: {
+          activities: string | null
+          average_age: string | null
+          checkout_attempt_count: number
+          checkout_started_at: string | null
+          church_address: string | null
+          church_email: string
+          church_id: string | null
+          church_name: string
+          church_phone: string | null
+          created_at: string
+          id: string
+          is_active: boolean | null
+          last_threshold_alert_pct: number | null
+          last_webhook_event_id: string | null
+          member_count: string | null
+          member_limit: number | null
+          needs: string | null
+          objectives: string | null
+          pastor_email: string | null
+          pastor_name: string
+          pastor_phone: string | null
+          pastor_role: string | null
+          preferences: string | null
+          recommended_plan: string
+          stripe_checkout_session_id: string | null
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          subscription_status: string
+          trial_alert_snoozed_until: string | null
+          trial_ends_at: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "church_subscriptions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
+      delete_push_scheduled: { Args: { _id: string }; Returns: undefined }
       get_all_areas: {
         Args: never
         Returns: {
@@ -3958,11 +4682,63 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_community_ranking_internal: {
+        Args: {
+          _church_id?: string
+          _community?: Database["public"]["Enums"]["community_name"]
+        }
+        Returns: {
+          achievement_bonus: number
+          base_points: number
+          completed_count: number
+          course_bonus: number
+          faith_points: number
+          full_name: string
+          other_bonus: number
+          user_id: string
+        }[]
+      }
       get_game_config: {
         Args: never
         Returns: {
           key: string
           value: number
+        }[]
+      }
+      get_leader_care_dashboard: {
+        Args: { p_area?: string; p_church_id?: string; p_turma_id?: string }
+        Returns: {
+          assigned_to: string
+          assigned_to_name: string
+          attendance_4_present: number
+          attendance_4_total: number
+          attendance_8_present: number
+          attendance_8_total: number
+          avatar_url: string
+          care_reasons: string[]
+          care_status: string
+          community: string
+          course_progress: number
+          devotionals_14: number
+          devotionals_30: number
+          devotionals_7: number
+          follow_up_id: string
+          full_name: string
+          last_access_at: string
+          last_activity_at: string
+          last_activity_source: string
+          last_contact_at: string
+          lessons_completed: number
+          lessons_total: number
+          needs_pastor: boolean
+          next_action: string
+          next_action_due_at: string
+          pastoral_request_at: string
+          pastoral_request_note: string
+          phone: string
+          progress_trend: string
+          trend_delta: number
+          user_id: string
         }[]
       }
       get_my_area: {
@@ -3974,6 +4750,7 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["community_name"]
       }
+      get_my_manageable_church_ids: { Args: never; Returns: string[] }
       get_profession_of_faith_report: {
         Args: { p_church_id: string }
         Returns: {
@@ -3981,6 +4758,13 @@ export type Database = {
           professed_at: string
           turma_name: string
           user_id: string
+        }[]
+      }
+      get_public_church_registration_availability: {
+        Args: { p_church_id: string }
+        Returns: {
+          can_register: boolean
+          reason: string
         }[]
       }
       get_push_automation_config: {
@@ -3993,15 +4777,6 @@ export type Database = {
           title: string
         }[]
       }
-      save_lesson_draft: {
-        Args: {
-          p_audio_listened?: boolean
-          p_lesson_id: string
-          p_responses?: Json
-          p_video_watched?: boolean
-        }
-        Returns: undefined
-      }
       get_push_scheduled_pending: {
         Args: never
         Returns: {
@@ -4009,10 +4784,50 @@ export type Database = {
           created_at: string
           id: string
           scheduled_at: string
+          sent: boolean
           target: string
           target_value: string
           title: string
         }[]
+      }
+      get_users_late_challenge: {
+        Args: { days_threshold?: number }
+        Returns: {
+          challenge_id: string
+          challenge_title: string
+          days_remaining: number
+          full_name: string
+          phone: string
+          user_id: string
+        }[]
+      }
+      get_users_late_checkin: {
+        Args: { days_after?: number }
+        Returns: {
+          event_date: string
+          event_id: string
+          event_title: string
+          full_name: string
+          phone: string
+          user_id: string
+        }[]
+      }
+      get_users_late_devotional: {
+        Args: { threshold_hour?: number }
+        Returns: {
+          full_name: string
+          phone: string
+          user_id: string
+        }[]
+      }
+      grant_manual_bonus: {
+        Args: {
+          p_achievement_key: string
+          p_justification: string
+          p_points: number
+          p_target_user_id: string
+        }
+        Returns: Json
       }
       has_role: {
         Args: {
@@ -4034,6 +4849,8 @@ export type Database = {
       }
       is_authorized_system_admin: { Args: never; Returns: boolean }
       is_authorized_system_admin_v2: { Args: never; Returns: boolean }
+      is_in_my_area: { Args: { _target_user_id: string }; Returns: boolean }
+      is_in_my_turma: { Args: { _target_user_id: string }; Returns: boolean }
       is_super_admin:
         | { Args: never; Returns: boolean }
         | { Args: { _user_id?: string }; Returns: boolean }
@@ -4062,9 +4879,21 @@ export type Database = {
         }
         Returns: undefined
       }
+      log_my_church_audit: {
+        Args: { p_action: string; p_details?: Json }
+        Returns: undefined
+      }
       log_system_access_attempt: {
         Args: { p_status: string }
         Returns: undefined
+      }
+      prepare_whatsapp_resend: {
+        Args: {
+          _reference_id?: string
+          _reminder_type: string
+          _target_user_id: string
+        }
+        Returns: Json
       }
       process_profession_of_faith:
         | {
@@ -4080,8 +4909,46 @@ export type Database = {
             Returns: undefined
           }
       recalculate_ranking: { Args: { _church_id?: string }; Returns: Json }
+      remove_manual_bonus: {
+        Args: { p_achievement_id: string; p_reason?: string }
+        Returns: Json
+      }
+      reset_turma_journey: { Args: { p_turma_id: string }; Returns: Json }
+      resolve_member_pastoral_request: {
+        Args: { p_notes?: string; p_target_user_id: string }
+        Returns: Json
+      }
+      revalidate_user_whatsapp: {
+        Args: { _target_user_id: string }
+        Returns: Json
+      }
+      sanitize_phone_br: { Args: { raw_phone: string }; Returns: string }
+      save_leader_follow_up: {
+        Args: {
+          p_assigned_to?: string
+          p_due_at?: string
+          p_kind: string
+          p_notes?: string
+          p_target_user_id: string
+          p_title: string
+        }
+        Returns: Json
+      }
+      save_lesson_draft: {
+        Args: {
+          p_audio_listened?: boolean
+          p_lesson_id: string
+          p_responses?: Json
+          p_video_watched?: boolean
+        }
+        Returns: undefined
+      }
       secure_extend_trial: {
         Args: { p_church_subscription_id: string; p_days: number }
+        Returns: undefined
+      }
+      set_ranking_participation: {
+        Args: { _included: boolean; _user_id: string }
         Returns: undefined
       }
       set_system_master_password: {
@@ -4100,10 +4967,6 @@ export type Database = {
         Args: { _body: string; _enabled: boolean; _key: string; _title: string }
         Returns: undefined
       }
-      upsert_game_config_item: {
-        Args: { _key: string; _value: number }
-        Returns: undefined
-      }
       verify_system_master_password: {
         Args: { p_password_attempt: string }
         Returns: boolean
@@ -4111,7 +4974,7 @@ export type Database = {
     }
     Enums: {
       app_role: "user" | "admin" | "lider" | "super_admin"
-      area_name: "Área 1" | "Área 2" | "DISCIPULADO JEMIAC"
+      area_name: "Área 1" | "Área 2" | "Sem area"
       community_name:
         | "Martim Lutero"
         | "Bom Pastor"
@@ -4120,7 +4983,7 @@ export type Database = {
         | "Linha Brasil"
         | "Iriá Pira 1"
         | "Iriá Pira 2"
-        | "JEMIAC"
+        | "Aguardando definicao"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4246,10 +5109,13 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["user", "admin", "lider", "super_admin"],
-      area_name: ["Área 1", "Área 2", "DISCIPULADO JEMIAC"],
+      area_name: ["Área 1", "Área 2", "Sem area"],
       community_name: [
         "Martim Lutero",
         "Bom Pastor",
@@ -4258,7 +5124,7 @@ export const Constants = {
         "Linha Brasil",
         "Iriá Pira 1",
         "Iriá Pira 2",
-        "JEMIAC",
+        "Aguardando definicao",
       ],
     },
   },
