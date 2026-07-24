@@ -70,6 +70,8 @@ type Props = {
   overrideId?: string | null;
   /** Manual awarded points for lesson responses */
   awardedPoints?: number | null;
+  /** Dedicated confirmatory recovery: show only unfinished items. */
+  recoveryMode?: boolean;
 };
 
 function normalizeDate(date: Date) {
@@ -299,6 +301,7 @@ export default function LessonChoiceView({
   isStudyCompleted = true,
   overrideId = null,
   awardedPoints = null,
+  recoveryMode = false,
 }: Props) {
   const { role } = useAuth();
   const isLeaderOrAdmin = role === "admin" || role === "lider";
@@ -327,7 +330,7 @@ export default function LessonChoiceView({
         user
           ? supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery").eq("user_id", user.id)
           : Promise.resolve({ data: [], error: null }),
-        supabase.rpc("get_game_config" as any),
+        supabase.rpc("get_game_config"),
       ]);
       const loadError = devsError ?? progressError ?? gameConfigError;
       if (loadError) {
@@ -337,20 +340,23 @@ export default function LessonChoiceView({
         setLoading(false);
         return;
       }
-      const cfgMap = new Map<string, number>((gameConfig ?? []).map((r: any) => [r.key, Number(r.value)]));
+      const cfgMap = new Map<string, number>((gameConfig ?? []).map((row) => [row.key, Number(row.value)]));
       setDevPts(cfgMap.get("devotional_points") ?? 5);
 
       setDevRecoveryPts(cfgMap.get("devotional_recovery_points") ?? 2);
 
-      const devList = (devs ?? []) as DevotionalItem[];
+      const completedIdsFromServer = new Set((prog ?? []).map((item) => item.devotional_id));
+      const devList = ((devs ?? []) as DevotionalItem[]).filter(
+        (devotional) => !recoveryMode || !completedIdsFromServer.has(devotional.id),
+      );
       const overrideMap = new Map<string, DevotionalOverride>();
       if (user && devList.length > 0) {
         const { data: overrides } = await supabase
-          .from("user_devotional_overrides" as any)
+          .from("user_devotional_overrides")
           .select("id, devotional_id, custom_points, available_from, available_until, is_unlocked")
           .eq("user_id", user.id)
           .in("devotional_id", devList.map((dev) => dev.id));
-        (overrides ?? []).forEach((item: any) => {
+        (overrides ?? []).forEach((item) => {
           overrideMap.set(item.devotional_id, item as DevotionalOverride);
         });
       }
@@ -358,15 +364,20 @@ export default function LessonChoiceView({
       const progList = prog ?? [];
       const completedMap = new Map<string, string>();
       const recoveryIds = new Set<string>();
-      progList.forEach((p: any) => {
+      progList.forEach((p) => {
         completedMap.set(p.devotional_id, p.completed_at);
         if (p.is_recovery) recoveryIds.add(p.devotional_id);
       });
-      setCompletedIds(new Set(progList.map((p: any) => p.devotional_id)));
+      setCompletedIds(new Set(progList.map((p) => p.devotional_id)));
       setCompletedDates(completedMap);
       setCompletedRecoveryIds(recoveryIds);
 
-      if (isLeaderOrAdmin) {
+      if (recoveryMode) {
+        const recoveryStatuses = new Map<string, DevotionalStatus>();
+        devList.forEach((devotional) => recoveryStatuses.set(devotional.id, "recovery"));
+        setDevStatuses(recoveryStatuses);
+        setDevRecoverySet(new Set(devList.map((devotional) => devotional.id)));
+      } else if (isLeaderOrAdmin) {
         const allAvailable = new Map<string, DevotionalStatus>();
         devList.forEach(d => allAvailable.set(d.id, completedMap.has(d.id) ? "completed" : "available"));
         setDevStatuses(allAvailable);
@@ -374,12 +385,7 @@ export default function LessonChoiceView({
       } else if (isLateAccess) {
         const lateStatuses = new Map<string, DevotionalStatus>();
         devList.forEach(d => {
-          if (completedMap.has(d.id)) {
-            lateStatuses.set(d.id, "completed");
-            return;
-          }
-          const activeOverride = overrideMap.get(d.id);
-          lateStatuses.set(d.id, isOverrideActive(activeOverride, new Date()) ? "available" : "locked");
+          lateStatuses.set(d.id, completedMap.has(d.id) ? "completed" : "available");
         });
         setDevStatuses(lateStatuses);
         setDevRecoverySet(new Set());
@@ -395,7 +401,7 @@ export default function LessonChoiceView({
       setLoading(false);
     }
     load();
-  }, [lesson.id, scheduledDevotionalDates, releasedDayNumbers, devotionalMode, isLateAccess, isStudyCompleted]);
+  }, [lesson.id, scheduledDevotionalDates, releasedDayNumbers, devotionalMode, isLateAccess, isStudyCompleted, isLeaderOrAdmin, recoveryMode]);
 
   useEffect(() => {
     if (!autoOpenAvailableDevotional || loading || devotionals.length === 0) return;
@@ -440,12 +446,7 @@ export default function LessonChoiceView({
     } else if (isLateAccess) {
       const lateStatuses = new Map<string, DevotionalStatus>();
       devotionals.forEach(d => {
-        if (newCompletedMap.has(d.id)) {
-          lateStatuses.set(d.id, "completed");
-          return;
-        }
-        const activeOverride = devOverrideMap.get(d.id);
-        lateStatuses.set(d.id, isOverrideActive(activeOverride, now) ? "available" : "locked");
+        lateStatuses.set(d.id, newCompletedMap.has(d.id) ? "completed" : "available");
       });
       setDevStatuses(lateStatuses);
       setDevRecoverySet(new Set());
@@ -560,7 +561,7 @@ export default function LessonChoiceView({
             {completedCount}/{totalCount} concluídos{lockedCount > 0 ? ` · ${lockedCount} bloqueado${lockedCount > 1 ? "s" : ""}` : ""}
           </p>
           {eventDate && (
-            <p className="text-primary-foreground/60 font-inter text-[10px] mt-1">
+            <p className="text-primary-foreground/60 font-inter text-xs mt-1">
               📅 Encontro: {format(eventDate, "d 'de' MMMM", { locale: ptBR })}
             </p>
           )}
@@ -614,7 +615,7 @@ export default function LessonChoiceView({
                     }`}>
                       {dev.title || `Dia ${dev.day_number}`}
                     </p>
-                    <p className="text-muted-foreground font-inter text-[10px] truncate">
+                    <p className="text-muted-foreground font-inter text-xs truncate">
                       {locked ? "🔒 Bloqueado — dia perdido" : future ? (
                         sched ? `🔜 ${weekdayNames[sched.getDay()]}, ${sched.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}` : "🔜 Disponível em breve"
                       ) : done ? "✅ Concluído" : (
@@ -645,17 +646,25 @@ export default function LessonChoiceView({
           <p className="text-primary-foreground/70 font-inter text-xs mt-2">{lesson.objective}</p>
         )}
         {eventDate && (
-          <p className="text-primary-foreground/50 font-inter text-[10px] mt-2">
+          <p className="text-primary-foreground/50 font-inter text-xs mt-2">
             📅 Encontro: {format(eventDate, "d 'de' MMMM 'às' HH:mm", { locale: ptBR })}
           </p>
         )}
       </div>
 
+      {recoveryMode && (
+        <div className="rounded-2xl p-3 bg-amber-50 border border-amber-300/60">
+          <p className="font-inter text-xs text-amber-900">
+            <strong>Trilha de recuperação:</strong> esta tela mostra somente suas pendências. A lição vale 10 pontos e cada devocional vale 2 pontos.
+          </p>
+        </div>
+      )}
+
       {isLateAccess && (
         <div className="rounded-2xl p-3 bg-accent/10 border border-accent/20 flex items-start gap-2">
           <span className="text-sm">⚠️</span>
           <p className="font-inter text-xs text-accent-foreground">
-            O prazo desta lição já encerrou. Você ainda pode completar o <strong>estudo</strong>, mas <strong>sem pontuação</strong>. Os devocionais não realizados estão bloqueados.
+            O prazo desta lição já encerrou. Você ainda pode completar o <strong>estudo</strong> e os <strong>devocionais</strong>, mas <strong>sem pontuação</strong>.
           </p>
         </div>
       )}
@@ -695,8 +704,8 @@ export default function LessonChoiceView({
               <p className="text-secondary font-inter text-xs mt-0.5 font-semibold">
                 ⭐ Recomendado — faça primeiro!
               </p>
-              <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
-                {isLateAccess ? "⚠️ Sem pontuação (prazo encerrado)" : "+20 pontos de fé ao completar"}
+              <p className="text-muted-foreground font-inter text-xs mt-1 italic">
+                {isLateAccess ? "⚠️ Sem pontuação (prazo encerrado)" : recoveryMode ? "+10 pontos de fé ao completar" : "+20 pontos de fé ao completar"}
               </p>
             </div>
             {!isStudyLocked && <span className="text-secondary font-montserrat font-bold text-lg">→</span>}
@@ -704,7 +713,7 @@ export default function LessonChoiceView({
         )}
 
         {/* Devocionais */}
-        <button onClick={() => setShowDevotionals(true)}
+        {totalCount > 0 && <button onClick={() => setShowDevotionals(true)}
           className="flex items-center gap-4 p-5 bg-card rounded-2xl border border-border shadow-sm text-left hover:bg-brand-green/5 hover:border-brand-green/30 transition-all group">
           <div className="w-14 h-14 rounded-2xl bg-brand-green/10 flex items-center justify-center flex-shrink-0 group-hover:bg-brand-green/20 transition-colors">
             <BookOpen className="w-7 h-7 text-brand-green" />
@@ -719,15 +728,15 @@ export default function LessonChoiceView({
                 <div className="h-full bg-brand-green rounded-full transition-all" style={{ width: `${progressPct}%` }} />
               </div>
             )}
-            <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
+            <p className="text-muted-foreground font-inter text-xs mt-1 italic">
               {isLateAccess ? "⚠️ Sem pontuação (prazo encerrado)" : "Preparação diária antes do encontro"}
             </p>
           </div>
           <span className="text-brand-green font-montserrat font-bold text-lg">→</span>
-        </button>
+        </button>}
 
         {/* Estudo — show here when study is already completed or for leaders */}
-        {(isStudyCompleted || isLeaderOrAdmin) && (
+        {(isStudyCompleted || isLeaderOrAdmin) && !recoveryMode && (
           <button onClick={() => {
               if (isStudyLocked) return;
               onOpenStudy();
@@ -751,7 +760,7 @@ export default function LessonChoiceView({
                   <p className="text-muted-foreground font-inter text-xs mt-0.5">
                     Responda as perguntas e registre sua reflexão
                   </p>
-                  <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
+                  <p className="text-muted-foreground font-inter text-xs mt-1 italic">
                     {isLateAccess ? "⚠️ Sem pontuação (prazo encerrado)" : "+20 pontos de fé ao completar"}
                   </p>
                 </>

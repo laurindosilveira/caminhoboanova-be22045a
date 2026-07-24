@@ -1,12 +1,16 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Heart, ChevronLeft, Save, AlertCircle, CheckCircle2, Flame, GraduationCap,
-  Star, MessageSquare, Calendar, FileText, AlertTriangle, Plus, BookOpen, Eye, Clock
+  Star, MessageSquare, Calendar, FileText, AlertTriangle, Plus, BookOpen, Eye, Clock, RotateCcw, Square
 } from "lucide-react";
 import PastoralReportPDF from "@/components/admin/PastoralReportPDF";
 import JourneyLessonView from "@/components/home/JourneyLessonView";
 import { toast } from "sonner";
+import type { Database } from "@/integrations/supabase/types";
+
+type AreaName = Database["public"]["Enums"]["area_name"];
+type CommunityName = Database["public"]["Enums"]["community_name"];
 
 type Assessment = {
   prayer_score: number | null; presence_score: number | null;
@@ -44,6 +48,8 @@ type WorshipRecord = {
 };
 
 type TimelineCategory = "encontro" | "crise" | "progresso" | "conversa" | "marco";
+
+const MONTH_NAMES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 type TimelineItem = {
   date: string;
   type: "activity" | "note" | "assessment" | "attendance" | "evaluation" | "worship" | "milestone" | "crisis";
@@ -134,6 +140,7 @@ type ManualReleaseDraft = {
   created_at: string;
   granted_by?: string;
 };
+type RecoveryRelease = Database["public"]["Tables"]["confirmatory_recovery_releases"]["Row"];
 
 import { ALL_COMMUNITIES as COMMUNITIES_LIST, getAreaForCommunity as getArea } from "@/config/areas";
 
@@ -191,6 +198,10 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   });
   const [loadingManualReleases, setLoadingManualReleases] = useState(false);
   const [savingManualRelease, setSavingManualRelease] = useState(false);
+  const [recoveryReleases, setRecoveryReleases] = useState<RecoveryRelease[]>([]);
+  const [recoveryUntil, setRecoveryUntil] = useState("");
+  const [recoveryNotes, setRecoveryNotes] = useState("");
+  const [savingRecovery, setSavingRecovery] = useState(false);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
   const [meetingEvals, setMeetingEvals] = useState<MeetingEval[]>([]);
@@ -201,7 +212,6 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
-  const MONTH_NAMES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -243,10 +253,10 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         supabase.from("challenge_participants").select("challenge_id, completed, completed_at, joined_at, response_text, file_url").eq("user_id", p.user_id),
         supabase.from("courses").select("id, title, order_num").order("order_num"),
         unlocksQuery,
-        supabase.rpc("get_game_config" as any),
+        supabase.rpc("get_game_config"),
       ]);
 
-      const cfgMap = new Map<string, number>((gameConfig ?? []).map((r: any) => [r.key, Number(r.value)]));
+      const cfgMap = new Map<string, number>((gameConfig ?? []).map((row) => [row.key, Number(row.value)]));
       setAptidaoThresholds({
         apto:           cfgMap.get("aptidao_apto_threshold")           ?? 3.5,
         acompanhamento: cfgMap.get("aptidao_acompanhamento_threshold") ?? 2.5,
@@ -255,7 +265,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       setAssessment(ass ?? null);
       if (planData) setPlan(prev => ({ ...prev, ...planData }));
       setNotes(notesData ?? []);
-      const unlockedCourseIds = new Set((unlocksData ?? []).map((unlock: any) => unlock.course_id));
+      const unlockedCourseIds = new Set((unlocksData ?? []).map((unlock) => unlock.course_id));
       const visibleCourses = (coursesData ?? []).filter((course) => unlockedCourseIds.has(course.id));
       setCourses(visibleCourses as Course[]);
       const visibleLessons = (lessonsData ?? []).filter((lesson) => unlockedCourseIds.has(lesson.course_id));
@@ -265,8 +275,9 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       const courseTitleMap = new Map((visibleCourses as Course[]).map((course) => [course.id, course.title]));
 
       const lessonCompletionMap = new Map<string, string | null>();
-      (lessonResponsesData ?? []).forEach((response: any) => {
+      (lessonResponsesData ?? []).forEach((response) => {
         if (!visibleLessonIds.has(response.lesson_id)) return;
+        if (!response.completed_at) return;
         const existing = lessonCompletionMap.get(response.lesson_id);
         if (!existing || new Date(response.completed_at).getTime() < new Date(existing).getTime()) {
           lessonCompletionMap.set(response.lesson_id, response.completed_at);
@@ -279,10 +290,10 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         }))
       );
 
-      const devotionalLessonMap = new Map((devotionalContentData ?? []).map((devotional: any) => [devotional.id, devotional.lesson_id]));
+      const devotionalLessonMap = new Map((devotionalContentData ?? []).map((devotional) => [devotional.id, devotional.lesson_id]));
       const catalog = (devotionalContentData ?? [])
-        .filter((devotional: any) => devotional.lesson_id && visibleLessonIds.has(devotional.lesson_id))
-        .map((devotional: any) => {
+        .filter((devotional) => devotional.lesson_id && visibleLessonIds.has(devotional.lesson_id))
+        .map((devotional) => {
           const lesson = lessonMap.get(devotional.lesson_id);
           return {
             id: devotional.id,
@@ -302,7 +313,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
 
       setDevotionalCompletions(
         (devotionalProgressData ?? [])
-          .map((progress: any) => ({
+          .map((progress) => ({
             devotional_id: progress.devotional_id,
             lesson_id: devotionalLessonMap.get(progress.devotional_id) ?? null,
             completed_at: progress.completed_at,
@@ -480,10 +491,10 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       // Challenge participations
       const challengeParts = challengeParticipations ?? [];
       if (challengeParts.length > 0) {
-        const challengeIds = challengeParts.map((cp: any) => cp.challenge_id);
+        const challengeIds = challengeParts.map((cp) => cp.challenge_id);
         const { data: challengesData } = await supabase.from("community_challenges").select("id, title, emoji").in("id", challengeIds);
-        const challengeMap = new Map((challengesData ?? []).map((c: any) => [c.id, c]));
-        challengeParts.forEach((cp: any) => {
+        const challengeMap = new Map((challengesData ?? []).map((challenge) => [challenge.id, challenge]));
+        challengeParts.forEach((cp) => {
           const ch = challengeMap.get(cp.challenge_id);
           if (!ch) return;
           const date = cp.completed && cp.completed_at ? cp.completed_at : cp.joined_at;
@@ -509,39 +520,47 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       setLoading(false);
     }
     load();
-  }, [p.user_id]);
+  }, [activities, month, p.area, p.church_id, p.turma_id, p.user_id, year]);
 
-  async function fetchManualReleaseDrafts() {
+  const fetchManualReleaseDrafts = useCallback(async () => {
     const storageKey = `manual-content-release-drafts:${p.user_id}`;
     setLoadingManualReleases(true);
 
     const { data: devotionalData, error: devotionalError } = await supabase
-      .from("user_devotional_overrides" as any)
+      .from("user_devotional_overrides")
       .select("id, user_id, devotional_id, custom_points, available_from, available_until, notes, is_unlocked, created_at, granted_by")
       .eq("user_id", p.user_id)
       .order("created_at", { ascending: false });
 
     const { data: lessonData, error: lessonError } = await supabase
-      .from("user_lesson_overrides" as any)
+      .from("user_lesson_overrides")
       .select("id, user_id, lesson_id, custom_points, available_from, available_until, notes, is_unlocked, created_at, granted_by")
       .eq("user_id", p.user_id)
       .order("created_at", { ascending: false });
 
     const merged = [
-      ...(!devotionalError ? (devotionalData ?? []).map((item: any) => ({
+      ...(!devotionalError ? (devotionalData ?? []).map((item): ManualReleaseDraft => ({
         ...item,
         content_kind: "devotional" as const,
         lesson_id: null,
+        custom_points: item.custom_points ?? 0,
+        available_from: item.available_from ?? "",
+        available_until: item.available_until ?? "",
+        notes: item.notes ?? "",
       })) : []),
-      ...(!lessonError ? (lessonData ?? []).map((item: any) => ({
+      ...(!lessonError ? (lessonData ?? []).map((item): ManualReleaseDraft => ({
         ...item,
         content_kind: "lesson" as const,
         devotional_id: null,
+        custom_points: item.custom_points ?? 0,
+        available_from: item.available_from ?? "",
+        available_until: item.available_until ?? "",
+        notes: item.notes ?? "",
       })) : []),
-    ].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
     if (merged.length > 0 || (!devotionalError && !lessonError)) {
-      setManualReleaseDrafts(merged as ManualReleaseDraft[]);
+      setManualReleaseDrafts(merged);
       window.localStorage.removeItem(storageKey);
       setLoadingManualReleases(false);
       return;
@@ -560,11 +579,67 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
     }
 
     setLoadingManualReleases(false);
-  }
+  }, [p.user_id]);
+
+  const fetchRecoveryReleases = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("confirmatory_recovery_releases")
+      .select("*")
+      .eq("user_id", p.user_id)
+      .order("created_at", { ascending: false });
+    if (error) {
+      toast.error("Não foi possível carregar a trilha de recuperação.");
+      return;
+    }
+    setRecoveryReleases(data ?? []);
+  }, [p.user_id]);
 
   useEffect(() => {
     fetchManualReleaseDrafts();
-  }, [p.user_id]);
+  }, [fetchManualReleaseDrafts]);
+
+  useEffect(() => {
+    void fetchRecoveryReleases();
+  }, [fetchRecoveryReleases]);
+
+  async function handleStartRecovery() {
+    if (!recoveryUntil) {
+      toast.error("Informe até quando a recuperação ficará disponível.");
+      return;
+    }
+    const until = new Date(recoveryUntil);
+    if (Number.isNaN(until.getTime()) || until <= new Date()) {
+      toast.error("Escolha uma data e hora futuras.");
+      return;
+    }
+    setSavingRecovery(true);
+    const { error } = await supabase.rpc("start_confirmatory_recovery", {
+      p_user_id: p.user_id,
+      p_available_until: until.toISOString(),
+      p_notes: recoveryNotes.trim() || undefined,
+    });
+    setSavingRecovery(false);
+    if (error) {
+      toast.error("Não foi possível liberar a recuperação.", { description: error.message });
+      return;
+    }
+    setRecoveryUntil("");
+    setRecoveryNotes("");
+    await Promise.all([fetchRecoveryReleases(), fetchManualReleaseDrafts()]);
+    toast.success("Trilha de recuperação liberada para as pendências do usuário.");
+  }
+
+  async function handleEndRecovery(releaseId: string) {
+    setSavingRecovery(true);
+    const { error } = await supabase.rpc("end_confirmatory_recovery", { p_release_id: releaseId });
+    setSavingRecovery(false);
+    if (error) {
+      toast.error("Não foi possível encerrar a recuperação.", { description: error.message });
+      return;
+    }
+    await Promise.all([fetchRecoveryReleases(), fetchManualReleaseDrafts()]);
+    toast.success("Trilha de recuperação encerrada.");
+  }
 
   async function handleSavePlan() {
     setSaving(true);
@@ -680,7 +755,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         granted_by: leaderId,
       };
       const { error } = await supabase
-        .from("user_lesson_overrides" as any)
+        .from("user_lesson_overrides")
         .upsert(payload, { onConflict: "user_id,lesson_id" })
         .select("id, user_id, lesson_id, custom_points, available_from, available_until, notes, is_unlocked, created_at, granted_by");
 
@@ -730,7 +805,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       }));
 
       const { error } = await supabase
-        .from("user_devotional_overrides" as any)
+        .from("user_devotional_overrides")
         .upsert(payloads, { onConflict: "user_id,devotional_id" })
         .select("id, user_id, devotional_id, custom_points, available_from, available_until, notes, is_unlocked, created_at, granted_by");
 
@@ -769,11 +844,9 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
     const draft = manualReleaseDrafts.find((item) => item.id === draftId);
     if (!draft) return;
 
-    const tableName = draft.content_kind === "lesson" ? "user_lesson_overrides" : "user_devotional_overrides";
-    const { error } = await supabase
-      .from(tableName as any)
-      .delete()
-      .eq("id", draftId);
+    const { error } = draft.content_kind === "lesson"
+      ? await supabase.from("user_lesson_overrides").delete().eq("id", draftId)
+      : await supabase.from("user_devotional_overrides").delete().eq("id", draftId);
 
     if (!error) {
       setManualReleaseDrafts((prev) => prev.filter((item) => item.id !== draftId));
@@ -825,6 +898,9 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
   const selectedManualLesson = lessons.find((lesson) => lesson.id === manualReleaseSelection.lesson_id) ?? null;
   const completedDevotionalIds = new Set(devotionalCompletions.map((completion) => completion.devotional_id));
   const selectedManualDevotionals = devotionalCatalog.filter((d) => manualReleaseForm.devotional_ids.includes(d.id));
+  const activeRecovery = recoveryReleases.find((release) =>
+    !release.ended_at && new Date(release.available_until) > new Date()
+  ) ?? null;
 
   // Attendance stats
   const totalEvents = attendanceRecords.length;
@@ -916,17 +992,17 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       </button>
 
       {/* Profile header */}
-      <div className="rounded-2xl p-4 relative overflow-hidden" style={{ background: "var(--gradient-hero)" }}>
+      <div className="rounded-lg p-4 relative overflow-hidden" style={{ background: "var(--gradient-hero)" }}>
         <div className="flex items-center gap-4 mb-3">
           {p.avatar_url ? (
             <img
               src={p.avatar_url}
               alt={p.full_name}
-              className="w-14 h-14 rounded-2xl object-cover flex-shrink-0 border-2 border-white/30 cursor-pointer hover:opacity-80 transition-opacity"
+              className="w-14 h-14 rounded-lg object-cover flex-shrink-0 border-2 border-white/30 cursor-pointer hover:opacity-80 transition-opacity"
               onClick={() => setShowAvatarZoom(true)}
             />
           ) : (
-            <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0 border border-white/20">
+            <div className="w-14 h-14 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0 border border-white/20">
               <span className="font-montserrat font-black text-primary-foreground text-2xl">{p.full_name.charAt(0)}</span>
             </div>
           )}
@@ -935,7 +1011,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           {showAvatarZoom && p.avatar_url && (
             <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6" onClick={() => setShowAvatarZoom(false)}>
               <div className="relative max-w-sm w-full" onClick={e => e.stopPropagation()}>
-                <img src={p.avatar_url} alt={p.full_name} className="w-full rounded-2xl object-contain max-h-[70vh]" />
+                <img src={p.avatar_url} alt={p.full_name} className="w-full rounded-lg object-contain max-h-[70vh]" />
                 <button
                   onClick={() => setShowAvatarZoom(false)}
                   className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-card border border-border flex items-center justify-center shadow-lg"
@@ -949,21 +1025,21 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
             <h2 className="font-montserrat font-black text-primary-foreground text-lg leading-tight">{p.full_name}</h2>
             <p className="text-primary-foreground/70 font-inter text-xs">
               {p.community} · {p.area}{age ? ` · ${age} anos` : ""}
-              <button onClick={() => { setEditingCommunity(true); setNewCommunity(p.community); }} className="ml-1.5 text-primary-foreground/50 hover:text-primary-foreground underline text-[10px]">✏️ alterar</button>
+              <button onClick={() => { setEditingCommunity(true); setNewCommunity(p.community); }} className="ml-1.5 text-primary-foreground/50 hover:text-primary-foreground underline text-xs">✏️ alterar</button>
             </p>
             <p className="text-primary-foreground/60 font-inter text-xs">📞 <a href={`https://wa.me/${p.phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary-foreground transition-colors">{p.phone}</a></p>
             {p.email && <p className="text-primary-foreground/60 font-inter text-xs">📧 {p.email}</p>}
             <p className="text-primary-foreground/60 font-inter text-xs">
               🎓 Confirmatório {new Date().getFullYear()} - {p.area}
-              <button onClick={() => { setEditingTurma(true); setNewTurmaId(p.turma_id ?? ""); }} className="ml-1.5 text-primary-foreground/50 hover:text-primary-foreground underline text-[10px]">✏️ alterar</button>
+              <button onClick={() => { setEditingTurma(true); setNewTurmaId(p.turma_id ?? ""); }} className="ml-1.5 text-primary-foreground/50 hover:text-primary-foreground underline text-xs">✏️ alterar</button>
             </p>
             <p className="text-primary-foreground/60 font-inter text-xs">
               📖 {p.confirmation_year ? `${p.confirmation_year}º ano do Ensino Confirmatório` : "Ano não definido"}
-              <button onClick={() => { setEditingConfYear(true); setNewConfYear(p.confirmation_year ?? null); }} className="ml-1.5 text-primary-foreground/50 hover:text-primary-foreground underline text-[10px]">✏️ alterar</button>
+              <button onClick={() => { setEditingConfYear(true); setNewConfYear(p.confirmation_year ?? null); }} className="ml-1.5 text-primary-foreground/50 hover:text-primary-foreground underline text-xs">✏️ alterar</button>
             </p>
           </div>
           <button onClick={() => setPlan(prev => ({ ...prev, is_priority: !prev.is_priority }))}
-            className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-all ${plan.is_priority ? "bg-accent border-accent/50" : "bg-white/10 border-white/20"}`}
+            className={`w-9 h-9 rounded-lg flex items-center justify-center border transition-all ${plan.is_priority ? "bg-accent border-accent/50" : "bg-white/10 border-white/20"}`}
             title="Marcar como prioridade pastoral">
             <Star className={`w-4 h-4 ${plan.is_priority ? "text-accent-foreground" : "text-primary-foreground/60"}`} style={{ fill: plan.is_priority ? "hsl(var(--accent-foreground))" : "transparent" }} />
           </button>
@@ -971,7 +1047,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
 
         {/* Family info */}
         {(p.father_name || p.mother_name) && (
-          <div className="bg-white/10 rounded-xl p-3 mb-3 space-y-1.5">
+          <div className="bg-white/10 rounded-lg p-3 mb-3 space-y-1.5">
             {p.father_name && (
               <p className="text-primary-foreground/80 font-inter text-xs">
                 👨 <strong>Pai:</strong> {p.father_name}
@@ -1003,12 +1079,12 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
 
       {/* Edit community modal */}
       {editingCommunity && (
-        <div className="bg-card rounded-2xl border border-border shadow-sm p-4 space-y-3">
+        <div className="bg-card rounded-lg border border-border shadow-sm p-4 space-y-3">
           <p className="font-montserrat font-bold text-foreground text-sm">Alterar Comunidade / Área</p>
           <select
             value={newCommunity}
             onChange={(e) => setNewCommunity(e.target.value)}
-            className="w-full h-10 rounded-xl border border-input bg-background px-3 pr-8 text-sm text-foreground appearance-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="w-full h-10 rounded-lg border border-input bg-background px-3 pr-8 text-sm text-foreground appearance-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {COMMUNITIES_LIST.map((c) => (
               <option key={c} value={c}>{c}</option>
@@ -1024,8 +1100,8 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                 setSavingCommunity(true);
                 const newArea = getArea(newCommunity);
                 const { error } = await supabase.from("profiles").update({
-                  community: newCommunity as any,
-                  area: newArea as any,
+                  community: newCommunity as CommunityName,
+                  area: newArea as AreaName,
                 }).eq("user_id", p.user_id);
                 setSavingCommunity(false);
                 if (!error) {
@@ -1034,12 +1110,12 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   setEditingCommunity(false);
                 }
               }}
-              className="flex-1 h-9 rounded-xl font-inter text-xs font-bold text-primary-foreground disabled:opacity-60"
+              className="flex-1 h-9 rounded-lg font-inter text-xs font-bold text-primary-foreground disabled:opacity-60"
               style={{ background: "var(--gradient-hero)" }}
             >
               {savingCommunity ? "Salvando..." : "Salvar"}
             </button>
-            <button onClick={() => setEditingCommunity(false)} className="px-4 h-9 rounded-xl border border-border text-xs font-inter text-muted-foreground hover:text-foreground">
+            <button onClick={() => setEditingCommunity(false)} className="px-4 h-9 rounded-lg border border-border text-xs font-inter text-muted-foreground hover:text-foreground">
               Cancelar
             </button>
           </div>
@@ -1048,12 +1124,12 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
 
       {/* Edit turma modal */}
       {editingTurma && (
-        <div className="bg-card rounded-2xl border border-border shadow-sm p-4 space-y-3">
+        <div className="bg-card rounded-lg border border-border shadow-sm p-4 space-y-3">
           <p className="font-montserrat font-bold text-foreground text-sm">Alterar Turma</p>
           <select
             value={newTurmaId}
             onChange={(e) => setNewTurmaId(e.target.value)}
-            className="w-full h-10 rounded-xl border border-input bg-background px-3 pr-8 text-sm text-foreground appearance-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="w-full h-10 rounded-lg border border-input bg-background px-3 pr-8 text-sm text-foreground appearance-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="">Sem turma</option>
             {turmas.map((t) => (
@@ -1077,12 +1153,12 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   setEditingTurma(false);
                 }
               }}
-              className="flex-1 h-9 rounded-xl font-inter text-xs font-bold text-primary-foreground disabled:opacity-60"
+              className="flex-1 h-9 rounded-lg font-inter text-xs font-bold text-primary-foreground disabled:opacity-60"
               style={{ background: "var(--gradient-hero)" }}
             >
               {savingTurma ? "Salvando..." : "Salvar"}
             </button>
-            <button onClick={() => setEditingTurma(false)} className="px-4 h-9 rounded-xl border border-border text-xs font-inter text-muted-foreground hover:text-foreground">
+            <button onClick={() => setEditingTurma(false)} className="px-4 h-9 rounded-lg border border-border text-xs font-inter text-muted-foreground hover:text-foreground">
               Cancelar
             </button>
           </div>
@@ -1091,14 +1167,14 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
 
       {/* Edit confirmation year */}
       {editingConfYear && (
-        <div className="bg-card rounded-2xl border border-border shadow-sm p-4 space-y-3">
+        <div className="bg-card rounded-lg border border-border shadow-sm p-4 space-y-3">
           <p className="font-montserrat font-bold text-foreground text-sm">Ano do Ensino Confirmatório</p>
           <div className="flex gap-2">
             {[{ val: null, label: "Não definido" }, { val: 1, label: "1º Ano" }, { val: 2, label: "2º Ano" }].map(opt => (
               <button
                 key={String(opt.val)}
                 onClick={() => setNewConfYear(opt.val)}
-                className={`flex-1 py-2.5 rounded-xl text-xs font-montserrat font-bold border transition-all ${
+                className={`flex-1 py-2.5 rounded-lg text-xs font-montserrat font-bold border transition-all ${
                   newConfYear === opt.val ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border"
                 }`}
               >
@@ -1113,19 +1189,19 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                 setSavingConfYear(true);
                 const { error } = await supabase.from("profiles").update({
                   confirmation_year: newConfYear,
-                } as any).eq("user_id", p.user_id);
+                }).eq("user_id", p.user_id);
                 setSavingConfYear(false);
                 if (!error) {
-                  (p as any).confirmation_year = newConfYear;
+                  p.confirmation_year = newConfYear;
                   setEditingConfYear(false);
                 }
               }}
-              className="flex-1 h-9 rounded-xl font-inter text-xs font-bold text-primary-foreground disabled:opacity-60"
+              className="flex-1 h-9 rounded-lg font-inter text-xs font-bold text-primary-foreground disabled:opacity-60"
               style={{ background: "var(--gradient-hero)" }}
             >
               {savingConfYear ? "Salvando..." : "Salvar"}
             </button>
-            <button onClick={() => setEditingConfYear(false)} className="px-4 h-9 rounded-xl border border-border text-xs font-inter text-muted-foreground hover:text-foreground">
+            <button onClick={() => setEditingConfYear(false)} className="px-4 h-9 rounded-lg border border-border text-xs font-inter text-muted-foreground hover:text-foreground">
               Cancelar
             </button>
           </div>
@@ -1139,7 +1215,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
             setManualReleaseSelection((prev) => ({ ...prev, content_kind: "lesson" }));
             setActiveSection("liberacoes");
           }}
-          className="flex items-center justify-center gap-2 p-3 rounded-2xl border border-primary/20 bg-primary/10 hover:bg-primary/15 transition-colors text-primary"
+          className="flex items-center justify-center gap-2 p-3 rounded-lg border border-primary/20 bg-primary/10 hover:bg-primary/15 transition-colors text-primary"
         >
           <BookOpen className="w-4 h-4 flex-shrink-0" />
           <span className="font-inter text-sm font-bold">Liberar lição</span>
@@ -1149,7 +1225,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
             setManualReleaseSelection((prev) => ({ ...prev, content_kind: "devotional" }));
             setActiveSection("liberacoes");
           }}
-          className="flex items-center justify-center gap-2 p-3 rounded-2xl border border-secondary/20 bg-secondary/10 hover:bg-secondary/15 transition-colors text-secondary-foreground"
+          className="flex items-center justify-center gap-2 p-3 rounded-lg border border-secondary/20 bg-secondary/10 hover:bg-secondary/15 transition-colors text-secondary-foreground"
         >
           <BookOpen className="w-4 h-4 flex-shrink-0" />
           <span className="font-inter text-sm font-bold">Liberar devocional</span>
@@ -1165,7 +1241,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           { icon: AlertTriangle, label: plan.health_status === "critico" ? "⚠️ Crítico" : "Marcar crítico", action: () => setPlan(prev => ({ ...prev, health_status: prev.health_status === "critico" ? "atencao" : "critico" })) },
         ].map(({ icon: Icon, label, action }) => (
           <button key={label} onClick={action}
-            className="flex items-center gap-2 p-3 rounded-xl bg-card border border-border hover:bg-muted/50 transition-colors text-left">
+            className="flex items-center gap-2 p-3 rounded-lg bg-card border border-border hover:bg-muted/50 transition-colors text-left">
             <Icon className="w-4 h-4 text-primary flex-shrink-0" />
             <span className="font-inter text-xs font-medium text-foreground">{label}</span>
           </button>
@@ -1174,41 +1250,41 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
 
       {/* Schedule conversation form */}
       {showScheduleForm && (
-        <div className="bg-card rounded-2xl border border-border shadow-sm p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="bg-card rounded-lg border border-border shadow-sm p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
           <p className="font-montserrat font-bold text-foreground text-sm">📅 Agendar Conversa com {p.full_name.split(" ")[0]}</p>
-          <p className="text-muted-foreground font-inter text-[10px]">
+          <p className="text-muted-foreground font-inter text-xs">
             O aluno receberá uma notificação push e verá o agendamento na aba Jornada e Agenda.
           </p>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-[10px] font-inter font-bold text-foreground mb-1">Data</label>
+              <label className="block text-xs font-inter font-bold text-foreground mb-1">Data</label>
               <input
                 type="date"
                 value={scheduleDate}
                 onChange={e => setScheduleDate(e.target.value)}
                 min={new Date().toISOString().slice(0, 10)}
-                className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
             <div>
-              <label className="block text-[10px] font-inter font-bold text-foreground mb-1">Horário</label>
+              <label className="block text-xs font-inter font-bold text-foreground mb-1">Horário</label>
               <input
                 type="time"
                 value={scheduleTime}
                 onChange={e => setScheduleTime(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
           </div>
           <div>
-            <label className="block text-[10px] font-inter font-bold text-foreground mb-1">Observação (opcional)</label>
+            <label className="block text-xs font-inter font-bold text-foreground mb-1">Observação (opcional)</label>
             <input
               type="text"
               value={scheduleNote}
               onChange={e => setScheduleNote(e.target.value)}
               placeholder="Ex: Conversa sobre frequência"
               maxLength={120}
-              className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm font-inter text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-inter text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
           <div className="flex gap-2">
@@ -1230,7 +1306,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                     church_id: p.church_id ?? null,
                     target_user_id: p.user_id,
                     created_by: user.id,
-                  } as any);
+                  });
                   if (error) throw error;
 
                   // Send push notification via admin-push
@@ -1240,6 +1316,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                       body: `Seu líder agendou uma conversa com você para ${new Date(eventDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })} às ${scheduleTime}. Confira na sua agenda!`,
                       target: "user",
                       targetValue: p.user_id,
+                      churchId: p.church_id ?? null,
                     },
                   });
 
@@ -1264,12 +1341,12 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   setSavingSchedule(false);
                 }
               }}
-              className="flex-1 h-9 rounded-xl font-inter text-xs font-bold text-primary-foreground disabled:opacity-60"
+              className="flex-1 h-9 rounded-lg font-inter text-xs font-bold text-primary-foreground disabled:opacity-60"
               style={{ background: "var(--gradient-hero)" }}
             >
               {savingSchedule ? "Agendando..." : "✅ Confirmar Agendamento"}
             </button>
-            <button onClick={() => setShowScheduleForm(false)} className="px-4 h-9 rounded-xl border border-border text-xs font-inter text-muted-foreground hover:text-foreground">
+            <button onClick={() => setShowScheduleForm(false)} className="px-4 h-9 rounded-lg border border-border text-xs font-inter text-muted-foreground hover:text-foreground">
               Cancelar
             </button>
           </div>
@@ -1277,7 +1354,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       )}
 
 
-      <div className="flex gap-1 bg-muted rounded-xl p-1 overflow-x-auto">
+      <div className="flex gap-1 bg-muted rounded-lg p-1 overflow-x-auto">
         {SECTIONS.map(s => (
           <button key={s.id} onClick={() => setActiveSection(s.id)}
             className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-inter font-medium transition-all ${activeSection === s.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
@@ -1289,7 +1366,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       {/* OVERVIEW SECTION */}
       {activeSection === "overview" && (
         <div className="space-y-4">
-          <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+          <div className="bg-card rounded-lg border border-border overflow-hidden shadow-sm">
             <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
               <Flame className="w-4 h-4 text-secondary" />
               <p className="font-montserrat font-bold text-foreground text-sm">Saúde Espiritual</p>
@@ -1319,7 +1396,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           </div>
 
           {/* Autoavaliação */}
-          <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+          <div className="bg-card rounded-lg border border-border overflow-hidden shadow-sm">
             <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
               <Heart className="w-4 h-4 text-primary" />
               <p className="font-montserrat font-bold text-foreground text-sm">Autoavaliação — {MONTH_NAMES[month-1]}/{year}</p>
@@ -1346,13 +1423,13 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                     </div>
                   ))}
                   {assessment.needs_pastor && (
-                    <div className="flex items-center gap-2 p-2.5 bg-primary/10 rounded-xl mt-1">
+                    <div className="flex items-center gap-2 p-2.5 bg-primary/10 rounded-lg mt-1">
                       <AlertCircle className="w-4 h-4 text-primary flex-shrink-0" />
                       <p className="font-inter text-xs text-primary font-semibold">Solicitou conversa com o pastor</p>
                     </div>
                   )}
                   {assessment.notes && (
-                    <p className="font-inter text-xs text-muted-foreground italic p-2.5 bg-muted rounded-xl">"{assessment.notes}"</p>
+                    <p className="font-inter text-xs text-muted-foreground italic p-2.5 bg-muted rounded-lg">"{assessment.notes}"</p>
                   )}
                 </div>
               ) : (
@@ -1362,7 +1439,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           </div>
 
           {/* Cursos */}
-          <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+          <div className="bg-card rounded-lg border border-border overflow-hidden shadow-sm">
             <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
               <GraduationCap className="w-4 h-4 text-secondary" />
               <p className="font-montserrat font-bold text-foreground text-sm">Formação nos Cursos</p>
@@ -1395,7 +1472,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
 
       {/* PLAN SECTION */}
       {activeSection === "plan" && (
-        <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+        <div className="bg-card rounded-lg border border-border overflow-hidden shadow-sm">
           <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <BookOpen className="w-4 h-4 text-accent-foreground" />
             <p className="font-montserrat font-bold text-foreground text-sm">Plano de Discipulado</p>
@@ -1411,7 +1488,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
               <div key={key}>
                 <label className="font-inter text-xs font-medium text-foreground block mb-1">{label}</label>
                 <textarea value={plan[key] ?? ""} onChange={e => setPlan(prev => ({ ...prev, [key]: e.target.value }))}
-                  rows={2} className="w-full px-3 py-2 rounded-xl border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
+                  rows={2} className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
               </div>
             ))}
             <div>
@@ -1421,7 +1498,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   const cfg = HEALTH_CFG[s];
                   return (
                     <button key={s} onClick={() => setPlan(prev => ({ ...prev, health_status: s }))}
-                      className={`py-2 rounded-xl text-xs font-inter font-medium border transition-all ${plan.health_status === s ? `border-transparent ${cfg.bg} ${cfg.text}` : "border-border bg-muted text-muted-foreground"}`}>
+                      className={`py-2 rounded-lg text-xs font-inter font-medium border transition-all ${plan.health_status === s ? `border-transparent ${cfg.bg} ${cfg.text}` : "border-border bg-muted text-muted-foreground"}`}>
                       {cfg.label}
                     </button>
                   );
@@ -1429,7 +1506,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
               </div>
             </div>
             <button onClick={handleSavePlan} disabled={saving}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-inter text-sm font-medium text-primary-foreground disabled:opacity-70 transition-all"
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-lg font-inter text-sm font-medium text-primary-foreground disabled:opacity-70 transition-all"
               style={{ background: "var(--gradient-hero)" }}>
               {saved ? <><CheckCircle2 className="w-4 h-4" /> Salvo!</> : saving ? "Salvando..." : <><Save className="w-4 h-4" /> Salvar plano</>}
             </button>
@@ -1441,28 +1518,28 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       {activeSection === "notes" && (
         <div className="space-y-3">
           <button onClick={() => setShowNoteForm(!showNoteForm)}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-inter text-sm font-medium text-primary-foreground"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-lg font-inter text-sm font-medium text-primary-foreground"
             style={{ background: "var(--gradient-hero)" }}>
             <Plus className="w-4 h-4" /> Registrar acompanhamento
           </button>
 
           {showNoteForm && (
-            <div className="bg-card rounded-2xl border border-border p-4 space-y-3 shadow-sm">
+            <div className="bg-card rounded-lg border border-border p-4 space-y-3 shadow-sm">
               <p className="font-montserrat font-bold text-foreground text-sm">Novo registro pastoral</p>
               <select value={noteForm.note_type} onChange={e => setNoteForm(f => ({ ...f, note_type: e.target.value }))}
-                className="w-full px-3 py-2 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
                 {NOTE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
               <textarea value={noteForm.content} onChange={e => setNoteForm(f => ({ ...f, content: e.target.value }))}
                 placeholder="Descreva o acompanhamento, observações ou próximos passos..." rows={3}
-                className="w-full px-3 py-2 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
               <div className="flex gap-2">
                 <button onClick={handleSaveNote} disabled={savingNote || !noteForm.content.trim()}
-                  className="flex-1 py-2.5 rounded-xl font-inter text-sm font-medium text-primary-foreground disabled:opacity-50"
+                  className="flex-1 py-2.5 rounded-lg font-inter text-sm font-medium text-primary-foreground disabled:opacity-50"
                   style={{ background: "var(--gradient-hero)" }}>
                   {savingNote ? "Salvando..." : "Salvar registro"}
                 </button>
-                <button onClick={() => setShowNoteForm(false)} className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm">
+                <button onClick={() => setShowNoteForm(false)} className="px-4 py-2.5 rounded-lg bg-muted text-foreground font-inter text-sm">
                   Cancelar
                 </button>
               </div>
@@ -1480,10 +1557,10 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
               {notes.map(note => {
                 const typeInfo = NOTE_TYPES.find(t => t.value === note.note_type);
                 return (
-                  <div key={note.id} className="bg-card rounded-xl border border-border p-3">
+                  <div key={note.id} className="bg-card rounded-lg border border-border p-3">
                     <div className="flex items-center gap-2 mb-1.5">
                       <span className="font-inter text-xs font-semibold text-foreground">{typeInfo?.label ?? note.note_type}</span>
-                      <span className="text-muted-foreground font-inter text-[10px] ml-auto">
+                      <span className="text-muted-foreground font-inter text-xs ml-auto">
                         {new Date(note.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
                       </span>
                     </div>
@@ -1500,7 +1577,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       {activeSection === "presenca" && (
         <div className="space-y-3">
           {/* Attendance summary */}
-          <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+          <div className="bg-card rounded-lg border border-border p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
               <Calendar className="w-4 h-4 text-primary" />
               <p className="font-montserrat font-bold text-foreground text-sm">Resumo de Presença</p>
@@ -1511,9 +1588,9 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                 { label: "Faltou", count: attendanceRecords.filter(a => normalizeAttendanceStatus(a.status) === "faltou").length, emoji: "🔴", color: "text-destructive", bg: "bg-destructive/10" },
                 { label: "Justificou", count: attendanceRecords.filter(a => normalizeAttendanceStatus(a.status) === "justificou").length, emoji: "🟡", color: "text-accent-foreground", bg: "bg-accent/20" },
               ].map(s => (
-                <div key={s.label} className={`rounded-xl p-2.5 text-center ${s.bg}`}>
+                <div key={s.label} className={`rounded-lg p-2.5 text-center ${s.bg}`}>
                   <p className={`font-montserrat font-black text-xl ${s.color}`}>{s.count}</p>
-                  <p className={`font-inter text-[10px] ${s.color} opacity-80`}>{s.emoji} {s.label}</p>
+                  <p className={`font-inter text-xs ${s.color} opacity-80`}>{s.emoji} {s.label}</p>
                 </div>
               ))}
             </div>
@@ -1541,11 +1618,11 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                 const statusEmoji = normalizedStatus === "presente" ? "🟢" : normalizedStatus === "faltou" ? "🔴" : "🟡";
                 const statusLabel = normalizedStatus === "presente" ? "Presente" : normalizedStatus === "faltou" ? "Faltou" : "Justificou";
                 return (
-                  <div key={a.id} className="bg-card rounded-xl border border-border p-3 flex items-center gap-3">
+                  <div key={a.id} className="bg-card rounded-lg border border-border p-3 flex items-center gap-3">
                     <span className="text-lg">{statusEmoji}</span>
                     <div className="flex-1 min-w-0">
                       <p className="font-inter text-sm font-medium text-foreground truncate">{a.event_title}</p>
-                      <p className="font-inter text-[10px] text-muted-foreground">
+                      <p className="font-inter text-xs text-muted-foreground">
                         {new Date(a.event_date!).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
                       </p>
                     </div>
@@ -1577,11 +1654,11 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   const validScores = scores.filter(s => s.value);
                   const avg = validScores.length > 0 ? (validScores.reduce((s, v) => s + (v.value ?? 0), 0) / validScores.length).toFixed(1) : "—";
                   return (
-                    <div key={i} className="bg-card rounded-xl border border-border p-3 space-y-2">
+                    <div key={i} className="bg-card rounded-lg border border-border p-3 space-y-2">
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="font-inter text-sm font-medium text-foreground">{ev.event_title}</p>
-                          <p className="font-inter text-[10px] text-muted-foreground">
+                          <p className="font-inter text-xs text-muted-foreground">
                             {new Date(ev.event_date!).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
                           </p>
                         </div>
@@ -1591,7 +1668,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                         {scores.map(s => (
                           <div key={s.label} className="flex-1 text-center">
                             <p className="font-montserrat font-bold text-foreground text-sm">{s.value ?? "—"}</p>
-                            <p className="font-inter text-[9px] text-muted-foreground">{s.label}</p>
+                            <p className="font-inter text-xs text-muted-foreground">{s.label}</p>
                           </div>
                         ))}
                       </div>
@@ -1619,13 +1696,13 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                     pendente: { label: "Pendente", color: "text-accent-foreground", bg: "bg-accent/20" },
                   }[w.status] ?? { label: w.status, color: "text-muted-foreground", bg: "bg-muted" };
                   return (
-                    <div key={w.id} className="bg-card rounded-xl border border-border p-3 flex items-center gap-3">
+                    <div key={w.id} className="bg-card rounded-lg border border-border p-3 flex items-center gap-3">
                       <span className="text-lg">{w.event_type === "jemiac" ? "✝️" : w.event_type === "retiro" ? "🏕️" : "⛪"}</span>
                       <div className="flex-1 min-w-0">
                         <p className="font-inter text-sm font-medium text-foreground">
                           {w.event_type === "jemiac" ? "JEMIAC" : w.event_type === "retiro" ? "Retiro" : "Culto"} · {new Date(w.worship_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })} · {w.worship_time}
                         </p>
-                        <p className="font-inter text-[10px] text-muted-foreground">Pregador: {w.preacher_name}</p>
+                        <p className="font-inter text-xs text-muted-foreground">Pregador: {w.preacher_name}</p>
                       </div>
                       <span className={`text-xs font-inter font-medium px-2 py-0.5 rounded-full ${statusCfg.bg} ${statusCfg.color}`}>
                         {statusCfg.label}
@@ -1668,16 +1745,16 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
 
         return (
         <div className="space-y-3">
-          <div className="bg-primary/5 border border-primary/20 rounded-2xl p-3 flex items-start gap-2">
+          <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 flex items-start gap-2">
             <Clock className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
             <div>
               <p className="font-inter text-xs text-primary leading-relaxed">
                 Linha do tempo completa de <strong>{p.full_name}</strong>
               </p>
               <div className="flex gap-2 mt-1">
-                {marcoCount > 0 && <span className="text-[10px] font-inter font-semibold text-brand-green">🏆 {marcoCount} marcos</span>}
-                {crisisCount > 0 && <span className="text-[10px] font-inter font-semibold text-destructive">⚠️ {crisisCount} crises</span>}
-                <span className="text-[10px] font-inter text-muted-foreground">{timelineItems.length} registros</span>
+                {marcoCount > 0 && <span className="text-xs font-inter font-semibold text-brand-green">🏆 {marcoCount} marcos</span>}
+                {crisisCount > 0 && <span className="text-xs font-inter font-semibold text-destructive">⚠️ {crisisCount} crises</span>}
+                <span className="text-xs font-inter text-muted-foreground">{timelineItems.length} registros</span>
               </div>
             </div>
           </div>
@@ -1685,7 +1762,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
           {/* Category filters */}
           <div className="flex gap-1 overflow-x-auto pb-1">
             {FILTERS.map(f => (
-              <button key={f.id} onClick={() => setTimelineFilter(f.id as any)}
+              <button key={f.id} onClick={() => setTimelineFilter(f.id)}
                 className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-inter font-medium transition-all ${
                   filter === f.id ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted/50 text-muted-foreground hover:bg-muted"
                 }`}>
@@ -1704,7 +1781,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
               {filtered.map((item, idx) => (
                 <div key={idx} className="flex gap-3 mb-1">
                   <div className="flex flex-col items-center">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 border ${severityBg(item.severity)}`}>
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-base flex-shrink-0 border ${severityBg(item.severity)}`}>
                       {item.icon}
                     </div>
                     {idx < filtered.length - 1 && (
@@ -1718,7 +1795,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                         item.severity === "positive" ? "text-brand-green" :
                         "text-foreground"
                       }`}>{item.title}</p>
-                      <span className="text-muted-foreground font-inter text-[10px] ml-auto flex-shrink-0">
+                      <span className="text-muted-foreground font-inter text-xs ml-auto flex-shrink-0">
                         {new Date(item.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
                       </span>
                     </div>
@@ -1726,7 +1803,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                       <p className="font-inter text-xs text-muted-foreground mt-0.5">{item.detail}</p>
                     )}
                     {item.category !== "encontro" && item.category !== "progresso" && (
-                      <span className={`inline-block mt-1 px-1.5 py-0.5 rounded text-[9px] font-inter font-medium ${
+                      <span className={`inline-block mt-1 px-1.5 py-0.5 rounded text-xs font-inter font-medium ${
                         item.category === "marco" ? "bg-brand-green/10 text-brand-green" :
                         item.category === "crise" ? "bg-destructive/10 text-destructive" :
                         "bg-muted text-muted-foreground"
@@ -1746,7 +1823,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
       {/* JORNADA SECTION */}
       {activeSection === "jornada" && (
         <div className="space-y-3">
-          <div className="bg-primary/5 border border-primary/20 rounded-2xl p-3 flex items-start gap-2">
+          <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 flex items-start gap-2">
             <Eye className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
             <p className="font-inter text-xs text-primary leading-relaxed">
               Visualize as respostas de <strong>{p.full_name}</strong> para cada lição da Minha Jornada. Use no encontro presencial.
@@ -1761,13 +1838,13 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
             <div className="space-y-2">
               {lessons.map(lesson => (
                 <button key={lesson.id} onClick={() => setSelectedLesson(lesson)}
-                  className="w-full flex items-center gap-3 p-3 rounded-xl bg-card border border-border hover:border-primary/30 transition-all text-left">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "var(--gradient-hero)" }}>
+                  className="w-full flex items-center gap-3 p-3 rounded-lg bg-card border border-border hover:border-primary/30 transition-all text-left">
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "var(--gradient-hero)" }}>
                     <span className="font-montserrat font-black text-primary-foreground text-sm">{lesson.order_num}</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-inter text-sm font-medium text-foreground truncate">{lesson.title}</p>
-                    {lesson.objective && <p className="font-inter text-[10px] text-muted-foreground truncate mt-0.5">{lesson.objective}</p>}
+                    {lesson.objective && <p className="font-inter text-xs text-muted-foreground truncate mt-0.5">{lesson.objective}</p>}
                   </div>
                   <Eye className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 </button>
@@ -1779,7 +1856,79 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
 
       {activeSection === "liberacoes" && (
         <div className="space-y-4">
-          <div className="bg-accent/10 border border-accent/20 rounded-2xl p-4 space-y-2">
+          <div className="rounded-xl border border-amber-300/60 bg-amber-50/70 p-4 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-700 flex items-center justify-center flex-shrink-0">
+                <RotateCcw className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-montserrat font-bold text-foreground text-sm">Trilha especial de recuperação</p>
+                <p className="font-inter text-xs text-muted-foreground mt-1">
+                  Libera automaticamente apenas lições e devocionais pendentes da trilha confirmatória.
+                  Lições valem 10 pontos e devocionais 2 pontos.
+                </p>
+              </div>
+            </div>
+
+            {activeRecovery ? (
+              <div className="rounded-lg border border-amber-300/50 bg-card p-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex-1">
+                  <p className="font-inter text-xs font-bold text-amber-800">Recuperação ativa</p>
+                  <p className="font-inter text-xs text-muted-foreground mt-1">
+                    Disponível até {new Date(activeRecovery.available_until).toLocaleString("pt-BR")}
+                  </p>
+                  {activeRecovery.notes && <p className="font-inter text-xs text-muted-foreground mt-1">{activeRecovery.notes}</p>}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleEndRecovery(activeRecovery.id)}
+                  disabled={savingRecovery}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-destructive px-3 py-2 text-xs font-inter font-bold text-destructive-foreground disabled:opacity-50"
+                >
+                  <Square className="w-3.5 h-3.5" />
+                  Encerrar agora
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-inter font-bold text-foreground mb-1.5">Disponível até</label>
+                  <input
+                    type="datetime-local"
+                    value={recoveryUntil}
+                    onChange={(event) => setRecoveryUntil(event.target.value)}
+                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-inter font-bold text-foreground mb-1.5">Observação (opcional)</label>
+                  <input
+                    value={recoveryNotes}
+                    onChange={(event) => setRecoveryNotes(event.target.value)}
+                    placeholder="Ex.: prazo combinado com a família"
+                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleStartRecovery()}
+                  disabled={savingRecovery || !recoveryUntil}
+                  className="sm:col-span-2 inline-flex items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-montserrat font-bold text-white disabled:opacity-50"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  {savingRecovery ? "Liberando..." : "Liberar trilha de recuperação"}
+                </button>
+              </div>
+            )}
+
+            {recoveryReleases.length > 0 && (
+              <p className="font-inter text-[11px] text-muted-foreground">
+                {recoveryReleases.length} autorização(ões) registrada(s). A trilha pode ser reaberta quantas vezes forem necessárias.
+              </p>
+            )}
+          </div>
+
+          <div className="bg-accent/10 border border-accent/20 rounded-lg p-4 space-y-2">
             <div className="flex items-start gap-2">
               <BookOpen className="w-4 h-4 text-accent-foreground flex-shrink-0 mt-0.5" />
               <div>
@@ -1791,7 +1940,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
               </div>
             </div>
           </div>
-          <div className="bg-card rounded-2xl border border-border shadow-sm p-4 space-y-4">
+          <div className="bg-card rounded-lg border border-border shadow-sm p-4 space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="font-montserrat font-bold text-foreground text-sm">Novo rascunho para {p.full_name}</p>
@@ -1799,7 +1948,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   Escolha primeiro o curso, depois a licao e por fim o tipo de conteudo que deseja liberar.
                 </p>
               </div>
-              <span className="px-2 py-1 rounded-lg bg-muted text-muted-foreground text-[10px] font-inter font-semibold">
+              <span className="px-2 py-1 rounded-lg bg-muted text-muted-foreground text-xs font-inter font-semibold">
                 Etapa 1
               </span>
             </div>
@@ -1818,7 +1967,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                     }));
                     setManualReleaseForm((prev) => ({ ...prev, devotional_ids: [] }));
                   }}
-                  className="w-full h-11 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="">Selecione um curso</option>
                   {manualReleaseCourses.map((course) => (
@@ -1842,7 +1991,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                     setManualReleaseForm((prev) => ({ ...prev, devotional_ids: [] }));
                   }}
                   disabled={!manualReleaseSelection.course_id}
-                  className="w-full h-11 rounded-xl border border-input bg-background px-3 text-sm text-foreground disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm text-foreground disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="">{manualReleaseSelection.course_id ? "Selecione uma licao" : "Escolha primeiro o curso"}</option>
                   {manualReleaseLessons.map((lesson) => (
@@ -1864,7 +2013,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                     setManualReleaseForm((prev) => ({ ...prev, devotional_ids: [] }));
                   }}
                   disabled={!manualReleaseSelection.lesson_id}
-                  className={`rounded-xl border px-3 py-3 text-left transition-colors ${
+                  className={`rounded-lg border px-3 py-3 text-left transition-colors ${
                     manualReleaseSelection.content_kind === "lesson"
                       ? "border-primary bg-primary/10"
                       : "border-border bg-background"
@@ -1879,7 +2028,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   type="button"
                   onClick={() => setManualReleaseSelection((prev) => ({ ...prev, content_kind: "devotional" }))}
                   disabled={!manualReleaseSelection.lesson_id}
-                  className={`rounded-xl border px-3 py-3 text-left transition-colors ${
+                  className={`rounded-lg border px-3 py-3 text-left transition-colors ${
                     manualReleaseSelection.content_kind === "devotional"
                       ? "border-primary bg-primary/10"
                       : "border-border bg-background"
@@ -1894,7 +2043,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
             </div>
 
             {manualReleaseSelection.content_kind === "lesson" && selectedManualLesson && (
-              <div className="rounded-xl border border-accent/20 bg-accent/10 p-3">
+              <div className="rounded-lg border border-accent/20 bg-accent/10 p-3">
                 <p className="font-inter text-sm font-semibold text-foreground">{selectedManualLesson.title}</p>
                 <p className="font-inter text-[11px] text-muted-foreground mt-1">
                   Este override vai liberar o conteudo principal da licao para este usuario, mesmo fora da agenda normal.
@@ -1914,7 +2063,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                         const allSelected = allIds.every((id) => manualReleaseForm.devotional_ids.includes(id));
                         setManualReleaseForm((prev) => ({ ...prev, devotional_ids: allSelected ? [] : allIds }));
                       }}
-                      className="text-[10px] font-inter text-primary underline underline-offset-2"
+                      className="text-xs font-inter text-primary underline underline-offset-2"
                     >
                       {manualReleaseLessonDevotionals.every((d) => manualReleaseForm.devotional_ids.includes(d.id))
                         ? "Desmarcar todos"
@@ -1925,7 +2074,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                 {!manualReleaseSelection.lesson_id ? (
                   <p className="text-[11px] font-inter text-muted-foreground px-1">Escolha primeiro o curso e a licao.</p>
                 ) : (
-                  <div className="rounded-xl border border-input bg-background divide-y divide-border max-h-56 overflow-y-auto">
+                  <div className="rounded-lg border border-input bg-background divide-y divide-border max-h-56 overflow-y-auto">
                     {manualReleaseLessonDevotionals.map((devotional) => {
                       const isChecked = manualReleaseForm.devotional_ids.includes(devotional.id);
                       const isDone = completedDevotionalIds.has(devotional.id);
@@ -1953,7 +2102,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                             </p>
                           </div>
                           {isDone && (
-                            <span className="text-[10px] font-inter text-brand-green font-semibold flex-shrink-0">✓ Feito</span>
+                            <span className="text-xs font-inter text-brand-green font-semibold flex-shrink-0">✓ Feito</span>
                           )}
                         </label>
                       );
@@ -1976,7 +2125,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   min="0"
                   value={manualReleaseForm.custom_points}
                   onChange={(e) => setManualReleaseForm((prev) => ({ ...prev, custom_points: Number(e.target.value) }))}
-                  className="w-full h-11 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </div>
               <div>
@@ -1985,7 +2134,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   type="datetime-local"
                   value={manualReleaseForm.available_from}
                   onChange={(e) => setManualReleaseForm((prev) => ({ ...prev, available_from: e.target.value }))}
-                  className="w-full h-11 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </div>
               <div>
@@ -1994,7 +2143,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   type="datetime-local"
                   value={manualReleaseForm.available_until}
                   onChange={(e) => setManualReleaseForm((prev) => ({ ...prev, available_until: e.target.value }))}
-                  className="w-full h-11 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </div>
             </div>
@@ -2006,11 +2155,11 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                 onChange={(e) => setManualReleaseForm((prev) => ({ ...prev, notes: e.target.value }))}
                 rows={3}
                 placeholder="Ex.: recuperacao autorizada por ausencia justificada no encontro."
-                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
               />
             </div>
 
-            <label className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 px-3 py-3 cursor-pointer">
+            <label className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-3 cursor-pointer">
               <input
                 type="checkbox"
                 checked={manualReleaseForm.is_unlocked}
@@ -2029,7 +2178,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
               <button
                 onClick={handleAddManualReleaseDraft}
                 disabled={savingManualRelease || (manualReleaseSelection.content_kind === "devotional" && manualReleaseForm.devotional_ids.length === 0) || (manualReleaseSelection.content_kind === "lesson" && !manualReleaseSelection.lesson_id)}
-                className="flex-1 h-11 rounded-xl font-inter text-sm font-bold text-primary-foreground disabled:opacity-60"
+                className="flex-1 h-11 rounded-lg font-inter text-sm font-bold text-primary-foreground disabled:opacity-60"
                 style={{ background: "var(--gradient-hero)" }}
               >
                 <span className="inline-flex items-center gap-2">
@@ -2039,14 +2188,14 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
               </button>
               <button
                 onClick={resetManualReleaseForm}
-                className="px-4 h-11 rounded-xl border border-border text-sm font-inter text-muted-foreground hover:text-foreground"
+                className="px-4 h-11 rounded-lg border border-border text-sm font-inter text-muted-foreground hover:text-foreground"
               >
                 Limpar
               </button>
             </div>
           </div>
 
-          <div className="bg-card rounded-2xl border border-border shadow-sm p-4 space-y-3">
+          <div className="bg-card rounded-lg border border-border shadow-sm p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="font-montserrat font-bold text-foreground text-sm">Rascunhos preparados</p>
@@ -2054,7 +2203,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   Quando a migration ja existe no Supabase, esta lista reflete os overrides reais salvos no banco.
                 </p>
               </div>
-              <span className="px-2 py-1 rounded-lg bg-muted text-muted-foreground text-[10px] font-inter font-semibold">
+              <span className="px-2 py-1 rounded-lg bg-muted text-muted-foreground text-xs font-inter font-semibold">
                 {manualReleaseDrafts.length} item(ns)
               </span>
             </div>
@@ -2075,7 +2224,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                   const lessonDraft = draft.lesson_id ? lessons.find((item) => item.id === draft.lesson_id) : null;
                   const devotional = draft.devotional_id ? devotionalCatalog.find((item) => item.id === draft.devotional_id) : null;
                   return (
-                    <div key={draft.id} className="rounded-xl border border-border bg-muted/20 p-3 space-y-2">
+                    <div key={draft.id} className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-inter text-sm font-semibold text-foreground">
@@ -2101,22 +2250,22 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                         </button>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <span className="px-2 py-1 rounded-lg bg-background border border-border text-[10px] font-inter text-muted-foreground">
+                        <span className="px-2 py-1 rounded-lg bg-background border border-border text-xs font-inter text-muted-foreground">
                           {draft.content_kind === "lesson" ? "Conteudo da licao" : "Devocional"}
                         </span>
-                        <span className="px-2 py-1 rounded-lg bg-background border border-border text-[10px] font-inter text-foreground">
+                        <span className="px-2 py-1 rounded-lg bg-background border border-border text-xs font-inter text-foreground">
                           {draft.custom_points} pts
                         </span>
-                        <span className={`px-2 py-1 rounded-lg text-[10px] font-inter font-semibold ${draft.is_unlocked ? "bg-brand-green/10 text-brand-green" : "bg-muted text-muted-foreground"}`}>
+                        <span className={`px-2 py-1 rounded-lg text-xs font-inter font-semibold ${draft.is_unlocked ? "bg-brand-green/10 text-brand-green" : "bg-muted text-muted-foreground"}`}>
                           {draft.is_unlocked ? "Liberado" : "Preparado, mas inativo"}
                         </span>
                         {draft.available_from && (
-                          <span className="px-2 py-1 rounded-lg bg-background border border-border text-[10px] font-inter text-muted-foreground">
+                          <span className="px-2 py-1 rounded-lg bg-background border border-border text-xs font-inter text-muted-foreground">
                             Inicio: {new Date(draft.available_from).toLocaleString("pt-BR")}
                           </span>
                         )}
                         {draft.available_until && (
-                          <span className="px-2 py-1 rounded-lg bg-background border border-border text-[10px] font-inter text-muted-foreground">
+                          <span className="px-2 py-1 rounded-lg bg-background border border-border text-xs font-inter text-muted-foreground">
                             Fim: {new Date(draft.available_until).toLocaleString("pt-BR")}
                           </span>
                         )}
@@ -2141,7 +2290,7 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
         return (
           <div className="space-y-4">
             {/* Resultado geral */}
-            <div className={`rounded-2xl p-4 border ${
+            <div className={`rounded-lg p-4 border ${
               parecer.aptidao === "apto" ? "bg-brand-green/5 border-brand-green/20" :
               parecer.aptidao === "acompanhamento" ? "bg-accent/5 border-accent/20" :
               "bg-destructive/5 border-destructive/20"
@@ -2155,13 +2304,13 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
             {/* 4 dimensões */}
             <div className="space-y-3">
               {parecer.dimensions.map((dim, idx) => (
-                <div key={idx} className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+                <div key={idx} className="bg-card rounded-lg border border-border p-4 shadow-sm">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <span className="text-xl">{dim.emoji}</span>
                       <div>
                         <p className="font-montserrat font-bold text-sm text-foreground">{dim.label}</p>
-                        <p className={`font-inter text-[10px] font-semibold ${
+                        <p className={`font-inter text-xs font-semibold ${
                           dim.score >= 4 ? "text-brand-green" : dim.score >= 3 ? "text-accent-foreground" : "text-destructive"
                         }`}>{dim.sublabel}</p>
                       </div>
@@ -2195,13 +2344,13 @@ export default function ParticipantSheet({ participant: p, activities, onBack }:
                 setSaved(true);
                 setTimeout(() => setSaved(false), 2000);
               }}
-              className="w-full py-3 rounded-xl font-inter font-semibold text-sm transition-all"
+              className="w-full py-3 rounded-lg font-inter font-semibold text-sm transition-all"
               style={{ background: "var(--gradient-hero)", color: "hsl(var(--primary-foreground))" }}
             >
               {saved ? "✅ Parecer salvo!" : "💾 Salvar parecer no plano de discipulado"}
             </button>
 
-            <p className="font-inter text-[10px] text-muted-foreground text-center leading-relaxed">
+            <p className="font-inter text-xs text-muted-foreground text-center leading-relaxed">
               Este parecer é gerado automaticamente com base em dados de formação, devocionais, autoavaliação espiritual, presença em encontros e cultos, e avaliações de participação. O pastor pode ajustar manualmente na aba "Plano".
             </p>
           </div>
