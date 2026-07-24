@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => ({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "robots.txt", "pwa-192x192.png", "pwa-512x512.png"],
       workbox: {
-        cacheId: "v3",
+        cacheId: "caminho-3m-v4",
         navigateFallbackDenylist: [/^\/~oauth/],
         globPatterns: ["**/*.{css,html,ico,svg,woff2,webmanifest}"],
         globIgnores: ["migration-export/**", "**/*.zip", "**/*.sql"],
