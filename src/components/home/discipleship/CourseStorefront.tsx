@@ -21,13 +21,14 @@ type Product = {
 type Props = {
   trackId: string;
   courses: Course[];
+  institutionalAccess?: boolean;
   onEntitlementsChange: (courseIds: Set<string>) => void;
 };
 
 const formatPrice = (cents: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 
-export default function CourseStorefront({ trackId, courses, onEntitlementsChange }: Props) {
+export default function CourseStorefront({ trackId, courses, institutionalAccess = false, onEntitlementsChange }: Props) {
   const [products, setProducts] = useState<Product[]>([]);
   const [entitledIds, setEntitledIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -138,6 +139,16 @@ export default function CourseStorefront({ trackId, courses, onEntitlementsChang
         </div>
       </div>
 
+      {institutionalAccess && (
+        <div className="flex items-center gap-3 rounded-2xl bg-brand-green/10 p-4 text-brand-green">
+          <BadgeCheck className="h-6 w-6 shrink-0" />
+          <div>
+            <p className="font-bold">Acesso institucional liberado</p>
+            <p className="text-xs opacity-80">Como líder ou administrador, você pode acessar os cursos sem realizar uma compra.</p>
+          </div>
+        </div>
+      )}
+
       {hasAll ? (
         <div className="flex items-center gap-3 rounded-2xl bg-brand-green/10 p-4 text-brand-green">
           <BadgeCheck className="h-6 w-6 shrink-0" />
@@ -152,7 +163,7 @@ export default function CourseStorefront({ trackId, courses, onEntitlementsChang
             const productCourseIds = product.product_kind === "bundle"
               ? courses.map((course) => course.id)
               : [product.course_id].filter(Boolean) as string[];
-            const owned = productCourseIds.length > 0 && productCourseIds.every((id) => entitledIds.has(id));
+            const owned = institutionalAccess || (productCourseIds.length > 0 && productCourseIds.every((id) => entitledIds.has(id)));
             return (
               <div
                 key={product.id}
@@ -176,7 +187,7 @@ export default function CourseStorefront({ trackId, courses, onEntitlementsChang
                   onClick={() => void buy(product)}
                 >
                   {buyingId === product.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {owned ? "Já adquirido" : product.product_kind === "bundle" ? "Comprar jornada completa" : "Comprar curso"}
+                  {institutionalAccess ? "Acesso institucional" : owned ? "Já adquirido" : product.product_kind === "bundle" ? "Comprar jornada completa" : "Comprar curso"}
                 </Button>
               </div>
             );

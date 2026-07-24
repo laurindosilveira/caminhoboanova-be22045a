@@ -194,10 +194,11 @@ export default function CourseTrailSection({
         <p className="px-1 font-inter text-xs text-muted-foreground">{activeTrack.description}</p>
       )}
 
-      {effectiveTrackId === CAMINHO_3M_TRACK_ID && !isLeaderOrAdmin && (
+      {effectiveTrackId === CAMINHO_3M_TRACK_ID && (
         <CourseStorefront
           trackId={CAMINHO_3M_TRACK_ID}
           courses={visibleCourses}
+          institutionalAccess={isLeaderOrAdmin}
           onEntitlementsChange={setPurchasedCourseIds}
         />
       )}
