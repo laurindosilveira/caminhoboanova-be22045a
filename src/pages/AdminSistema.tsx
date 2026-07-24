@@ -36,6 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import GlobalCourseReleasesPanel from "@/components/admin/tabs/GlobalCourseReleasesPanel";
 import GlobalTrackReleasesPanel from "@/components/admin/tabs/GlobalTrackReleasesPanel";
+import CourseSalesAdminPanel from "@/components/admin/tabs/CourseSalesAdminPanel";
 import type { Database } from "@/integrations/supabase/types";
 
 type Tables = Database["public"]["Tables"];
@@ -907,6 +908,9 @@ export default function AdminSistema() {
               <CardContent className="space-y-8">
                 <GlobalTrackReleasesPanel />
                 <GlobalCourseReleasesPanel />
+                <div className="border-t pt-8">
+                  <CourseSalesAdminPanel />
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

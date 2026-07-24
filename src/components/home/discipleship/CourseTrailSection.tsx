@@ -5,6 +5,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Course, Lesson, LearningTrack, Module } from "./shared";
+import CourseStorefront from "./CourseStorefront";
+
+const CAMINHO_3M_TRACK_ID = "3a000000-0000-4000-8000-000000000001";
 
 type AgendaSchedule = {
   loading: boolean;
@@ -41,6 +44,7 @@ export default function CourseTrailSection({
 }: Props) {
   const [selectedTrackId, setSelectedTrackId] = useState<string>("confirmatory");
   const [trackMenuOpen, setTrackMenuOpen] = useState(false);
+  const [purchasedCourseIds, setPurchasedCourseIds] = useState<Set<string>>(new Set());
   // ── create module state ──
   const [showNewModule, setShowNewModule] = useState<string | null>(null); // course id
   const [newModuleTitle, setNewModuleTitle] = useState("");
@@ -190,6 +194,14 @@ export default function CourseTrailSection({
         <p className="px-1 font-inter text-xs text-muted-foreground">{activeTrack.description}</p>
       )}
 
+      {effectiveTrackId === CAMINHO_3M_TRACK_ID && !isLeaderOrAdmin && (
+        <CourseStorefront
+          trackId={CAMINHO_3M_TRACK_ID}
+          courses={visibleCourses}
+          onEntitlementsChange={setPurchasedCourseIds}
+        />
+      )}
+
       {/* Waiting message */}
       {!agendaSchedule.loading && !agendaSchedule.hasScheduledEvents && (
         <div className="bg-accent/10 rounded-2xl p-4 border border-accent/20 flex items-start gap-3">
@@ -207,7 +219,7 @@ export default function CourseTrailSection({
       {visibleCourses.map((course) => {
         const isOpen = expandedCourse === course.id;
         const courseHasManualOverride = course.lessons.some((lesson) => manualLessonOverrideIds.has(lesson.id));
-        const isCourseUnlocked = isLeaderOrAdmin || unlockedCourseIds.has(course.id) || courseHasManualOverride;
+        const isCourseUnlocked = isLeaderOrAdmin || unlockedCourseIds.has(course.id) || purchasedCourseIds.has(course.id) || courseHasManualOverride;
         const doneLessons = course.lessons.filter(l => fullyCompletedLessonIds.has(l.id)).length;
         const totalLessons = course.lessons.length;
         const coursePct = totalLessons > 0 ? Math.round((doneLessons / totalLessons) * 100) : 0;
