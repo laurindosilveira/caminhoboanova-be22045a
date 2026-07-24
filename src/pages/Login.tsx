@@ -530,7 +530,7 @@ export default function Login() {
         {/* Bottom badge */}
         <div className="mt-3 flex items-center gap-2 bg-white/10 rounded-2xl px-4 py-2 backdrop-blur">
           <span className="text-primary-foreground font-inter text-sm">
-            Discipulado 3M
+            Caminho 3M
           </span>
         </div>
       </div>

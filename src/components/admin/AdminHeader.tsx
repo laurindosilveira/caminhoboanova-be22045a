@@ -190,7 +190,7 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
                 <Church className="h-5 w-5 text-orange-200" />
               </div>
               <div className="min-w-0">
-                <p className="font-inter text-xs font-bold uppercase tracking-widest text-white/60">Discipulado 3M</p>
+                <p className="font-inter text-xs font-bold uppercase tracking-widest text-white/60">Caminho 3M</p>
                 <h1 className="break-words font-montserrat text-lg font-black leading-tight text-white sm:text-xl">{areaName}</h1>
                 {subtitle && <p className="mt-1 truncate font-inter text-xs text-white/60">{subtitle}</p>}
               </div>

@@ -115,7 +115,7 @@ export default defineConfig(({ mode }) => ({
         ],
       },
       manifest: {
-        name: "Discipulado 3M",
+        name: "Caminho 3M",
         short_name: "3M",
         description: "App gamificado do Confirmatório Boa Nova. Crescendo na fé, juntos.",
         theme_color: "#D34E00",
