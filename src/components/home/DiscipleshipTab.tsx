@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { Heart, GraduationCap, Sparkles, Lock, ClipboardList, BookOpen, ArrowLeft, ChevronRight, AlertTriangle, CalendarClock } from "lucide-react";
+import { Heart, GraduationCap, Sparkles, Lock, ClipboardList, BookOpen, ArrowLeft, ChevronRight, AlertTriangle, CalendarClock, RotateCcw, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import JourneyLessonView from "@/components/home/JourneyLessonView";
 import LessonContentEditor from "@/components/admin/tabs/LessonContentEditor";
@@ -47,6 +47,12 @@ type DiscipleshipTabProps = {
   onTargetLessonConsumed?: () => void;
 };
 
+type RecoveryReleaseRow = {
+  id: string;
+  available_until: string;
+  ended_at: string | null;
+};
+
 export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "choice", onTargetLessonConsumed }: DiscipleshipTabProps = {}) {
   const { profile, role, isSuper, signOut } = useAuth();
   const { effectiveArea } = useAreaSwitch();
@@ -76,6 +82,12 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
   const [worshipCount, setWorshipCount] = useState(0);
   const [unlockedCourseIds, setUnlockedCourseIds] = useState<Set<string>>(new Set());
   const [manualLessonOverrideMap, setManualLessonOverrideMap] = useState<Map<string, { id: string; custom_points: number | null }>>(new Map());
+  const [activeRecovery, setActiveRecovery] = useState<RecoveryReleaseRow | null>(null);
+  const [recoveryLessonIds, setRecoveryLessonIds] = useState<Set<string>>(new Set());
+  const [recoveryDevotionalIds, setRecoveryDevotionalIds] = useState<Set<string>>(new Set());
+  const [selectedRecoveryMode, setSelectedRecoveryMode] = useState(false);
+  const [completedDevotionalIds, setCompletedDevotionalIds] = useState<Set<string>>(new Set());
+  const [devotionalsByLesson, setDevotionalsByLesson] = useState<Map<string, { id: string }[]>>(new Map());
   const [showNovoCurso, setShowNovoCurso] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [helpType, setHelpType] = useState<"crise" | "conversar" | "oracao" | null>(null);
@@ -124,7 +136,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }, { data: responsesData }, { data: eventsData }, { data: attendanceData }, { data: allAssess }, { data: devContentData }, { data: devProgressData }, { data: worshipData }, { data: unlocksData }, { data: lessonOverrideData }, { data: modulesData }, { data: tracksData }, { data: trackReleasesData }] = await Promise.all([
+    const [{ data: acts }, { data: prog }, { data: assess }, { data: planData }, { data: coursesData }, { data: lessonsData }, { data: responsesData }, { data: eventsData }, { data: attendanceData }, { data: allAssess }, { data: devContentData }, { data: devProgressData }, { data: worshipData }, { data: unlocksData }, { data: lessonOverrideData }, { data: modulesData }, { data: tracksData }, { data: trackReleasesData }, { data: recoveryReleaseData }, { data: recoveryDevotionalOverrideData }] = await Promise.all([
       supabase.from("activities").select("id, type, title, points"),
       supabase.from("user_progress").select("activity_id").eq("user_id", user.id),
       supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).eq("month", month).eq("year", year).maybeSingle(),
@@ -139,12 +151,14 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
       supabase.from("worship_attendance").select("id").eq("user_id", user.id).eq("status", "aprovado"),
       supabase.from("course_unlocks").select("course_id").eq("area", currentArea),
-      supabase.from("user_lesson_overrides" as any).select("id, lesson_id, custom_points, available_from, available_until, is_unlocked").eq("user_id", user.id),
+      supabase.from("user_lesson_overrides").select("id, lesson_id, custom_points, available_from, available_until, is_unlocked, recovery_release_id").eq("user_id", user.id),
       profile?.church_id ? supabase.from("modules" as any).select("id, course_id, title, order_num, church_id").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("modules" as any).select("id, course_id, title, order_num, church_id").is("church_id", null).order("order_num"),
       supabase.from("learning_tracks").select("id, name, description, order_num").order("order_num"),
       profile?.church_id
         ? supabase.from("track_church_releases").select("track_id").eq("church_id", profile.church_id)
         : Promise.resolve({ data: [] as { track_id: string }[], error: null }),
+      supabase.from("confirmatory_recovery_releases").select("id, available_until, ended_at").eq("user_id", user.id).is("ended_at", null).order("created_at", { ascending: false }).limit(1),
+      supabase.from("user_devotional_overrides").select("devotional_id, recovery_release_id, is_unlocked, available_until").eq("user_id", user.id).not("recovery_release_id", "is", null),
     ]);
 
     setActivities(acts ?? []);
@@ -165,6 +179,13 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       }
     });
     const completedDevIds = new Set((devProgressData ?? []).map((p: any) => p.devotional_id));
+    setCompletedDevotionalIds(completedDevIds);
+    const devotionalIndex = new Map<string, { id: string }[]>();
+    (devContentData ?? []).forEach((item: any) => {
+      if (!item.lesson_id) return;
+      devotionalIndex.set(item.lesson_id, [...(devotionalIndex.get(item.lesson_id) ?? []), { id: item.id }]);
+    });
+    setDevotionalsByLesson(devotionalIndex);
     const fullyDone = new Set<string>();
     (lessonsData ?? []).forEach((l: any) => {
       const hasStudy = lessonIdsWithResponses.has(l.id);
@@ -205,6 +226,23 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       activeLessonOverrides.set(item.lesson_id, { id: item.id, custom_points: item.custom_points ?? null });
     });
     setManualLessonOverrideMap(activeLessonOverrides);
+    const recoveryRelease = ((recoveryReleaseData ?? []) as RecoveryReleaseRow[])
+      .find((release) => new Date(release.available_until) > new Date()) ?? null;
+    setActiveRecovery(recoveryRelease);
+    setRecoveryLessonIds(new Set(
+      (lessonOverrideData ?? [])
+        .filter((item: any) => item.recovery_release_id === recoveryRelease?.id && item.is_unlocked)
+        .map((item: any) => item.lesson_id),
+    ));
+    setRecoveryDevotionalIds(new Set(
+      (recoveryDevotionalOverrideData ?? [])
+        .filter((item: any) =>
+          item.recovery_release_id === recoveryRelease?.id
+          && item.is_unlocked
+          && (!item.available_until || new Date(item.available_until) >= new Date())
+        )
+        .map((item: any) => item.devotional_id),
+    ));
     const unlockedSet = new Set((unlocksData ?? []).map((u: any) => u.course_id));
     const firstUnlocked = courseList.find(c => unlockedSet.has(c.id));
     if (firstUnlocked) setExpandedCourse(firstUnlocked.id);
@@ -430,6 +468,24 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     setSelectedLessonMode("choice");
   }
 
+  const recoveryPendingItems = activeRecovery
+    ? courses.flatMap((course) => course.lessons.map((lesson) => {
+        const studyPending = recoveryLessonIds.has(lesson.id) && !completedLessonIds.has(lesson.id);
+        const pendingDevotionals = (devotionalsByLesson.get(lesson.id) ?? [])
+          .filter((devotional) => recoveryDevotionalIds.has(devotional.id) && !completedDevotionalIds.has(devotional.id));
+        if (!studyPending && pendingDevotionals.length === 0) return null;
+        return { lesson, courseTitle: course.title, studyPending, pendingDevotionals };
+      }).filter((item): item is NonNullable<typeof item> => item !== null))
+    : [];
+
+  function openRecoveryLesson(lesson: Lesson, devotional = false) {
+    setSelectedRecoveryMode(true);
+    setSelectedLesson(lesson);
+    setSelectedLessonMode("choice");
+    setAutoOpenDevotionalLessonId(devotional ? lesson.id : null);
+    setSubTab("trilha");
+  }
+
   // ── Lesson selected view ──
   if (selectedLesson) {
     if (selectedLessonMode === "edit" && isLeaderOrAdmin) {
@@ -487,6 +543,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
         isStudyCompleted={studyDone}
         overrideId={manualLessonOverrideMap.get(selectedLesson.id)?.id}
         awardedPoints={manualLessonOverrideMap.get(selectedLesson.id)?.custom_points ?? null}
+        recoveryMode={selectedRecoveryMode}
       />
     );
   }
@@ -585,6 +642,49 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       <AnimatePresence mode="wait">
         {subTab === "trilha" && (
           <motion.div key="trilha" variants={subTabVariants} initial="initial" animate="animate" exit="exit" className="space-y-4">
+            {activeRecovery && (
+              <div className="overflow-hidden rounded-2xl border border-amber-300/60 bg-amber-50/80 shadow-sm">
+                <div className="flex items-start gap-3 p-4">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-700">
+                    <RotateCcw className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-montserrat text-sm font-black text-amber-950">Trilha especial de recuperação</p>
+                    <p className="mt-1 font-inter text-xs text-amber-900/75">Somente suas lições e devocionais pendentes aparecem aqui.</p>
+                    <p className="mt-2 inline-flex items-center gap-1.5 font-inter text-[11px] font-semibold text-amber-800">
+                      <Clock className="h-3.5 w-3.5" />
+                      Até {new Date(activeRecovery.available_until).toLocaleString("pt-BR")}
+                    </p>
+                  </div>
+                </div>
+                <div className="border-t border-amber-300/40 bg-card/70">
+                  {recoveryPendingItems.length === 0 ? (
+                    <div className="p-4 text-center">
+                      <p className="font-montserrat text-sm font-bold text-brand-green">Tudo recuperado!</p>
+                      <p className="mt-1 font-inter text-xs text-muted-foreground">Você não possui mais itens pendentes nesta liberação.</p>
+                    </div>
+                  ) : recoveryPendingItems.map(({ lesson, courseTitle, studyPending, pendingDevotionals }) => (
+                    <div key={lesson.id} className="border-b border-border p-4 last:border-b-0">
+                      <p className="font-inter text-[10px] font-bold uppercase tracking-wide text-amber-700">{courseTitle}</p>
+                      <p className="mt-1 font-montserrat text-sm font-bold text-foreground">Lição {lesson.order_num} — {lesson.title}</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {studyPending && (
+                          <button onClick={() => openRecoveryLesson(lesson)} className="inline-flex items-center gap-1.5 rounded-xl bg-secondary/10 px-3 py-2 font-montserrat text-xs font-bold text-secondary">
+                            <GraduationCap className="h-3.5 w-3.5" /> Fazer lição · 10 pts
+                          </button>
+                        )}
+                        {pendingDevotionals.length > 0 && (
+                          <button onClick={() => openRecoveryLesson(lesson, true)} className="inline-flex items-center gap-1.5 rounded-xl bg-brand-green/10 px-3 py-2 font-montserrat text-xs font-bold text-brand-green">
+                            <BookOpen className="h-3.5 w-3.5" /> {pendingDevotionals.length} devocional{pendingDevotionals.length > 1 ? "is" : ""} · 2 pts
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {overdueLessons.length > 0 && (
               <button
                 type="button"
@@ -618,6 +718,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
               isSuper={isSuper}
               onRefresh={() => fetchAll(true)}
               onSelectLesson={(lesson) => {
+                setSelectedRecoveryMode(false);
                 setSelectedLesson(lesson);
                 setSelectedLessonMode("choice");
               }}

@@ -4035,6 +4035,45 @@ export type Database = {
           },
         ]
       }
+      confirmatory_recovery_releases: {
+        Row: {
+          available_from: string
+          available_until: string
+          church_id: string
+          created_at: string
+          ended_at: string | null
+          ended_by: string | null
+          granted_by: string
+          id: string
+          notes: string | null
+          user_id: string
+        }
+        Insert: {
+          available_from?: string
+          available_until: string
+          church_id: string
+          created_at?: string
+          ended_at?: string | null
+          ended_by?: string | null
+          granted_by: string
+          id?: string
+          notes?: string | null
+          user_id: string
+        }
+        Update: {
+          available_from?: string
+          available_until?: string
+          church_id?: string
+          created_at?: string
+          ended_at?: string | null
+          ended_by?: string | null
+          granted_by?: string
+          id?: string
+          notes?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_devotional_overrides: {
         Row: {
           available_from: string | null
@@ -4047,6 +4086,7 @@ export type Database = {
           id: string
           is_unlocked: boolean
           notes: string | null
+          recovery_release_id: string | null
           updated_at: string
           user_id: string
         }
@@ -4061,6 +4101,7 @@ export type Database = {
           id?: string
           is_unlocked?: boolean
           notes?: string | null
+          recovery_release_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -4075,6 +4116,7 @@ export type Database = {
           id?: string
           is_unlocked?: boolean
           notes?: string | null
+          recovery_release_id?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -4121,6 +4163,7 @@ export type Database = {
           is_unlocked: boolean
           lesson_id: string
           notes: string | null
+          recovery_release_id: string | null
           updated_at: string
           user_id: string
         }
@@ -4135,6 +4178,7 @@ export type Database = {
           is_unlocked?: boolean
           lesson_id: string
           notes?: string | null
+          recovery_release_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -4149,6 +4193,7 @@ export type Database = {
           is_unlocked?: boolean
           lesson_id?: string
           notes?: string | null
+          recovery_release_id?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -4549,6 +4594,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      end_confirmatory_recovery: {
+        Args: { p_release_id: string }
+        Returns: undefined
+      }
       confirm_whatsapp_resend: {
         Args: { _error?: string; _log_id: string; _success: boolean }
         Returns: undefined
@@ -4942,6 +4991,14 @@ export type Database = {
           p_video_watched?: boolean
         }
         Returns: undefined
+      }
+      start_confirmatory_recovery: {
+        Args: {
+          p_available_until: string
+          p_notes?: string
+          p_user_id: string
+        }
+        Returns: string
       }
       secure_extend_trial: {
         Args: { p_church_subscription_id: string; p_days: number }
