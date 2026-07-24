@@ -2,6 +2,8 @@ import { useState } from "react";
 import { GraduationCap, CalendarDays, ChevronDown, ChevronRight, CheckCircle2, Lock, Layers, Plus, X, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Course, Lesson, LearningTrack, Module } from "./shared";
 
 type AgendaSchedule = {
@@ -38,6 +40,7 @@ export default function CourseTrailSection({
   isSuper, onRefresh, onSelectLesson,
 }: Props) {
   const [selectedTrackId, setSelectedTrackId] = useState<string>("confirmatory");
+  const [trackMenuOpen, setTrackMenuOpen] = useState(false);
   // ── create module state ──
   const [showNewModule, setShowNewModule] = useState<string | null>(null); // course id
   const [newModuleTitle, setNewModuleTitle] = useState("");
@@ -112,50 +115,79 @@ export default function CourseTrailSection({
 
   return (
     <div className="space-y-3">
-      {/* Seletor de trilha */}
-      <div className="grid gap-2">
-        {trackOptions.map((track) => {
-          const isActive = track.id === effectiveTrackId;
-          return (
-            <button
-              key={track.id}
-              type="button"
-              onClick={() => {
-                setSelectedTrackId(track.id);
-                onExpandCourse(null);
-              }}
-              className={`w-full rounded-2xl p-4 flex items-center gap-3 text-left border transition-all ${
-                isActive
-                  ? "bg-secondary/10 border-secondary/30 shadow-sm"
-                  : "bg-card border-border hover:bg-muted/30"
-              }`}
-            >
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                isActive ? "bg-secondary/15" : "bg-muted"
-              }`}>
-                <GraduationCap className={`w-5 h-5 ${isActive ? "text-secondary" : "text-muted-foreground"}`} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-montserrat font-bold text-foreground text-sm">{track.name}</p>
-                <p className="text-muted-foreground font-inter text-xs mt-0.5 truncate">
-                  {courses
-                    .filter((course) => track.id === "confirmatory" ? !course.track_id : course.track_id === track.id)
-                    .reduce((sum, course) => sum + course.lessons.length, 0)} lições em {track.courseCount} cursos
-                </p>
-              </div>
-              <ChevronRight className={`w-4 h-4 transition-transform ${
-                isActive ? "rotate-90 text-secondary" : "text-muted-foreground"
-              }`} />
-            </button>
-          );
-        })}
-      </div>
+      {/* Menu com rolagem para selecionar a trilha exibida */}
+      <Popover open={trackMenuOpen} onOpenChange={setTrackMenuOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="w-full rounded-2xl p-4 flex items-center gap-3 text-left border border-secondary/30 bg-secondary/10 shadow-sm transition-colors hover:bg-secondary/15"
+            aria-label="Selecionar trilha de discipulado"
+          >
+            <div className="w-10 h-10 rounded-xl bg-secondary/15 flex items-center justify-center flex-shrink-0">
+              <GraduationCap className="w-5 h-5 text-secondary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-inter text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Trilha selecionada
+              </p>
+              <p className="font-montserrat font-bold text-foreground text-sm truncate">{activeTrack?.name}</p>
+              <p className="font-inter text-xs text-muted-foreground mt-0.5 truncate">
+                {visibleCourses.reduce((sum, course) => sum + course.lessons.length, 0)} lições em {visibleCourses.length} cursos
+              </p>
+            </div>
+            <ChevronDown className={`w-4 h-4 text-secondary transition-transform ${trackMenuOpen ? "rotate-180" : ""}`} />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          sideOffset={6}
+          className="w-[var(--radix-popover-trigger-width)] rounded-2xl p-1.5"
+        >
+          <p className="px-3 py-2 font-inter text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Selecione uma trilha
+          </p>
+          <ScrollArea className={trackOptions.length > 4 ? "h-60" : "h-auto max-h-60"}>
+            <div className="space-y-1 pr-2">
+              {trackOptions.map((track) => {
+                const isActive = track.id === effectiveTrackId;
+                const trackCourses = courses.filter((course) =>
+                  track.id === "confirmatory" ? !course.track_id : course.track_id === track.id
+                );
+                return (
+                  <button
+                    key={track.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedTrackId(track.id);
+                      setTrackMenuOpen(false);
+                      onExpandCourse(null);
+                    }}
+                    className={`w-full rounded-xl px-3 py-3 flex items-center gap-3 text-left transition-colors ${
+                      isActive ? "bg-secondary/15" : "hover:bg-muted"
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      isActive ? "bg-secondary/20" : "bg-muted"
+                    }`}>
+                      <GraduationCap className={`w-4 h-4 ${isActive ? "text-secondary" : "text-muted-foreground"}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-montserrat font-bold text-foreground text-sm truncate">{track.name}</p>
+                      <p className="font-inter text-xs text-muted-foreground truncate">
+                        {trackCourses.reduce((sum, course) => sum + course.lessons.length, 0)} lições em {track.courseCount} cursos
+                      </p>
+                    </div>
+                    {isActive && <CheckCircle2 className="w-4 h-4 text-secondary flex-shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </PopoverContent>
+      </Popover>
 
-      {activeTrack && (
-        <div className="px-1">
-          <p className="font-montserrat font-bold text-foreground text-sm">{activeTrack.name}</p>
-          <p className="font-inter text-xs text-muted-foreground mt-0.5">{activeTrack.description}</p>
-        </div>
+      {activeTrack?.description && (
+        <p className="px-1 font-inter text-xs text-muted-foreground">{activeTrack.description}</p>
       )}
 
       {/* Waiting message */}
