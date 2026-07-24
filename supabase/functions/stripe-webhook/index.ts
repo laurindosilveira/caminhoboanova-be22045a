@@ -11,7 +11,37 @@ const log = (step: string, details?: unknown) => {
   console.log(`[STRIPE-WEBHOOK] ${step}${details ? ` ${JSON.stringify(details)}` : ""}`);
 };
 
-const PLAN_FEATURES: Record<string, any> = {
+const stripeObjectId = (value: string | { id: string } | null | undefined): string | null => {
+  if (!value) return null;
+  return typeof value === "string" ? value : value.id;
+};
+
+const sanitizeError = (error: unknown): string => {
+  const raw = error instanceof Error ? error.message : String(error);
+  return raw
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+    .replace(/(sk|whsec|rk)_(live|test)_[A-Za-z0-9_]+/g, "[secret]")
+    .slice(0, 500);
+};
+
+const compactEventPayload = (event: Stripe.Event) => ({
+  id: event.id,
+  type: event.type,
+  created: event.created,
+  livemode: event.livemode,
+  api_version: event.api_version,
+  request_id: event.request?.id ?? null,
+});
+
+interface PlanFeatures {
+  maxMembers: number | null;
+  advancedExport: boolean;
+  multiAreaManagement: boolean;
+  detailedReports: boolean;
+  customBranding: boolean;
+}
+
+const PLAN_FEATURES: Record<string, PlanFeatures> = {
   comunidade: {
     maxMembers: 50,
     advancedExport: false,
@@ -55,13 +85,19 @@ const planMemberLimit = (plan: string): number | null => {
   return PLAN_FEATURES[plan]?.maxMembers ?? null;
 };
 
-// Map Stripe Product IDs to internal plan keys
-const productToPlan = (productId: string): string | null => {
-  const map: Record<string, string> = {
-    "prod_UAICj5dGzPRA0j": "comunidade",
-    "prod_UAICkTjHwlKsgI": "crescimento",
-    "prod_UAIIHa32ACvV60": "pastoral"
-  };
+// Map Stripe Product IDs to internal plan keys. Test mode must provide its own
+// catalog because Stripe keeps test and live objects completely separate.
+const productToPlan = (productId: string, stripeKey: string): string | null => {
+  const isTestMode = /^(sk|rk)_test_/.test(stripeKey);
+  const map: Record<string, string> = {};
+  const products = [
+    [Deno.env.get("STRIPE_PRODUCT_COMUNIDADE")?.trim() || (!isTestMode ? "prod_UuZw2jt79ka7I3" : ""), "comunidade"],
+    [Deno.env.get("STRIPE_PRODUCT_CRESCIMENTO")?.trim() || (!isTestMode ? "prod_UuZtkU2SzqH0yK" : ""), "crescimento"],
+    [Deno.env.get("STRIPE_PRODUCT_PASTORAL")?.trim() || (!isTestMode ? "prod_UuZtWDMyJCVaaN" : ""), "pastoral"],
+  ];
+  for (const [configuredProductId, plan] of products) {
+    if (configuredProductId?.startsWith("prod_")) map[configuredProductId] = plan;
+  }
   return map[productId] || null;
 };
 
@@ -98,9 +134,8 @@ serve(async (req) => {
   try {
     event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log("Signature verification failed", { error: msg });
-    return new Response(`Webhook Error: ${msg}`, { status: 400 });
+    log("Signature verification failed");
+    return new Response("Invalid signature", { status: 400 });
   }
 
   log("Event received", { type: event.type, id: event.id });
@@ -115,7 +150,7 @@ serve(async (req) => {
     .from("stripe_webhook_logs")
     .select("id")
     .eq("event_id", event.id)
-    .single();
+    .maybeSingle();
 
   if (existingLog) {
     log("Duplicate event ignored", { eventId: event.id });
@@ -131,11 +166,75 @@ serve(async (req) => {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+
+        if (session.metadata?.kind === "course_sale") {
+          const orderId = session.metadata.order_id;
+          if (!orderId || session.client_reference_id !== orderId) {
+            throw new Error("Course order metadata mismatch");
+          }
+          if (session.payment_status !== "paid") {
+            log("Course checkout completed without paid status", { orderId, paymentStatus: session.payment_status });
+            break;
+          }
+
+          const { data: order, error: orderError } = await supabaseAdmin
+            .from("course_orders")
+            .select("id,user_id,product_id,status,course_products(product_kind,course_id,track_id)")
+            .eq("id", orderId)
+            .single();
+          if (orderError || !order) throw new Error("Course order not found");
+          if (order.user_id !== session.metadata.user_id || order.product_id !== session.metadata.course_product_id) {
+            throw new Error("Course order ownership mismatch");
+          }
+
+          const paymentIntentId = stripeObjectId(session.payment_intent);
+          const { error: paidOrderError } = await supabaseAdmin.from("course_orders").update({
+            status: "paid",
+            stripe_checkout_session_id: session.id,
+            stripe_payment_intent_id: paymentIntentId,
+            paid_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }).eq("id", order.id).neq("status", "refunded");
+          if (paidOrderError) throw paidOrderError;
+
+          const product = order.course_products as unknown as {
+            product_kind: "course" | "bundle";
+            course_id: string | null;
+            track_id: string | null;
+          };
+          const courseIds = product.product_kind === "course"
+            ? [product.course_id].filter(Boolean) as string[]
+            : (await supabaseAdmin.from("courses").select("id").eq("track_id", product.track_id)).data?.map((course) => course.id) ?? [];
+
+          for (const courseId of courseIds) {
+            const { data: existing } = await supabaseAdmin
+              .from("user_course_entitlements")
+              .select("id")
+              .eq("user_id", order.user_id)
+              .eq("course_id", courseId)
+              .eq("source", "purchase")
+              .eq("order_id", order.id)
+              .maybeSingle();
+            if (!existing) {
+              const { error: entitlementError } = await supabaseAdmin.from("user_course_entitlements").insert({
+                user_id: order.user_id,
+                course_id: courseId,
+                source: "purchase",
+                order_id: order.id,
+                starts_at: new Date().toISOString(),
+                expires_at: null,
+              });
+              if (entitlementError) throw entitlementError;
+            }
+          }
+          log("Course purchase fulfilled", { orderId, courses: courseIds.length });
+          break;
+        }
+
         churchSubId = session.metadata?.subscriptionId as string;
 
         if (!churchSubId) {
-          log("No subscriptionId in metadata");
-          break;
+          throw new Error("Checkout metadata is missing subscriptionId");
         }
 
         const { data: subData, error: subError } = await supabaseAdmin
@@ -145,12 +244,28 @@ serve(async (req) => {
           .single();
 
         if (subError || !subData) {
-          log("Error fetching church_subscription", { subError });
-          break;
+          throw new Error("Checkout subscription record was not found");
+        }
+
+        if (session.client_reference_id !== churchSubId) {
+          throw new Error("Checkout reference mismatch");
+        }
+
+        const stripeSubscriptionId = stripeObjectId(session.subscription);
+        const stripeCustomerId = stripeObjectId(session.customer);
+        if (!stripeSubscriptionId || !stripeCustomerId) {
+          throw new Error("Checkout is missing Stripe subscription identifiers");
+        }
+
+        const stripeSubscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+        const purchasedProductId = stripeObjectId(stripeSubscription.items.data[0]?.price.product);
+        const purchasedPlan = purchasedProductId ? productToPlan(purchasedProductId, stripeKey) : null;
+        if (!purchasedPlan || purchasedPlan !== subData.recommended_plan || session.metadata?.plan !== purchasedPlan) {
+          throw new Error("Purchased plan does not match the onboarding request");
         }
 
         // 1. Provision Church
-        let churchId = (subData as any).church_id as string | null;
+        let churchId = subData.church_id as string | null;
         if (!churchId) {
           const baseSlug = subData.church_name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "");
           const slug = `${baseSlug}-${Date.now().toString(36)}`;
@@ -164,17 +279,21 @@ serve(async (req) => {
             })
             .select()
             .single();
-          if (churchError) log("Error creating church", { churchError });
+          if (churchError) throw churchError;
           churchId = churchData?.id ?? null;
         }
 
         // 2. Provision Admin Profile (Pastor)
         if (subData.pastor_email && churchId) {
-          log("Provisioning admin", { email: subData.pastor_email });
-          let { data: userData } = await supabaseAdmin.auth.admin.getUserByEmail(subData.pastor_email);
-          
-          if (!userData?.user) {
-            log("User not found, inviting", { email: subData.pastor_email });
+          const normalizedEmail = subData.pastor_email.trim().toLowerCase();
+          const { data: existingProfile } = await supabaseAdmin
+            .from("profiles")
+            .select("user_id")
+            .eq("email", normalizedEmail)
+            .maybeSingle();
+          let userId = existingProfile?.user_id ?? null;
+
+          if (!userId) {
             const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(subData.pastor_email, {
               data: {
                 full_name: subData.pastor_name,
@@ -183,48 +302,50 @@ serve(async (req) => {
                 enrollment_status: "approved"
               }
             });
-            if (inviteError) log("Error inviting user", { inviteError });
-            userData = { user: inviteData?.user ?? null };
+            if (inviteError || !inviteData?.user) {
+              throw new Error(`Unable to provision pastor account: ${sanitizeError(inviteError)}`);
+            }
+            userId = inviteData.user.id;
           }
 
-          if (userData?.user) {
-            log("Linking user to church", { userId: userData.user.id, churchId });
-            await supabaseAdmin.from("profiles").update({ 
-              church_id: churchId, 
-              role: "admin", 
-              enrollment_status: "approved",
-              full_name: subData.pastor_name
-            }).eq("user_id", userData.user.id);
+          const { error: profileError } = await supabaseAdmin.from("profiles").update({
+            church_id: churchId,
+            role: "admin",
+            enrollment_status: "approved",
+            full_name: subData.pastor_name,
+          }).eq("user_id", userId);
+          if (profileError) throw profileError;
 
-            await supabaseAdmin.from("user_roles").upsert({ 
-              user_id: userData.user.id, 
-              role: "admin", 
-              church_id: churchId 
-            }, { onConflict: "user_id,role" });
-          }
+          const { error: roleError } = await supabaseAdmin.from("user_roles").upsert({
+            user_id: userId,
+            role: "admin",
+            church_id: churchId,
+          }, { onConflict: "user_id,role" });
+          if (roleError) throw roleError;
+        } else {
+          throw new Error("Pastor email or church provisioning is missing");
         }
 
         // 3. Update Status
-        let internalStatus = "active";
-        let trialEndsAt: string | null = null;
-        if (session.subscription) {
-          const sub = await stripe.subscriptions.retrieve(session.subscription as string);
-          internalStatus = stripeStatusToInternal(sub.status);
-          trialEndsAt = sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null;
-        }
+        const internalStatus = stripeStatusToInternal(stripeSubscription.status);
+        const trialEndsAt = stripeSubscription.trial_end
+          ? new Date(stripeSubscription.trial_end * 1000).toISOString()
+          : null;
 
-        await supabaseAdmin
+        const { error: subscriptionUpdateError } = await supabaseAdmin
           .from("church_subscriptions")
           .update({
-            stripe_customer_id: session.customer as string,
-            stripe_subscription_id: session.subscription as string,
+            stripe_customer_id: stripeCustomerId,
+            stripe_subscription_id: stripeSubscriptionId,
             subscription_status: internalStatus,
             church_id: churchId,
-            member_limit: planMemberLimit(subData.recommended_plan),
+            recommended_plan: purchasedPlan,
+            member_limit: planMemberLimit(purchasedPlan),
             trial_ends_at: trialEndsAt,
             last_webhook_event_id: event.id
           })
           .eq("id", churchSubId);
+        if (subscriptionUpdateError) throw subscriptionUpdateError;
 
         // 4. Provision Audit
         await supabaseAdmin.rpc('log_church_audit', { 
@@ -235,12 +356,66 @@ serve(async (req) => {
         break;
       }
 
+      case "charge.refunded": {
+        const charge = event.data.object as Stripe.Charge;
+        const paymentIntentId = stripeObjectId(charge.payment_intent);
+        if (!paymentIntentId) break;
+        const { data: order } = await supabaseAdmin
+          .from("course_orders")
+          .select("id")
+          .eq("stripe_payment_intent_id", paymentIntentId)
+          .maybeSingle();
+        if (order) {
+          await supabaseAdmin.from("course_orders").update({
+            status: "refunded",
+            updated_at: new Date().toISOString(),
+          }).eq("id", order.id);
+          await supabaseAdmin.from("user_course_entitlements").update({
+            revoked_at: new Date().toISOString(),
+          }).eq("order_id", order.id).eq("source", "purchase");
+        }
+        break;
+      }
+
+      case "checkout.session.expired": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        if (session.metadata?.kind === "course_sale") {
+          const orderId = session.metadata.order_id;
+          if (!orderId || session.client_reference_id !== orderId) {
+            throw new Error("Expired course checkout metadata is invalid");
+          }
+          await supabaseAdmin.from("course_orders").update({
+            status: "expired",
+            updated_at: new Date().toISOString(),
+          }).eq("id", orderId).eq("status", "pending");
+          break;
+        }
+        const subscriptionId = session.metadata?.subscriptionId;
+        if (!subscriptionId || session.client_reference_id !== subscriptionId) {
+          throw new Error("Expired checkout metadata is invalid");
+        }
+
+        churchSubId = subscriptionId;
+        const { error: releaseError } = await supabaseAdmin
+          .from("church_subscriptions")
+          .update({
+            stripe_checkout_session_id: null,
+            checkout_started_at: null,
+            last_webhook_event_id: event.id,
+          })
+          .eq("id", subscriptionId)
+          .eq("subscription_status", "pending_checkout")
+          .eq("stripe_checkout_session_id", session.id);
+        if (releaseError) throw releaseError;
+        break;
+      }
+
       case "customer.subscription.created":
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
         const status = stripeStatusToInternal(subscription.status);
-        const productId = subscription.items.data[0].price.product as string;
-        const newPlan = productToPlan(productId);
+        const productId = stripeObjectId(subscription.items.data[0]?.price.product);
+        const newPlan = productId ? productToPlan(productId, stripeKey) : null;
         
         const { data: sub } = await supabaseAdmin
           .from("church_subscriptions")
@@ -367,7 +542,7 @@ serve(async (req) => {
     await supabaseAdmin.from("stripe_webhook_logs").insert({
       event_id: event.id,
       event_type: event.type,
-      payload: event,
+      payload: compactEventPayload(event),
       church_subscription_id: churchSubId,
       status: "processed"
     });
@@ -377,20 +552,23 @@ serve(async (req) => {
       status: 200,
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log("ERROR processing webhook", { error: msg });
+    const msg = sanitizeError(err);
+    log("ERROR processing webhook", {
+      name: err instanceof Error ? err.name : "UnknownError",
+      eventId: event.id,
+    });
     
     // Log failure
     await supabaseAdmin.from("stripe_webhook_logs").insert({
       event_id: event.id,
       event_type: event.type,
-      payload: event,
+      payload: compactEventPayload(event),
       church_subscription_id: churchSubId,
       status: "failed",
       error_message: msg
     }).select();
 
-    return new Response(JSON.stringify({ error: msg }), {
+    return new Response(JSON.stringify({ error: "Webhook processing failed" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });
