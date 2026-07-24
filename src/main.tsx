@@ -27,7 +27,7 @@ function showUpdateBanner(updateSWFn: () => void) {
   banner.id = "pwa-update-banner";
   banner.style.cssText = [
     "position:fixed", "bottom:80px", "left:50%", "transform:translateX(-50%)",
-    "z-index:99999", "background:#1F3C88", "color:#fff",
+    "z-index:99999", "background:#D34E00", "color:#fff",
     "padding:10px 18px", "border-radius:999px",
     "font-family:Inter,sans-serif", "font-size:13px",
     "box-shadow:0 4px 24px rgba(0,0,0,0.3)",

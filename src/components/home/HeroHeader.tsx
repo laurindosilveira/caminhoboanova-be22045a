@@ -3,6 +3,7 @@ import { AREAS } from "@/config/areas";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import { toast } from "sonner";
+import BrandLogo from "@/components/BrandLogo";
 
 interface HeroHeaderProps {
   streakDays: number;
@@ -23,12 +24,10 @@ export default function HeroHeader({ streakDays, faithPoints, faithLevel, faithE
         {/* Top row */}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center border-2 border-white/30" aria-hidden="true">
-              <span className="text-xl">✝️</span>
-            </div>
+            <BrandLogo inverse compact markClassName="h-11 w-11" />
             <div>
-              <p className="text-primary-foreground/70 text-[10px] font-inter uppercase tracking-[0.15em] leading-none mb-1.5 font-bold">
-                {(profile as any)?.churches?.name || profile?.community || "Boa Nova"}
+              <p className="text-primary-foreground/70 text-xs font-inter uppercase tracking-[0.15em] leading-none mb-1.5 font-bold">
+                {profile?.churches?.name || profile?.community || "Boa Nova"}
               </p>
               <h1 className="text-primary-foreground font-montserrat font-black text-2xl leading-tight">
                 {profile?.full_name || "Participante"}

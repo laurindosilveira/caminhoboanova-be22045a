@@ -186,11 +186,11 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
 
           <div className="mb-5 flex items-start justify-between gap-3">
             <div className="flex min-w-0 flex-1 items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-emerald-300/30 bg-emerald-400/10">
-                <Church className="h-5 w-5 text-emerald-300" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-orange-200/30 bg-orange-300/10">
+                <Church className="h-5 w-5 text-orange-200" />
               </div>
               <div className="min-w-0">
-                <p className="font-inter text-xs font-bold uppercase text-white/60">Caminho do Discipulado</p>
+                <p className="font-inter text-xs font-bold uppercase tracking-widest text-white/60">Discipulado 3M</p>
                 <h1 className="break-words font-montserrat text-lg font-black leading-tight text-white sm:text-xl">{areaName}</h1>
                 {subtitle && <p className="mt-1 truncate font-inter text-xs text-white/60">{subtitle}</p>}
               </div>

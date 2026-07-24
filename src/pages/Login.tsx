@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
-import { Eye, EyeOff, Mail, Lock, Flame, MessageCircle, Fingerprint } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, MessageCircle, Fingerprint } from "lucide-react";
+import BrandLogo from "@/components/BrandLogo";
 import { z } from "zod";
 import {
   diagnoseLoginFailure,
@@ -246,11 +247,10 @@ export default function Login() {
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
         {/* Logo area */}
         <div className="mb-8 text-center">
-          <div className="w-20 h-20 rounded-3xl bg-white/15 backdrop-blur border-2 border-white/30 flex items-center justify-center mx-auto mb-4 shadow-xl">
-            <span className="text-4xl">✝️</span>
-          </div>
-          <h1 className="font-montserrat font-black text-3xl text-primary-foreground">Caminho</h1>
-          <p className="text-primary-foreground/70 font-inter text-sm mt-1">Crescendo na fé, juntos.</p>
+          <BrandLogo inverse className="justify-center" markClassName="h-20 w-20 drop-shadow-xl" />
+          <p className="mt-3 text-primary-foreground/75 font-inter text-sm">
+            Amar a Deus · Amar ao próximo · Servir ao mundo
+          </p>
         </div>
 
         {/* Card */}
@@ -457,7 +457,7 @@ export default function Login() {
         {/* Bottom badge */}
         <div className="mt-3 flex items-center gap-2 bg-white/10 rounded-2xl px-4 py-2 backdrop-blur">
           <span className="text-primary-foreground font-inter text-sm">
-            Caminho — Plataforma de Discipulado
+            Discipulado 3M
           </span>
         </div>
       </div>
