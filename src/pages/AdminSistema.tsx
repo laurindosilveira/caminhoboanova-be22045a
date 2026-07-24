@@ -21,7 +21,6 @@ import {
   Plus,
   FileDown,
   FileText,
-  Database,
   Lock,
   Package,
   ListOrdered,
@@ -36,21 +35,21 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import GlobalCourseReleasesPanel from "@/components/admin/tabs/GlobalCourseReleasesPanel";
+import GlobalTrackReleasesPanel from "@/components/admin/tabs/GlobalTrackReleasesPanel";
+import type { Database } from "@/integrations/supabase/types";
 
-interface ChurchSubscription {
-  id: string;
-  church_name: string;
-  church_email: string;
-  pastor_name: string;
-  pastor_phone: string;
-  member_count: string;
-  recommended_plan: string;
-  subscription_status: string;
-  trial_ends_at: string | null;
-  created_at: string;
-  stripe_customer_id: string | null;
-  stripe_subscription_id: string | null;
-}
+type Tables = Database["public"]["Tables"];
+type ChurchSubscription = Tables["church_subscriptions"]["Row"];
+type WebhookLog = Tables["stripe_webhook_logs"]["Row"] & {
+  church_subscriptions: Pick<ChurchSubscription, "church_name"> | null;
+};
+type AdminAuditLog = Tables["system_admin_audit_logs"]["Row"];
+type ErrorLog = Tables["frontend_error_logs"]["Row"] & {
+  churches: { name: string } | null;
+};
+type PlanHistoryLog = Tables["plan_history"]["Row"] & {
+  churches: { name: string } | null;
+};
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: typeof CheckCircle2 }> = {
   pending_checkout: { label: "Aguardando checkout", color: "bg-warning/10 text-warning border-warning/30", icon: Clock },
@@ -87,11 +86,11 @@ export default function AdminSistema() {
   const [selectedUpdateId, setSelectedUpdateId] = useState<string | null>(null);
   const [isSystemAdmin, setIsSystemAdmin] = useState(false);
   const [systemAdminChecked, setSystemAdminChecked] = useState(false);
-  const [webhookLogs, setWebhookLogs] = useState<any[]>([]);
-  const [adminAuditLogs, setAdminAuditLogs] = useState<any[]>([]);
-  const [planHistory, setPlanHistory] = useState<any[]>([]);
+  const [webhookLogs, setWebhookLogs] = useState<WebhookLog[]>([]);
+  const [adminAuditLogs, setAdminAuditLogs] = useState<AdminAuditLog[]>([]);
+  const [planHistory, setPlanHistory] = useState<PlanHistoryLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
-  const [errorLogs, setErrorLogs] = useState<any[]>([]);
+  const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -138,7 +137,7 @@ export default function AdminSistema() {
   async function fetchChurches() {
     setChurchesLoading(true);
     const { data, error } = await supabase
-      .from("church_subscriptions" as any)
+      .from("church_subscriptions")
       .select("*")
       .order("created_at", { ascending: false });
 
@@ -146,7 +145,7 @@ export default function AdminSistema() {
       console.error(error);
       toast({ title: "Erro ao carregar igrejas", variant: "destructive" });
     } else {
-      setChurches((data as any) ?? []);
+      setChurches(data ?? []);
     }
 
     setChurchesLoading(false);
@@ -197,8 +196,8 @@ export default function AdminSistema() {
 
   async function updateStatus(id: string, newStatus: string) {
     const { error } = await supabase
-      .from("church_subscriptions" as any)
-      .update({ subscription_status: newStatus, updated_at: new Date().toISOString() } as any)
+      .from("church_subscriptions")
+      .update({ subscription_status: newStatus, updated_at: new Date().toISOString() })
       .eq("id", id);
 
     if (error) {
@@ -270,7 +269,7 @@ export default function AdminSistema() {
             <CardDescription>Seu usuario nao esta autorizado a acessar esta area.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button className="w-full rounded-xl" onClick={() => navigate("/")}>Voltar para o app</Button>
+            <Button className="w-full rounded-lg" onClick={() => navigate("/")}>Voltar para o app</Button>
           </CardContent>
         </Card>
       </div>
@@ -281,10 +280,10 @@ export default function AdminSistema() {
     <div className="min-h-screen bg-background">
       <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/admin")} className="rounded-xl">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/admin")} className="rounded-lg">
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "var(--gradient-hero)" }}>
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: "var(--gradient-hero)" }}>
             <Church className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
@@ -296,16 +295,16 @@ export default function AdminSistema() {
 
       <div className="mx-auto max-w-7xl px-4 py-6">
         <Tabs defaultValue="igrejas" className="space-y-6">
-          <TabsList className="h-auto flex-wrap justify-start gap-2 rounded-2xl bg-muted/60 p-2">
-            <TabsTrigger value="igrejas" className="rounded-xl px-4 py-2">Igrejas</TabsTrigger>
-            <TabsTrigger value="atualizacoes" className="rounded-xl px-4 py-2">Atualizacoes do app</TabsTrigger>
-            <TabsTrigger value="audit-logs" className="rounded-xl px-4 py-2">Seguranca</TabsTrigger>
-            <TabsTrigger value="plan-history" className="rounded-xl px-4 py-2">Historico de Planos</TabsTrigger>
-            <TabsTrigger value="webhook-logs" className="rounded-xl px-4 py-2">Webhook Logs</TabsTrigger>
-            <TabsTrigger value="error-logs" className="rounded-xl px-4 py-2">Monitoramento de Erros</TabsTrigger>
-            <TabsTrigger value="cursos" className="rounded-xl px-4 py-2">Cursos</TabsTrigger>
-            <TabsTrigger value="backup" className="rounded-xl px-4 py-2">Backup</TabsTrigger>
-            <TabsTrigger value="migration" className="rounded-xl px-4 py-2">Migração</TabsTrigger>
+          <TabsList className="h-auto flex-wrap justify-start gap-2 rounded-lg bg-muted/60 p-2">
+            <TabsTrigger value="igrejas" className="rounded-lg px-4 py-2">Igrejas</TabsTrigger>
+            <TabsTrigger value="atualizacoes" className="rounded-lg px-4 py-2">Atualizacoes do app</TabsTrigger>
+            <TabsTrigger value="audit-logs" className="rounded-lg px-4 py-2">Seguranca</TabsTrigger>
+            <TabsTrigger value="plan-history" className="rounded-lg px-4 py-2">Historico de Planos</TabsTrigger>
+            <TabsTrigger value="webhook-logs" className="rounded-lg px-4 py-2">Webhook Logs</TabsTrigger>
+            <TabsTrigger value="error-logs" className="rounded-lg px-4 py-2">Monitoramento de Erros</TabsTrigger>
+            <TabsTrigger value="cursos" className="rounded-lg px-4 py-2">Cursos</TabsTrigger>
+            <TabsTrigger value="backup" className="rounded-lg px-4 py-2">Backup</TabsTrigger>
+            <TabsTrigger value="migration" className="rounded-lg px-4 py-2">Migração</TabsTrigger>
           </TabsList>
 
           <TabsContent value="igrejas" className="space-y-6">
@@ -322,7 +321,7 @@ export default function AdminSistema() {
                     <stat.icon className={`h-5 w-5 ${stat.color}`} />
                     <div>
                       <p className="font-montserrat text-xl font-black text-foreground">{stat.value}</p>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{stat.label}</p>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider">{stat.label}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -336,7 +335,7 @@ export default function AdminSistema() {
                   placeholder="Buscar por nome, pastor ou email..."
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  className="rounded-xl pl-9"
+                  className="rounded-lg pl-9"
                 />
               </div>
               <div className="flex flex-wrap gap-2">
@@ -346,13 +345,13 @@ export default function AdminSistema() {
                     variant={statusFilter === status ? "default" : "outline"}
                     size="sm"
                     onClick={() => setStatusFilter(status)}
-                    className="rounded-xl text-xs"
+                    className="rounded-lg text-xs"
                   >
                     {status === "all" ? "Todos" : STATUS_MAP[status]?.label ?? status}
                   </Button>
                 ))}
               </div>
-              <Button variant="outline" size="icon" onClick={fetchChurches} className="rounded-xl">
+              <Button variant="outline" size="icon" onClick={fetchChurches} className="rounded-lg">
                 <RefreshCw className={`h-4 w-4 ${churchesLoading ? "animate-spin" : ""}`} />
               </Button>
             </div>
@@ -360,7 +359,7 @@ export default function AdminSistema() {
             {churchesLoading ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((item) => (
-                  <div key={item} className="h-28 animate-pulse rounded-2xl bg-muted" />
+                  <div key={item} className="h-28 animate-pulse rounded-lg bg-muted" />
                 ))}
               </div>
             ) : filteredChurches.length === 0 ? (
@@ -390,7 +389,7 @@ export default function AdminSistema() {
                           <div className="min-w-0 flex-1">
                             <div className="mb-1 flex items-center gap-2">
                               <h3 className="truncate font-montserrat font-bold text-foreground">{church.church_name}</h3>
-                              <Badge variant="outline" className={`border text-[10px] ${status.color}`}>
+                              <Badge variant="outline" className={`border text-xs ${status.color}`}>
                                 <StatusIcon className="mr-1 h-3 w-3" />
                                 {status.label}
                               </Badge>
@@ -409,7 +408,7 @@ export default function AdminSistema() {
                               </p>
                             )}
 
-                            <p className="mt-1 text-[10px] text-muted-foreground">
+                            <p className="mt-1 text-xs text-muted-foreground">
                               Cadastrado em {new Date(church.created_at).toLocaleDateString("pt-BR")}
                             </p>
                           </div>
@@ -419,27 +418,7 @@ export default function AdminSistema() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-8 rounded-lg border-primary/30 text-[10px] text-primary hover:bg-primary/10 flex-1"
-                                onClick={async () => {
-                                  const { data, error } = await supabase.rpc('test_stripe_webhook', {
-                                    p_church_subscription_id: church.id,
-                                    p_event_type: 'manual_reprocess',
-                                    p_stripe_status: 'active'
-                                  });
-                                  if (error) toast({ title: "Erro ao reprocessar", variant: "destructive" });
-                                  else {
-                                    toast({ title: "Webhook reprocessado com sucesso" });
-                                    fetchChurches();
-                                    fetchWebhookLogs();
-                                  }
-                                }}
-                              >
-                                Reprocessar
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 rounded-lg border-warning/30 text-[10px] text-warning hover:bg-warning/10 flex-1"
+                                className="h-8 rounded-lg border-warning/30 text-xs text-warning hover:bg-warning/10 flex-1"
                                 onClick={() => extendTrial(church.id, 7)}
                                 title="Adicionar 7 dias de teste"
                               >
@@ -451,7 +430,7 @@ export default function AdminSistema() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-8 rounded-lg border-border text-[10px] hover:bg-muted"
+                                className="h-8 rounded-lg border-border text-xs hover:bg-muted"
                                 onClick={() => window.open(`https://dashboard.stripe.com/customers/${church.stripe_customer_id}`, "_blank")}
                               >
                                 Ver no Stripe
@@ -462,7 +441,7 @@ export default function AdminSistema() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="h-8 rounded-lg border-brand-green/30 text-[10px] text-brand-green hover:bg-brand-green/10 flex-1"
+                                  className="h-8 rounded-lg border-brand-green/30 text-xs text-brand-green hover:bg-brand-green/10 flex-1"
                                   onClick={() => updateStatus(church.id, "active")}
                                 >
                                   Ativar
@@ -472,7 +451,7 @@ export default function AdminSistema() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="h-8 rounded-lg border-destructive/30 text-[10px] text-destructive hover:bg-destructive/10 flex-1"
+                                  className="h-8 rounded-lg border-destructive/30 text-xs text-destructive hover:bg-destructive/10 flex-1"
                                   onClick={() => updateStatus(church.id, "blocked")}
                                 >
                                   Bloquear
@@ -496,9 +475,9 @@ export default function AdminSistema() {
                 <CardDescription>Acompanhe tentativas de acesso e acoes administrativas criticas.</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="rounded-xl border border-border overflow-hidden">
+                <div className="rounded-lg border border-border overflow-hidden">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-muted text-muted-foreground uppercase font-bold text-[10px]">
+                    <thead className="bg-muted text-muted-foreground uppercase font-bold text-xs">
                       <tr>
                         <th className="px-4 py-3">Data</th>
                         <th className="px-4 py-3">IP</th>
@@ -541,7 +520,7 @@ export default function AdminSistema() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
                     <p className="text-sm font-semibold text-foreground">Como funciona agora</p>
                     <p className="mt-1 text-sm text-muted-foreground">
                       O painel mostra a versao atual publicada no build e o historico versionado das entregas sem depender de formulario manual no app.
@@ -549,13 +528,13 @@ export default function AdminSistema() {
                   </div>
 
                   <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-2xl border border-border bg-muted/30 p-4">
+                    <div className="rounded-lg border border-border bg-muted/30 p-4">
                       <p className="text-xs uppercase tracking-wide text-muted-foreground">Versao atual</p>
                       <p className="mt-1 font-montserrat text-2xl font-black text-foreground">
                         {latestAutomatedUpdate?.version ?? "Sem versao"}
                       </p>
                     </div>
-                    <div className="rounded-2xl border border-border bg-muted/30 p-4">
+                    <div className="rounded-lg border border-border bg-muted/30 p-4">
                       <p className="text-xs uppercase tracking-wide text-muted-foreground">Build atual</p>
                       <p className="mt-1 text-sm font-semibold text-foreground">
                         {latestAutomatedUpdate ? new Date(latestAutomatedUpdate.createdAt).toLocaleString("pt-BR") : "Nao disponivel"}
@@ -563,7 +542,7 @@ export default function AdminSistema() {
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-border bg-muted/30 p-4">
+                  <div className="rounded-lg border border-border bg-muted/30 p-4">
                     <p className="text-sm font-semibold text-foreground">Origem das informacoes</p>
                     <p className="mt-1 text-sm text-muted-foreground">
                       O historico desta aba e lido diretamente do projeto e exibido automaticamente no admin do sistema sempre que houver novo deploy.
@@ -582,11 +561,11 @@ export default function AdminSistema() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-border bg-muted/30 p-4">
+                    <div className="rounded-lg border border-border bg-muted/30 p-4">
                       <p className="text-xs uppercase tracking-wide text-muted-foreground">Total</p>
                       <p className="mt-1 font-montserrat text-3xl font-black text-foreground">{AUTOMATED_SYSTEM_UPDATES.length}</p>
                     </div>
-                    <div className="rounded-2xl border border-border bg-muted/30 p-4">
+                    <div className="rounded-lg border border-border bg-muted/30 p-4">
                       <p className="text-xs uppercase tracking-wide text-muted-foreground">Ultima publicacao</p>
                       <p className="mt-1 text-sm font-semibold text-foreground">
                         {latestAutomatedUpdate ? new Date(latestAutomatedUpdate.createdAt).toLocaleDateString("pt-BR") : "Nenhuma ainda"}
@@ -594,7 +573,7 @@ export default function AdminSistema() {
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
                     <p className="text-sm font-semibold text-foreground">Beneficio principal</p>
                     <p className="mt-1 text-sm text-muted-foreground">
                       Voce nao precisa mais abrir o app para cadastrar a atualizacao manualmente. O painel recebe esse conteudo sozinho a partir do codigo publicado.
@@ -609,7 +588,7 @@ export default function AdminSistema() {
                 <h2 className="font-montserrat text-xl font-black text-foreground">Historico de atualizacoes</h2>
                 <p className="text-sm text-muted-foreground">Entradas automaticas exibidas pelo admin do sistema.</p>
               </div>
-              <Button variant="outline" onClick={() => window.location.reload()} className="rounded-xl">
+              <Button variant="outline" onClick={() => window.location.reload()} className="rounded-lg">
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Recarregar painel
               </Button>
@@ -653,7 +632,7 @@ export default function AdminSistema() {
                           <p className="text-sm leading-6 text-muted-foreground">{item.summary}</p>
 
                           {item.details && (
-                            <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm leading-6 text-foreground">
+                            <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm leading-6 text-foreground">
                               {item.details}
                             </div>
                           )}
@@ -682,7 +661,7 @@ export default function AdminSistema() {
                   <CardTitle className="font-montserrat text-xl font-black">Logs do Stripe Webhook</CardTitle>
                   <CardDescription>Auditoria de eventos recebidos e processados pelo Stripe.</CardDescription>
                 </div>
-                <Button variant="outline" size="icon" onClick={fetchWebhookLogs} className="rounded-xl">
+                <Button variant="outline" size="icon" onClick={fetchWebhookLogs} className="rounded-lg">
                   <RefreshCw className={`h-4 w-4 ${logsLoading ? "animate-spin" : ""}`} />
                 </Button>
               </CardHeader>
@@ -694,7 +673,7 @@ export default function AdminSistema() {
                 ) : webhookLogs.length === 0 ? (
                   <p className="text-center py-10 text-muted-foreground">Nenhum evento registrado ainda.</p>
                 ) : (
-                  <div className="rounded-xl border border-border overflow-hidden">
+                  <div className="rounded-lg border border-border overflow-hidden">
                     <table className="w-full text-sm">
                       <thead className="bg-muted/50 border-b border-border">
                         <tr>
@@ -707,18 +686,18 @@ export default function AdminSistema() {
                       <tbody className="divide-y divide-border">
                         {webhookLogs.map((log) => (
                           <tr key={log.id} className="hover:bg-muted/30 transition-colors">
-                            <td className="px-4 py-3 font-mono text-[10px] truncate max-w-[150px]">
+                            <td className="px-4 py-3 font-mono text-xs truncate max-w-[150px]">
                               {log.event_type}
                             </td>
                             <td className="px-4 py-3 truncate max-w-[150px]">
                               {log.church_subscriptions?.church_name || "-"}
                             </td>
                             <td className="px-4 py-3">
-                              <Badge variant={log.status === "processed" ? "outline" : "destructive"} className="text-[10px] py-0">
+                              <Badge variant={log.status === "processed" ? "outline" : "destructive"} className="text-xs py-0">
                                 {log.status}
                               </Badge>
                             </td>
-                            <td className="px-4 py-3 text-muted-foreground text-[10px]">
+                            <td className="px-4 py-3 text-muted-foreground text-xs">
                               {new Date(log.created_at).toLocaleString("pt-BR")}
                             </td>
                           </tr>
@@ -737,7 +716,7 @@ export default function AdminSistema() {
                   <CardTitle className="font-montserrat text-xl font-black">Monitoramento de Erros</CardTitle>
                   <CardDescription>Erros capturados automaticamente no frontend em tempo real.</CardDescription>
                 </div>
-                <Button variant="outline" size="icon" onClick={fetchErrorLogs} className="rounded-xl">
+                <Button variant="outline" size="icon" onClick={fetchErrorLogs} className="rounded-lg">
                   <RefreshCw className={`h-4 w-4 ${logsLoading ? "animate-spin" : ""}`} />
                 </Button>
               </CardHeader>
@@ -751,17 +730,17 @@ export default function AdminSistema() {
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between gap-3 mb-2">
                             <div className="flex items-center gap-2">
-                              <Badge variant="destructive" className="text-[10px]">ERROR</Badge>
+                              <Badge variant="destructive" className="text-xs">ERROR</Badge>
                               <span className="text-xs font-bold font-mono">{log.churches?.name || "Global"}</span>
                             </div>
-                            <span className="text-[10px] text-muted-foreground">{new Date(log.created_at).toLocaleString("pt-BR")}</span>
+                            <span className="text-xs text-muted-foreground">{new Date(log.created_at).toLocaleString("pt-BR")}</span>
                           </div>
                           <p className="text-sm font-bold text-foreground mb-1">{log.error_message}</p>
-                          <p className="text-[10px] text-muted-foreground font-mono truncate">{log.url}</p>
+                          <p className="text-xs text-muted-foreground font-mono truncate">{log.url}</p>
                           {log.stack_trace && (
                             <details className="mt-2">
-                              <summary className="text-[10px] cursor-pointer text-primary font-bold">Ver Stack Trace</summary>
-                              <pre className="mt-2 p-2 bg-black text-white text-[9px] overflow-auto max-h-40 rounded-lg">
+                              <summary className="text-xs cursor-pointer text-primary font-bold">Ver Stack Trace</summary>
+                              <pre className="mt-2 p-2 bg-black text-white text-xs overflow-auto max-h-40 rounded-lg">
                                 {log.stack_trace}
                               </pre>
                             </details>
@@ -787,13 +766,13 @@ export default function AdminSistema() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="rounded-2xl border border-border bg-muted/30 p-4">
+                <div className="rounded-lg border border-border bg-muted/30 p-4">
                   <p className="text-sm font-semibold text-foreground">Escopo do backup</p>
                   <p className="mt-1 text-sm leading-6 text-muted-foreground">
                     A exportacao inclui igrejas, usuarios, turmas, progresso, agenda, mensagens, trilhas, push, auditoria e demais tabelas operacionais conhecidas.
                   </p>
                 </div>
-                <Button onClick={() => navigate("/exportar-dados")} className="rounded-xl">
+                <Button onClick={() => navigate("/exportar-dados")} className="rounded-lg">
                   Abrir exportacao e migracao
                 </Button>
               </CardContent>
@@ -807,7 +786,7 @@ export default function AdminSistema() {
                   Arquivos de Migração Consolidada
                 </CardTitle>
                 <CardDescription>
-                  Baixe os arquivos gerados para realizar a migração manual para um novo projeto Supabase.
+                  Os pacotes de migração não são mais publicados junto com o app. Gere ou acesse esses arquivos pelo processo administrativo interno.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -831,22 +810,20 @@ export default function AdminSistema() {
                           </div>
                           <div>
                             <p className="font-montserrat font-bold text-sm text-foreground">{file.label}</p>
-                            <p className="text-[10px] text-muted-foreground font-mono">{file.name}</p>
+                            <p className="text-xs text-muted-foreground font-mono">{file.name}</p>
                           </div>
                         </div>
                         <p className="text-xs text-muted-foreground flex-grow mb-4">
                           {file.description}
                         </p>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="w-full rounded-xl gap-2 mt-auto"
-                          asChild
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full rounded-lg gap-2 mt-auto"
+                          disabled
                         >
-                          <a href={`/migration-export/${file.name}`} download>
-                            <FileDown className="h-4 w-4" />
-                            Download
-                          </a>
+                          <FileDown className="h-4 w-4" />
+                          Disponível internamente
                         </Button>
                       </CardContent>
                     </Card>
@@ -872,15 +849,15 @@ export default function AdminSistema() {
                     <p className="text-center py-8 text-muted-foreground italic">Nenhuma alteração registrada ainda.</p>
                   ) : (
                     planHistory.map((log) => (
-                      <div key={log.id} className="rounded-xl border border-border bg-muted/30 p-4">
+                      <div key={log.id} className="rounded-lg border border-border bg-muted/30 p-4">
                         <div className="flex justify-between items-start mb-2">
                           <div>
                             <p className="font-bold text-sm text-foreground">{log.churches?.name || "Igreja desconhecida"}</p>
-                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                            <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">
                               {new Date(log.changed_at).toLocaleString("pt-BR")}
                             </p>
                           </div>
-                          <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
+                          <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20">
                             {log.new_plan || "Manual"}
                           </Badge>
                         </div>
@@ -904,7 +881,7 @@ export default function AdminSistema() {
                         </div>
                         {log.notes && (
                           <div className="mt-3 pt-2 border-t border-border/50">
-                            <p className="text-[10px] text-muted-foreground italic">{log.notes}</p>
+                            <p className="text-xs text-muted-foreground italic">{log.notes}</p>
                           </div>
                         )}
                       </div>
@@ -927,7 +904,8 @@ export default function AdminSistema() {
                   Após liberar, o admin de cada igreja ativa o curso para sua turma.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-8">
+                <GlobalTrackReleasesPanel />
                 <GlobalCourseReleasesPanel />
               </CardContent>
             </Card>
@@ -936,7 +914,7 @@ export default function AdminSistema() {
       </div>
 
       <Dialog open={!!selectedUpdate} onOpenChange={(open) => setSelectedUpdateId(open ? selectedUpdateId : null)}>
-        <DialogContent className="max-w-2xl rounded-2xl">
+        <DialogContent className="max-w-2xl rounded-lg">
           {selectedUpdate && (
             <>
               <DialogHeader>
@@ -960,23 +938,23 @@ export default function AdminSistema() {
                   )}
                 </div>
 
-                <div className="rounded-2xl border border-border bg-muted/30 p-4">
+                <div className="rounded-lg border border-border bg-muted/30 p-4">
                   <p className="text-sm font-semibold text-foreground">Resumo</p>
                   <p className="mt-1 text-sm leading-6 text-muted-foreground">{selectedUpdate.summary}</p>
                 </div>
 
                 {selectedUpdate.details && (
-                  <div className="rounded-2xl border border-border bg-muted/30 p-4">
+                  <div className="rounded-lg border border-border bg-muted/30 p-4">
                     <p className="text-sm font-semibold text-foreground">Contexto</p>
                     <p className="mt-1 text-sm leading-6 text-muted-foreground">{selectedUpdate.details}</p>
                   </div>
                 )}
 
-                <div className="rounded-2xl border border-border bg-background p-4">
+                <div className="rounded-lg border border-border bg-background p-4">
                   <p className="text-sm font-semibold text-foreground">O que foi modificado no codigo</p>
                   <div className="mt-3 space-y-3">
                     {selectedUpdate.codeChanges.map((change) => (
-                      <div key={`${selectedUpdate.id}-${change.area}`} className="rounded-xl border border-border bg-muted/30 p-3">
+                      <div key={`${selectedUpdate.id}-${change.area}`} className="rounded-lg border border-border bg-muted/30 p-3">
                         <p className="font-mono text-xs font-semibold text-foreground">{change.area}</p>
                         <p className="mt-1 text-sm leading-6 text-muted-foreground">{change.description}</p>
                       </div>

@@ -1,21 +1,14 @@
-import { useState, useEffect } from "react";
+import { lazy, Suspense, useCallback, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { Heart, GraduationCap, Sparkles, Lock, ClipboardList, BookOpen, ArrowLeft, ChevronRight } from "lucide-react";
+import { Heart, GraduationCap, Sparkles, Lock, ClipboardList, BookOpen, ArrowLeft, ChevronRight, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import JourneyLessonView from "@/components/home/JourneyLessonView";
-import LessonContentEditor from "@/components/admin/tabs/LessonContentEditor";
-import LessonDevotionalEditor from "@/components/admin/tabs/LessonDevotionalEditor";
-import LessonChoiceView from "@/components/home/LessonChoiceView";
-import ResourceLibrary from "@/components/home/ResourceLibrary";
-import LeaderRoomSection from "@/components/home/LeaderRoomSection";
-import NovoCursoModal from "@/components/home/NovoCursoModal";
 import { useAgendaSchedule } from "@/hooks/useAgendaSchedule";
 import { toast } from "sonner";
 import { cachedStudentQuery, getPendingStudentOverlay, mergeByKey } from "@/lib/studentOffline";
 
-import { computeHealth, type Assessment, type Plan, type Activity, type Progress, type Lesson, type Course, type AttendanceRecord, type EventRecord } from "./discipleship/shared";
+import { computeHealth, type Assessment, type Plan, type Activity, type Progress, type Lesson, type Course, type Module, type LearningTrack, type AttendanceRecord, type EventRecord } from "./discipleship/shared";
 import DiscipleshipHero from "./discipleship/DiscipleshipHero";
 import HelpSection from "./discipleship/HelpSection";
 import SpiritualHealthSection from "./discipleship/SpiritualHealthSection";
@@ -24,6 +17,22 @@ import RewardsSection from "./discipleship/RewardsSection";
 import AssessmentSection from "./discipleship/AssessmentSection";
 import GrowthPlanSection from "./discipleship/GrowthPlanSection";
 import CourseTrailSection from "./discipleship/CourseTrailSection";
+
+const JourneyLessonView = lazy(() => import("@/components/home/JourneyLessonView"));
+const LessonContentEditor = lazy(() => import("@/components/admin/tabs/LessonContentEditor"));
+const LessonDevotionalEditor = lazy(() => import("@/components/admin/tabs/LessonDevotionalEditor"));
+const LessonChoiceView = lazy(() => import("@/components/home/LessonChoiceView"));
+const ResourceLibrary = lazy(() => import("@/components/home/ResourceLibrary"));
+const LeaderRoomSection = lazy(() => import("@/components/home/LeaderRoomSection"));
+const NovoCursoModal = lazy(() => import("@/components/home/NovoCursoModal"));
+
+const LazySectionFallback = () => (
+  <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+    <div className="h-4 w-32 rounded bg-muted animate-pulse" />
+    <div className="mt-3 h-3 w-full rounded bg-muted animate-pulse" />
+    <div className="mt-2 h-3 w-2/3 rounded bg-muted animate-pulse" />
+  </div>
+);
 
 // ─── Sub-tabs ─────────────────────────────────────────────
 const SUB_TABS = [
@@ -47,6 +56,24 @@ type DiscipleshipTabProps = {
   onTargetLessonConsumed?: () => void;
 };
 
+type CourseRow = Pick<Course, "id" | "order_num" | "title" | "subtitle" | "track_id"> & {
+  church_id?: string | null;
+};
+type ModuleRow = Omit<Module, "lessons">;
+type LessonProgressRow = { lesson_id: string };
+type DevotionalContentIndexRow = { id: string; lesson_id: string | null; day_number: number | null; title: string | null };
+type DevotionalProgressRow = { devotional_id: string };
+type WorshipAttendanceRow = { id: string };
+type CourseUnlockRow = { course_id: string };
+type LessonOverrideRow = {
+  id: string;
+  lesson_id: string;
+  custom_points: number | null;
+  available_from: string | null;
+  available_until: string | null;
+  is_unlocked: boolean;
+};
+
 export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "choice", onTargetLessonConsumed }: DiscipleshipTabProps = {}) {
   const { profile, role, isSuper, signOut } = useAuth();
   const { effectiveArea } = useAreaSwitch();
@@ -63,12 +90,15 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
   const [showAssessment, setShowAssessment] = useState(false);
   const [saving, setSaving] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [learningTracks, setLearningTracks] = useState<LearningTrack[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [selectedLessonMode, setSelectedLessonMode] = useState<"choice" | "study" | "edit" | "edit-devotionals">("choice");
   const [autoOpenDevotionalLessonId, setAutoOpenDevotionalLessonId] = useState<string | null>(null);
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
   const [fullyCompletedLessonIds, setFullyCompletedLessonIds] = useState<Set<string>>(new Set());
+  const [devotionalsByLesson, setDevotionalsByLesson] = useState<Map<string, DevotionalContentIndexRow[]>>(new Map());
+  const [completedDevotionalIds, setCompletedDevotionalIds] = useState<Set<string>>(new Set());
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [recentEvents, setRecentEvents] = useState<EventRecord[]>([]);
   const [allAssessments, setAllAssessments] = useState<Assessment[]>([]);
@@ -82,6 +112,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
   const [helpSending, setHelpSending] = useState(false);
   const [helpSent, setHelpSent] = useState(false);
   const [showLeaderRoom, setShowLeaderRoom] = useState(false);
+  const [showLatePendingList, setShowLatePendingList] = useState(false);
 
   const [form, setForm] = useState({
     prayer_score: null as number | null,
@@ -96,7 +127,141 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
 
-  useEffect(() => { fetchAll(); }, [currentArea]);
+  const fetchAll = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setLoading(false); return; }
+
+    const scope = `student:${user.id}:${profile?.church_id ?? "global"}:${currentArea || "all"}`;
+    const [
+      actsRes, progRes, assessRes, planRes, coursesRes, lessonsRes, responsesRes, eventsRes,
+      attendanceRes, allAssessRes, devContentRes, devProgressRes, worshipRes, unlocksRes,
+      lessonOverrideRes, modulesRes, tracksRes, trackReleasesRes,
+    ] = await Promise.all([
+      cachedStudentQuery<Activity[]>(`${scope}:activities`, () => supabase.from("activities").select("id, type, title, points"), []),
+      cachedStudentQuery<Progress[]>(`${scope}:user_progress`, () => supabase.from("user_progress").select("activity_id").eq("user_id", user.id), []),
+      cachedStudentQuery<Assessment | null>(`${scope}:spiritual_assessment:${month}:${year}`, () => supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).eq("month", month).eq("year", year).maybeSingle(), null),
+      cachedStudentQuery<Plan | null>(`${scope}:discipleship_plan`, () => supabase.from("discipleship_plans").select("objectives,challenges,recommendations,next_steps,health_status").eq("user_id", user.id).maybeSingle(), null),
+      cachedStudentQuery<CourseRow[]>(`${scope}:courses`, () => profile?.church_id ? supabase.from("courses").select("*").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("courses").select("*").is("church_id", null).order("order_num"), []),
+      cachedStudentQuery<Lesson[]>(`${scope}:lessons`, () => profile?.church_id ? supabase.from("lessons").select("id, title, order_num, objective, topics, course_id, church_id, module_id").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("lessons").select("id, title, order_num, objective, topics, course_id, church_id, module_id").is("church_id", null).order("order_num"), []),
+      cachedStudentQuery<LessonProgressRow[]>(`${scope}:lesson_progress`, () => supabase.from("lesson_progress").select("lesson_id").eq("user_id", user.id).eq("is_completed", true), []),
+      cachedStudentQuery<EventRecord[]>(`${scope}:events:recent`, () => supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false }).limit(10), []),
+      cachedStudentQuery<AttendanceRecord[]>(`${scope}:attendance`, () => supabase.from("attendance").select("event_id, status").eq("user_id", user.id), []),
+      cachedStudentQuery<Assessment[]>(`${scope}:spiritual_assessments`, () => supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).order("year", { ascending: true }).order("month", { ascending: true }), []),
+      cachedStudentQuery<DevotionalContentIndexRow[]>(`${scope}:devotional_content:index`, () => supabase.from("devotional_content").select("id, lesson_id, day_number, title").not("lesson_id", "is", null), []),
+      cachedStudentQuery<DevotionalProgressRow[]>(`${scope}:devotional_progress`, () => supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id), []),
+      cachedStudentQuery<WorshipAttendanceRow[]>(`${scope}:worship_attendance`, () => supabase.from("worship_attendance").select("id").eq("user_id", user.id).eq("status", "aprovado"), []),
+      cachedStudentQuery<CourseUnlockRow[]>(`${scope}:course_unlocks`, () => supabase.from("course_unlocks").select("course_id").eq("area", currentArea), []),
+      cachedStudentQuery<LessonOverrideRow[]>(`${scope}:lesson_overrides`, () => supabase.from("user_lesson_overrides").select("id, lesson_id, custom_points, available_from, available_until, is_unlocked").eq("user_id", user.id), []),
+      cachedStudentQuery<ModuleRow[]>(`${scope}:modules`, () => profile?.church_id ? supabase.from("modules").select("id, course_id, title, order_num, church_id").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("modules").select("id, course_id, title, order_num, church_id").is("church_id", null).order("order_num"), []),
+      cachedStudentQuery<LearningTrack[]>(`${scope}:learning_tracks`, () => supabase.from("learning_tracks").select("id, name, description, order_num").order("order_num"), []),
+      profile?.church_id
+        ? cachedStudentQuery<{ track_id: string }[]>(`${scope}:track_releases`, () => supabase.from("track_church_releases").select("track_id").eq("church_id", profile.church_id!), [])
+        : Promise.resolve({ data: [] as { track_id: string }[] }),
+    ]);
+
+    const overlay = await getPendingStudentOverlay(user.id);
+    const acts = actsRes.data;
+    const prog = progRes.data;
+    const assess = assessRes.data;
+    const planData = planRes.data;
+    const coursesData = coursesRes.data;
+    const lessonsData = lessonsRes.data;
+    const responsesData = mergeByKey<LessonProgressRow>(responsesRes.data, overlay.lessonProgress, "lesson_id");
+    const eventsData = eventsRes.data;
+    const attendanceData = mergeByKey<AttendanceRecord>(attendanceRes.data, overlay.attendance, "event_id");
+    const allAssess = allAssessRes.data;
+    const devContentData = devContentRes.data;
+    const devProgressData = mergeByKey<DevotionalProgressRow>(devProgressRes.data, overlay.devotionalProgress, "devotional_id");
+    const worshipData = [...worshipRes.data, ...overlay.worshipAttendance];
+    const unlocksData = unlocksRes.data;
+    const lessonOverrideData = lessonOverrideRes.data;
+    const modulesData = modulesRes.data;
+    const tracksData = tracksRes.data;
+    const releasedTrackIds = new Set((trackReleasesRes.data ?? []).map((release) => release.track_id));
+
+    setActivities(acts ?? []);
+    setProgress(prog ?? []);
+    setAssessment(assess ?? null);
+    setPlan(planData ?? null);
+
+    const lessonIdsWithResponses = new Set<string>(
+      (responsesData ?? []).map((response: { lesson_id: string }) => response.lesson_id),
+    );
+    setCompletedLessonIds(lessonIdsWithResponses);
+
+    const devsByLesson: Record<string, string[]> = {};
+    (devContentData ?? []).forEach((d) => {
+      if (d.lesson_id) {
+        if (!devsByLesson[d.lesson_id]) devsByLesson[d.lesson_id] = [];
+        devsByLesson[d.lesson_id].push(d.id);
+      }
+    });
+    const completedDevIds = new Set((devProgressData ?? []).map((p) => p.devotional_id));
+    setCompletedDevotionalIds(completedDevIds);
+    const nextDevotionalsByLesson = new Map<string, DevotionalContentIndexRow[]>();
+    (devContentData ?? []).forEach((dev) => {
+      if (!dev.lesson_id) return;
+      const list = nextDevotionalsByLesson.get(dev.lesson_id) ?? [];
+      list.push(dev);
+      nextDevotionalsByLesson.set(dev.lesson_id, list);
+    });
+    nextDevotionalsByLesson.forEach((list) => list.sort((a, b) => (a.day_number ?? 0) - (b.day_number ?? 0)));
+    setDevotionalsByLesson(nextDevotionalsByLesson);
+    const fullyDone = new Set<string>();
+    (lessonsData ?? []).forEach((l) => {
+      const hasStudy = lessonIdsWithResponses.has(l.id);
+      const lessonDevs = devsByLesson[l.id] ?? [];
+      const allDevsDone = lessonDevs.length === 0 || lessonDevs.every(devId => completedDevIds.has(devId));
+      if (hasStudy && allDevsDone) fullyDone.add(l.id);
+    });
+    setFullyCompletedLessonIds(fullyDone);
+
+    const visibleCourseRows = (coursesData ?? []).filter((course) =>
+      course.track_id === null
+      || isSuper
+      || releasedTrackIds.has(course.track_id)
+    );
+    const courseList = visibleCourseRows.map(c => {
+      const courseModules = (modulesData ?? [])
+        .filter((m) => m.course_id === c.id)
+        .map((m) => ({
+          ...m,
+          lessons: (lessonsData ?? []).filter((l) => l.module_id === m.id),
+        }));
+      return {
+        ...c,
+        lessons: (lessonsData ?? []).filter((l) => l.course_id === c.id),
+        modules: courseModules,
+      };
+    });
+    setCourses(courseList);
+    setLearningTracks((tracksData ?? []).filter((track) =>
+      isSuper || releasedTrackIds.has(track.id)
+    ));
+    setUnlockedCourseIds(new Set((unlocksData ?? []).map((u) => u.course_id)));
+    const nowIso = new Date();
+    const activeLessonOverrides = new Map<string, { id: string; custom_points: number | null }>();
+    (lessonOverrideData ?? []).forEach((item) => {
+      if (!item?.lesson_id || item.is_unlocked === false) return;
+      if (item.available_from && new Date(item.available_from) > nowIso) return;
+      if (item.available_until && new Date(item.available_until) < nowIso) return;
+      activeLessonOverrides.set(item.lesson_id, { id: item.id, custom_points: item.custom_points ?? null });
+    });
+    setManualLessonOverrideMap(activeLessonOverrides);
+    const unlockedSet = new Set((unlocksData ?? []).map((u) => u.course_id));
+    const firstUnlocked = courseList.find(c => unlockedSet.has(c.id));
+    if (firstUnlocked) setExpandedCourse(firstUnlocked.id);
+    else if (courseList.length > 0) setExpandedCourse(courseList[0].id);
+
+    setRecentEvents((eventsData ?? []) as EventRecord[]);
+    setAttendanceRecords((attendanceData ?? []) as AttendanceRecord[]);
+    setAllAssessments((allAssess ?? []) as Assessment[]);
+    setWorshipCount((worshipData ?? []).length);
+    if (!silent) setLoading(false);
+  }, [currentArea, isSuper, month, profile?.church_id, year]);
+
+  useEffect(() => { void fetchAll(); }, [fetchAll]);
 
   useEffect(() => {
     const refresh = () => {
@@ -108,7 +273,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       window.removeEventListener("student-offline-queue-changed", refresh);
       window.removeEventListener("student-offline-queue-synced", refresh);
     };
-  }, [loading, currentArea]);
+  }, [fetchAll, loading]);
 
   // Auto-open lesson when navigating from agenda.
   // Wait for agendaSchedule to finish loading so scheduledDevotionalDates
@@ -129,121 +294,17 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     }
   }, [targetLessonId, targetLessonMode, loading, agendaSchedule.loading, courses, onTargetLessonConsumed]);
 
-  async function fetchAll(silent = false) {
-    if (!silent) setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setLoading(false); return; }
-
-    const scope = `student:${user.id}:${profile?.church_id ?? "global"}:${currentArea || "all"}`;
-    const [
-      actsRes, progRes, assessRes, planRes, coursesRes, lessonsRes, responsesRes, eventsRes,
-      attendanceRes, allAssessRes, devContentRes, devProgressRes, worshipRes, unlocksRes,
-      lessonOverrideRes, modulesRes,
-    ] = await Promise.all([
-      cachedStudentQuery(`${scope}:activities`, () => supabase.from("activities").select("id, type, title, points"), [] as any[]),
-      cachedStudentQuery(`${scope}:user_progress`, () => supabase.from("user_progress").select("activity_id").eq("user_id", user.id), [] as any[]),
-      cachedStudentQuery(`${scope}:spiritual_assessment:${month}:${year}`, () => supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).eq("month", month).eq("year", year).maybeSingle(), null as any),
-      cachedStudentQuery(`${scope}:discipleship_plan`, () => supabase.from("discipleship_plans").select("objectives,challenges,recommendations,next_steps,health_status").eq("user_id", user.id).maybeSingle(), null as any),
-      cachedStudentQuery(`${scope}:courses`, () => profile?.church_id ? supabase.from("courses").select("*").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("courses").select("*").is("church_id", null).order("order_num"), [] as any[]),
-      cachedStudentQuery(`${scope}:lessons`, () => profile?.church_id ? supabase.from("lessons").select("id, title, order_num, objective, topics, course_id, church_id, module_id").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("lessons").select("id, title, order_num, objective, topics, course_id, church_id, module_id").is("church_id", null).order("order_num"), [] as any[]),
-      cachedStudentQuery(`${scope}:lesson_progress`, () => supabase.from("lesson_progress").select("lesson_id").eq("user_id", user.id).eq("is_completed", true), [] as any[]),
-      cachedStudentQuery(`${scope}:events:recent`, () => supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false }).limit(10), [] as any[]),
-      cachedStudentQuery(`${scope}:attendance`, () => supabase.from("attendance").select("event_id, status").eq("user_id", user.id), [] as any[]),
-      cachedStudentQuery(`${scope}:spiritual_assessments`, () => supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).order("year", { ascending: true }).order("month", { ascending: true }), [] as any[]),
-      cachedStudentQuery(`${scope}:devotional_content:index`, () => supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null), [] as any[]),
-      cachedStudentQuery(`${scope}:devotional_progress`, () => supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id), [] as any[]),
-      cachedStudentQuery(`${scope}:worship_attendance`, () => supabase.from("worship_attendance").select("id").eq("user_id", user.id).eq("status", "aprovado"), [] as any[]),
-      cachedStudentQuery(`${scope}:course_unlocks`, () => supabase.from("course_unlocks").select("course_id").eq("area", currentArea), [] as any[]),
-      cachedStudentQuery(`${scope}:lesson_overrides`, () => supabase.from("user_lesson_overrides" as any).select("id, lesson_id, custom_points, available_from, available_until, is_unlocked").eq("user_id", user.id), [] as any[]),
-      cachedStudentQuery(`${scope}:modules`, () => profile?.church_id ? supabase.from("modules" as any).select("id, course_id, title, order_num, church_id").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("modules" as any).select("id, course_id, title, order_num, church_id").is("church_id", null).order("order_num"), [] as any[]),
-    ]);
-
-    const overlay = await getPendingStudentOverlay(user.id);
-    const acts = actsRes.data;
-    const prog = progRes.data;
-    const assess = assessRes.data;
-    const planData = planRes.data;
-    const coursesData = coursesRes.data;
-    const lessonsData = lessonsRes.data;
-    const responsesData = mergeByKey(responsesRes.data, overlay.lessonProgress as any[], "lesson_id");
-    const eventsData = eventsRes.data;
-    const attendanceData = mergeByKey(attendanceRes.data, overlay.attendance as any[], "event_id");
-    const allAssess = allAssessRes.data;
-    const devContentData = devContentRes.data;
-    const devProgressData = mergeByKey(devProgressRes.data, overlay.devotionalProgress as any[], "devotional_id");
-    const worshipData = [...worshipRes.data, ...overlay.worshipAttendance];
-    const unlocksData = unlocksRes.data;
-    const lessonOverrideData = lessonOverrideRes.data;
-    const modulesData = modulesRes.data;
-
-    setActivities(acts ?? []);
-    setProgress(prog ?? []);
-    setAssessment(assess ?? null);
-    setPlan(planData ?? null);
-
-    const lessonIdsWithResponses = new Set<string>(
-      (responsesData ?? []).map((response: { lesson_id: string }) => response.lesson_id),
-    );
-    setCompletedLessonIds(lessonIdsWithResponses);
-
-    const devsByLesson: Record<string, string[]> = {};
-    (devContentData ?? []).forEach((d: any) => {
-      if (d.lesson_id) {
-        if (!devsByLesson[d.lesson_id]) devsByLesson[d.lesson_id] = [];
-        devsByLesson[d.lesson_id].push(d.id);
-      }
-    });
-    const completedDevIds = new Set((devProgressData ?? []).map((p: any) => p.devotional_id));
-    const fullyDone = new Set<string>();
-    (lessonsData ?? []).forEach((l: any) => {
-      const hasStudy = lessonIdsWithResponses.has(l.id);
-      const lessonDevs = devsByLesson[l.id] ?? [];
-      const allDevsDone = lessonDevs.length === 0 || lessonDevs.every(devId => completedDevIds.has(devId));
-      if (hasStudy && allDevsDone) fullyDone.add(l.id);
-    });
-    setFullyCompletedLessonIds(fullyDone);
-
-    const courseList = (coursesData ?? []).map(c => {
-      const courseModules = ((modulesData ?? []) as any[])
-        .filter((m: any) => m.course_id === c.id)
-        .map((m: any) => ({
-          ...m,
-          lessons: (lessonsData ?? []).filter((l: any) => l.module_id === m.id),
-        }));
-      return {
-        ...c,
-        lessons: (lessonsData ?? []).filter((l: any) => l.course_id === c.id),
-        modules: courseModules,
-      };
-    });
-    setCourses(courseList);
-    setUnlockedCourseIds(new Set((unlocksData ?? []).map((u: any) => u.course_id)));
-    const nowIso = new Date();
-    const activeLessonOverrides = new Map<string, { id: string; custom_points: number | null }>();
-    (lessonOverrideData ?? []).forEach((item: any) => {
-      if (!item?.lesson_id || item.is_unlocked === false) return;
-      if (item.available_from && new Date(item.available_from) > nowIso) return;
-      if (item.available_until && new Date(item.available_until) < nowIso) return;
-      activeLessonOverrides.set(item.lesson_id, { id: item.id, custom_points: item.custom_points ?? null });
-    });
-    setManualLessonOverrideMap(activeLessonOverrides);
-    const unlockedSet = new Set((unlocksData ?? []).map((u: any) => u.course_id));
-    const firstUnlocked = courseList.find(c => unlockedSet.has(c.id));
-    if (firstUnlocked) setExpandedCourse(firstUnlocked.id);
-    else if (courseList.length > 0) setExpandedCourse(courseList[0].id);
-
-    setRecentEvents((eventsData ?? []) as EventRecord[]);
-    setAttendanceRecords((attendanceData ?? []) as AttendanceRecord[]);
-    setAllAssessments((allAssess ?? []) as Assessment[]);
-    setWorshipCount((worshipData ?? []).length);
-    if (!silent) setLoading(false);
-  }
-
   async function handleSaveAssessment() {
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const health = computeHealth({ ...form, id: "", month, year, created_at: "" } as any);
+    const health = computeHealth({
+      ...form,
+      id: "",
+      month,
+      year,
+      notes: form.notes || null,
+    });
     await supabase.from("spiritual_assessments").upsert({
       user_id: user.id, month, year,
       prayer_score: form.prayer_score, presence_score: form.presence_score,
@@ -425,18 +486,47 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
   }
 
   // ── Lesson selected view ──
+  const lessonsById = new Map(courses.flatMap((course) => course.lessons).map((lesson) => [lesson.id, lesson]));
+  const latePendingItems = !isLeaderOrAdmin
+    ? agendaSchedule.schedule
+        .filter((entry) => entry.eventDate <= now)
+        .map((entry) => {
+          const lesson = lessonsById.get(entry.lessonId);
+          if (!lesson || fullyCompletedLessonIds.has(entry.lessonId)) return null;
+          const pendingDevotionals = (devotionalsByLesson.get(entry.lessonId) ?? [])
+            .filter((devotional) => !completedDevotionalIds.has(devotional.id));
+          const studyPending = !completedLessonIds.has(entry.lessonId);
+          if (!studyPending && pendingDevotionals.length === 0) return null;
+          return { entry, lesson, studyPending, pendingDevotionals };
+        })
+        .filter((item): item is NonNullable<typeof item> => item !== null)
+    : [];
+
+  function openLatePendingLesson(lesson: Lesson, openDevotional = false) {
+    setSelectedLesson(lesson);
+    setSelectedLessonMode("choice");
+    setAutoOpenDevotionalLessonId(openDevotional ? lesson.id : null);
+    setSubTab("trilha");
+    const course = courses.find((item) => item.lessons.some((courseLesson) => courseLesson.id === lesson.id));
+    if (course) setExpandedCourse(course.id);
+  }
+
   if (selectedLesson) {
     if (selectedLessonMode === "edit" && isLeaderOrAdmin) {
       return (
         <div className="px-5 pt-5 pb-6">
-          <LessonContentEditor lesson={selectedLesson} onBack={() => setSelectedLessonMode("choice")} />
+          <Suspense fallback={<LazySectionFallback />}>
+            <LessonContentEditor lesson={selectedLesson} onBack={() => setSelectedLessonMode("choice")} />
+          </Suspense>
         </div>
       );
     }
     if (selectedLessonMode === "edit-devotionals" && isLeaderOrAdmin) {
       return (
         <div className="px-5 pt-5 pb-6">
-          <LessonDevotionalEditor lesson={selectedLesson} onBack={() => setSelectedLessonMode("choice")} />
+          <Suspense fallback={<LazySectionFallback />}>
+            <LessonDevotionalEditor lesson={selectedLesson} onBack={() => setSelectedLessonMode("choice")} />
+          </Suspense>
         </div>
       );
     }
@@ -444,16 +534,18 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       const isLateAccessStudy = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id);
       return (
         <div className="px-5 pt-5 pb-6">
-          <JourneyLessonView
-            lesson={selectedLesson}
-            onBack={() => { setSelectedLesson(null); setSelectedLessonMode("choice"); }}
-            isLateAccess={isLateAccessStudy}
-            overrideId={manualLessonOverrideMap.get(selectedLesson.id)?.id}
-            awardedPoints={manualLessonOverrideMap.get(selectedLesson.id)?.custom_points ?? null}
-            onComplete={(lessonId) => {
-              setCompletedLessonIds((current) => new Set(current).add(lessonId));
-            }}
-          />
+          <Suspense fallback={<LazySectionFallback />}>
+            <JourneyLessonView
+              lesson={selectedLesson}
+              onBack={() => { setSelectedLesson(null); setSelectedLessonMode("choice"); }}
+              isLateAccess={isLateAccessStudy}
+              overrideId={manualLessonOverrideMap.get(selectedLesson.id)?.id}
+              awardedPoints={manualLessonOverrideMap.get(selectedLesson.id)?.custom_points ?? null}
+              onComplete={(lessonId) => {
+                setCompletedLessonIds((current) => new Set(current).add(lessonId));
+              }}
+            />
+          </Suspense>
         </div>
       );
     }
@@ -464,24 +556,26 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     const isStudyLocked = !isLeaderOrAdmin && !isStudyOpen && !isLateAccess && !isFullyDone;
     const studyDone = completedLessonIds.has(selectedLesson.id);
     return (
-      <LessonChoiceView
-        lesson={selectedLesson}
-        onBack={() => { setSelectedLesson(null); setSelectedLessonMode("choice"); }}
-        onOpenStudy={() => setSelectedLessonMode("study")}
-        onOpenEdit={(isLeaderOrAdmin && (isSuper || selectedLesson.church_id !== null)) ? () => setSelectedLessonMode("edit") : undefined}
-        onOpenEditDevotionals={(isLeaderOrAdmin && (isSuper || selectedLesson.church_id !== null)) ? () => setSelectedLessonMode("edit-devotionals") : undefined}
-        autoOpenAvailableDevotional={autoOpenDevotionalLessonId === selectedLesson.id}
-        onAutoOpenAvailableDevotionalConsumed={() => setAutoOpenDevotionalLessonId(null)}
-        scheduledDevotionalDates={agendaSchedule.lessonDevotionalDates.get(selectedLesson.id)}
-        releasedDayNumbers={agendaSchedule.lessonReleasedDays.get(selectedLesson.id)}
-        devotionalMode={agendaSchedule.lessonDevotionalMode.get(selectedLesson.id) ?? "10_days"}
-        eventDate={agendaSchedule.lessonEventDate.get(selectedLesson.id) ?? undefined}
-        isStudyLocked={isStudyLocked}
-        isLateAccess={isLateAccess}
-        isStudyCompleted={studyDone}
-        overrideId={manualLessonOverrideMap.get(selectedLesson.id)?.id}
-        awardedPoints={manualLessonOverrideMap.get(selectedLesson.id)?.custom_points ?? null}
-      />
+      <Suspense fallback={<LazySectionFallback />}>
+        <LessonChoiceView
+          lesson={selectedLesson}
+          onBack={() => { setSelectedLesson(null); setSelectedLessonMode("choice"); }}
+          onOpenStudy={() => setSelectedLessonMode("study")}
+          onOpenEdit={(isLeaderOrAdmin && (isSuper || selectedLesson.church_id !== null)) ? () => setSelectedLessonMode("edit") : undefined}
+          onOpenEditDevotionals={(isLeaderOrAdmin && (isSuper || selectedLesson.church_id !== null)) ? () => setSelectedLessonMode("edit-devotionals") : undefined}
+          autoOpenAvailableDevotional={autoOpenDevotionalLessonId === selectedLesson.id}
+          onAutoOpenAvailableDevotionalConsumed={() => setAutoOpenDevotionalLessonId(null)}
+          scheduledDevotionalDates={agendaSchedule.lessonDevotionalDates.get(selectedLesson.id)}
+          releasedDayNumbers={agendaSchedule.lessonReleasedDays.get(selectedLesson.id)}
+          devotionalMode={agendaSchedule.lessonDevotionalMode.get(selectedLesson.id) ?? "10_days"}
+          eventDate={agendaSchedule.lessonEventDate.get(selectedLesson.id) ?? undefined}
+          isStudyLocked={isStudyLocked}
+          isLateAccess={isLateAccess}
+          isStudyCompleted={studyDone}
+          overrideId={manualLessonOverrideMap.get(selectedLesson.id)?.id}
+          awardedPoints={manualLessonOverrideMap.get(selectedLesson.id)?.custom_points ?? null}
+        />
+      </Suspense>
     );
   }
 
@@ -496,7 +590,9 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
           Voltar ao discipulado
         </button>
 
-        <LeaderRoomSection asTab />
+        <Suspense fallback={<LazySectionFallback />}>
+          <LeaderRoomSection asTab />
+        </Suspense>
       </div>
     );
   }
@@ -546,6 +642,63 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
         </button>
       )}
 
+      {latePendingItems.length > 0 && (
+        <div className="rounded-2xl border border-accent/30 bg-accent/10 shadow-sm overflow-hidden">
+          <button
+            onClick={() => setShowLatePendingList((value) => !value)}
+            className="w-full flex items-center gap-3 p-4 text-left hover:bg-accent/10 transition-colors"
+          >
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center bg-accent/20 text-accent-foreground flex-shrink-0">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-montserrat font-bold text-foreground text-sm">Pendências em aberto</p>
+              <p className="text-muted-foreground text-xs font-inter">
+                Você tem lição ou devocionais de encontros passados para finalizar sem pontuação.
+              </p>
+            </div>
+            <ChevronRight className={`w-4 h-4 text-accent-foreground/70 flex-shrink-0 transition-transform ${showLatePendingList ? "rotate-90" : ""}`} />
+          </button>
+
+          {showLatePendingList && (
+            <div className="border-t border-accent/20 bg-card/60">
+              {latePendingItems.map(({ entry, lesson, studyPending, pendingDevotionals }) => (
+                <div key={entry.eventId} className="p-4 border-b border-border last:border-b-0 space-y-3">
+                  <div>
+                    <p className="font-montserrat font-bold text-foreground text-sm">
+                      Lição {lesson.order_num} - {lesson.title}
+                    </p>
+                    <p className="font-inter text-xs text-muted-foreground">
+                      Encontro em {entry.eventDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {studyPending && (
+                      <button
+                        onClick={() => openLatePendingLesson(lesson)}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-secondary/10 px-3 py-2 text-xs font-montserrat font-bold text-secondary hover:bg-secondary/20 transition-colors"
+                      >
+                        <GraduationCap className="w-3.5 h-3.5" />
+                        Fazer lição
+                      </button>
+                    )}
+                    {pendingDevotionals.length > 0 && (
+                      <button
+                        onClick={() => openLatePendingLesson(lesson, true)}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-brand-green/10 px-3 py-2 text-xs font-montserrat font-bold text-brand-green hover:bg-brand-green/20 transition-colors"
+                      >
+                        <BookOpen className="w-3.5 h-3.5" />
+                        {pendingDevotionals.length} devocional{pendingDevotionals.length > 1 ? "is" : ""}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Sub-tab pills */}
       <div className="flex gap-1.5 bg-muted/50 rounded-2xl p-1.5 border border-border/50">
         {SUB_TABS.map(tab => {
@@ -581,6 +734,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
           <motion.div key="trilha" variants={subTabVariants} initial="initial" animate="animate" exit="exit" className="space-y-4">
             <CourseTrailSection
               courses={courses}
+              tracks={learningTracks}
               expandedCourse={expandedCourse}
               onExpandCourse={setExpandedCourse}
               unlockedCourseIds={unlockedCourseIds}
@@ -596,7 +750,9 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
                 setSelectedLessonMode("choice");
               }}
             />
-            <ResourceLibrary />
+            <Suspense fallback={<LazySectionFallback />}>
+              <ResourceLibrary />
+            </Suspense>
           </motion.div>
         )}
 
@@ -648,11 +804,13 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       </AnimatePresence>
 
       {showNovoCurso && (
-        <NovoCursoModal
-          churchId={isSuper ? null : (profile?.church_id ?? null)}
-          onClose={() => setShowNovoCurso(false)}
-          onCreated={() => { setShowNovoCurso(false); fetchAll(); }}
-        />
+        <Suspense fallback={null}>
+          <NovoCursoModal
+            churchId={isSuper ? null : (profile?.church_id ?? null)}
+            onClose={() => setShowNovoCurso(false)}
+            onCreated={() => { setShowNovoCurso(false); fetchAll(); }}
+          />
+        </Suspense>
       )}
     </div>
   );
