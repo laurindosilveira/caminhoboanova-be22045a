@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
@@ -73,13 +73,14 @@ export function useAgendaSchedule() {
   const currentArea = effectiveArea || profile?.area || "";
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const channelInstanceId = useRef(Math.random().toString(36).slice(2));
 
   useEffect(() => {
     if (!profile) return;
 
     fetchSchedule();
 
-    const channelName = `agenda-events-realtime:${currentArea}`;
+    const channelName = `agenda-events-realtime:${currentArea}:${channelInstanceId.current}`;
     const channel = supabase
       .channel(channelName)
       .on("postgres_changes", { event: "*", schema: "public", table: "events" }, () => {
