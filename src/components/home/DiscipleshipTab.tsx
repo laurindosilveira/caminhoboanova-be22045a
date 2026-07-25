@@ -86,6 +86,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
   const [recoveryLessonIds, setRecoveryLessonIds] = useState<Set<string>>(new Set());
   const [recoveryDevotionalIds, setRecoveryDevotionalIds] = useState<Set<string>>(new Set());
   const [selectedRecoveryMode, setSelectedRecoveryMode] = useState(false);
+  const [showRecoveryDetails, setShowRecoveryDetails] = useState(false);
   const [completedDevotionalIds, setCompletedDevotionalIds] = useState<Set<string>>(new Set());
   const [devotionalsByLesson, setDevotionalsByLesson] = useState<Map<string, { id: string }[]>>(new Map());
   const [showNovoCurso, setShowNovoCurso] = useState(false);
@@ -479,6 +480,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     : [];
 
   function openRecoveryLesson(lesson: Lesson, devotional = false) {
+    setShowRecoveryDetails(false);
     setSelectedRecoveryMode(true);
     setSelectedLesson(lesson);
     setSelectedLessonMode("choice");
@@ -643,46 +645,32 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
         {subTab === "trilha" && (
           <motion.div key="trilha" variants={subTabVariants} initial="initial" animate="animate" exit="exit" className="space-y-4">
             {activeRecovery && (
-              <div className="overflow-hidden rounded-2xl border border-amber-300/60 bg-amber-50/80 shadow-sm">
-                <div className="flex items-start gap-3 p-4">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-700">
-                    <RotateCcw className="h-5 w-5" />
+              <button
+                type="button"
+                onClick={() => setShowRecoveryDetails(true)}
+                className="group relative w-full overflow-hidden rounded-2xl border-2 border-amber-400 bg-gradient-to-br from-amber-500 via-orange-500 to-primary p-4 text-left text-white shadow-lg shadow-orange-500/20 transition-all hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0"
+              >
+                <span className="absolute -right-8 -top-10 h-28 w-28 rounded-full bg-white/15" />
+                <span className="relative flex items-center gap-3">
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20 ring-1 ring-white/30">
+                    <RotateCcw className="h-6 w-6" />
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-montserrat text-sm font-black text-amber-950">Trilha especial de recuperação</p>
-                    <p className="mt-1 font-inter text-xs text-amber-900/75">Somente suas lições e devocionais pendentes aparecem aqui.</p>
-                    <p className="mt-2 inline-flex items-center gap-1.5 font-inter text-[11px] font-semibold text-amber-800">
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-montserrat text-base font-black">Trilha especial de recuperação</span>
+                    <span className="mt-1 block font-inter text-xs text-white/90">
+                      {recoveryPendingItems.length} {recoveryPendingItems.length === 1 ? "lição com pendências" : "lições com pendências"}
+                    </span>
+                    <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-black/15 px-2.5 py-1 font-inter text-[11px] font-semibold">
                       <Clock className="h-3.5 w-3.5" />
-                      Até {new Date(activeRecovery.available_until).toLocaleString("pt-BR")}
-                    </p>
-                  </div>
-                </div>
-                <div className="border-t border-amber-300/40 bg-card/70">
-                  {recoveryPendingItems.length === 0 ? (
-                    <div className="p-4 text-center">
-                      <p className="font-montserrat text-sm font-bold text-brand-green">Tudo recuperado!</p>
-                      <p className="mt-1 font-inter text-xs text-muted-foreground">Você não possui mais itens pendentes nesta liberação.</p>
-                    </div>
-                  ) : recoveryPendingItems.map(({ lesson, courseTitle, studyPending, pendingDevotionals }) => (
-                    <div key={lesson.id} className="border-b border-border p-4 last:border-b-0">
-                      <p className="font-inter text-[10px] font-bold uppercase tracking-wide text-amber-700">{courseTitle}</p>
-                      <p className="mt-1 font-montserrat text-sm font-bold text-foreground">Lição {lesson.order_num} — {lesson.title}</p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {studyPending && (
-                          <button onClick={() => openRecoveryLesson(lesson)} className="inline-flex items-center gap-1.5 rounded-xl bg-secondary/10 px-3 py-2 font-montserrat text-xs font-bold text-secondary">
-                            <GraduationCap className="h-3.5 w-3.5" /> Fazer lição · 10 pts
-                          </button>
-                        )}
-                        {pendingDevotionals.length > 0 && (
-                          <button onClick={() => openRecoveryLesson(lesson, true)} className="inline-flex items-center gap-1.5 rounded-xl bg-brand-green/10 px-3 py-2 font-montserrat text-xs font-bold text-brand-green">
-                            <BookOpen className="h-3.5 w-3.5" /> {pendingDevotionals.length} devocional{pendingDevotionals.length > 1 ? "is" : ""} · 2 pts
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                      Disponível até {new Date(activeRecovery.available_until).toLocaleString("pt-BR")}
+                    </span>
+                  </span>
+                  <ChevronRight className="h-5 w-5 shrink-0 transition-transform group-hover:translate-x-1" />
+                </span>
+                <span className="relative mt-3 block border-t border-white/20 pt-3 text-center font-montserrat text-xs font-bold">
+                  Toque para ver e concluir suas pendências
+                </span>
+              </button>
             )}
 
             {overdueLessons.length > 0 && (
@@ -773,6 +761,70 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
           </motion.div>
         )}
       </AnimatePresence>
+
+      <Dialog open={showRecoveryDetails} onOpenChange={setShowRecoveryDetails}>
+        <DialogContent className="max-h-[88vh] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl p-0 sm:max-w-md">
+          <div className="bg-gradient-to-br from-amber-500 via-orange-500 to-primary px-5 pb-5 pt-6 text-white">
+            <DialogHeader>
+              <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 ring-1 ring-white/30">
+                <RotateCcw className="h-6 w-6" />
+              </div>
+              <DialogTitle className="font-montserrat text-xl font-black text-white">
+                Trilha especial de recuperação
+              </DialogTitle>
+              <DialogDescription className="font-inter text-sm text-white/90">
+                Conclua as lições e os devocionais pendentes dentro do prazo da liberação.
+              </DialogDescription>
+            </DialogHeader>
+            {activeRecovery && (
+              <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-black/15 px-3 py-1.5 font-inter text-xs font-semibold">
+                <Clock className="h-4 w-4" />
+                Até {new Date(activeRecovery.available_until).toLocaleString("pt-BR")}
+              </p>
+            )}
+          </div>
+
+          <div className="max-h-[58vh] overflow-y-auto bg-background">
+            {recoveryPendingItems.length === 0 ? (
+              <div className="p-8 text-center">
+                <p className="font-montserrat text-base font-bold text-brand-green">Tudo recuperado!</p>
+                <p className="mt-2 font-inter text-sm text-muted-foreground">
+                  Você não possui mais itens pendentes nesta liberação.
+                </p>
+              </div>
+            ) : recoveryPendingItems.map(({ lesson, courseTitle, studyPending, pendingDevotionals }) => (
+              <div key={lesson.id} className="border-b border-border p-4 last:border-b-0">
+                <p className="font-inter text-[10px] font-bold uppercase tracking-wide text-amber-700">{courseTitle}</p>
+                <p className="mt-1 font-montserrat text-sm font-bold text-foreground">
+                  Lição {lesson.order_num} — {lesson.title}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {studyPending && (
+                    <button
+                      type="button"
+                      onClick={() => openRecoveryLesson(lesson)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-secondary/10 px-3 py-2 font-montserrat text-xs font-bold text-secondary transition-colors hover:bg-secondary/20"
+                    >
+                      <GraduationCap className="h-3.5 w-3.5" />
+                      Fazer lição · 10 pts
+                    </button>
+                  )}
+                  {pendingDevotionals.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => openRecoveryLesson(lesson, true)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-brand-green/10 px-3 py-2 font-montserrat text-xs font-bold text-brand-green transition-colors hover:bg-brand-green/20"
+                    >
+                      <BookOpen className="h-3.5 w-3.5" />
+                      {pendingDevotionals.length} devocional{pendingDevotionals.length > 1 ? "is" : ""} · 2 pts
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showLateLessons} onOpenChange={setShowLateLessons}>
         <DialogContent className="max-h-[85vh] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl sm:max-w-md">
