@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { Heart, GraduationCap, Sparkles, Lock, ClipboardList, BookOpen, ArrowLeft, ChevronRight, AlertTriangle, CalendarClock, RotateCcw, Clock } from "lucide-react";
+import { Heart, GraduationCap, Sparkles, Lock, ClipboardList, BookOpen, ArrowLeft, ChevronRight, RotateCcw, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import JourneyLessonView from "@/components/home/JourneyLessonView";
 import LessonContentEditor from "@/components/admin/tabs/LessonContentEditor";
@@ -96,7 +96,6 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
   const [helpSending, setHelpSending] = useState(false);
   const [helpSent, setHelpSent] = useState(false);
   const [showLeaderRoom, setShowLeaderRoom] = useState(false);
-  const [showLateLessons, setShowLateLessons] = useState(false);
 
   const [form, setForm] = useState({
     prayer_score: null as number | null,
@@ -441,34 +440,6 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     if (!spiritualRewards.some(r => r.icon === "🔥")) spiritualRewards.push({ icon: "🔥", title: "Exemplo de fé da turma", subtitle: "Alcance 75% no termômetro", earned: false, bg: "bg-muted" });
   }
 
-  const lessonById = new Map(courses.flatMap(course => course.lessons).map(lesson => [lesson.id, lesson]));
-  const overdueByLessonId = new Map<string, {
-    lesson: Lesson;
-    courseTitle: string;
-    eventDate: Date;
-  }>();
-
-  if (!isLeaderOrAdmin) {
-    for (const entry of agendaSchedule.schedule) {
-      const lesson = lessonById.get(entry.lessonId);
-      if (!lesson || completedLessonIds.has(entry.lessonId) || entry.eventDate >= now) continue;
-      overdueByLessonId.set(entry.lessonId, {
-        lesson,
-        courseTitle: courses.find(course => course.id === lesson.course_id)?.title ?? "Curso",
-        eventDate: entry.eventDate,
-      });
-    }
-  }
-
-  const overdueLessons = [...overdueByLessonId.values()].sort((a, b) => a.eventDate.getTime() - b.eventDate.getTime());
-
-  function openOverdueLesson(item: (typeof overdueLessons)[number]) {
-    setShowLateLessons(false);
-    setExpandedCourse(item.lesson.course_id);
-    setSelectedLesson(item.lesson);
-    setSelectedLessonMode("choice");
-  }
-
   const recoveryPendingItems = activeRecovery
     ? courses.flatMap((course) => course.lessons.map((lesson) => {
         const studyPending = recoveryLessonIds.has(lesson.id) && !completedLessonIds.has(lesson.id);
@@ -505,13 +476,12 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       );
     }
     if (selectedLessonMode === "study") {
-      const isLateAccessStudy = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id);
       return (
         <div className="px-5 pt-5 pb-6">
           <JourneyLessonView
             lesson={selectedLesson}
             onBack={() => { setSelectedLesson(null); setSelectedLessonMode("choice"); }}
-            isLateAccess={isLateAccessStudy}
+            isLateAccess={false}
             overrideId={manualLessonOverrideMap.get(selectedLesson.id)?.id}
             awardedPoints={manualLessonOverrideMap.get(selectedLesson.id)?.custom_points ?? null}
             onComplete={(lessonId) => {
@@ -521,11 +491,10 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
         </div>
       );
     }
-    const isLateAccess = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id);
     const hasManualOverride = manualLessonOverrideMap.has(selectedLesson.id);
     const isStudyOpen = isLeaderOrAdmin || agendaSchedule.studyOpenLessonIds.has(selectedLesson.id) || hasManualOverride;
     const isFullyDone = fullyCompletedLessonIds.has(selectedLesson.id);
-    const isStudyLocked = !isLeaderOrAdmin && !isStudyOpen && !isLateAccess && !isFullyDone;
+    const isStudyLocked = !isLeaderOrAdmin && !isStudyOpen && !isFullyDone;
     const studyDone = completedLessonIds.has(selectedLesson.id);
     return (
       <LessonChoiceView
@@ -541,7 +510,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
         devotionalMode={agendaSchedule.lessonDevotionalMode.get(selectedLesson.id) ?? "10_days"}
         eventDate={agendaSchedule.lessonEventDate.get(selectedLesson.id) ?? undefined}
         isStudyLocked={isStudyLocked}
-        isLateAccess={isLateAccess}
+        isLateAccess={false}
         isStudyCompleted={studyDone}
         overrideId={manualLessonOverrideMap.get(selectedLesson.id)?.id}
         awardedPoints={manualLessonOverrideMap.get(selectedLesson.id)?.custom_points ?? null}
@@ -670,25 +639,6 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
                 <span className="relative mt-3 block border-t border-white/20 pt-3 text-center font-montserrat text-xs font-bold">
                   Toque para ver e concluir suas pendências
                 </span>
-              </button>
-            )}
-
-            {overdueLessons.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowLateLessons(true)}
-                className="flex w-full items-center gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-left shadow-sm transition-colors hover:bg-amber-100"
-              >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
-                  <AlertTriangle className="h-5 w-5" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-montserrat text-sm font-bold text-amber-950">
-                    Você tem {overdueLessons.length} {overdueLessons.length === 1 ? "lição atrasada" : "lições atrasadas"}
-                  </span>
-                  <span className="mt-0.5 block text-xs text-amber-800">Veja o relatório e recupere cada lição por 1 ponto.</span>
-                </span>
-                <ChevronRight className="h-5 w-5 shrink-0 text-amber-700" />
               </button>
             )}
 
@@ -821,38 +771,6 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
                   )}
                 </div>
               </div>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showLateLessons} onOpenChange={setShowLateLessons}>
-        <DialogContent className="max-h-[85vh] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-montserrat">Lições atrasadas</DialogTitle>
-            <DialogDescription>
-              Estas lições já passaram na agenda. Escolha uma para concluir e ganhar 1 ponto.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 pt-2">
-            {overdueLessons.map(item => (
-              <button
-                type="button"
-                key={item.lesson.id}
-                onClick={() => openOverdueLesson(item)}
-                className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-3 text-left transition-colors hover:bg-muted/60"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
-                  <CalendarClock className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold text-foreground">{item.lesson.order_num}. {item.lesson.title}</span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {item.courseTitle} · agenda de {item.eventDate.toLocaleDateString("pt-BR")}
-                  </span>
-                </span>
-                <span className="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-700">+1 ponto</span>
-              </button>
             ))}
           </div>
         </DialogContent>
