@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle2, Lock, BookOpen, ChevronDown, ChevronRight, CalendarDays, Heart, GraduationCap } from "lucide-react";
+import { CalendarDays, Heart } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { getBusinessDaysBefore } from "@/hooks/useAgendaSchedule";
 
 type Lesson = {
   id: string;
@@ -44,21 +43,14 @@ function ProgressRing({ pct, color, size = 56 }: { pct: number; color: string; s
   );
 }
 
-type Props = {
-  onSelectLesson?: (lessonId: string) => void;
-};
-
-export default function JourneyPath({ onSelectLesson }: Props = {}) {
+export default function JourneyPath() {
   const { profile, role, isSuper } = useAuth();
   const { effectiveArea } = useAreaSwitch();
   const currentArea = effectiveArea || profile?.area || "";
   const [courses, setCourses] = useState<Course[]>([]);
-  const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
   const [fullyCompletedLessonIds, setFullyCompletedLessonIds] = useState<Set<string>>(new Set());
   const [unlockedCourseIds, setUnlockedCourseIds] = useState<Set<string>>(new Set());
-  const [scheduledLessonIds, setScheduledLessonIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
   const [integrated, setIntegrated] = useState<IntegratedStats>({
     lessonsStudied: 0, totalLessons: 0,
     devotionalsCompleted: 0, totalDevotionals: 0,
@@ -101,7 +93,6 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
     const lessonIdsWithResponses = new Set<string>(
       (responsesData ?? []).map((response: { lesson_id: string }) => response.lesson_id),
     );
-    setCompletedLessonIds(lessonIdsWithResponses);
 
     // Compute fully completed lessons (study + all devotionals)
     const devsByLesson: Record<string, string[]> = {};
@@ -129,31 +120,6 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
     setCourses(courseList);
     setUnlockedCourseIds(new Set((unlocksData ?? []).map((u: any) => u.course_id)));
     
-    // Lessons are unlocked if they are scheduled in the agenda for this area
-    const now = new Date();
-    const scheduled = new Set<string>();
-    const applicableEvents = (eventsData ?? []).filter((e: any) => {
-      if (e.area && e.area !== currentArea) return;
-      return true;
-    });
-    applicableEvents.forEach((e: any, index: number) => {
-      // Unlock if event is in the past OR if we are within its devotional window.
-      const eventDate = new Date(e.event_date);
-      const prevEvent = index > 0 ? applicableEvents[index - 1] : null;
-      const prevEventDate = prevEvent ? new Date(prevEvent.event_date) : null;
-      const autoLimited = prevEventDate
-        ? Math.round((eventDate.getTime() - prevEventDate.getTime()) / 86400000) < 10
-        : false;
-      const devotionalDates = getBusinessDaysBefore(eventDate, 10);
-      const windowStart = autoLimited ? devotionalDates[5] : devotionalDates[0];
-      if (now >= windowStart) {
-        scheduled.add(e.linked_lesson_id);
-      }
-    });
-    setScheduledLessonIds(scheduled);
-
-    if (courseList.length > 0) setExpandedCourse(courseList[0].id);
-
     // Integrated stats
     const totalDevotionals = (devContentData ?? []).length;
     setIntegrated({
@@ -298,145 +264,6 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
           </div>
         </div>
       </div>
-
-      {/* Courses list */}
-      {courses.length === 0 ? (
-        <div className="text-center py-10">
-          <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-          <p className="font-montserrat font-bold text-foreground text-sm">Jornada em preparação</p>
-          <p className="text-muted-foreground font-inter text-xs mt-1">Seu pastor está preparando o conteúdo. Volte em breve!</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 mb-1">
-            <GraduationCap className="w-4 h-4 text-secondary" />
-            <p className="font-montserrat font-bold text-foreground text-sm">Trilha de Cursos</p>
-          </div>
-
-          {courses.map((course) => {
-            const isOpen = expandedCourse === course.id;
-            const isCourseUnlocked = unlockedCourseIds.has(course.id);
-            const doneLessons = course.lessons.filter(l => fullyCompletedLessonIds.has(l.id)).length;
-            const totalLessons = course.lessons.length;
-            const coursePct = totalLessons > 0 ? Math.round((doneLessons / totalLessons) * 100) : 0;
-
-            return (
-              <div key={course.id} className={`bg-card rounded-2xl border shadow-sm overflow-hidden ${
-                isCourseUnlocked ? "border-border" : "border-border opacity-75"
-              }`}>
-                {/* Course header */}
-                <button
-                  onClick={() => isCourseUnlocked ? setExpandedCourse(isOpen ? null : course.id) : null}
-                  className={`w-full flex items-center gap-3 p-4 text-left ${!isCourseUnlocked ? "cursor-default" : ""}`}
-                >
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                    isCourseUnlocked ? "" : "bg-muted"
-                  }`} style={isCourseUnlocked ? { background: "var(--gradient-hero)" } : {}}>
-                    {isCourseUnlocked
-                      ? <span className="font-montserrat font-black text-primary-foreground text-sm">#{course.order_num}</span>
-                      : <Lock className="w-4 h-4 text-muted-foreground" />
-                    }
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-montserrat font-bold text-foreground text-sm">{course.title}</p>
-                    {isCourseUnlocked ? (
-                      <>
-                        {course.subtitle && <p className="text-muted-foreground font-inter text-xs truncate">{course.subtitle}</p>}
-                        <div className="flex items-center gap-2 mt-1">
-                          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all"
-                              style={{
-                                width: `${coursePct}%`,
-                                background: coursePct === 100 ? "var(--gradient-green)" : "var(--gradient-hero)",
-                              }}
-                            />
-                          </div>
-                          <span className={`font-inter text-[10px] font-semibold flex-shrink-0 ${coursePct === 100 ? "text-brand-green" : "text-muted-foreground"}`}>
-                            {doneLessons}/{totalLessons}
-                          </span>
-                        </div>
-                      </>
-                    ) : (
-                      <p className="text-muted-foreground font-inter text-xs mt-0.5">🔒 Curso ainda não liberado pelo líder</p>
-                    )}
-                  </div>
-                  {isCourseUnlocked && (
-                    isOpen
-                      ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                      : <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                  )}
-                </button>
-
-                {/* Lessons list */}
-                {isOpen && isCourseUnlocked && (
-                  <div className="border-t border-border">
-                    {course.lessons.length === 0 ? (
-                      <p className="px-4 py-3 text-muted-foreground font-inter text-xs text-center">Nenhuma lição cadastrada ainda.</p>
-                    ) : (
-                      course.lessons.map((lesson, lessonIndex) => {
-                        const isDone = completedLessonIds.has(lesson.id);
-                        const isFullyDone = fullyCompletedLessonIds.has(lesson.id);
-                        const isScheduled = scheduledLessonIds.has(lesson.id);
-                        const prevLesson = lessonIndex > 0 ? course.lessons[lessonIndex - 1] : null;
-                        
-                        // A lesson is locked if it's not done AND not scheduled AND (it has a previous lesson that isn't fully done)
-                        // If it's the first lesson of an unlocked course, it's unlocked by default (prevLesson is null)
-                        const isLocked = !isDone && !isFullyDone && !isScheduled && (prevLesson ? !fullyCompletedLessonIds.has(prevLesson.id) : false);
-
-                        const isClickable = !isLocked && !!onSelectLesson;
-                        return (
-                          <div
-                            key={lesson.id}
-                            role={isClickable ? "button" : undefined}
-                            tabIndex={isClickable ? 0 : undefined}
-                            onClick={isClickable ? () => onSelectLesson(lesson.id) : undefined}
-                            onKeyDown={isClickable ? (e) => { if (e.key === "Enter" || e.key === " ") onSelectLesson(lesson.id); } : undefined}
-                            className={`flex items-center gap-3 px-4 py-3 border-b border-border last:border-b-0 ${
-                              isLocked ? "opacity-50" : ""
-                            } ${isFullyDone ? "bg-brand-green/5" : isDone ? "bg-secondary/5" : ""} ${
-                              isClickable ? "cursor-pointer active:bg-muted/60 transition-colors" : ""
-                            }`}
-                          >
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                              isFullyDone ? "bg-brand-green/15" : isLocked ? "bg-muted" : "bg-secondary/10"
-                            }`}>
-                              {isFullyDone
-                                ? <CheckCircle2 className="w-4 h-4 text-brand-green" />
-                                : isLocked
-                                ? <Lock className="w-3.5 h-3.5 text-muted-foreground" />
-                                : <span className="font-montserrat font-bold text-secondary text-xs">{lesson.order_num}</span>
-                              }
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className={`font-inter text-sm ${isFullyDone ? "text-brand-green font-medium" : isLocked ? "text-muted-foreground" : "text-foreground"}`}>
-                                {lesson.title}
-                              </p>
-                              {lesson.objective && (
-                                <p className="text-muted-foreground font-inter text-[10px] truncate">{lesson.objective}</p>
-                              )}
-                            </div>
-                            {isFullyDone && (
-                              <span className="text-[10px] font-inter font-semibold text-brand-green bg-brand-green/10 px-2 py-0.5 rounded-full flex-shrink-0">
-                                ✓ Feita
-                              </span>
-                            )}
-                            {isDone && !isFullyDone && (
-                              <span className="text-[10px] font-inter font-semibold text-secondary bg-secondary/10 px-2 py-0.5 rounded-full flex-shrink-0">
-                                Em andamento
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
 
     </div>
   );

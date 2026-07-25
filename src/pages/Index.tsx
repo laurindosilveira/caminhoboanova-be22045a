@@ -262,11 +262,7 @@ export default function Index() {
               transition={{ duration: 0.5, delay: 0.4 }}
               className="mb-8"
             >
-              <JourneyPath onSelectLesson={(lessonId) => {
-                setTargetLessonId(lessonId);
-                setTargetLessonMode("choice");
-                setActiveTab("discipulado");
-              }} />
+              <JourneyPath />
             </motion.div>
 
             {/* 6. Utilidades e Lembretes (Rodapé da página) */}
