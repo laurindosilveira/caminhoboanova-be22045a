@@ -89,7 +89,9 @@ BEGIN
       FROM public.lesson_responses WHERE user_id=v_user AND lesson_id=p_item_id;
   END IF;
   SELECT EXISTS (SELECT 1 FROM jsonb_each_text(p_responses) AS pending(key,value)
-    WHERE CASE WHEN p_expected IS NULL THEN v_current ? pending.key AND v_current->>pending.key IS DISTINCT FROM pending.value
+    -- Older queued actions have no reliable baseline. A missing server key
+    -- might mean it was deleted on another device, so require review too.
+    WHERE CASE WHEN p_expected IS NULL THEN v_current->>pending.key IS DISTINCT FROM pending.value
       ELSE (v_current->pending.key) IS DISTINCT FROM (p_expected->pending.key) END) INTO v_conflict;
   IF v_conflict THEN RETURN jsonb_build_object('status','conflict','current',v_current); END IF;
 

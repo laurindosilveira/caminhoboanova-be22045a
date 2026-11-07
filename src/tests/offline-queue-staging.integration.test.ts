@@ -50,5 +50,19 @@ describe.skipIf(!enabled)("IndexedDB queue and staging database", () => {
     const verified = await supabase.rpc("test_read" as never, { p_lesson_id: lesson, p_key: key } as never);
     expect(verified.error).toBeNull();
     expect(verified.data).toBe("rascunho offline");
+
+    // A missing server answer may have been deleted on another device. An
+    // older queue entry without a baseline must not recreate it silently.
+    const missingKey = `${key}_ausente`;
+    await enqueueStudentAction({ type: "save_lesson_draft", userId: uid, payload: { lessonId: lesson, responses: { [missingKey]: "resposta antiga" }, videoWatched: false, audioListened: false } });
+    const missing = await syncStudentOfflineQueue(uid);
+    expect(missing.conflict).toBeTruthy();
+    expect(missing.conflict?.current[missingKey]).toBeUndefined();
+    expect(await getQueuedStudentActions(uid)).toHaveLength(1);
+    const absent = await supabase.rpc("test_read" as never, { p_lesson_id: lesson, p_key: missingKey } as never);
+    expect(absent.error).toBeNull();
+    expect(absent.data).toBeNull();
+    expect(await resolveOfflineConflict(missing.conflict!, "offline")).toBeNull();
+    expect(await getQueuedStudentActions(uid)).toHaveLength(0);
   }, 45000);
 });
