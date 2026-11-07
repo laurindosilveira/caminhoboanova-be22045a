@@ -15,6 +15,7 @@ import {
   getPendingStudentOverlay,
   isStudentOffline,
   mergeByKey,
+  syncLearningActionWithCurrent,
 } from "@/lib/studentOffline";
 import {
   getStoredLessonMediaProgress,
@@ -126,6 +127,13 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
   const [savingLeaderNotes, setSavingLeaderNotes] = useState(false);
   const [showLeaderScript, setShowLeaderScript] = useState(false);
   const hasLoadedResponses = useRef(false);
+  const changedByUser = useRef(false);
+  const serverResponses = useRef<Response>({});
+  const latestResponses = useRef<Response>({});
+  const saveChain = useRef<Promise<void>>(Promise.resolve());
+  const conflictBlocked = useRef(false);
+  const [responseLoadState, setResponseLoadState] = useState<"loading" | "ready" | "error" | "pending">("loading");
+  const [responseLoadAttempt, setResponseLoadAttempt] = useState(0);
 
   const isLeaderOrAdmin = role === "admin" || role === "lider";
 
@@ -239,9 +247,13 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
 
   // Load user responses
   useEffect(() => {
+    let cancelled = false;
+    setResponseLoadState("loading");
+    hasLoadedResponses.current = false;
+    changedByUser.current = false;
     async function loadResponses() {
       const uid = targetUserId ?? authUser?.id;
-      if (!uid) return;
+      if (!uid) { if (!cancelled) setResponseLoadState("error"); return; }
       const [{ data, error }, { data: progress, error: progressError }, overlay] = await Promise.all([
         cachedStudentQuery<LessonResponseRow[]>(
           `lesson-responses:${uid}:${lesson.id}`,
@@ -251,6 +263,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
             .eq("lesson_id", lesson.id)
             .eq("user_id", uid),
           [],
+          { force: true },
         ),
         cachedStudentQuery<LessonProgressDetail | null>(
           `lesson-progress-detail:${uid}:${lesson.id}`,
@@ -261,9 +274,13 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
             .eq("user_id", uid)
             .maybeSingle(),
           null,
+          { force: true },
         ),
         getPendingStudentOverlay(uid),
       ]);
+      if (cancelled) return;
+      if (!isStudentOffline() && overlay.actions.some(action => (action.type === "save_lesson_draft" || action.type === "complete_lesson") && action.payload.lessonId === lesson.id)) { setResponseLoadState("pending"); return; }
+      if ((error || progressError) && !isStudentOffline()) { setResponseLoadState("error"); return; }
       const mergedResponses = mergeByKey(data ?? [], overlay.lessonResponses.filter((item) => item.lesson_id === lesson.id), "question_key");
       const pendingProgress = overlay.lessonProgress.find((item) => item.lesson_id === lesson.id);
       if (error && !isStudentOffline()) {
@@ -273,6 +290,11 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
       } else if (mergedResponses) {
         const map: Response = {};
         mergedResponses.forEach(r => { map[r.question_key] = r.response; });
+        const baseline: Response = {};
+        (data ?? []).forEach(r => { baseline[r.question_key] = r.response; });
+        serverResponses.current = baseline;
+        latestResponses.current = map;
+        conflictBlocked.current = false;
         setResponses(map);
       }
       const effectiveProgress = pendingProgress ?? progress;
@@ -284,12 +306,23 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
         if (savedAt) setLastSaved(new Date(savedAt));
       }
       hasLoadedResponses.current = true;
+      setResponseLoadState("ready");
     }
-    void loadResponses();
-  }, [authUser?.id, lesson.id, targetUserId]);
+    void loadResponses().catch(() => { if (!cancelled) setResponseLoadState("error"); });
+    return () => { cancelled = true; };
+  }, [authUser?.id, lesson.id, targetUserId, responseLoadAttempt]);
 
   useEffect(() => {
-    if (isAdmin || !contentLoaded || !hasLoadedResponses.current) return;
+    if (responseLoadState !== "pending") return;
+    const refresh = () => setResponseLoadAttempt(value => value + 1);
+    window.addEventListener("student-offline-queue-changed", refresh);
+    window.addEventListener("student-offline-queue-synced", refresh);
+    window.addEventListener("online", refresh);
+    return () => { window.removeEventListener("student-offline-queue-changed", refresh); window.removeEventListener("student-offline-queue-synced", refresh); window.removeEventListener("online", refresh); };
+  }, [responseLoadState]);
+
+  useEffect(() => {
+    if (isAdmin || saving || !contentLoaded || !hasLoadedResponses.current || !changedByUser.current) return;
 
     const entries = Object.entries(responses);
     if (entries.length === 0 && !videoWatched && !audioListened) return;
@@ -310,28 +343,84 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
             },
           });
           setDraftError(null);
+          if (JSON.stringify(latestResponses.current) === JSON.stringify(Object.fromEntries(entries))) changedByUser.current = false;
           setLastSaved(new Date());
         }
         return;
       }
 
-      const { error } = await supabase.rpc("save_lesson_draft", {
-        p_lesson_id: lesson.id,
-        p_responses: Object.fromEntries(entries),
-        p_video_watched: videoWatched,
-        p_audio_listened: audioListened,
-      });
-
-      if (error) {
-        setDraftError(error.message);
-      } else {
+      const uid = targetUserId ?? authUser?.id;
+      if (!uid) { setDraftError("Sessão expirada."); return; }
+      const snapshot = Object.fromEntries(entries);
+      const previous = saveChain.current.catch(() => {});
+      const next = previous.then(async () => {
+        if (conflictBlocked.current) return;
+        const action = { id: "live", type: "save_lesson_draft" as const, userId: uid, createdAt: new Date().toISOString(), payload: { lessonId: lesson.id, responses: snapshot, videoWatched, audioListened } };
+        const result = await syncLearningActionWithCurrent(action, serverResponses.current);
+        if (result.conflict) {
+          conflictBlocked.current = true;
+          try {
+            await enqueueStudentAction({ type: "save_lesson_draft", userId: uid, churchId: profile?.church_id ?? null, payload: { lessonId: lesson.id, responses: latestResponses.current, videoWatched, audioListened } });
+            setResponseLoadState("pending");
+            window.dispatchEvent(new Event("online"));
+          } catch (error) { conflictBlocked.current = false; throw error; }
+          return;
+        }
+        serverResponses.current = result.current;
         setDraftError(null);
-        setLastSaved(new Date());
-      }
+        if (JSON.stringify(latestResponses.current) === JSON.stringify(snapshot)) {
+          changedByUser.current = false;
+          setLastSaved(new Date());
+        }
+      });
+      saveChain.current = next;
+      try { await next; } catch (error) { setDraftError(getErrorMessage(error)); }
     }, 1200);
 
     return () => window.clearTimeout(timeoutId);
-  }, [responses, lesson.id, isAdmin, contentLoaded, videoWatched, audioListened, profile?.church_id, targetUserId, authUser?.id]);
+  }, [responses, lesson.id, isAdmin, saving, contentLoaded, videoWatched, audioListened, profile?.church_id, targetUserId, authUser?.id]);
+
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (changedByUser.current) { event.preventDefault(); event.returnValue = ""; }
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
+
+  async function handleBack() {
+    if (isAdmin || !changedByUser.current) { onBack(); return; }
+    const uid = targetUserId ?? authUser?.id;
+    if (!uid) { setDraftError("Sessão expirada. Suas respostas ainda não foram salvas."); return; }
+    setSaving(true);
+    try {
+      await saveChain.current.catch(() => {});
+      if (conflictBlocked.current) return;
+      if (changedByUser.current) {
+        const payload = { lessonId: lesson.id, responses: latestResponses.current, videoWatched, audioListened };
+        if (isStudentOffline()) {
+          await enqueueStudentAction({ type: "save_lesson_draft", userId: uid, churchId: profile?.church_id ?? null, payload });
+        } else {
+          const action = { id: "live", type: "save_lesson_draft" as const, userId: uid, createdAt: new Date().toISOString(), payload };
+          const result = await syncLearningActionWithCurrent(action, serverResponses.current);
+          if (result.conflict) {
+            conflictBlocked.current = true;
+            try { await enqueueStudentAction({ type: "save_lesson_draft", userId: uid, churchId: profile?.church_id ?? null, payload }); }
+            catch (error) { conflictBlocked.current = false; throw error; }
+            setResponseLoadState("pending");
+            window.dispatchEvent(new Event("online"));
+            return;
+          }
+          serverResponses.current = result.current;
+        }
+        changedByUser.current = false;
+      }
+      onBack();
+    } catch (error) {
+      setDraftError(getErrorMessage(error));
+      toast.error("Não foi possível salvar suas respostas. Tente novamente.");
+    } finally { setSaving(false); }
+  }
 
   // Validation: check all required fields
   const visibleQuestions = content.questions
@@ -384,6 +473,8 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     }
     setSaving(true);
     const uid = targetUserId ?? authUser?.id;
+    try { await saveChain.current; } catch { /* Retry the full snapshot below. */ }
+    if (conflictBlocked.current) { setSaving(false); return; }
 
     if (isStudentOffline() && uid) {
       await enqueueStudentAction({
@@ -400,6 +491,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
           isLateAccess,
         },
       });
+      changedByUser.current = false;
       setSaving(false);
       setDraftError(null);
       setLastSaved(new Date());
@@ -408,22 +500,27 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
       return;
     }
 
-    const { error } = await supabase.rpc("complete_lesson", {
-      p_lesson_id: lesson.id,
-      p_responses: responses,
-      p_video_watched: videoWatched,
-      p_audio_listened: audioListened,
-      p_awarded_points: isLateAccess ? 0 : awardedPoints,
-      p_override_release_id: overrideId,
-    });
-    if (error) {
+    if (!uid) { setSaving(false); setDraftError("Sessão expirada."); return; }
+    try {
+      const action = { id: "live", type: "complete_lesson" as const, userId: uid, createdAt: new Date().toISOString(), payload: { lessonId: lesson.id, responses, videoWatched, audioListened, awardedPoints, overrideId, isLateAccess } };
+      const result = await syncLearningActionWithCurrent(action, serverResponses.current);
+      if (result.conflict) {
+        conflictBlocked.current = true;
+        await enqueueStudentAction({ type: "complete_lesson", userId: uid, churchId: profile?.church_id ?? null, payload: action.payload });
+        setSaving(false);
+        setResponseLoadState("pending");
+        window.dispatchEvent(new Event("online"));
+        return;
+      }
+      serverResponses.current = result.current;
+    } catch (error) {
+      conflictBlocked.current = false;
       setSaving(false);
-      setDraftError(error.message);
-      toast.error("Não foi possível concluir a lição.", {
-        description: error.message,
-      });
+      setDraftError(getErrorMessage(error));
+      toast.error("Não foi possível concluir a lição.");
       return;
     }
+    changedByUser.current = false;
     setSaving(false);
     setDraftError(null);
     setLastSaved(new Date());
@@ -446,7 +543,9 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
 
   function updateResponse(key: string, value: string) {
     if (isAdmin) return;
-    setResponses(prev => ({ ...prev, [key]: value }));
+    changedByUser.current = true;
+    latestResponses.current = { ...latestResponses.current, [key]: value };
+    setResponses(latestResponses.current);
   }
 
   async function handleDownloadPDF() {
@@ -744,7 +843,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
         value={responses[qKey] ?? ""}
         onChange={e => updateResponse(qKey, e.target.value)}
         placeholder={isAdmin ? "(Sem resposta ainda)" : placeholder}
-        readOnly={isAdmin}
+        readOnly={isAdmin || saving}
         rows={3}
         className={`w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none transition-colors ${isAdmin ? "opacity-70 cursor-default" : ""}`}
       />
@@ -760,6 +859,10 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
         <p className="text-muted-foreground font-inter text-sm">Carregando lição...</p>
       </div>
     );
+  }
+
+  if (responseLoadState !== "ready") {
+    return <div className="px-5 py-12 text-center space-y-4"><p>{responseLoadState === "loading" ? "Carregando suas respostas..." : responseLoadState === "pending" ? "Aguarde a sincronização ou resolva a diferença de respostas antes de editar." : "Não foi possível carregar suas respostas. Verifique a conexão."}</p>{(responseLoadState === "error" || responseLoadState === "pending") && <button onClick={() => { window.dispatchEvent(new Event("online")); setResponseLoadAttempt(value => value + 1); }} className="text-primary underline">Tentar novamente</button>}<button onClick={onBack} className="block mx-auto text-primary underline">Voltar</button></div>;
   }
 
   if (showLeaderGuideEditor && leaderGuide) {
@@ -780,9 +883,9 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-unsaved-work={changedByUser.current ? "true" : undefined}>
       {/* Back */}
-      <button onClick={onBack} className="flex items-center gap-2 text-muted-foreground font-inter text-sm hover:text-foreground transition-colors">
+      <button onClick={() => void handleBack()} disabled={saving} className="flex items-center gap-2 text-muted-foreground font-inter text-sm hover:text-foreground transition-colors">
         <ChevronLeft className="w-4 h-4" />
         {isAdmin ? "Voltar" : "Voltar às lições"}
       </button>

@@ -320,7 +320,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
       }
       const [{ count: devC }, { count: worC }, { data: attD }, { count: chatC }, { count: prayerC }, { data: planData }, { data: existingUnlocks }, { data: allLessons }, { data: allDevContent }, { count: totalEventsC }, { data: lessonResps }, { data: allActs }, { data: userProg }, { data: achUnlocks },
         // Biweekly streak data
-        { data: recentEvents }, { data: recentAttendance }, { data: recentDevContent }, { data: recentDevProgress }, { data: recentLessonResps },
+        { data: recentEvents }, { data: recentAttendance }, { data: recentDevProgress }, { data: recentLessonResps },
         { data: courseUnlocks },
       ] = await Promise.all([
         supabase.from("devotional_progress").select("id", { count: "exact", head: true }).eq("user_id", user.id),
@@ -340,8 +340,6 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
         // Biweekly: events in last 15 days for user's area
         recentEventsQuery,
         supabase.from("attendance").select("event_id, status").eq("user_id", user.id).eq("status", "presente"),
-        // Devotionals linked to lessons that have events in last 15 days
-        supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null),
         supabase.from("devotional_progress").select("devotional_id, completed_at").eq("user_id", user.id).gte("completed_at", fifteenDaysAgo),
         supabase.from("lesson_progress").select("lesson_id, completed_at").eq("user_id", user.id).eq("is_completed", true).gte("completed_at", fifteenDaysAgo),
         courseUnlocksQuery,
@@ -379,7 +377,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
 
       // Devotionals from lessons linked to recent events
       const recentDevCompletedIds = new Set((recentDevProgress ?? []).map(p => p.devotional_id));
-      const devsForRecentLessons = (recentDevContent ?? []).filter(d => d.lesson_id && recentEventLessonIds.includes(d.lesson_id));
+      const devsForRecentLessons = (allDevContent ?? []).filter(d => d.lesson_id && recentEventLessonIds.includes(d.lesson_id));
       const allRecentDevsDone = devsForRecentLessons.length > 0 && devsForRecentLessons.every(d => recentDevCompletedIds.has(d.id));
       const recentDevsCompleted = devsForRecentLessons.filter(d => recentDevCompletedIds.has(d.id)).length;
 

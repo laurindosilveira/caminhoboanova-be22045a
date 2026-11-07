@@ -1,3 +1,7 @@
+self.addEventListener("activate", (event) => {
+  event.waitUntil(Promise.all(["supabase-api-cache", "supabase-auth-cache"].map((name) => caches.delete(name))));
+});
+
 /// <reference lib="webworker" />
 
 // Custom service worker for Web Push notifications
