@@ -268,7 +268,7 @@ export default function WorshipConfirmation({ events, attendanceRecords, onCheck
                           {format(dateObj, "EEE, d 'de' MMM 'às' HH:mm", { locale: ptBR })}
                         </p>
                         {attRecord && (
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-inter font-semibold px-2 py-0.5 rounded-full mt-1 ${ATT_STATUS_CFG[attRecord.status]?.cls ?? ""}`}>
+                          <span className={`inline-flex items-center gap-1 text-xs font-inter font-semibold px-2 py-0.5 rounded-full mt-1 ${ATT_STATUS_CFG[attRecord.status]?.cls ?? ""}`}>
                             {ATT_STATUS_CFG[attRecord.status]?.icon} {ATT_STATUS_CFG[attRecord.status]?.label}
                           </span>
                         )}
@@ -440,7 +440,7 @@ export default function WorshipConfirmation({ events, attendanceRecords, onCheck
                       <span className="text-lg">{getEventEmoji(r.event_type)}</span>
                       <div className="flex-1 min-w-0">
                         <p className="font-inter text-sm font-medium text-foreground truncate">{r.preacher_name}</p>
-                        <p className="font-inter text-[10px] text-muted-foreground">
+                        <p className="font-inter text-xs text-muted-foreground">
                           {new Date(r.worship_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })} · {r.worship_time}
                         </p>
                       </div>

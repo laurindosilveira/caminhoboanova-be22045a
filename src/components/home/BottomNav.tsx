@@ -1,19 +1,19 @@
-import { Home, Trophy, Calendar, Users, User, Heart, Music, ChevronDown, ChevronUp, ShieldCheck } from "lucide-react";
+import { Home, Trophy, Calendar, Users, User, Heart, Music, ChevronDown, ChevronUp, ShieldCheck, ClipboardList } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 
-export type Tab = "jornada" | "conquistas" | "agenda" | "comunidade" | "perfil" | "discipulado" | "adoracao";
+export type Tab = "jornada" | "conquistas" | "agenda" | "comunidade" | "perfil" | "discipulado" | "adoracao" | "lider";
 
 interface BottomNavProps {
   activeTab: Tab;
   onChange: (tab: Tab) => void;
 }
 
-const tabs = [
+const baseTabs = [
   { tab: "jornada" as Tab, icon: Home, label: "Jornada" },
-  { tab: "discipulado" as Tab, icon: Heart, label: "3M" },
+  { tab: "discipulado" as Tab, icon: Heart, label: "Caminho" },
   { tab: "adoracao" as Tab, icon: Music, label: "Adoração" },
   { tab: "agenda" as Tab, icon: Calendar, label: "Agenda" },
   { tab: "conquistas" as Tab, icon: Trophy, label: "Ranking" },
@@ -22,9 +22,17 @@ const tabs = [
 ];
 
 export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const canManageChurch = role === "admin" || role === "lider";
+  const tabs = canManageChurch
+    ? [
+        ...baseTabs.slice(0, 2),
+        { tab: "lider" as Tab, icon: ClipboardList, label: "Sala do Líder" },
+        ...baseTabs.slice(2),
+      ]
+    : baseTabs;
 
   const handleTabClick = (tab: Tab) => {
     onChange(tab);
@@ -62,7 +70,7 @@ export default function BottomNav({ activeTab, onChange }: BottomNavProps) {
               </div>
 
               <div className="px-4 pb-2 pt-1">
-                <p className="font-inter text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                <p className="font-inter text-xs font-bold uppercase tracking-wide text-muted-foreground">
                   Escolha a aba
                 </p>
               </div>

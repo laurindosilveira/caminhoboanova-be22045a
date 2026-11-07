@@ -37,7 +37,7 @@ function whatsappUrl(phone: string): string | null {
 function Avatar({ name, size = "md" }: { name: string; size?: "sm" | "md" }) {
   const s = size === "sm" ? "w-7 h-7 text-xs" : "w-9 h-9 text-sm";
   return (
-    <div className={`rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 ${s}`}>
+    <div className={`rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 ${s}`}>
       <span className="font-montserrat font-black text-primary">{name.charAt(0)}</span>
     </div>
   );
@@ -54,6 +54,7 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
   const [loadingData, setLoadingData] = useState(true);
 
   const myArea = profile?.area || participants[0]?.area || "";
+  const myChurchId = profile?.church_id ?? null;
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const ids = participants.map(p => p.user_id);
@@ -62,31 +63,26 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
     if (!myArea) { setLoadingData(false); return; }
     async function fetchData() {
       setLoadingData(true);
-      const queries: any[] = [
-        supabase.from("events").select("id, title, event_date, type")
-          .eq("area", myArea as any)
+      let lastEventQuery = supabase.from("events").select("id, title, event_date, type")
+          .eq("area", myArea)
           .lt("event_date", now.toISOString())
           .order("event_date", { ascending: false })
-          .limit(1),
-        supabase.from("events").select("id, title, event_date, type")
-          .eq("area", myArea as any)
+          .limit(1);
+      let nextEventQuery = supabase.from("events").select("id, title, event_date, type")
+          .eq("area", myArea)
           .gt("event_date", now.toISOString())
           .order("event_date", { ascending: true })
-          .limit(1),
-      ];
+          .limit(1);
+      lastEventQuery = myChurchId ? lastEventQuery.eq("church_id", myChurchId) : lastEventQuery.is("church_id", null);
+      nextEventQuery = myChurchId ? nextEventQuery.eq("church_id", myChurchId) : nextEventQuery.is("church_id", null);
 
-      if (ids.length > 0) {
-        queries.push(
+      const [{ data: lastEvData }, { data: nextEvData }] = await Promise.all([lastEventQuery, nextEventQuery]);
+      const [{ data: devData }, { data: progressData }] = ids.length > 0
+        ? await Promise.all([
           supabase.from("devotional_progress").select("user_id, completed_at").in("user_id", ids),
           supabase.from("user_progress").select("user_id, completed_at").in("user_id", ids),
-        );
-      }
-
-      const results = await Promise.all(queries);
-      const lastEvData = results[0]?.data;
-      const nextEvData = results[1]?.data;
-      const devData = results[2]?.data ?? [];
-      const progressData = results[3]?.data ?? [];
+        ])
+        : [{ data: [] }, { data: [] }];
 
       // Last activity per user
       const actMap: Record<string, Date | null> = {};
@@ -127,7 +123,7 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
     }
     fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [participants.length, myArea]);
+  }, [participants.length, myArea, myChurchId]);
 
   // Derived data
   const activeThisWeek = Object.keys(weeklyDevCount).length;
@@ -186,7 +182,7 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
     <div className="space-y-4 pb-4">
 
       {/* ── HERO ── */}
-      <div className="rounded-2xl p-4 relative overflow-hidden" style={{ background: "var(--gradient-hero)" }}>
+      <div className="rounded-lg p-4 relative overflow-hidden" style={{ background: "var(--gradient-hero)" }}>
         <div className="absolute inset-0 opacity-10" style={{
           backgroundImage: "radial-gradient(circle at 80% 20%, white 1px, transparent 1px)",
           backgroundSize: "20px 20px"
@@ -201,9 +197,9 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
             { label: "Ativos esta semana", value: activeThisWeek },
             { label: "Precisam de atenção", value: contactList.length },
           ].map(s => (
-            <div key={s.label} className="bg-white/10 backdrop-blur rounded-xl p-2.5 text-center">
+            <div key={s.label} className="bg-white/10 backdrop-blur rounded-lg p-2.5 text-center">
               <p className="font-montserrat font-black text-primary-foreground text-xl leading-none">{s.value}</p>
-              <p className="text-primary-foreground/50 text-[9px] font-inter mt-0.5 leading-tight">{s.label}</p>
+              <p className="text-primary-foreground/50 text-xs font-inter mt-0.5 leading-tight">{s.label}</p>
             </div>
           ))}
         </div>
@@ -211,10 +207,10 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
 
       {/* ── QUEM CONTATAR ── */}
       {contactList.length > 0 && (
-        <div className="bg-card rounded-2xl border border-border overflow-hidden">
+        <div className="bg-card rounded-lg border border-border overflow-hidden">
           <div className="px-4 py-3 border-b border-border">
             <p className="font-montserrat font-bold text-foreground text-sm">Contatar agora</p>
-            <p className="text-muted-foreground font-inter text-[10px] mt-0.5">
+            <p className="text-muted-foreground font-inter text-xs mt-0.5">
               {contactList.length} aluno{contactList.length !== 1 ? "s" : ""} precisam de atenção
             </p>
           </div>
@@ -234,7 +230,7 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
                         {p.reasons.map((r, i) => (
                           <span
                             key={i}
-                            className={`text-[10px] font-inter font-medium px-1.5 py-0.5 rounded-full ${
+                            className={`text-xs font-inter font-medium px-1.5 py-0.5 rounded-full ${
                               r.urgent
                                 ? "bg-destructive/10 text-destructive"
                                 : "bg-accent/20 text-accent-foreground"
@@ -253,7 +249,7 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={e => e.stopPropagation()}
-                      className="w-9 h-9 rounded-xl bg-brand-green/10 flex items-center justify-center flex-shrink-0 hover:bg-brand-green/20 transition-colors"
+                      className="w-9 h-9 rounded-lg bg-brand-green/10 flex items-center justify-center flex-shrink-0 hover:bg-brand-green/20 transition-colors"
                     >
                       <MessageCircle className="w-4 h-4 text-brand-green" />
                     </a>
@@ -269,12 +265,12 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
 
       {/* ── PRÓXIMO ENCONTRO ── */}
       {nextEvent && (
-        <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+        <div className="bg-card rounded-lg border border-border p-4 flex items-center gap-3">
+          <div className="w-11 h-11 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
             <Calendar className="w-5 h-5 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-muted-foreground font-inter text-[10px] mb-0.5">Próximo encontro</p>
+            <p className="text-muted-foreground font-inter text-xs mb-0.5">Próximo encontro</p>
             <p className="font-inter text-sm font-semibold text-foreground truncate">{nextEvent.title}</p>
             <p className="text-primary font-inter text-xs font-medium">
               {format(new Date(nextEvent.event_date), "EEEE, dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
@@ -285,10 +281,10 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
 
       {/* ── ÚLTIMO ENCONTRO ── */}
       {lastEvent && (
-        <div className="bg-card rounded-2xl border border-border overflow-hidden">
+        <div className="bg-card rounded-lg border border-border overflow-hidden">
           <div className="px-4 py-3 border-b border-border">
             <p className="font-montserrat font-bold text-foreground text-sm">Último encontro</p>
-            <p className="text-muted-foreground font-inter text-[10px] mt-0.5">
+            <p className="text-muted-foreground font-inter text-xs mt-0.5">
               {lastEvent.title} · {format(new Date(lastEvent.event_date), "dd/MM/yyyy", { locale: ptBR })}
             </p>
           </div>
@@ -310,12 +306,12 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
                   </button>
                 ))}
                 {presentParticipants.length > 6 && (
-                  <p className="text-[10px] font-inter text-muted-foreground pl-3">
+                  <p className="text-xs font-inter text-muted-foreground pl-3">
                     +{presentParticipants.length - 6} mais
                   </p>
                 )}
                 {presentParticipants.length === 0 && (
-                  <p className="text-[10px] font-inter text-muted-foreground">Nenhum registro</p>
+                  <p className="text-xs font-inter text-muted-foreground">Nenhum registro</p>
                 )}
               </div>
             </div>
@@ -351,7 +347,7 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
                   );
                 })}
                 {absentParticipants.length > 6 && (
-                  <p className="text-[10px] font-inter text-muted-foreground pl-3">
+                  <p className="text-xs font-inter text-muted-foreground pl-3">
                     +{absentParticipants.length - 6} mais
                   </p>
                 )}
@@ -362,18 +358,18 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
       )}
 
       {/* ── DEVOCIONAIS ESTA SEMANA ── */}
-      <div className="bg-card rounded-2xl border border-border overflow-hidden">
+      <div className="bg-card rounded-lg border border-border overflow-hidden">
         <div className="px-4 py-3 border-b border-border flex items-center justify-between">
           <div>
             <p className="font-montserrat font-bold text-foreground text-sm">Devocionais esta semana</p>
-            <p className="text-muted-foreground font-inter text-[10px] mt-0.5">
+            <p className="text-muted-foreground font-inter text-xs mt-0.5">
               {activeThisWeek === 0
                 ? "Nenhum nos últimos 7 dias"
                 : `${activeThisWeek} de ${participants.length} participante${participants.length !== 1 ? "s" : ""}`
               }
             </p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-brand-green/10 flex items-center justify-center flex-shrink-0">
+          <div className="w-10 h-10 rounded-lg bg-brand-green/10 flex items-center justify-center flex-shrink-0">
             <BookOpen className="w-5 h-5 text-brand-green" />
           </div>
         </div>
@@ -391,7 +387,7 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
                   <Avatar name={p.full_name} size="sm" />
                   <div className="flex-1 min-w-0">
                     <p className="font-inter text-xs font-medium text-foreground truncate">{p.full_name}</p>
-                    <p className="text-muted-foreground font-inter text-[10px]">{p.community}</p>
+                    <p className="text-muted-foreground font-inter text-xs">{p.community}</p>
                   </div>
                   <span className="font-montserrat font-bold text-xs text-brand-green flex-shrink-0">
                     {weeklyDevCount[p.user_id]} dev.
@@ -409,11 +405,11 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
       </div>
 
       {/* ── TODOS OS DISCÍPULOS ── */}
-      <div className="bg-card rounded-2xl border border-border overflow-hidden">
+      <div className="bg-card rounded-lg border border-border overflow-hidden">
         <div className="px-4 py-3 border-b border-border flex items-center gap-2">
           <Users className="w-4 h-4 text-primary" />
           <p className="font-montserrat font-bold text-foreground text-sm">Todos os discípulos</p>
-          <span className="ml-auto text-[10px] font-inter text-muted-foreground">
+          <span className="ml-auto text-xs font-inter text-muted-foreground">
             {participants.length} total
           </span>
         </div>
@@ -446,7 +442,7 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-inter text-sm font-medium text-foreground truncate">{p.full_name}</p>
-                    <p className={`font-inter text-[10px] ${isInactive ? "text-destructive/80" : "text-muted-foreground"}`}>
+                    <p className={`font-inter text-xs ${isInactive ? "text-destructive/80" : "text-muted-foreground"}`}>
                       {lastLabel}{p.community ? ` · ${p.community}` : ""}
                     </p>
                   </div>
@@ -457,7 +453,7 @@ export default function OverviewTab({ participants, activities, plans, onSelectP
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={e => e.stopPropagation()}
-                    className="w-9 h-9 rounded-xl bg-muted/30 flex items-center justify-center flex-shrink-0 hover:bg-brand-green/15 transition-colors group"
+                    className="w-9 h-9 rounded-lg bg-muted/30 flex items-center justify-center flex-shrink-0 hover:bg-brand-green/15 transition-colors group"
                   >
                     <MessageCircle className="w-4 h-4 text-muted-foreground group-hover:text-brand-green transition-colors" />
                   </a>

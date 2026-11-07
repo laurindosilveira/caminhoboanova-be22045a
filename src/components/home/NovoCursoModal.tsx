@@ -45,8 +45,8 @@ export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) 
         ? supabase.from("courses").select("title").eq("church_id", churchId)
         : Promise.resolve({ data: [] }),
     ]);
-    const churchTitles = new Set((churchData ?? []).map((c: any) => c.title));
-    setGlobalCourses((globalData ?? []).filter((c: any) => !churchTitles.has(c.title)));
+    const churchTitles = new Set((churchData ?? []).map(c => c.title));
+    setGlobalCourses((globalData ?? []).filter(c => !churchTitles.has(c.title)));
     setLoadingGlobal(false);
   }
 
@@ -62,7 +62,7 @@ export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) 
       ? supabase.from("courses").select("order_num").eq("church_id", effectiveId)
       : supabase.from("courses").select("order_num").is("church_id", null);
     const { data } = await query.order("order_num", { ascending: false }).limit(1);
-    return data && data.length > 0 ? ((data[0] as any).order_num ?? 0) + 1 : 1;
+    return data && data.length > 0 ? (data[0].order_num ?? 0) + 1 : 1;
   }
 
   async function handleSelectGlobal(course: GlobalCourse) {
@@ -317,7 +317,11 @@ export default function NovoCursoModal({ churchId, onClose, onCreated }: Props) 
             <button
               onClick={() => {
                 if (isGlobalAdmin) {
-                  courseScope === "church" ? setStep("church-select") : setStep("scope");
+                  if (courseScope === "church") {
+                    setStep("church-select");
+                  } else {
+                    setStep("scope");
+                  }
                 } else {
                   setStep("choose");
                 }

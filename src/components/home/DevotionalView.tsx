@@ -11,6 +11,21 @@ import {
   isStudentOffline,
   mergeByKey,
 } from "@/lib/studentOffline";
+import type { Database } from "@/integrations/supabase/types";
+
+type Tables = Database["public"]["Tables"];
+type DevotionalContentRow = Tables["devotional_content"]["Row"];
+type WorshipSongRow = Tables["worship_songs"]["Row"];
+type DevotionalResponseRow = Pick<Tables["devotional_responses"]["Row"], "question_index" | "response">;
+type WorshipSongLink = { worship_song: WorshipSongRow | null };
+
+function normalizePlatform(platform: string): WorshipSong["platform"] {
+  return platform === "youtube" || platform === "spotify" ? platform : "other";
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 type WorshipSong = {
   id: string;
@@ -58,17 +73,17 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
     if (devotionalData && devotionalData.worship_songs && devotionalData.worship_songs.length > 0) return;
 
     async function load() {
-      const { data: contentData } = await cachedStudentQuery(
+      const { data: contentData } = await cachedStudentQuery<DevotionalContentRow | null>(
         `devotional-content:${activity.id}`,
         () => supabase
           .from("devotional_content")
           .select("*")
           .eq("activity_id", activity.id)
           .maybeSingle(),
-        null as any,
+        null,
       );
 
-      const { data: songsData } = await cachedStudentQuery(
+      const { data: songsData } = await cachedStudentQuery<WorshipSongLink[]>(
         `devotional-songs:${activity.id}`,
         () => supabase
           .from("devotional_worship_songs")
@@ -76,10 +91,13 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
             worship_song:worship_songs(*)
           `)
           .eq("devotional_id", activity.id),
-        [] as any[],
+        [],
       );
 
-      const songs = songsData?.map(s => s.worship_song).filter(Boolean) as WorshipSong[] || [];
+      const songs: WorshipSong[] = songsData
+        .map((link) => link.worship_song)
+        .filter((song): song is WorshipSongRow => Boolean(song))
+        .map((song) => ({ ...song, platform: normalizePlatform(song.platform) }));
 
       if (contentData) {
         setContent({
@@ -105,7 +123,7 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
       if (!user) return;
 
       const [{ data, error }, overlay] = await Promise.all([
-        cachedStudentQuery(
+        cachedStudentQuery<DevotionalResponseRow[]>(
           `devotional-responses:${user.id}:${activity.id}`,
           () => supabase
             .from("devotional_responses")
@@ -113,19 +131,19 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
             .eq("user_id", user.id)
             .eq("devotional_id", activity.id)
             .order("question_index"),
-          [] as any[],
+          [],
         ),
         getPendingStudentOverlay(user.id),
       ]);
       const mergedResponses = mergeByKey(
         data ?? [],
-        overlay.devotionalResponses.filter((item) => item.devotional_id === activity.id) as any[],
+        overlay.devotionalResponses.filter((item) => item.devotional_id === activity.id),
         "question_index",
       );
 
       if (error && !isStudentOffline()) {
         toast.error("Não foi possível carregar as respostas do devocional.", {
-          description: String((error as any)?.message ?? error),
+          description: getErrorMessage(error),
         });
         return;
       }
@@ -184,12 +202,15 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
           overrideId: overrideId ?? null,
         },
       });
-      window.dispatchEvent(new CustomEvent("show-celebration", {
-        detail: {
-          type: "devotional",
-          points: awardedPoints ?? activity.points
-        }
-      }));
+      const points = awardedPoints ?? activity.points;
+      if (points > 0) {
+        window.dispatchEvent(new CustomEvent("show-celebration", {
+          detail: {
+            type: "devotional",
+            points
+          }
+        }));
+      }
       await onComplete(activity.id);
       setCompleting(false);
       toast.success("Devocional salvo offline. Ele sera sincronizado quando a internet voltar.");
@@ -213,12 +234,15 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
     }
     
     // Dispatch celebration event
-    window.dispatchEvent(new CustomEvent("show-celebration", {
-      detail: {
-        type: "devotional",
-        points: awardedPoints ?? activity.points
-      }
-    }));
+    const points = awardedPoints ?? activity.points;
+    if (points > 0) {
+      window.dispatchEvent(new CustomEvent("show-celebration", {
+        detail: {
+          type: "devotional",
+          points
+        }
+      }));
+    }
 
     await onComplete(activity.id);
     setCompleting(false);
@@ -327,7 +351,7 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
             <span className="text-sm">💬</span>
             <p className="font-montserrat font-bold text-foreground text-sm">Para Pensar</p>
             {!isCompleted && (
-              <span className="ml-auto text-muted-foreground font-inter text-[10px]">
+              <span className="ml-auto text-muted-foreground font-inter text-xs">
                 {activeQuestions.filter((_, index) => (answers[index] ?? "").trim()).length}/{activeQuestions.length} respondidas
               </span>
             )}
@@ -421,7 +445,7 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
           {(() => {
             const now = new Date();
             const isWeekend = now.getDay() === 0 || now.getDay() === 6;
-            const points = isWeekend ? 2 : activity.points;
+            const points = awardedPoints ?? (isWeekend ? 2 : activity.points);
 
             return (
               <>
@@ -435,16 +459,16 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
                 >
                   {completing ? "Marcando..." : `Concluir Devocional · +${points} pts →`}
                 </button>
-                {isWeekend && (
-                  <p className="text-center text-accent-foreground font-inter text-[10px]">
+                {isWeekend && points > 0 && (
+                  <p className="text-center text-accent-foreground font-inter text-xs">
                     ⚠️ Recuperação de fim de semana: 2 pts ao invés de {activity.points} pts
                   </p>
                 )}
               </>
             );
           })()}
-          <p className="text-center text-muted-foreground font-inter text-[10px]">
-            ⭐ Responda as perguntas para ganhar seus pontos de fé!
+          <p className="text-center text-muted-foreground font-inter text-xs">
+            {activity.points > 0 ? "⭐ Responda as perguntas para ganhar seus pontos de fé!" : "Prazo encerrado: suas respostas serão salvas sem pontuação."}
           </p>
         </div>
       )}

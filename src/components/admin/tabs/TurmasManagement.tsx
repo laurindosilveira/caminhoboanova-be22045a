@@ -5,7 +5,7 @@ import { Plus, Trash2, GraduationCap, Calendar, Pencil, Archive, CheckCircle2, R
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import TurmaReportPDF from "@/components/admin/TurmaReportPDF";
+import TurmaReportPDF, { type TurmaReportActivity, type TurmaReportParticipant } from "@/components/admin/TurmaReportPDF";
 
 type Turma = {
   id: string;
@@ -34,7 +34,7 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
   const [archiving, setArchiving] = useState<string | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<Turma | null>(null);
   const [showArchive, setShowArchive] = useState(false);
-  const [archivedPdfData, setArchivedPdfData] = useState<Record<string, { participants: any[]; activities: any[] }>>({});
+  const [archivedPdfData, setArchivedPdfData] = useState<Record<string, { participants: TurmaReportParticipant[]; activities: TurmaReportActivity[] }>>({});
   const [loadingPdf, setLoadingPdf] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState<Turma | null>(null);
   const [resetting, setResetting] = useState(false);
@@ -133,7 +133,7 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
       .eq("turma_id", turma.id);
     
     const allProfiles = turmaProfiles ?? [];
-    const secondYearUsers = allProfiles.filter(p => (p as any).confirmation_year === 2);
+    const secondYearUsers = allProfiles.filter(p => p.confirmation_year === 2);
 
     if (secondYearUsers.length === 0) {
       toast({ 
@@ -166,7 +166,7 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
     }
 
     // Move 2nd year users to the archived turma
-    await supabase.from("profiles").update({ turma_id: newTurma.id } as any)
+    await supabase.from("profiles").update({ turma_id: newTurma.id })
       .in("user_id", secondYearUsers.map(p => p.user_id));
 
     // 1st year users stay in the original turma (unchanged)
@@ -245,7 +245,7 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
             <GraduationCap className="w-5 h-5 text-primary" />
           </div>
           <div>
@@ -254,7 +254,7 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
           </div>
         </div>
         <button onClick={() => setShowCreate(true)}
-          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-montserrat font-bold text-primary-foreground transition-all active:scale-95"
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-xs font-montserrat font-bold text-primary-foreground transition-all active:scale-95"
           style={{ background: "var(--gradient-hero)" }}>
           <Plus className="w-4 h-4" /> Nova turma
         </button>
@@ -262,25 +262,25 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
 
       {/* Create dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-md rounded-2xl">
+        <DialogContent className="max-w-md rounded-lg">
           <DialogHeader>
             <DialogTitle className="font-montserrat font-bold text-foreground text-base">Criar nova turma</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>
               <label className="text-xs font-inter font-medium text-muted-foreground mb-1 block">Nome da turma</label>
-              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ex: Confirmatório 2026/1" className="rounded-xl" />
+              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ex: Confirmatório 2026/1" className="rounded-lg" />
             </div>
             <div>
               <label className="text-xs font-inter font-medium text-muted-foreground mb-1 block">Área (opcional)</label>
               <div className="flex gap-2">
                 <button onClick={() => setForm(f => ({ ...f, area: "" }))}
-                  className={`flex-1 py-2 rounded-xl text-xs font-montserrat font-bold transition-all border ${!form.area ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border"}`}>
+                  className={`flex-1 py-2 rounded-lg text-xs font-montserrat font-bold transition-all border ${!form.area ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border"}`}>
                   Todas
                 </button>
                 {AREAS.map(area => (
                   <button key={area} onClick={() => setForm(f => ({ ...f, area }))}
-                    className={`flex-1 py-2 rounded-xl text-xs font-montserrat font-bold transition-all border ${form.area === area ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border"}`}>
+                    className={`flex-1 py-2 rounded-lg text-xs font-montserrat font-bold transition-all border ${form.area === area ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border"}`}>
                     {area}
                   </button>
                 ))}
@@ -290,14 +290,14 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
               <label className="text-xs font-inter font-medium text-muted-foreground mb-1 flex items-center gap-1">
                 <Calendar className="w-3 h-3" /> Ano
               </label>
-              <Input type="number" value={form.year} onChange={e => setForm(f => ({ ...f, year: parseInt(e.target.value) || currentYear }))} className="rounded-xl" />
+              <Input type="number" value={form.year} onChange={e => setForm(f => ({ ...f, year: parseInt(e.target.value) || currentYear }))} className="rounded-lg" />
             </div>
             <div>
               <label className="text-xs font-inter font-medium text-muted-foreground mb-1 block">Descrição (opcional)</label>
-              <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Breve descrição..." className="rounded-xl" />
+              <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Breve descrição..." className="rounded-lg" />
             </div>
             <button onClick={handleCreate} disabled={creating || !form.name.trim()}
-              className="w-full py-2.5 rounded-xl text-sm font-montserrat font-bold text-primary-foreground disabled:opacity-50"
+              className="w-full py-2.5 rounded-lg text-sm font-montserrat font-bold text-primary-foreground disabled:opacity-50"
               style={{ background: "var(--gradient-hero)" }}>
               {creating ? "Criando..." : "Criar turma"}
             </button>
@@ -307,21 +307,21 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
 
       {/* Edit dialog */}
       <Dialog open={!!editingTurma} onOpenChange={(open) => !open && setEditingTurma(null)}>
-        <DialogContent className="max-w-md rounded-2xl">
+        <DialogContent className="max-w-md rounded-lg">
           <DialogHeader>
             <DialogTitle className="font-montserrat font-bold text-foreground text-base">Editar turma</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>
               <label className="text-xs font-inter font-medium text-muted-foreground mb-1 block">Nome da turma</label>
-              <Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} className="rounded-xl" />
+              <Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} className="rounded-lg" />
             </div>
             <div>
               <label className="text-xs font-inter font-medium text-muted-foreground mb-1 block">Descrição (opcional)</label>
-              <Input value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} className="rounded-xl" />
+              <Input value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} className="rounded-lg" />
             </div>
             <button onClick={handleEdit} disabled={!editForm.name.trim()}
-              className="w-full py-2.5 rounded-xl text-sm font-montserrat font-bold text-primary-foreground disabled:opacity-50"
+              className="w-full py-2.5 rounded-lg text-sm font-montserrat font-bold text-primary-foreground disabled:opacity-50"
               style={{ background: "var(--gradient-hero)" }}>
               Salvar
             </button>
@@ -331,13 +331,13 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
 
       {/* Confirm archive dialog */}
       <Dialog open={!!confirmArchive} onOpenChange={(open) => !open && setConfirmArchive(null)}>
-        <DialogContent className="max-w-sm rounded-2xl">
+        <DialogContent className="max-w-sm rounded-lg">
           <DialogHeader>
             <DialogTitle className="font-montserrat font-bold text-foreground text-base">Profissão de Fé em Grupo</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-lg bg-green-500/10 flex items-center justify-center">
                 <CheckCircle2 className="w-6 h-6 text-green-600" />
               </div>
               <div>
@@ -352,12 +352,12 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
             </p>
             <div className="flex gap-2">
               <button onClick={() => setConfirmArchive(null)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-montserrat font-bold bg-muted text-muted-foreground border border-border">
+                className="flex-1 py-2.5 rounded-lg text-sm font-montserrat font-bold bg-muted text-muted-foreground border border-border">
                 Cancelar
               </button>
               <button onClick={() => confirmArchive && handleArchive(confirmArchive)}
                 disabled={archiving === confirmArchive?.id}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-montserrat font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors">
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-montserrat font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors">
                 <CheckCircle2 className="w-4 h-4" />
                 {archiving === confirmArchive?.id ? "Arquivando..." : "Confirmar"}
               </button>
@@ -368,13 +368,13 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
 
       {/* Confirm reset journey dialog */}
       <Dialog open={!!confirmReset} onOpenChange={(open) => !open && setConfirmReset(null)}>
-        <DialogContent className="max-w-sm rounded-2xl">
+        <DialogContent className="max-w-sm rounded-lg">
           <DialogHeader>
             <DialogTitle className="font-montserrat font-bold text-foreground text-base">Reiniciar Jornada</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-lg bg-destructive/10 flex items-center justify-center">
                 <RefreshCw className="w-6 h-6 text-destructive" />
               </div>
               <div>
@@ -396,12 +396,12 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
             </ul>
             <div className="flex gap-2">
               <button onClick={() => setConfirmReset(null)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-montserrat font-bold bg-muted text-muted-foreground border border-border">
+                className="flex-1 py-2.5 rounded-lg text-sm font-montserrat font-bold bg-muted text-muted-foreground border border-border">
                 Cancelar
               </button>
               <button onClick={() => confirmReset && handleResetJourney(confirmReset)}
                 disabled={resetting}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-montserrat font-bold text-destructive-foreground bg-destructive hover:bg-destructive/90 disabled:opacity-50 transition-colors">
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-montserrat font-bold text-destructive-foreground bg-destructive hover:bg-destructive/90 disabled:opacity-50 transition-colors">
                 <RefreshCw className="w-4 h-4" />
                 {resetting ? "Reiniciando..." : "Reiniciar tudo"}
               </button>
@@ -413,11 +413,11 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
       {/* Active Turmas list */}
       {loading ? (
         <div className="space-y-2">
-          {[1, 2, 3].map(i => <div key={i} className="bg-muted rounded-2xl h-20 animate-pulse" />)}
+          {[1, 2, 3].map(i => <div key={i} className="bg-muted rounded-lg h-20 animate-pulse" />)}
         </div>
       ) : activeTurmas.length === 0 && archivedTurmas.length === 0 ? (
         <div className="text-center py-12">
-          <div className="w-14 h-14 mx-auto rounded-2xl bg-muted flex items-center justify-center mb-3">
+          <div className="w-14 h-14 mx-auto rounded-lg bg-muted flex items-center justify-center mb-3">
             <GraduationCap className="w-7 h-7 text-muted-foreground" />
           </div>
           <p className="text-muted-foreground font-inter text-sm">Nenhuma turma criada ainda.</p>
@@ -430,9 +430,9 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
             <div className="space-y-2">
               {activeTurmas.map(turma => (
                 <div key={turma.id}
-                  className="bg-card border border-border rounded-2xl p-4 hover:border-primary/30 transition-all">
+                  className="bg-card border border-border rounded-lg p-4 hover:border-primary/30 transition-all">
                   <div className="flex items-center gap-4 cursor-pointer" onClick={() => onSelectTurma?.(turma)}>
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                       <GraduationCap className="w-6 h-6 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -460,14 +460,14 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
                     <button
                       onClick={(e) => { e.stopPropagation(); setConfirmArchive(turma); }}
                       disabled={archiving === turma.id}
-                      className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-montserrat font-bold border-2 border-green-500/30 bg-green-500/5 text-green-700 hover:bg-green-500/10 hover:border-green-500/50 transition-all disabled:opacity-50"
+                      className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-montserrat font-bold border-2 border-green-500/30 bg-green-500/5 text-green-700 hover:bg-green-500/10 hover:border-green-500/50 transition-all disabled:opacity-50"
                     >
                       <CheckCircle2 className="w-4 h-4" />
                       Grupo Confirmado
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setConfirmReset(turma); }}
-                      className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-montserrat font-bold border-2 border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/10 hover:border-destructive/50 transition-all"
+                      className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-montserrat font-bold border-2 border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/10 hover:border-destructive/50 transition-all"
                     >
                       <RefreshCw className="w-4 h-4" />
                       Reiniciar Jornada
@@ -489,14 +489,14 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
             <div className="mt-6">
               <button
                 onClick={() => setShowArchive(!showArchive)}
-                className="w-full flex items-center gap-3 py-3 px-4 bg-muted/50 rounded-2xl border border-border hover:bg-muted transition-all"
+                className="w-full flex items-center gap-3 py-3 px-4 bg-muted/50 rounded-lg border border-border hover:bg-muted transition-all"
               >
-                <div className="w-8 h-8 rounded-xl bg-muted flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
                   <Archive className="w-4 h-4 text-muted-foreground" />
                 </div>
                 <div className="flex-1 text-left">
                   <p className="font-montserrat font-bold text-muted-foreground text-sm">Arquivo</p>
-                  <p className="text-muted-foreground font-inter text-[10px]">
+                  <p className="text-muted-foreground font-inter text-xs">
                     {archivedTurmas.length} turma{archivedTurmas.length !== 1 ? "s" : ""} confirmada{archivedTurmas.length !== 1 ? "s" : ""}
                   </p>
                 </div>
@@ -511,15 +511,15 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
                   {archivedTurmas.map(turma => {
                     const pdfData = archivedPdfData[turma.id];
                     return (
-                      <div key={turma.id} className="bg-card/50 border border-border rounded-2xl p-4 opacity-80">
+                      <div key={turma.id} className="bg-card/50 border border-border rounded-lg p-4 opacity-80">
                         <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
+                          <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
                             <Archive className="w-6 h-6 text-muted-foreground" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <p className="font-montserrat font-bold text-foreground text-sm truncate">{turma.name}</p>
-                              <span className="px-2 py-0.5 rounded-full bg-green-500/10 text-green-700 text-[10px] font-montserrat font-bold flex-shrink-0">
+                              <span className="px-2 py-0.5 rounded-full bg-green-500/10 text-green-700 text-xs font-montserrat font-bold flex-shrink-0">
                                 ✓ Confirmado
                               </span>
                             </div>
@@ -529,7 +529,7 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
                           </div>
                           <div className="flex gap-1.5 flex-shrink-0">
                             {pdfData ? (
-                              <TurmaReportPDF participants={pdfData.participants} activities={pdfData.activities} turmaName={turma.name} />
+                              <TurmaReportPDF participants={pdfData.participants} activities={pdfData.activities} turmaName={turma.name} turmaId={turma.id} />
                             ) : (
                               <button
                                 onClick={() => loadArchivedTurmaData(turma.id)}

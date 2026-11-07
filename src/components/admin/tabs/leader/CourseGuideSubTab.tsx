@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
@@ -30,7 +30,7 @@ type PastorInfo = { pastor_name: string; phone: string };
 
 export default function CourseGuideSubTab() {
   const { profile } = useAuth();
-  const { effectiveArea } = useAreaSwitch();
+  const { effectiveArea, effectiveTurmaId } = useAreaSwitch();
   const { toast } = useToast();
   const [courses, setCourses] = useState<Course[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -43,21 +43,34 @@ export default function CourseGuideSubTab() {
   const [savingNotes, setSavingNotes] = useState(false);
   const [pastorInfo, setPastorInfo] = useState<PastorInfo | null>(null);
 
-  useEffect(() => { fetchCourses(); fetchPastor(); }, [effectiveArea]);
-
-  async function fetchPastor() {
+  const fetchPastor = useCallback(async () => {
     const area = effectiveArea || profile?.area;
-    if (!area) return;
-    const { data } = await supabase.from("area_pastors").select("pastor_name, phone").eq("area", area).maybeSingle();
-    if (data) setPastorInfo(data);
-  }
+    if (!area || !profile?.church_id) {
+      setPastorInfo(null);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("area_pastors")
+      .select("pastor_name, phone")
+      .eq("church_id", profile.church_id)
+      .eq("area", area)
+      .maybeSingle();
+    if (error) {
+      setPastorInfo(null);
+      toast({ title: "Não foi possível carregar o contato pastoral", description: error.message, variant: "destructive" });
+      return;
+    }
+    setPastorInfo(data ?? null);
+  }, [effectiveArea, profile?.area, profile?.church_id, toast]);
 
-  async function fetchCourses() {
+  const fetchCourses = useCallback(async () => {
     setLoading(true);
     const { data } = await supabase.from("courses").select("id, title, order_num").order("order_num");
     setCourses(data ?? []);
     setLoading(false);
-  }
+  }, []);
+
+  useEffect(() => { fetchCourses(); fetchPastor(); }, [fetchCourses, fetchPastor]);
 
   async function selectCourse(course: Course) {
     setSelectedCourse(course);
@@ -73,15 +86,25 @@ export default function CourseGuideSubTab() {
     setSelectedLesson(lesson);
     setLoading(true);
     const area = effectiveArea || profile?.area;
-    const [{ data: guideData }, { data: notesData }] = await Promise.all([
+    let notesQuery = supabase.from("leader_meeting_notes")
+      .select("*")
+      .eq("lesson_id", lesson.id)
+      .eq("church_id", profile?.church_id ?? "");
+    notesQuery = effectiveTurmaId
+      ? notesQuery.eq("turma_id", effectiveTurmaId)
+      : notesQuery.is("turma_id", null).eq("area", area);
+
+    const [{ data: guideData, error: guideError }, { data: notesData, error: notesError }] = await Promise.all([
       supabase.from("leader_guide").select("*").eq("lesson_id", lesson.id).maybeSingle(),
-      supabase.from("leader_meeting_notes")
-        .select("*")
-        .eq("lesson_id", lesson.id)
-        .eq("church_id", profile?.church_id ?? null)
-        .eq("area", area as any)
-        .maybeSingle(),
+      notesQuery.maybeSingle(),
     ]);
+    if (guideError || notesError) {
+      toast({
+        title: "Não foi possível carregar o guia",
+        description: (guideError ?? notesError)?.message,
+        variant: "destructive",
+      });
+    }
     setContent(guideData ? {
       greeting: guideData.greeting || "",
       icebreaker: guideData.icebreaker || "",
@@ -108,13 +131,18 @@ export default function CourseGuideSubTab() {
       leader_id: profile.user_id,
       lesson_id: selectedLesson.id,
       church_id: profile.church_id || null,
-      area: (effectiveArea || profile.area) as any,
+      area: effectiveArea || profile.area,
+      turma_id: effectiveTurmaId ?? null,
       participation_notes: notes.participation_notes,
       questions_notes: notes.questions_notes,
       pastoral_care_notes: notes.pastoral_care_notes,
       follow_up_notes: notes.follow_up_notes,
       spiritual_notes: notes.spiritual_notes,
-    }, { onConflict: "lesson_id,church_id,area" });
+    }, {
+      onConflict: effectiveTurmaId
+        ? "lesson_id,church_id,turma_id"
+        : "lesson_id,church_id,area",
+    });
     setSavingNotes(false);
     if (error) {
       toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
@@ -140,9 +168,9 @@ export default function CourseGuideSubTab() {
         </button>
 
         {/* Hero */}
-        <div className="rounded-2xl overflow-hidden" style={{ background: "var(--gradient-hero)" }}>
+        <div className="rounded-lg overflow-hidden" style={{ background: "var(--gradient-hero)" }}>
           <div className="px-5 py-5">
-            <p className="text-primary-foreground/60 font-inter text-[10px] uppercase tracking-wider font-semibold mb-1">
+            <p className="text-primary-foreground/60 font-inter text-xs uppercase tracking-wider font-semibold mb-1">
               📘 Folha do Líder — {selectedCourse?.title}
             </p>
             <h2 className="font-montserrat font-black text-primary-foreground text-lg">
@@ -178,7 +206,7 @@ export default function CourseGuideSubTab() {
             <div className="flex flex-wrap gap-2">
               {content.bible_texts.map(text => (
                 <button key={text} onClick={() => setBibleRef(text)}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-primary/10 rounded-xl text-primary font-inter text-sm font-medium hover:bg-primary/20 transition-colors">
+                  className="flex items-center gap-1.5 px-3 py-2 bg-primary/10 rounded-lg text-primary font-inter text-sm font-medium hover:bg-primary/20 transition-colors">
                   <span>📖</span><span>{text}</span>
                 </button>
               ))}
@@ -213,7 +241,7 @@ export default function CourseGuideSubTab() {
         )}
 
         {/* ===== LEADER NOTES ===== */}
-        <div className="bg-card rounded-2xl border-2 border-primary/20 overflow-hidden shadow-sm">
+        <div className="bg-card rounded-lg border-2 border-primary/20 overflow-hidden shadow-sm">
           <div className="px-4 py-3 border-b border-border bg-primary/5 flex items-center gap-2">
             <Pen className="w-4 h-4 text-primary" />
             <p className="font-montserrat font-bold text-foreground text-sm">📝 Anotações do Líder</p>
@@ -225,7 +253,7 @@ export default function CourseGuideSubTab() {
             <NoteField label="Aplicações importantes para próximos encontros" value={notes.follow_up_notes} onChange={v => setNotes(n => ({ ...n, follow_up_notes: v }))} />
             <NoteField label="Observações espirituais" value={notes.spiritual_notes} onChange={v => setNotes(n => ({ ...n, spiritual_notes: v }))} />
 
-            <Button onClick={handleSaveNotes} disabled={savingNotes} className="w-full rounded-2xl h-11 font-montserrat font-bold">
+            <Button onClick={handleSaveNotes} disabled={savingNotes} className="w-full rounded-lg h-11 font-montserrat font-bold">
               <Save className="w-4 h-4 mr-2" />
               {savingNotes ? "Salvando..." : "Salvar Anotações"}
             </Button>
@@ -236,7 +264,7 @@ export default function CourseGuideSubTab() {
         {pastorInfo && pastorInfo.phone && (
           <button
             onClick={openPastorWhatsApp}
-            className="w-full flex items-center justify-center gap-3 p-4 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-montserrat font-bold text-sm transition-all shadow-lg"
+            className="w-full flex items-center justify-center gap-3 p-4 rounded-lg bg-green-600 hover:bg-green-700 text-white font-montserrat font-bold text-sm transition-all shadow-lg"
           >
             <Phone className="w-5 h-5" />
             Pedir ajuda ao Pastor {pastorInfo.pastor_name}
@@ -264,8 +292,8 @@ export default function CourseGuideSubTab() {
           <div className="space-y-2">
             {lessons.map(lesson => (
               <button key={lesson.id} onClick={() => selectLesson(lesson)}
-                className="w-full flex items-center gap-3 p-4 bg-card rounded-2xl border border-border shadow-sm hover:border-primary/30 hover:bg-primary/5 transition-all">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "var(--gradient-hero)" }}>
+                className="w-full flex items-center gap-3 p-4 bg-card rounded-lg border border-border shadow-sm hover:border-primary/30 hover:bg-primary/5 transition-all">
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "var(--gradient-hero)" }}>
                   <span className="font-montserrat font-black text-primary-foreground text-sm">{lesson.order_num}</span>
                 </div>
                 <div className="text-left flex-1 min-w-0">
@@ -294,8 +322,8 @@ export default function CourseGuideSubTab() {
         <div className="space-y-3">
           {courses.map(course => (
             <button key={course.id} onClick={() => selectCourse(course)}
-              className="w-full flex items-center gap-4 p-5 bg-card rounded-2xl border border-border shadow-sm hover:border-primary/30 hover:bg-primary/5 transition-all">
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "var(--gradient-hero)" }}>
+              className="w-full flex items-center gap-4 p-5 bg-card rounded-lg border border-border shadow-sm hover:border-primary/30 hover:bg-primary/5 transition-all">
+              <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "var(--gradient-hero)" }}>
                 <BookOpen className="w-5 h-5 text-primary-foreground" />
               </div>
               <div className="text-left flex-1">
@@ -313,7 +341,7 @@ export default function CourseGuideSubTab() {
 
 function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+    <div className="bg-card rounded-lg border border-border overflow-hidden shadow-sm">
       <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
         {icon}
         <p className="font-montserrat font-bold text-foreground text-sm">{title}</p>
@@ -331,7 +359,7 @@ function NoteField({ label, value, onChange }: { label: string; value: string; o
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={`Registre aqui...`}
-        className="text-sm border-border rounded-xl resize-none min-h-[70px]"
+        className="text-sm border-border rounded-lg resize-none min-h-[70px]"
       />
     </div>
   );

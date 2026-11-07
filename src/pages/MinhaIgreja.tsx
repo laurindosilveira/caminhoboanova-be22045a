@@ -17,13 +17,15 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { PlanGate } from "@/components/auth/PlanGate";
+import type { Database, Json } from "@/integrations/supabase/types";
+import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 
 interface Invoice {
   id: string;
   number: string | null;
   amount: number;
   currency: string;
-  status: string;
+  status: string | null;
   created: string;
   pdf: string | null;
   hosted_url: string | null;
@@ -38,12 +40,16 @@ interface SubData {
   invoices: Invoice[];
 }
 
-interface AuditLog {
-  id: string;
-  action: string;
-  created_at: string;
-  details: any;
-}
+type AuditLog = Database["public"]["Tables"]["church_audit_logs"]["Row"];
+type ChurchSubscription = Database["public"]["Tables"]["church_subscriptions"]["Row"];
+
+const getUnlockedFeatures = (details: Json | null): string[] => {
+  if (!details || Array.isArray(details) || typeof details !== "object") return [];
+  const unlocked = details.unlocked;
+  return Array.isArray(unlocked)
+    ? unlocked.filter((feature): feature is string => typeof feature === "string")
+    : [];
+};
 
 interface UserStats {
   total_users: number;
@@ -56,7 +62,7 @@ export default function MinhaIgreja() {
   const { user, profile, role, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [subData, setSubData] = useState<SubData | null>(null);
-  const [dbSub, setDbSub] = useState<any>(null);
+  const [dbSub, setDbSub] = useState<ChurchSubscription | null>(null);
   const [memberStats, setMemberStats] = useState<UserStats | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +86,7 @@ export default function MinhaIgreja() {
         { data: cData, error: cError },
         { data: dbSubscriptionData }
       ] = await Promise.all([
-        supabase.functions.invoke("check-subscription"),
+        supabase.functions.invoke<SubData>("check-subscription"),
         supabase.rpc("get_church_user_stats", { p_church_id: profile.church_id }),
         supabase.from('church_audit_logs').select('*').order('created_at', { ascending: false }).limit(10),
         supabase.from('churches').select('*').eq('id', profile.church_id).single(),
@@ -90,7 +96,7 @@ export default function MinhaIgreja() {
       if (sError) throw sError;
       setSubData(sData);
       setDbSub(dbSubscriptionData);
-      setAuditLogs((aLogs as AuditLog[]) || []);
+      setAuditLogs(aLogs || []);
       
       if (cData) {
         setBranding({
@@ -104,7 +110,7 @@ export default function MinhaIgreja() {
       if (uStats) {
         setMemberStats(uStats[0] || null);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error checking subscription:", err);
       toast({ title: "Erro", description: "Não foi possível verificar a assinatura.", variant: "destructive" });
     } finally {
@@ -122,7 +128,7 @@ export default function MinhaIgreja() {
       .on(
         'postgres_changes', 
         { event: '*', schema: 'public', table: 'church_subscriptions', filter: `church_id=eq.${profile.church_id}` }, 
-        (payload: any) => {
+        (payload: RealtimePostgresChangesPayload<ChurchSubscription>) => {
           const eventId = payload.new?.last_webhook_event_id;
           if (eventId && eventId === lastProcessedEvent) return;
           lastProcessedEvent = eventId;
@@ -168,8 +174,8 @@ export default function MinhaIgreja() {
         .eq("id", profile.church_id);
       if (error) throw error;
       toast({ title: "Sucesso", description: "Configurações de marca atualizadas com sucesso." });
-      await supabase.rpc('log_church_audit', { p_church_id: profile.church_id, p_action: 'branding_updated', p_details: { name: branding.name } });
-    } catch (err: any) {
+      await supabase.rpc('log_my_church_audit', { p_action: 'branding_updated', p_details: { name: branding.name } });
+    } catch {
       toast({ title: "Erro", description: "Não foi possível salvar as configurações.", variant: "destructive" });
     } finally {
       setSavingBranding(false);
@@ -180,11 +186,11 @@ export default function MinhaIgreja() {
     if (isMembro) return;
     setPortalLoading(true);
     try {
-      if (profile?.church_id) await supabase.rpc('log_church_audit', { p_church_id: profile.church_id, p_action: action });
-      const { data, error } = await supabase.functions.invoke("customer-portal");
+      if (profile?.church_id) await supabase.rpc('log_my_church_audit', { p_action: action });
+      const { data, error } = await supabase.functions.invoke<{ url?: string }>("customer-portal");
       if (error) throw error;
       if (data?.url) window.open(data.url, "_blank");
-    } catch (err: any) {
+    } catch {
       toast({ title: "Erro", description: "Não foi possível abrir o portal de pagamentos.", variant: "destructive" });
     } finally {
       setPortalLoading(false);
@@ -219,6 +225,23 @@ export default function MinhaIgreja() {
     : planKey === "Premium" 
       ? { name: "Premium", price: "R$ 0", period: "Vitalício" }
       : null;
+
+  const subscriptionStatus = isUnlimited
+    ? "active"
+    : subData?.subscription_status || dbSub?.subscription_status || null;
+  const requiresPayment = ["blocked", "paused", "past_due", "unpaid"].includes(subscriptionStatus || "");
+  const subscriptionLabel = isUnlimited || subscriptionStatus === "active"
+    ? "Ativa"
+    : subscriptionStatus === "trial"
+      ? "Teste grátis"
+      : requiresPayment
+        ? "Aguardando pagamento"
+        : "Pendente";
+  const portalButtonLabel = subscriptionStatus === "trial"
+    ? "Adicionar cartão para continuar"
+    : requiresPayment
+      ? "Adicionar pagamento e reativar"
+      : "Gerenciar assinatura";
 
   const features = getFeaturesForPlan(planKey);
 
@@ -255,8 +278,8 @@ export default function MinhaIgreja() {
           <ArrowLeft className="w-5 h-5 text-foreground" />
         </button>
         <div>
-          <h1 className="font-montserrat font-black text-xl text-foreground">⛪ {(profile as any)?.churches?.name || profile?.community || "Minha Igreja"}</h1>
-          <p className="text-muted-foreground text-[10px] font-inter uppercase font-bold tracking-wider">{role === 'admin' ? 'Administrador' : role === 'lider' ? 'Líder de Área' : 'Membro'}</p>
+          <h1 className="font-montserrat font-black text-xl text-foreground">⛪ {profile?.churches?.name || profile?.community || "Minha Igreja"}</h1>
+          <p className="text-muted-foreground text-xs font-inter uppercase font-bold tracking-wider">{role === 'admin' ? 'Administrador' : role === 'lider' ? 'Líder de Área' : 'Membro'}</p>
         </div>
         <div className="ml-auto flex gap-2">
           {!isMembro && (
@@ -264,7 +287,7 @@ export default function MinhaIgreja() {
               variant="outline" 
               size="sm" 
               onClick={handleExportUsers}
-              className="h-9 rounded-xl text-[10px] font-bold hidden sm:flex"
+              className="h-9 rounded-xl text-xs font-bold hidden sm:flex"
             >
               <Download className="w-3.5 h-3.5 mr-1.5" />
               Exportar
@@ -275,7 +298,7 @@ export default function MinhaIgreja() {
             size="sm" 
             onClick={fetchSubscription} 
             disabled={loading}
-            className="h-9 rounded-xl text-[10px] font-bold"
+            className="h-9 rounded-xl text-xs font-bold"
           >
             <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? "animate-spin" : ""}`} />
             Sincronizar Status
@@ -302,10 +325,19 @@ export default function MinhaIgreja() {
                     </div>
                     <div className="text-right bg-white/40 backdrop-blur-sm px-3 py-1.5 rounded-xl border border-primary/10">
                       <span className="text-xl font-black text-primary block leading-none">{Math.max(0, Math.ceil((new Date(subData.subscription_end).getTime() - Date.now()) / 86400000))}</span>
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold">dias rest.</p>
+                      <p className="text-xs text-muted-foreground uppercase font-bold">dias rest.</p>
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {requiresPayment && (
+              <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4">
+                <p className="font-montserrat text-sm font-bold text-amber-800 dark:text-amber-200">Seu acesso está pausado</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Adicione uma forma de pagamento no portal da Stripe e selecione “Iniciar assinatura” para liberar o aplicativo novamente.
+                </p>
               </div>
             )}
 
@@ -314,10 +346,10 @@ export default function MinhaIgreja() {
                 <div className="flex items-center justify-between">
                   <CardTitle className="font-montserrat text-lg flex items-center gap-2">
                     <ShieldCheck className="w-5 h-5 text-primary" />
-                    Plano Ativo
+                    Plano & Assinatura
                   </CardTitle>
-                  <Badge variant={isUnlimited || subData?.subscription_status === 'active' ? 'default' : 'secondary'} className="font-semibold">
-                    {isUnlimited || subData?.subscription_status === 'active' ? 'Ativa' : 'Pendente'}
+                  <Badge variant={isUnlimited || subscriptionStatus === 'active' ? 'default' : 'secondary'} className="font-semibold">
+                    {subscriptionLabel}
                   </Badge>
                 </div>
               </CardHeader>
@@ -328,13 +360,13 @@ export default function MinhaIgreja() {
                       <Church className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold leading-none mb-1">Plano Atual</p>
+                      <p className="text-xs text-muted-foreground uppercase font-bold leading-none mb-1">Plano Atual</p>
                       <p className="font-montserrat font-bold text-base text-foreground">{planInfo?.name || "Personalizado"}</p>
                     </div>
                   </div>
                   <div className="text-right">
                     <p className="font-montserrat font-bold text-lg text-primary leading-none">{planInfo?.price || "--"}</p>
-                    <p className="text-[9px] text-muted-foreground font-inter uppercase font-bold tracking-wider">{planInfo?.period || ""}</p>
+                    <p className="text-xs text-muted-foreground font-inter uppercase font-bold tracking-wider">{planInfo?.period || ""}</p>
                   </div>
                 </div>
 
@@ -352,7 +384,7 @@ export default function MinhaIgreja() {
                         </span>
                       </div>
                       {feat.value && (
-                        <Badge variant="secondary" className="text-[9px] font-bold">{feat.value}</Badge>
+                        <Badge variant="secondary" className="text-xs font-bold">{feat.value}</Badge>
                       )}
                       {!feat.active && (
                         <Zap className="w-3.5 h-3.5 text-primary/40" />
@@ -365,15 +397,15 @@ export default function MinhaIgreja() {
                   <div className="space-y-4 pt-2">
                     <div className="grid grid-cols-3 gap-2">
                       <div className="bg-card border border-border/50 p-2 rounded-xl text-center">
-                        <p className="text-[9px] text-muted-foreground uppercase font-bold">Ativos</p>
+                        <p className="text-xs text-muted-foreground uppercase font-bold">Ativos</p>
                         <p className="text-sm font-black text-brand-green">{memberStats.active_users}</p>
                       </div>
                       <div className="bg-card border border-border/50 p-2 rounded-xl text-center">
-                        <p className="text-[9px] text-muted-foreground uppercase font-bold">Pendentes</p>
+                        <p className="text-xs text-muted-foreground uppercase font-bold">Pendentes</p>
                         <p className="text-sm font-black text-warning">{memberStats.pending_users}</p>
                       </div>
                       <div className="bg-card border border-border/50 p-2 rounded-xl text-center">
-                        <p className="text-[9px] text-muted-foreground uppercase font-bold">Total</p>
+                        <p className="text-xs text-muted-foreground uppercase font-bold">Total</p>
                         <p className="text-sm font-black text-foreground">{memberStats.total_users}</p>
                       </div>
                     </div>
@@ -389,7 +421,7 @@ export default function MinhaIgreja() {
                           style={{ width: `${isUnlimited ? 100 : (memberStats.member_limit ? Math.min(100, (memberStats.total_users / memberStats.member_limit) * 100) : 100)}%` }} 
                         />
                       </div>
-                      <p className="text-[9px] text-muted-foreground leading-tight italic">
+                      <p className="text-xs text-muted-foreground leading-tight italic">
                         * O limite do plano considera usuários ativos e pendentes para garantir a segurança da plataforma.
                       </p>
                     </div>
@@ -399,7 +431,7 @@ export default function MinhaIgreja() {
                 {!isMembro && (
                   <div className="pt-2">
                     <Button onClick={() => handleManageSubscription()} disabled={portalLoading} variant="default" className="w-full h-11 rounded-xl shadow-md font-bold">
-                      {portalLoading ? "Processando..." : "Gerenciar no Stripe"}
+                      {portalLoading ? "Processando..." : portalButtonLabel}
                       <ExternalLink className="w-4 h-4 ml-2" />
                     </Button>
                   </div>
@@ -466,7 +498,9 @@ export default function MinhaIgreja() {
           <CardContent className="p-0 overflow-hidden">
             {auditLogs.length > 0 ? (
               <div className="divide-y divide-border">
-                {auditLogs.map((log) => (
+                {auditLogs.map((log) => {
+                  const unlockedFeatures = getUnlockedFeatures(log.details);
+                  return (
                   <div key={log.id} className="px-4 py-3 flex items-start justify-between gap-3 bg-card/50">
                     <div className="flex-1 min-w-0">
                       <p className="text-[11px] font-bold text-foreground uppercase tracking-wider truncate">
@@ -482,16 +516,17 @@ export default function MinhaIgreja() {
                         {log.action === 'payment_failed' && 'Falha no pagamento'}
                         {!['trial_alert_shown', 'portal_opened', 'portal_opened_for_cancel', 'alert_snoozed', 'subscription_created', 'subscription_updated', 'plan_changed', 'branding_updated', 'invoice_paid', 'payment_failed'].includes(log.action) && log.action}
                       </p>
-                      <p className="text-[10px] text-muted-foreground">{new Date(log.created_at).toLocaleString('pt-BR')}</p>
-                      {log.action === 'plan_changed' && log.details?.unlocked?.length > 0 && (
-                        <p className="text-[9px] text-brand-green font-medium mt-1">
-                          Recursos liberados: {log.details.unlocked.join(', ')}
+                      <p className="text-xs text-muted-foreground">{new Date(log.created_at).toLocaleString('pt-BR')}</p>
+                      {log.action === 'plan_changed' && unlockedFeatures.length > 0 && (
+                        <p className="text-xs text-brand-green font-medium mt-1">
+                          Recursos liberados: {unlockedFeatures.join(', ')}
                         </p>
                       )}
                     </div>
                     <Badge variant="outline" className="text-[8px] h-4">AUDITORIA</Badge>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="p-8 text-center"><p className="text-muted-foreground font-inter text-xs">Nenhuma atividade registrada.</p></div>
@@ -512,7 +547,7 @@ export default function MinhaIgreja() {
                 <FileText className="w-5 h-5 text-muted-foreground" />
                 <div>
                   <p className="font-inter font-semibold text-sm">{inv.number || inv.id.slice(0, 12)}</p>
-                  <p className="text-muted-foreground text-[10px]">{formatDate(inv.created)}</p>
+                  <p className="text-muted-foreground text-xs">{formatDate(inv.created)}</p>
                 </div>
               </div>
               <div className="text-right">

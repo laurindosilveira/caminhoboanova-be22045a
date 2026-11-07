@@ -181,7 +181,7 @@ export default function ExportData() {
 
   async function fetchAllData() {
     const sections = await Promise.all(MIGRATION_TABLES.map(async (table) => {
-      const { data, error } = await (supabase.from as any)(table).select("*");
+      const { data, error } = await supabase.from(table).select("*");
       if (error) {
         return `-- ${table}: ignorado na exportacao (${error.message})\n\n`;
       }

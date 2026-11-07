@@ -2,11 +2,13 @@ import { lazy, Suspense, useCallback, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { Heart, GraduationCap, Sparkles, Lock, ClipboardList, BookOpen, ArrowLeft, ChevronRight, AlertCircle, RotateCcw, Clock } from "lucide-react";
+import { Heart, GraduationCap, Sparkles, Lock, ClipboardList, BookOpen, ChevronRight, AlertCircle, RotateCcw, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAgendaSchedule } from "@/hooks/useAgendaSchedule";
 import { toast } from "sonner";
-import { cachedStudentQuery, getPendingStudentOverlay, mergeByKey } from "@/lib/studentOffline";
+import { cachedStudentQuery, getPendingStudentOverlay, invalidateCachedStudentQueries, mergeByKey } from "@/lib/studentOffline";
+import { isEventVisibleInGroupScope } from "@/lib/eventScope";
+import { getCourseIdsByMode, isCourseVisibleInJourney, resolveCourseUnlocks } from "@/lib/courseAccess";
 
 import { computeHealth, type Assessment, type Plan, type Activity, type Progress, type Lesson, type Course, type Module, type LearningTrack, type AttendanceRecord, type EventRecord } from "./discipleship/shared";
 import DiscipleshipHero from "./discipleship/DiscipleshipHero";
@@ -23,7 +25,6 @@ const LessonContentEditor = lazy(() => import("@/components/admin/tabs/LessonCon
 const LessonDevotionalEditor = lazy(() => import("@/components/admin/tabs/LessonDevotionalEditor"));
 const LessonChoiceView = lazy(() => import("@/components/home/LessonChoiceView"));
 const ResourceLibrary = lazy(() => import("@/components/home/ResourceLibrary"));
-const LeaderRoomSection = lazy(() => import("@/components/home/LeaderRoomSection"));
 const NovoCursoModal = lazy(() => import("@/components/home/NovoCursoModal"));
 
 const LazySectionFallback = () => (
@@ -64,7 +65,17 @@ type LessonProgressRow = { lesson_id: string };
 type DevotionalContentIndexRow = { id: string; lesson_id: string | null; day_number: number | null; title: string | null };
 type DevotionalProgressRow = { devotional_id: string };
 type WorshipAttendanceRow = { id: string };
-type CourseUnlockRow = { course_id: string };
+type ScopedEventRecord = EventRecord & {
+  area: string | null;
+  turma_id: string | null;
+  target_user_id: string | null;
+};
+type CourseUnlockRow = {
+  course_id: string;
+  area: string;
+  turma_id: string | null;
+  access_mode: "open" | "scheduled" | string;
+};
 type LessonOverrideRow = {
   id: string;
   lesson_id: string;
@@ -81,11 +92,12 @@ type RecoveryReleaseRow = {
 };
 
 export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "choice", onTargetLessonConsumed }: DiscipleshipTabProps = {}) {
-  const { profile, role, isSuper, signOut } = useAuth();
-  const { effectiveArea } = useAreaSwitch();
+  const { profile, role, isSuper, signOut, user } = useAuth();
+  const { effectiveArea, effectiveTurmaId, switchNonce } = useAreaSwitch();
   const isLeaderOrAdmin = role === "admin" || role === "lider";
   const agendaSchedule = useAgendaSchedule();
   const currentArea = effectiveArea || profile?.area || "";
+  const currentTurmaId = effectiveTurmaId ?? profile?.turma_id ?? null;
 
   const [subTab, setSubTab] = useState<SubTab>("trilha");
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -110,6 +122,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
   const [allAssessments, setAllAssessments] = useState<Assessment[]>([]);
   const [worshipCount, setWorshipCount] = useState(0);
   const [unlockedCourseIds, setUnlockedCourseIds] = useState<Set<string>>(new Set());
+  const [openAccessCourseIds, setOpenAccessCourseIds] = useState<Set<string>>(new Set());
   const [manualLessonOverrideMap, setManualLessonOverrideMap] = useState<Map<string, { id: string; custom_points: number | null }>>(new Map());
   const [activeRecovery, setActiveRecovery] = useState<RecoveryReleaseRow | null>(null);
   const [recoveryLessonIds, setRecoveryLessonIds] = useState<Set<string>>(new Set());
@@ -121,7 +134,6 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
   const [helpMessage, setHelpMessage] = useState("");
   const [helpSending, setHelpSending] = useState(false);
   const [helpSent, setHelpSent] = useState(false);
-  const [showLeaderRoom, setShowLeaderRoom] = useState(false);
   const [showLatePendingList, setShowLatePendingList] = useState(false);
 
   const [form, setForm] = useState({
@@ -139,14 +151,15 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
 
   const fetchAll = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const scope = `student:${user.id}:${profile?.church_id ?? "global"}:${currentArea || "all"}`;
+    const scope = `student:${user.id}:${profile?.church_id ?? "global"}:${currentTurmaId ?? "no-turma"}:${currentArea || "all"}`;
+    if (silent) invalidateCachedStudentQueries(scope);
     const [
       actsRes, progRes, assessRes, planRes, coursesRes, lessonsRes, responsesRes, eventsRes,
       attendanceRes, allAssessRes, devContentRes, devProgressRes, worshipRes, unlocksRes,
-      lessonOverrideRes, modulesRes, tracksRes, trackReleasesRes, recoveryReleaseRes, recoveryDevotionalOverrideRes,
+      lessonOverrideRes, modulesRes, tracksRes, globalReleasesRes, trackReleasesRes,
+      recoveryReleaseRes, recoveryDevotionalOverrideRes,
     ] = await Promise.all([
       cachedStudentQuery<Activity[]>(`${scope}:activities`, () => supabase.from("activities").select("id, type, title, points"), []),
       cachedStudentQuery<Progress[]>(`${scope}:user_progress`, () => supabase.from("user_progress").select("activity_id").eq("user_id", user.id), []),
@@ -155,16 +168,23 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       cachedStudentQuery<CourseRow[]>(`${scope}:courses`, () => profile?.church_id ? supabase.from("courses").select("*").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("courses").select("*").is("church_id", null).order("order_num"), []),
       cachedStudentQuery<Lesson[]>(`${scope}:lessons`, () => profile?.church_id ? supabase.from("lessons").select("id, title, order_num, objective, topics, course_id, church_id, module_id").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("lessons").select("id, title, order_num, objective, topics, course_id, church_id, module_id").is("church_id", null).order("order_num"), []),
       cachedStudentQuery<LessonProgressRow[]>(`${scope}:lesson_progress`, () => supabase.from("lesson_progress").select("lesson_id").eq("user_id", user.id).eq("is_completed", true), []),
-      cachedStudentQuery<EventRecord[]>(`${scope}:events:recent`, () => supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false }).limit(10), []),
+      cachedStudentQuery<ScopedEventRecord[]>(`${scope}:events:recent`, () => supabase.from("events").select("id, title, event_date, type, area, turma_id, target_user_id").order("event_date", { ascending: false }).limit(50), []),
       cachedStudentQuery<AttendanceRecord[]>(`${scope}:attendance`, () => supabase.from("attendance").select("event_id, status").eq("user_id", user.id), []),
       cachedStudentQuery<Assessment[]>(`${scope}:spiritual_assessments`, () => supabase.from("spiritual_assessments").select("*").eq("user_id", user.id).order("year", { ascending: true }).order("month", { ascending: true }), []),
       cachedStudentQuery<DevotionalContentIndexRow[]>(`${scope}:devotional_content:index`, () => supabase.from("devotional_content").select("id, lesson_id, day_number, title").not("lesson_id", "is", null), []),
       cachedStudentQuery<DevotionalProgressRow[]>(`${scope}:devotional_progress`, () => supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id), []),
       cachedStudentQuery<WorshipAttendanceRow[]>(`${scope}:worship_attendance`, () => supabase.from("worship_attendance").select("id").eq("user_id", user.id).eq("status", "aprovado"), []),
-      cachedStudentQuery<CourseUnlockRow[]>(`${scope}:course_unlocks`, () => supabase.from("course_unlocks").select("course_id").eq("area", currentArea), []),
+      cachedStudentQuery<CourseUnlockRow[]>(`${scope}:course_unlocks`, () =>
+        profile?.church_id
+          ? supabase.from("course_unlocks").select("course_id, area, turma_id, access_mode").eq("church_id", profile.church_id)
+          : supabase.from("course_unlocks").select("course_id, area, turma_id, access_mode").is("church_id", null),
+      []),
       cachedStudentQuery<LessonOverrideRow[]>(`${scope}:lesson_overrides`, () => supabase.from("user_lesson_overrides").select("id, lesson_id, custom_points, available_from, available_until, is_unlocked, recovery_release_id").eq("user_id", user.id), []),
       cachedStudentQuery<ModuleRow[]>(`${scope}:modules`, () => profile?.church_id ? supabase.from("modules").select("id, course_id, title, order_num, church_id").or(`church_id.is.null,church_id.eq.${profile.church_id}`).order("order_num") : supabase.from("modules").select("id, course_id, title, order_num, church_id").is("church_id", null).order("order_num"), []),
       cachedStudentQuery<LearningTrack[]>(`${scope}:learning_tracks`, () => supabase.from("learning_tracks").select("id, name, description, order_num").order("order_num"), []),
+      profile?.church_id
+        ? cachedStudentQuery<{ course_id: string }[]>(`${scope}:global_course_releases`, () => supabase.from("global_course_releases").select("course_id").eq("church_id", profile.church_id!), [])
+        : Promise.resolve({ data: [] as { course_id: string }[] }),
       profile?.church_id
         ? cachedStudentQuery<{ track_id: string }[]>(`${scope}:track_releases`, () => supabase.from("track_church_releases").select("track_id").eq("church_id", profile.church_id!), [])
         : Promise.resolve({ data: [] as { track_id: string }[] }),
@@ -180,17 +200,28 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     const coursesData = coursesRes.data;
     const lessonsData = lessonsRes.data;
     const responsesData = mergeByKey<LessonProgressRow>(responsesRes.data, overlay.lessonProgress, "lesson_id");
-    const eventsData = eventsRes.data;
+    const eventsData = (eventsRes.data ?? [])
+      .filter((event) => isEventVisibleInGroupScope(event, {
+        turmaId: currentTurmaId,
+        area: currentArea,
+        userId: user.id,
+      }))
+      .slice(0, 10);
     const attendanceData = mergeByKey<AttendanceRecord>(attendanceRes.data, overlay.attendance, "event_id");
     const allAssess = allAssessRes.data;
     const devContentData = devContentRes.data;
     const devProgressData = mergeByKey<DevotionalProgressRow>(devProgressRes.data, overlay.devotionalProgress, "devotional_id");
     const worshipData = [...worshipRes.data, ...overlay.worshipAttendance];
-    const unlocksData = unlocksRes.data;
+    const resolvedUnlocks = resolveCourseUnlocks(unlocksRes.data ?? [], {
+      turmaId: currentTurmaId,
+      area: currentArea || null,
+    });
     const lessonOverrideData = lessonOverrideRes.data;
     const modulesData = modulesRes.data;
     const tracksData = tracksRes.data;
+    const globallyReleasedCourseIds = new Set((globalReleasesRes.data ?? []).map((release) => release.course_id));
     const releasedTrackIds = new Set((trackReleasesRes.data ?? []).map((release) => release.track_id));
+    const unlockedSet = new Set(resolvedUnlocks.keys());
     const recoveryRelease = (recoveryReleaseRes.data ?? []).find((release) =>
       !release.ended_at && new Date(release.available_until) > new Date()
     ) ?? null;
@@ -233,9 +264,13 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     setFullyCompletedLessonIds(fullyDone);
 
     const visibleCourseRows = (coursesData ?? []).filter((course) =>
-      course.track_id === null
-      || isSuper
-      || releasedTrackIds.has(course.track_id)
+      isCourseVisibleInJourney(course, {
+        churchId: profile?.church_id ?? null,
+        isSuper,
+        unlockedCourseIds: unlockedSet,
+        releasedCourseIds: globallyReleasedCourseIds,
+        releasedTrackIds,
+      }),
     );
     const courseList = visibleCourseRows.map(c => {
       const courseModules = (modulesData ?? [])
@@ -254,7 +289,8 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     setLearningTracks((tracksData ?? []).filter((track) =>
       isSuper || releasedTrackIds.has(track.id)
     ));
-    setUnlockedCourseIds(new Set((unlocksData ?? []).map((u) => u.course_id)));
+    setUnlockedCourseIds(unlockedSet);
+    setOpenAccessCourseIds(getCourseIdsByMode(resolvedUnlocks, "open"));
     const nowIso = new Date();
     const activeLessonOverrides = new Map<string, { id: string; custom_points: number | null }>();
     (lessonOverrideData ?? []).forEach((item) => {
@@ -279,7 +315,6 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
         )
         .map((item) => item.devotional_id),
     ));
-    const unlockedSet = new Set((unlocksData ?? []).map((u) => u.course_id));
     const firstUnlocked = courseList.find(c => unlockedSet.has(c.id));
     if (firstUnlocked) setExpandedCourse(firstUnlocked.id);
     else if (courseList.length > 0) setExpandedCourse(courseList[0].id);
@@ -289,9 +324,9 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
     setAllAssessments((allAssess ?? []) as Assessment[]);
     setWorshipCount((worshipData ?? []).length);
     if (!silent) setLoading(false);
-  }, [currentArea, isSuper, month, profile?.church_id, year]);
+  }, [currentArea, currentTurmaId, isSuper, month, profile?.church_id, user, year]);
 
-  useEffect(() => { void fetchAll(); }, [fetchAll]);
+  useEffect(() => { void fetchAll(); }, [fetchAll, switchNonce]);
 
   useEffect(() => {
     const refresh = () => {
@@ -326,8 +361,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
 
   async function handleSaveAssessment() {
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) { setSaving(false); return; }
     const health = computeHealth({
       ...form,
       id: "",
@@ -353,7 +387,6 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
   async function handleSendHelp() {
     if (!helpType) return;
     setHelpSending(true);
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setHelpSending(false); return; }
     await supabase.from("spiritual_assessments").upsert({
       user_id: user.id, month, year,
@@ -581,7 +614,10 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
       );
     }
     if (selectedLessonMode === "study") {
-      const isLateAccessStudy = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id);
+      const isLateAccessStudy = !isLeaderOrAdmin
+        && !openAccessCourseIds.has(selectedLesson.course_id)
+        && agendaSchedule.lateAccessLessonIds.has(selectedLesson.id)
+        && !fullyCompletedLessonIds.has(selectedLesson.id);
       return (
         <div className="px-5 pt-5 pb-6">
           <Suspense fallback={<LazySectionFallback />}>
@@ -599,9 +635,16 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
         </div>
       );
     }
-    const isLateAccess = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(selectedLesson.id) && !fullyCompletedLessonIds.has(selectedLesson.id);
+    const isOpenCourseAccess = openAccessCourseIds.has(selectedLesson.course_id);
+    const isLateAccess = !isLeaderOrAdmin
+      && !isOpenCourseAccess
+      && agendaSchedule.lateAccessLessonIds.has(selectedLesson.id)
+      && !fullyCompletedLessonIds.has(selectedLesson.id);
     const hasManualOverride = manualLessonOverrideMap.has(selectedLesson.id);
-    const isStudyOpen = isLeaderOrAdmin || agendaSchedule.studyOpenLessonIds.has(selectedLesson.id) || hasManualOverride;
+    const isStudyOpen = isLeaderOrAdmin
+      || isOpenCourseAccess
+      || agendaSchedule.studyOpenLessonIds.has(selectedLesson.id)
+      || hasManualOverride;
     const isFullyDone = fullyCompletedLessonIds.has(selectedLesson.id);
     const isStudyLocked = !isLeaderOrAdmin && !isStudyOpen && !isLateAccess && !isFullyDone;
     const studyDone = completedLessonIds.has(selectedLesson.id);
@@ -615,36 +658,19 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
           onOpenEditDevotionals={(isLeaderOrAdmin && (isSuper || selectedLesson.church_id !== null)) ? () => setSelectedLessonMode("edit-devotionals") : undefined}
           autoOpenAvailableDevotional={autoOpenDevotionalLessonId === selectedLesson.id}
           onAutoOpenAvailableDevotionalConsumed={() => setAutoOpenDevotionalLessonId(null)}
-          scheduledDevotionalDates={agendaSchedule.lessonDevotionalDates.get(selectedLesson.id)}
-          releasedDayNumbers={agendaSchedule.lessonReleasedDays.get(selectedLesson.id)}
+          scheduledDevotionalDates={isOpenCourseAccess ? undefined : agendaSchedule.lessonDevotionalDates.get(selectedLesson.id)}
+          releasedDayNumbers={isOpenCourseAccess ? null : agendaSchedule.lessonReleasedDays.get(selectedLesson.id)}
           devotionalMode={agendaSchedule.lessonDevotionalMode.get(selectedLesson.id) ?? "10_days"}
-          eventDate={agendaSchedule.lessonEventDate.get(selectedLesson.id) ?? undefined}
+          eventDate={isOpenCourseAccess ? undefined : agendaSchedule.lessonEventDate.get(selectedLesson.id) ?? undefined}
           isStudyLocked={isStudyLocked}
           isLateAccess={isLateAccess}
+          unrestrictedAccess={isOpenCourseAccess}
           isStudyCompleted={studyDone}
           overrideId={manualLessonOverrideMap.get(selectedLesson.id)?.id}
           awardedPoints={manualLessonOverrideMap.get(selectedLesson.id)?.custom_points ?? null}
           recoveryMode={selectedRecoveryMode}
         />
       </Suspense>
-    );
-  }
-
-  if (showLeaderRoom && isLeaderOrAdmin) {
-    return (
-      <div className="px-5 pt-5 pb-6 space-y-4">
-        <button
-          onClick={() => setShowLeaderRoom(false)}
-          className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm font-inter font-semibold text-foreground shadow-sm hover:bg-muted/50 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Voltar ao discipulado
-        </button>
-
-        <Suspense fallback={<LazySectionFallback />}>
-          <LeaderRoomSection asTab />
-        </Suspense>
-      </div>
     );
   }
 
@@ -672,24 +698,6 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
             </p>
           </div>
           <ChevronRight className="w-4 h-4 text-primary/60 flex-shrink-0" />
-        </button>
-      )}
-
-      {isLeaderOrAdmin && (
-        <button
-          onClick={() => setShowLeaderRoom(true)}
-          className="w-full flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm hover:bg-muted/50 transition-colors text-left"
-        >
-          <div className="w-11 h-11 rounded-2xl flex items-center justify-center bg-primary/10 text-primary">
-            <ClipboardList className="w-5 h-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="font-montserrat font-bold text-foreground text-sm">Sala do Líder</p>
-            <p className="text-muted-foreground text-xs font-inter">
-              Acesse rapidamente a gestão da turma, encontros, avisos e relatórios.
-            </p>
-          </div>
-          <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
         </button>
       )}
 
@@ -842,6 +850,7 @@ export default function DiscipleshipTab({ targetLessonId, targetLessonMode = "ch
               expandedCourse={expandedCourse}
               onExpandCourse={setExpandedCourse}
               unlockedCourseIds={unlockedCourseIds}
+              openAccessCourseIds={openAccessCourseIds}
               completedLessonIds={completedLessonIds}
               fullyCompletedLessonIds={fullyCompletedLessonIds}
               agendaSchedule={agendaSchedule}

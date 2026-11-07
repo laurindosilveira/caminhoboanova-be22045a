@@ -1,4 +1,5 @@
 const RECOVERY_PATH = "/redefinir-senha";
+const FIRST_ACCESS_PATH = "/primeiro-acesso";
 
 export function isPasswordRecoveryUrl(pathname: string, search: string, hash: string) {
   const hashParams = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
@@ -11,7 +12,7 @@ export function isPasswordRecoveryUrl(pathname: string, search: string, hash: st
     hashParams.get("type") === "recovery" ||
     searchParams.get("type") === "recovery" ||
     // PKCE code present anywhere — will be (or already was) redirected to recovery page
-    searchParams.has("code")
+    (pathname !== FIRST_ACCESS_PATH && searchParams.has("code"))
   );
 }
 
@@ -24,7 +25,7 @@ export function getPasswordRecoveryRedirect(pathname: string, search: string, ha
   if (
     hashParams.get("type") === "recovery" ||
     searchParams.get("type") === "recovery" ||
-    searchParams.has("code")
+    (pathname !== FIRST_ACCESS_PATH && searchParams.has("code"))
   ) {
     return `${RECOVERY_PATH}${search}${hash}`;
   }

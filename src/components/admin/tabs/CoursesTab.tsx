@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useChurch } from "@/hooks/useChurch";
@@ -74,13 +74,7 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
   // Track which context a new lesson belongs to: { courseId, moduleId | null }
   const [newLessonCtx, setNewLessonCtx] = useState<{ courseId: string; moduleId: string | null } | null>(null);
 
-  useEffect(() => {
-    if (effectiveChurchId || isSuper) {
-      fetchCourses();
-    }
-  }, [effectiveChurchId, isSuper]);
-
-  async function fetchCourses() {
+  const fetchCourses = useCallback(async () => {
     setLoading(true);
     const filter = effectiveChurchId
       ? `church_id.is.null,church_id.eq.${effectiveChurchId}`
@@ -89,13 +83,13 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
     const [{ data: coursesData }, { data: lessonsData }, { data: modulesData }, { data: contentData }, { data: devData }] = await Promise.all([
       supabase.from("courses").select("*").or(filter).order("order_num"),
       supabase.from("lessons").select("*").or(filter).order("order_num"),
-      supabase.from("modules" as any).select("*").or(filter).order("order_num"),
+      supabase.from("modules").select("*").or(filter).order("order_num"),
       supabase.from("lesson_content").select("lesson_id, church_id").or(filter),
       supabase.from("devotional_content").select("lesson_id, church_id").not("lesson_id", "is", null).or(filter),
     ]);
 
     const allLessons: Lesson[] = (lessonsData ?? []) as Lesson[];
-    const allModules: Omit<Module, "lessons">[] = (modulesData ?? []) as any[];
+    const allModules: Omit<Module, "lessons">[] = modulesData ?? [];
 
     const courseList: Course[] = (coursesData ?? []).map(c => {
       const courseModules: Module[] = allModules
@@ -120,9 +114,15 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
     });
     setDevotionalCounts(counts);
 
-    if (courseList.length > 0 && !expandedCourse) setExpandedCourse(courseList[0].id);
+    if (courseList.length > 0) setExpandedCourse((current) => current ?? courseList[0].id);
     setLoading(false);
-  }
+  }, [effectiveChurchId]);
+
+  useEffect(() => {
+    if (effectiveChurchId || isSuper) {
+      void fetchCourses();
+    }
+  }, [effectiveChurchId, fetchCourses, isSuper]);
 
   async function handleCreateGlobal() {
     if (!newTitle.trim()) { setGlobalError("Informe o nome do curso."); return; }
@@ -131,7 +131,7 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
     const { data: maxRow } = await supabase
       .from("courses").select("order_num").is("church_id", null)
       .order("order_num", { ascending: false }).limit(1);
-    const orderNum = maxRow && maxRow.length > 0 ? ((maxRow[0] as any).order_num ?? 0) + 1 : 1;
+    const orderNum = maxRow && maxRow.length > 0 ? (maxRow[0].order_num ?? 0) + 1 : 1;
     const { error } = await supabase.from("courses").insert({
       title: newTitle.trim(),
       subtitle: newSubtitle.trim() || null,
@@ -153,7 +153,7 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
     const course = courses.find(c => c.id === courseId);
     const existing = course?.modules ?? [];
     const orderNum = existing.length > 0 ? Math.max(...existing.map(m => m.order_num)) + 1 : 1;
-    const { error } = await supabase.from("modules" as any).insert({
+    const { error } = await supabase.from("modules").insert({
       course_id: courseId,
       title: newModuleTitle.trim(),
       order_num: orderNum,
@@ -205,7 +205,7 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
-        <div className="w-12 h-12 rounded-2xl bg-secondary/10 flex items-center justify-center mb-3 animate-pulse">
+        <div className="w-12 h-12 rounded-lg bg-secondary/10 flex items-center justify-center mb-3 animate-pulse">
           <GraduationCap className="w-6 h-6 text-secondary" />
         </div>
         <p className="text-muted-foreground font-inter text-sm">Carregando cursos...</p>
@@ -231,14 +231,14 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="bg-secondary/10 rounded-2xl p-4 flex items-start gap-3">
+      <div className="bg-secondary/10 rounded-lg p-4 flex items-start gap-3">
         <GraduationCap className="w-5 h-5 text-secondary flex-shrink-0 mt-0.5" />
         <div className="flex-1">
           <p className="font-montserrat font-bold text-foreground text-sm">Trilha Confirmatória</p>
           <p className="text-muted-foreground font-inter text-xs mt-0.5">
             {totalLessons} lições em {courses.length} cursos cadastrados
           </p>
-          <p className="text-muted-foreground font-inter text-[10px] mt-1">
+          <p className="text-muted-foreground font-inter text-xs mt-1">
             {isLider
               ? "✅ = publicado · Clique em \"Personalizar\" para adaptar uma lição para sua turma"
               : "✅ = conteúdo publicado · 📝 = usando conteúdo padrão · 📖 = devocionais"
@@ -248,7 +248,7 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
         {isSuper && (
           <button
             onClick={() => { setShowNewGlobal(v => !v); setGlobalError(null); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-montserrat font-bold text-primary-foreground flex-shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-montserrat font-bold text-primary-foreground flex-shrink-0"
             style={{ background: "var(--gradient-hero)" }}
           >
             {showNewGlobal ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
@@ -259,7 +259,7 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
 
       {/* New global course form */}
       {isSuper && showNewGlobal && (
-        <div className="bg-card rounded-2xl border border-primary/30 p-4 space-y-3">
+        <div className="bg-card rounded-lg border border-primary/30 p-4 space-y-3">
           <p className="font-montserrat font-bold text-foreground text-sm">Novo Curso Global</p>
           <p className="font-inter text-xs text-muted-foreground">Ficará disponível para todas as igrejas da plataforma.</p>
           <div>
@@ -269,7 +269,7 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
               value={newTitle}
               onChange={e => setNewTitle(e.target.value)}
               placeholder="Ex: Fundamentos da Fé"
-              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background font-inter text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+              className="w-full px-3 py-2.5 rounded-lg border border-border bg-background font-inter text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
             />
           </div>
           <div>
@@ -279,14 +279,14 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
               value={newSubtitle}
               onChange={e => setNewSubtitle(e.target.value)}
               placeholder="Ex: Curso introdutório para novos membros"
-              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background font-inter text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+              className="w-full px-3 py-2.5 rounded-lg border border-border bg-background font-inter text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
             />
           </div>
           {globalError && <p className="text-destructive font-inter text-xs">{globalError}</p>}
           <button
             onClick={handleCreateGlobal}
             disabled={savingGlobal}
-            className="w-full py-2.5 rounded-xl font-montserrat font-bold text-primary-foreground text-sm disabled:opacity-50"
+            className="w-full py-2.5 rounded-lg font-montserrat font-bold text-primary-foreground text-sm disabled:opacity-50"
             style={{ background: "var(--gradient-hero)" }}
           >
             {savingGlobal ? "Criando..." : "Criar Curso Global"}
@@ -301,13 +301,13 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
         const lessonsWithoutModule = course.lessons.filter(l => !l.module_id);
 
         return (
-          <div key={course.id} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div key={course.id} className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
             {/* Course header */}
             <button
               onClick={() => setExpandedCourse(isOpen ? null : course.id)}
               className="w-full flex items-center gap-3 p-4 text-left"
             >
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "var(--gradient-hero)" }}>
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "var(--gradient-hero)" }}>
                 <span className="font-montserrat font-black text-primary-foreground text-sm">#{course.order_num}</span>
               </div>
               <div className="flex-1 min-w-0">
@@ -317,12 +317,12 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
                   <p className="text-muted-foreground font-inter text-xs">{course.lessons.length} lições</p>
                   {hasModules && (
                     <>
-                      <span className="text-muted-foreground font-inter text-[10px]">·</span>
-                      <p className="text-secondary font-inter text-[10px] font-medium">{course.modules.length} módulos</p>
+                      <span className="text-muted-foreground font-inter text-xs">·</span>
+                      <p className="text-secondary font-inter text-xs font-medium">{course.modules.length} módulos</p>
                     </>
                   )}
-                  <span className="text-muted-foreground font-inter text-[10px]">·</span>
-                  <p className="text-brand-green font-inter text-[10px] font-medium">
+                  <span className="text-muted-foreground font-inter text-xs">·</span>
+                  <p className="text-brand-green font-inter text-xs font-medium">
                     {course.lessons.filter(l => publishedLessonIds.has(l.id)).length} publicadas
                   </p>
                 </div>
@@ -346,7 +346,7 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
                           value={newModuleTitle}
                           onChange={e => setNewModuleTitle(e.target.value)}
                           placeholder="Ex: Módulo 1 — Fundamentos"
-                          className="w-full px-3 py-2 rounded-xl border border-border bg-background font-inter text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                          className="w-full px-3 py-2 rounded-lg border border-border bg-background font-inter text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
                           autoFocus
                         />
                         {moduleError && <p className="text-destructive font-inter text-xs">{moduleError}</p>}
@@ -354,14 +354,14 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
                           <button
                             onClick={() => handleCreateModule(course.id)}
                             disabled={savingModule}
-                            className="flex-1 py-2 rounded-xl font-montserrat font-bold text-primary-foreground text-xs disabled:opacity-50"
+                            className="flex-1 py-2 rounded-lg font-montserrat font-bold text-primary-foreground text-xs disabled:opacity-50"
                             style={{ background: "var(--gradient-hero)" }}
                           >
                             {savingModule ? "Criando..." : "Criar Módulo"}
                           </button>
                           <button
                             onClick={() => { setShowNewModule(null); setNewModuleTitle(""); setModuleError(null); }}
-                            className="px-3 py-2 rounded-xl bg-muted text-muted-foreground font-inter text-xs"
+                            className="px-3 py-2 rounded-lg bg-muted text-muted-foreground font-inter text-xs"
                           >
                             Cancelar
                           </button>
@@ -370,7 +370,7 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
                     ) : (
                       <button
                         onClick={() => { setShowNewModule(course.id); setNewModuleTitle(""); setModuleError(null); }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors text-xs font-montserrat font-bold"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors text-xs font-montserrat font-bold"
                       >
                         <Layers className="w-3.5 h-3.5" />
                         Criar novo módulo
@@ -386,7 +386,7 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
                     <div className="flex items-center gap-2 px-4 py-2 bg-secondary/5">
                       <Layers className="w-3.5 h-3.5 text-secondary flex-shrink-0" />
                       <p className="font-montserrat font-bold text-secondary text-xs flex-1">{mod.title}</p>
-                      <span className="font-inter text-[10px] text-muted-foreground">{mod.lessons.length} lição(ões)</span>
+                      <span className="font-inter text-xs text-muted-foreground">{mod.lessons.length} lição(ões)</span>
                     </div>
 
                     {/* Lessons in this module */}
@@ -421,7 +421,7 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
                           <div className="flex gap-2 flex-wrap">
                             <button
                               onClick={() => openNewLesson(course.id, mod.id)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs font-montserrat font-bold"
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs font-montserrat font-bold"
                             >
                               <Plus className="w-3.5 h-3.5" />
                               Criar nova lição
@@ -432,7 +432,7 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
                                   const last = mod.lessons[mod.lessons.length - 1];
                                   setEditMode({ lesson: last, mode: "devotionals" });
                                 }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors text-xs font-montserrat font-bold"
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors text-xs font-montserrat font-bold"
                               >
                                 <BookOpen className="w-3.5 h-3.5" />
                                 Criar novo devocional
@@ -450,7 +450,7 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
                   <div>
                     {hasModules && (
                       <div className="px-4 py-2 bg-muted/10 border-b border-border">
-                        <p className="font-inter text-[10px] text-muted-foreground">Lições sem módulo</p>
+                        <p className="font-inter text-xs text-muted-foreground">Lições sem módulo</p>
                       </div>
                     )}
                     {lessonsWithoutModule.map((lesson) => (
@@ -490,7 +490,7 @@ export default function CoursesTab({ churchId: selectedChurchId }: { churchId?: 
                     ) : (
                       <button
                         onClick={() => openNewLesson(course.id, null)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs font-montserrat font-bold"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs font-montserrat font-bold"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         Criar nova lição
@@ -517,7 +517,7 @@ function LessonRow({
   isLider: boolean;
   publishedLessonIds: Set<string>;
   devotionalCounts: Record<string, number>;
-  onEdit: (mode: { lesson: any; mode: "study" | "devotionals" | "leader-guide" | "leader-customize" }) => void;
+  onEdit: (mode: { lesson: Lesson; mode: "study" | "devotionals" | "leader-guide" | "leader-customize" }) => void;
   onRefresh: () => void;
 }) {
   const [renaming, setRenaming] = useState(false);
@@ -571,7 +571,7 @@ function LessonRow({
             {lesson.objective && (
               <div className="flex items-start gap-1.5 mt-1">
                 <BookOpen className="w-3 h-3 text-secondary flex-shrink-0 mt-0.5" />
-                <p className="font-inter text-[10px] text-muted-foreground">{lesson.objective}</p>
+                <p className="font-inter text-xs text-muted-foreground">{lesson.objective}</p>
               </div>
             )}
             {lesson.topics && lesson.topics.length > 0 && (
@@ -579,7 +579,7 @@ function LessonRow({
                 <Tag className="w-3 h-3 text-primary flex-shrink-0 mt-0.5" />
                 <div className="flex flex-wrap gap-1">
                   {lesson.topics.map((topic, i) => (
-                    <span key={i} className="px-1.5 py-0.5 bg-primary/10 text-primary rounded text-[9px] font-inter font-medium">
+                    <span key={i} className="px-1.5 py-0.5 bg-primary/10 text-primary rounded text-xs font-inter font-medium">
                       {topic}
                     </span>
                   ))}
@@ -588,9 +588,9 @@ function LessonRow({
             )}
           </div>
           {publishedLessonIds.has(lesson.id) ? (
-            <span className="text-brand-green text-[9px] font-inter font-bold flex-shrink-0">✅</span>
+            <span className="text-brand-green text-xs font-inter font-bold flex-shrink-0">✅</span>
           ) : (
-            <span className="text-muted-foreground text-[9px] font-inter flex-shrink-0">📝</span>
+            <span className="text-muted-foreground text-xs font-inter flex-shrink-0">📝</span>
           )}
         </div>
 
@@ -599,7 +599,7 @@ function LessonRow({
             <>
               <button
                 onClick={() => onEdit({ lesson, mode: "study" })}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors flex-shrink-0"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors flex-shrink-0"
               >
                 <Edit3 className="w-3.5 h-3.5" />
                 <span className="font-inter text-xs font-medium">
@@ -608,7 +608,7 @@ function LessonRow({
               </button>
               <button
                 onClick={() => onEdit({ lesson, mode: "devotionals" })}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors flex-shrink-0"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors flex-shrink-0"
               >
                 <BookOpen className="w-3.5 h-3.5" />
                 <span className="font-inter text-xs font-medium">
@@ -619,7 +619,7 @@ function LessonRow({
           )}
           <button
             onClick={() => onEdit({ lesson, mode: "leader-guide" })}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors flex-shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors flex-shrink-0"
           >
             <FileText className="w-3.5 h-3.5" />
             <span className="font-inter text-xs font-medium">Roteiro</span>
@@ -627,7 +627,7 @@ function LessonRow({
           {isLider && (
             <button
               onClick={() => onEdit({ lesson, mode: "leader-customize" })}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors flex-shrink-0"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors flex-shrink-0"
             >
               <Pencil className="w-3.5 h-3.5" />
               <span className="font-inter text-xs font-medium">Personalizar</span>
@@ -662,7 +662,7 @@ function NewLessonForm({
         value={title}
         onChange={e => onChangeTitle(e.target.value)}
         placeholder="Título da lição *"
-        className="w-full px-3 py-2 rounded-xl border border-border bg-background font-inter text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+        className="w-full px-3 py-2 rounded-lg border border-border bg-background font-inter text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
         autoFocus
       />
       <input
@@ -670,21 +670,21 @@ function NewLessonForm({
         value={objective}
         onChange={e => onChangeObjective(e.target.value)}
         placeholder="Objetivo (opcional)"
-        className="w-full px-3 py-2 rounded-xl border border-border bg-background font-inter text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+        className="w-full px-3 py-2 rounded-lg border border-border bg-background font-inter text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
       />
       {error && <p className="text-destructive font-inter text-xs">{error}</p>}
       <div className="flex gap-2">
         <button
           onClick={onSave}
           disabled={saving}
-          className="flex-1 py-2 rounded-xl font-montserrat font-bold text-primary-foreground text-xs disabled:opacity-50"
+          className="flex-1 py-2 rounded-lg font-montserrat font-bold text-primary-foreground text-xs disabled:opacity-50"
           style={{ background: "var(--gradient-hero)" }}
         >
           {saving ? "Criando..." : "Criar Lição"}
         </button>
         <button
           onClick={onCancel}
-          className="px-3 py-2 rounded-xl bg-muted text-muted-foreground font-inter text-xs"
+          className="px-3 py-2 rounded-lg bg-muted text-muted-foreground font-inter text-xs"
         >
           Cancelar
         </button>

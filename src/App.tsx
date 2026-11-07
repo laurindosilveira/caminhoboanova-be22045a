@@ -19,6 +19,7 @@ const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const FirstAccess = lazy(() => import("./pages/FirstAccess"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const Install = lazy(() => import("./pages/Install"));
@@ -28,10 +29,11 @@ const MinhaIgreja = lazy(() => import("./pages/MinhaIgreja"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const AdminSistema = lazy(() => import("./pages/AdminSistema"));
 const AreaMembros = lazy(() => import("./pages/AreaMembros"));
+const LegalPage = lazy(() => import("./pages/LegalPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 import AdminSistemaPasswordGate from "./components/auth/AdminSistemaPasswordGate";
-import { PlanGate } from "./components/auth/PlanGate";
 import { ErrorBoundary } from "./components/shared/ErrorBoundary";
+import { SubscriptionAccessGate } from "./components/auth/SubscriptionAccessGate";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,7 +45,7 @@ const queryClient = new QueryClient({
 });
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading, signOut } = useAuth();
+  const { user, profile, requiresPasswordSetup, loading, signOut } = useAuth();
 
   if (loading) {
     return (
@@ -59,6 +61,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) return <Navigate to="/login" replace />;
+  if (requiresPasswordSetup) return <Navigate to="/primeiro-acesso" replace />;
   if (profile?.enrollment_status === "rejected") {
     return (
       <div className="min-h-screen flex items-center justify-center px-6 bg-background">
@@ -80,26 +83,28 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  return <>{children}</>;
+  return <SubscriptionAccessGate>{children}</SubscriptionAccessGate>;
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { user, role, loading } = useAuth();
+  const { user, role, requiresPasswordSetup, loading } = useAuth();
   if (loading) return null;
+  if (user && requiresPasswordSetup) return <Navigate to="/primeiro-acesso" replace />;
   if (user) return <Navigate to={(role === "admin" || role === "lider") ? "/admin" : "/"} replace />;
   return <>{children}</>;
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { user, role, loading } = useAuth();
+  const { user, role, requiresPasswordSetup, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
+  if (requiresPasswordSetup) return <Navigate to="/primeiro-acesso" replace />;
   if (role !== "admin" && role !== "lider") return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
 function RootRedirect() {
-  const { user, loading } = useAuth();
+  const { user, requiresPasswordSetup, loading } = useAuth();
   
   if (loading) return <LoadingFallback />;
 
@@ -108,6 +113,7 @@ function RootRedirect() {
   if (user) {
     // Set persistence flag when user is logged in
     localStorage.setItem('caminho_app_active', 'true');
+    if (requiresPasswordSetup) return <Navigate to="/primeiro-acesso" replace />;
     return <Navigate to="/home" replace />;
   }
 
@@ -119,14 +125,25 @@ function RootRedirect() {
 }
 
 function NotFoundRedirect() {
-  const { user, loading } = useAuth();
+  const { user, requiresPasswordSetup, loading } = useAuth();
   if (loading) return <LoadingFallback />;
   
   // For unauthenticated visitors or specific cases, always go to presentation
   if (!user) return <Navigate to="/apresentacao" replace />;
+  if (requiresPasswordSetup) return <Navigate to="/primeiro-acesso" replace />;
   
   // Fallback for logged in users
   return <Navigate to="/home" replace />;
+}
+
+function FirstAccessRoute({ children }: { children: React.ReactNode }) {
+  const { user, role, requiresPasswordSetup, loading } = useAuth();
+  if (loading) return <LoadingFallback />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!requiresPasswordSetup) {
+    return <Navigate to={(role === "admin" || role === "lider") ? "/admin" : "/home"} replace />;
+  }
+  return <>{children}</>;
 }
 
 const LoadingFallback = () => (
@@ -168,15 +185,21 @@ const AppRoutes = () => (
       {/* Public auth routes */}
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/cadastro" element={<PublicRoute><Register /></PublicRoute>} />
+      <Route path="/convite/:inviteToken" element={<PublicRoute><Register /></PublicRoute>} />
       <Route path="/recuperar-senha" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
       <Route path="/verificar-email" element={<VerifyEmail />} />
       <Route path="/redefinir-senha" element={<ResetPassword />} />
+      <Route path="/primeiro-acesso" element={<FirstAccessRoute><FirstAccess /></FirstAccessRoute>} />
       <Route path="/instalar" element={<Install />} />
       <Route path="/apresentacao" element={<Apresentacao />} />
       <Route path="/area-membros" element={<PublicRoute><AreaMembros /></PublicRoute>} />
-      <Route path="/exportar-dados" element={<ProtectedRoute><PlanGate feature="advancedExport"><ExportData /></PlanGate></ProtectedRoute>} />
+      <Route path="/exportar-dados" element={<ProtectedRoute><ExportData /></ProtectedRoute>} />
       <Route path="/minha-igreja" element={<ProtectedRoute><MinhaIgreja /></ProtectedRoute>} />
       <Route path="/onboarding" element={<Onboarding />} />
+      <Route path="/privacidade" element={<LegalPage />} />
+      <Route path="/termos" element={<LegalPage />} />
+      <Route path="/cookies" element={<LegalPage />} />
+      <Route path="/cancelamento-e-reembolso" element={<LegalPage />} />
       <Route
         path="/admin-sistema"
         element={

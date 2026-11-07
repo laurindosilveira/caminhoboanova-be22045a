@@ -50,7 +50,7 @@ export default function NextMeetingCard({ churchId, currentArea, onNavigateToAge
           <CalendarDays className="w-5 h-5 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-primary text-[10px] font-inter font-bold uppercase tracking-wide">
+          <p className="text-primary text-xs font-inter font-bold uppercase tracking-wide">
             Próximo evento
           </p>
           <p className="font-montserrat font-black text-foreground text-sm leading-tight truncate">

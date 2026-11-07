@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2, Lock, BookOpen, ChevronDown, ChevronRight, CalendarDays, Heart, GraduationCap } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { getBusinessDaysBefore } from "@/hooks/useAgendaSchedule";
+import { useAgendaSchedule } from "@/hooks/useAgendaSchedule";
+import { getCourseIdsByMode, isCourseVisibleInJourney, resolveCourseUnlocks } from "@/lib/courseAccess";
+import { resolveJourneyFocus } from "@/lib/journeyFocus";
 
 type Lesson = {
   id: string;
@@ -18,7 +20,16 @@ type Course = {
   title: string;
   subtitle: string | null;
   order_num: number;
+  church_id: string | null;
+  track_id: string | null;
   lessons: Lesson[];
+};
+
+type CourseUnlock = {
+  course_id: string;
+  area: string;
+  turma_id: string | null;
+  access_mode: "open" | "scheduled" | string;
 };
 
 type IntegratedStats = {
@@ -27,7 +38,6 @@ type IntegratedStats = {
   devotionalsCompleted: number;
   totalDevotionals: number;
   attendancePresent: number;
-  totalEvents: number;
   worshipApproved: number;
 };
 
@@ -49,42 +59,34 @@ type Props = {
 };
 
 export default function JourneyPath({ onSelectLesson }: Props = {}) {
-  const { profile, role, isSuper } = useAuth();
-  const { effectiveArea } = useAreaSwitch();
+  const { profile, isSuper } = useAuth();
+  const { effectiveArea, effectiveTurmaId, switchNonce } = useAreaSwitch();
   const currentArea = effectiveArea || profile?.area || "";
+  const currentTurmaId = effectiveTurmaId ?? profile?.turma_id ?? null;
+  const agendaSchedule = useAgendaSchedule();
   const [courses, setCourses] = useState<Course[]>([]);
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
   const [fullyCompletedLessonIds, setFullyCompletedLessonIds] = useState<Set<string>>(new Set());
   const [unlockedCourseIds, setUnlockedCourseIds] = useState<Set<string>>(new Set());
-  const [scheduledLessonIds, setScheduledLessonIds] = useState<Set<string>>(new Set());
+  const [openAccessCourseIds, setOpenAccessCourseIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
   const [integrated, setIntegrated] = useState<IntegratedStats>({
     lessonsStudied: 0, totalLessons: 0,
     devotionalsCompleted: 0, totalDevotionals: 0,
-    attendancePresent: 0, totalEvents: 0,
+    attendancePresent: 0,
     worshipApproved: 0,
   });
 
-  useEffect(() => {
-    if (currentArea) fetchData();
-  }, [currentArea]);
-
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
+    setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
     const churchId = profile?.church_id;
-    let eventsQuery = supabase
-      .from("events")
-      .select("id, linked_lesson_id, area, event_date")
-      .not("linked_lesson_id", "is", null)
-      .order("event_date");
     let unlocksQuery = supabase
       .from("course_unlocks")
-      .select("course_id")
-      .eq("area", currentArea);
+      .select("course_id, area, turma_id, access_mode");
     if (churchId) {
-      eventsQuery = eventsQuery.eq("church_id", churchId);
       unlocksQuery = unlocksQuery.eq("church_id", churchId);
     }
 
@@ -94,37 +96,72 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
       { data: responsesData },
       { data: devContentData },
       { data: devProgressData },
-      { data: eventsData },
       { data: attendanceData },
       { data: worshipData },
       { data: unlocksData },
+      { data: globalReleasesData },
+      { data: trackReleasesData },
     ] = await Promise.all([
-      supabase.from("courses").select("*").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null").order("order_num"),
+      supabase.from("courses").select("id, title, subtitle, order_num, church_id, track_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null").order("order_num"),
       supabase.from("lessons").select("id, title, order_num, objective, course_id").order("order_num"),
       supabase.from("lesson_progress").select("lesson_id").eq("user_id", user.id).eq("is_completed", true),
       supabase.from("devotional_content").select("id, lesson_id").not("lesson_id", "is", null),
       supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
-      eventsQuery,
       supabase.from("attendance").select("event_id, status").eq("user_id", user.id),
       supabase.from("worship_attendance").select("id, status").eq("user_id", user.id).eq("status", "aprovado"),
       unlocksQuery,
+      churchId
+        ? supabase.from("global_course_releases").select("course_id").eq("church_id", churchId)
+        : Promise.resolve({ data: [] as { course_id: string }[], error: null }),
+      churchId
+        ? supabase.from("track_church_releases").select("track_id").eq("church_id", churchId)
+        : Promise.resolve({ data: [] as { track_id: string }[], error: null }),
     ]);
 
-    const lessons = lessonsData ?? [];
+    const resolvedUnlocks = resolveCourseUnlocks(
+      ((unlocksData ?? []) as CourseUnlock[]),
+      {
+        turmaId: currentTurmaId,
+        area: currentArea || null,
+      },
+    );
+    const nextUnlockedCourseIds = new Set(resolvedUnlocks.keys());
+    const nextOpenAccessCourseIds = getCourseIdsByMode(resolvedUnlocks, "open");
+    const releasedCourseIds = new Set((globalReleasesData ?? []).map((release) => release.course_id));
+    const releasedTrackIds = new Set((trackReleasesData ?? []).map((release) => release.track_id));
+    const visibleCourseRows = (coursesData ?? []).filter((course) =>
+      isCourseVisibleInJourney(course, {
+        churchId: churchId ?? null,
+        isSuper,
+        unlockedCourseIds: nextUnlockedCourseIds,
+        releasedCourseIds,
+        releasedTrackIds,
+      }),
+    );
+    const visibleCourseIds = new Set(visibleCourseRows.map((course) => course.id));
+    const lessons = (lessonsData ?? []).filter((lesson) => visibleCourseIds.has(lesson.course_id));
+    const visibleLessonIds = new Set(lessons.map((lesson) => lesson.id));
     const lessonIdsWithResponses = new Set<string>(
-      (responsesData ?? []).map((response: { lesson_id: string }) => response.lesson_id),
+      (responsesData ?? [])
+        .filter((response: { lesson_id: string }) => visibleLessonIds.has(response.lesson_id))
+        .map((response: { lesson_id: string }) => response.lesson_id),
     );
     setCompletedLessonIds(lessonIdsWithResponses);
 
     // Compute fully completed lessons (study + all devotionals)
     const devsByLesson: Record<string, string[]> = {};
-    (devContentData ?? []).forEach((d: any) => {
-      if (d.lesson_id) {
+    (devContentData ?? []).forEach((d) => {
+      if (d.lesson_id && visibleLessonIds.has(d.lesson_id)) {
         if (!devsByLesson[d.lesson_id]) devsByLesson[d.lesson_id] = [];
         devsByLesson[d.lesson_id].push(d.id);
       }
     });
-    const completedDevIds = new Set((devProgressData ?? []).map((p: any) => p.devotional_id));
+    const visibleDevotionalIds = new Set(Object.values(devsByLesson).flat());
+    const completedDevIds = new Set(
+      (devProgressData ?? [])
+        .filter((progress) => visibleDevotionalIds.has(progress.devotional_id))
+        .map((progress) => progress.devotional_id),
+    );
     const fullyDone = new Set<string>();
     lessons.forEach((l) => {
       const hasStudy = lessonIdsWithResponses.has(l.id);
@@ -135,52 +172,34 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
     setFullyCompletedLessonIds(fullyDone);
 
     // Build courses
-    const courseList = (coursesData ?? []).map(c => ({
+    const courseList = visibleCourseRows.map(c => ({
       ...c,
       lessons: lessons.filter(l => l.course_id === c.id),
     }));
     setCourses(courseList);
-    setUnlockedCourseIds(new Set((unlocksData ?? []).map((u: any) => u.course_id)));
+    setUnlockedCourseIds(nextUnlockedCourseIds);
+    setOpenAccessCourseIds(nextOpenAccessCourseIds);
     
-    // Lessons are unlocked if they are scheduled in the agenda for this area
-    const now = new Date();
-    const scheduled = new Set<string>();
-    const applicableEvents = (eventsData ?? []).filter((e: any) => {
-      if (e.area && e.area !== currentArea) return;
-      return true;
-    });
-    applicableEvents.forEach((e: any, index: number) => {
-      // Unlock if event is in the past OR if we are within its devotional window.
-      const eventDate = new Date(e.event_date);
-      const prevEvent = index > 0 ? applicableEvents[index - 1] : null;
-      const prevEventDate = prevEvent ? new Date(prevEvent.event_date) : null;
-      const autoLimited = prevEventDate
-        ? Math.round((eventDate.getTime() - prevEventDate.getTime()) / 86400000) < 10
-        : false;
-      const devotionalDates = getBusinessDaysBefore(eventDate, 10);
-      const windowStart = autoLimited ? devotionalDates[5] : devotionalDates[0];
-      if (now >= windowStart) {
-        scheduled.add(e.linked_lesson_id);
-      }
-    });
-    setScheduledLessonIds(scheduled);
-
-    if (courseList.length > 0) setExpandedCourse(courseList[0].id);
+    const firstUnlockedCourse = courseList.find((course) => nextUnlockedCourseIds.has(course.id));
+    setExpandedCourse(firstUnlockedCourse?.id ?? courseList[0]?.id ?? null);
 
     // Integrated stats
-    const totalDevotionals = (devContentData ?? []).length;
+    const totalDevotionals = visibleDevotionalIds.size;
     setIntegrated({
       lessonsStudied: lessonIdsWithResponses.size,
       totalLessons: lessons.length,
       devotionalsCompleted: completedDevIds.size,
       totalDevotionals,
-      attendancePresent: (attendanceData ?? []).filter((a: any) => a.status === "presente").length,
-      totalEvents: (eventsData ?? []).length,
+      attendancePresent: (attendanceData ?? []).filter((attendance) => attendance.status === "presente").length,
       worshipApproved: (worshipData ?? []).length,
     });
 
     setLoading(false);
-  }
+  }, [currentArea, currentTurmaId, isSuper, profile?.church_id]);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData, switchNonce]);
 
   if (loading) {
     return (
@@ -235,22 +254,29 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
 
         {/* Fase atual */}
         {(() => {
-          // Only consider unlocked courses
-          const unlockedCourses = courses.filter(c => unlockedCourseIds.has(c.id));
-          if (unlockedCourses.length === 0) return null;
+          if (agendaSchedule.loading) return null;
+          const focus = resolveJourneyFocus({
+            courses,
+            unlockedCourseIds,
+            openAccessCourseIds,
+            fullyCompletedLessonIds,
+            currentAgendaEntry: agendaSchedule.currentEntry,
+            schedule: agendaSchedule.schedule,
+          });
+          if (!focus) return null;
 
-          // Find the highest-order unlocked course that still has pending lessons
-          const withPending = unlockedCourses.filter(c =>
-            c.lessons.some(l => !fullyCompletedLessonIds.has(l.id))
-          );
+          const currentCourse = courses.find((course) => course.id === focus.courseId);
+          const currentLesson = currentCourse?.lessons.find((lesson) => lesson.id === focus.lessonId);
+          if (!currentCourse) return null;
 
-          // If all unlocked courses are fully done, show the last unlocked as completed
-          const currentCourse = withPending.length > 0
-            ? withPending[withPending.length - 1]
-            : unlockedCourses[unlockedCourses.length - 1];
-
-          const currentLesson = currentCourse.lessons.find(l => !fullyCompletedLessonIds.has(l.id));
-          const allDone = withPending.length === 0;
+          const allDone = focus.mode === "complete";
+          const lessonPrefix = focus.mode === "current_agenda"
+            ? "Em vigor"
+            : focus.mode === "upcoming_agenda"
+              ? "Próxima na agenda"
+              : focus.mode === "last_scheduled"
+                ? "Última programada"
+                : "Próxima";
 
           return (
             <div className={`mt-2 flex items-center gap-2 rounded-xl px-3 py-2 ${allDone ? "bg-brand-green/10" : "bg-secondary/10"}`}>
@@ -260,12 +286,17 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
                   {allDone ? "Completo" : "Fase atual"}: Curso {currentCourse.order_num} — {currentCourse.title}
                 </p>
                 {currentLesson && !allDone && (
-                  <p className="font-inter text-[10px] text-muted-foreground truncate">
-                    Próxima: Lição {currentLesson.order_num} — {currentLesson.title}
+                  <p className="font-inter text-xs text-muted-foreground truncate">
+                    {lessonPrefix}: Lição {currentLesson.order_num} — {currentLesson.title}
+                  </p>
+                )}
+                {focus.mode === "waiting_schedule" && (
+                  <p className="font-inter text-xs text-muted-foreground truncate">
+                    Aguardando o líder programar a próxima lição na Agenda
                   </p>
                 )}
                 {allDone && (
-                  <p className="font-inter text-[10px] text-brand-green truncate">
+                  <p className="font-inter text-xs text-brand-green truncate">
                     Todas as lições concluídas! 🎉
                   </p>
                 )}
@@ -288,7 +319,7 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
             </div>
             <div>
               <p className="font-montserrat font-bold text-foreground text-sm">{done}/{total}</p>
-              <p className="font-inter text-[10px] text-muted-foreground">{label}</p>
+              <p className="font-inter text-xs text-muted-foreground">{label}</p>
             </div>
           </div>
         ))}
@@ -300,24 +331,28 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
           <CalendarDays className="w-4 h-4 text-primary flex-shrink-0" />
           <div>
             <p className="font-montserrat font-bold text-foreground text-xs">{integrated.attendancePresent} presença{integrated.attendancePresent !== 1 ? "s" : ""}</p>
-            <p className="font-inter text-[10px] text-muted-foreground">em encontros</p>
+            <p className="font-inter text-xs text-muted-foreground">em encontros</p>
           </div>
         </div>
         <div className="flex-1 bg-card rounded-xl border border-border p-3 flex items-center gap-2.5">
           <Heart className="w-4 h-4 text-brand-green flex-shrink-0" />
           <div>
             <p className="font-montserrat font-bold text-foreground text-xs">{integrated.worshipApproved} culto{integrated.worshipApproved !== 1 ? "s" : ""}</p>
-            <p className="font-inter text-[10px] text-muted-foreground">confirmados</p>
+            <p className="font-inter text-xs text-muted-foreground">confirmados</p>
           </div>
         </div>
       </div>
 
       {/* Courses list */}
       {courses.length === 0 ? (
-        <div className="text-center py-10">
-          <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-          <p className="font-montserrat font-bold text-foreground text-sm">Jornada em preparação</p>
-          <p className="text-muted-foreground font-inter text-xs mt-1">Seu pastor está preparando o conteúdo. Volte em breve!</p>
+        <div className="rounded-2xl border border-border bg-card px-5 py-8 text-center shadow-sm">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary/10">
+            <BookOpen className="h-6 w-6 text-secondary" />
+          </div>
+          <p className="font-montserrat text-sm font-bold text-foreground">Aguardando liberação do próximo curso</p>
+          <p className="mx-auto mt-1 max-w-xs font-inter text-xs leading-5 text-muted-foreground">
+            Os cursos bloqueados ficam ocultos. Quando seu líder liberar um curso para este grupo, ele aparecerá aqui.
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -329,6 +364,7 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
           {courses.map((course) => {
             const isOpen = expandedCourse === course.id;
             const isCourseUnlocked = unlockedCourseIds.has(course.id);
+            const isOpenAccess = openAccessCourseIds.has(course.id);
             const doneLessons = course.lessons.filter(l => fullyCompletedLessonIds.has(l.id)).length;
             const totalLessons = course.lessons.length;
             const coursePct = totalLessons > 0 ? Math.round((doneLessons / totalLessons) * 100) : 0;
@@ -355,6 +391,11 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
                     {isCourseUnlocked ? (
                       <>
                         {course.subtitle && <p className="text-muted-foreground font-inter text-xs truncate">{course.subtitle}</p>}
+                        {isOpenAccess && (
+                          <p className="mt-0.5 font-inter text-xs font-semibold text-brand-green">
+                            Acesso livre · conteúdo completo
+                          </p>
+                        )}
                         <div className="flex items-center gap-2 mt-1">
                           <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                             <div
@@ -365,7 +406,7 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
                               }}
                             />
                           </div>
-                          <span className={`font-inter text-[10px] font-semibold flex-shrink-0 ${coursePct === 100 ? "text-brand-green" : "text-muted-foreground"}`}>
+                          <span className={`font-inter text-xs font-semibold flex-shrink-0 ${coursePct === 100 ? "text-brand-green" : "text-muted-foreground"}`}>
                             {doneLessons}/{totalLessons}
                           </span>
                         </div>
@@ -387,15 +428,16 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
                     {course.lessons.length === 0 ? (
                       <p className="px-4 py-3 text-muted-foreground font-inter text-xs text-center">Nenhuma lição cadastrada ainda.</p>
                     ) : (
-                      course.lessons.map((lesson, lessonIndex) => {
+                      course.lessons.map((lesson) => {
                         const isDone = completedLessonIds.has(lesson.id);
                         const isFullyDone = fullyCompletedLessonIds.has(lesson.id);
-                        const isScheduled = scheduledLessonIds.has(lesson.id);
-                        const prevLesson = lessonIndex > 0 ? course.lessons[lessonIndex - 1] : null;
-                        
-                        // A lesson is locked if it's not done AND not scheduled AND (it has a previous lesson that isn't fully done)
-                        // If it's the first lesson of an unlocked course, it's unlocked by default (prevLesson is null)
-                        const isLocked = !isDone && !isFullyDone && !isScheduled && (prevLesson ? !fullyCompletedLessonIds.has(prevLesson.id) : false);
+                        const isScheduled =
+                          agendaSchedule.studyOpenLessonIds.has(lesson.id)
+                          || agendaSchedule.lateAccessLessonIds.has(lesson.id);
+
+                        // Open releases expose every lesson. Agenda releases expose a
+                        // lesson only when its official availability window has begun.
+                        const isLocked = !isOpenAccess && !isDone && !isFullyDone && !isScheduled;
 
                         const isClickable = !isLocked && !!onSelectLesson;
                         return (
@@ -426,16 +468,16 @@ export default function JourneyPath({ onSelectLesson }: Props = {}) {
                                 {lesson.title}
                               </p>
                               {lesson.objective && (
-                                <p className="text-muted-foreground font-inter text-[10px] truncate">{lesson.objective}</p>
+                                <p className="text-muted-foreground font-inter text-xs truncate">{lesson.objective}</p>
                               )}
                             </div>
                             {isFullyDone && (
-                              <span className="text-[10px] font-inter font-semibold text-brand-green bg-brand-green/10 px-2 py-0.5 rounded-full flex-shrink-0">
+                              <span className="text-xs font-inter font-semibold text-brand-green bg-brand-green/10 px-2 py-0.5 rounded-full flex-shrink-0">
                                 ✓ Feita
                               </span>
                             )}
                             {isDone && !isFullyDone && (
-                              <span className="text-[10px] font-inter font-semibold text-secondary bg-secondary/10 px-2 py-0.5 rounded-full flex-shrink-0">
+                              <span className="text-xs font-inter font-semibold text-secondary bg-secondary/10 px-2 py-0.5 rounded-full flex-shrink-0">
                                 Em andamento
                               </span>
                             )}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { MapPin, Users, Plus, Edit3, Trash2, ChevronDown, ChevronRight, X, Check } from "lucide-react";
@@ -40,17 +40,12 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
 
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { fetchData(); }, [churchId]);
-
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     setLoading(true);
-    const applyChurchScope = (query: any) => {
-      if (churchId) return query.eq("church_id", churchId);
-      return query.is("church_id", null);
-    };
-
-    const areasQuery = applyChurchScope(supabase.from("areas").select("id, name, description, church_id").order("name"));
-    const communitiesQuery = applyChurchScope(supabase.from("communities").select("id, name, area_id, church_id").order("name"));
+    let areasQuery = supabase.from("areas").select("id, name, description, church_id").order("name");
+    let communitiesQuery = supabase.from("communities").select("id, name, area_id, church_id").order("name");
+    areasQuery = churchId ? areasQuery.eq("church_id", churchId) : areasQuery.is("church_id", null);
+    communitiesQuery = churchId ? communitiesQuery.eq("church_id", churchId) : communitiesQuery.is("church_id", null);
     const [{ data: areasData, error: areasErr }, { data: commData, error: commErr }] = await Promise.all([
       areasQuery,
       communitiesQuery,
@@ -59,11 +54,13 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
     if (commErr) setError(`Erro ao carregar comunidades: ${commErr.message}`);
     setAreas((areasData ?? []) as AreaRow[]);
     setCommunities((commData ?? []) as CommunityRow[]);
-    if (areasData && areasData.length > 0 && !expandedArea) {
-      setExpandedArea(areasData[0].id);
+    if (areasData && areasData.length > 0) {
+      setExpandedArea((current) => current ?? areasData[0].id);
     }
     setLoading(false);
-  }
+  }, [churchId]);
+
+  useEffect(() => { void fetchData(); }, [fetchData]);
 
   // ── Area CRUD ────────────────────────────────────────────────────────────────
 
@@ -86,8 +83,8 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
     setSavingArea(true);
     setError(null);
     const { error: e } = editingAreaId
-      ? await supabase.from("areas").update({ name: areaForm.name.trim(), description: areaForm.description.trim() || null, church_id: churchId ?? null } as any).eq("id", editingAreaId)
-      : await supabase.from("areas").insert({ name: areaForm.name.trim(), description: areaForm.description.trim() || null, church_id: churchId ?? null } as any);
+      ? await supabase.from("areas").update({ name: areaForm.name.trim(), description: areaForm.description.trim() || null, church_id: churchId ?? null }).eq("id", editingAreaId)
+      : await supabase.from("areas").insert({ name: areaForm.name.trim(), description: areaForm.description.trim() || null, church_id: churchId ?? null });
     if (e) { setError(e.message); setSavingArea(false); return; }
     setSavingArea(false);
     setShowAreaForm(false);
@@ -132,8 +129,8 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
     setSavingCommunity(true);
     setError(null);
     const { error: e } = editingCommunityId
-      ? await supabase.from("communities").update({ name: communityForm.name.trim(), area_id: communityForm.area_id, church_id: churchId ?? null } as any).eq("id", editingCommunityId)
-      : await supabase.from("communities").insert({ name: communityForm.name.trim(), area_id: communityForm.area_id, church_id: churchId ?? null } as any);
+      ? await supabase.from("communities").update({ name: communityForm.name.trim(), area_id: communityForm.area_id, church_id: churchId ?? null }).eq("id", editingCommunityId)
+      : await supabase.from("communities").insert({ name: communityForm.name.trim(), area_id: communityForm.area_id, church_id: churchId ?? null });
     if (e) { setError(e.message); setSavingCommunity(false); return; }
     setSavingCommunity(false);
     setShowCommunityFormFor(null);
@@ -152,7 +149,7 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
-        <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
+        <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
           <MapPin className="w-6 h-6 text-primary" />
         </div>
         <p className="text-muted-foreground font-inter text-sm">Carregando configurações...</p>
@@ -163,14 +160,14 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
   return (
     <div className="space-y-4">
       {/* Header info */}
-      <div className="bg-primary/10 rounded-2xl p-4 flex items-start gap-3">
+      <div className="bg-primary/10 rounded-lg p-4 flex items-start gap-3">
         <MapPin className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
         <div>
           <p className="font-montserrat font-bold text-foreground text-sm">Áreas e Comunidades</p>
           <p className="text-muted-foreground font-inter text-xs mt-0.5">
             {areas.length} área{areas.length !== 1 ? "s" : ""} · {communities.length} comunidade{communities.length !== 1 ? "s" : ""}
           </p>
-          <p className="text-muted-foreground font-inter text-[10px] mt-1">
+          <p className="text-muted-foreground font-inter text-xs mt-1">
             Configure a estrutura geográfica da sua igreja. Novos membros serão vinculados a estas áreas e comunidades.
           </p>
         </div>
@@ -178,7 +175,7 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
 
       {/* Error message */}
       {error && (
-        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 flex items-start gap-2">
+        <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 flex items-start gap-2">
           <X className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
           <p className="font-inter text-xs text-destructive">{error}</p>
           <button onClick={() => setError(null)} className="ml-auto text-destructive/60 hover:text-destructive">
@@ -189,7 +186,7 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
 
       {/* Area form (new/edit) */}
       {showAreaForm && (
-        <div className="bg-card border border-primary/30 rounded-2xl p-4 space-y-3">
+        <div className="bg-card border border-primary/30 rounded-lg p-4 space-y-3">
           <p className="font-montserrat font-bold text-foreground text-sm">
             {editingAreaId ? "Editar Área" : "Nova Área"}
           </p>
@@ -198,27 +195,27 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
             placeholder="Nome da área (ex: Área Norte)"
             value={areaForm.name}
             onChange={e => setAreaForm(f => ({ ...f, name: e.target.value }))}
-            className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-inter"
+            className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-inter"
           />
           <input
             type="text"
             placeholder="Descrição (opcional)"
             value={areaForm.description}
             onChange={e => setAreaForm(f => ({ ...f, description: e.target.value }))}
-            className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-inter"
+            className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-inter"
           />
           <div className="flex gap-2">
             <button
               onClick={saveArea}
               disabled={savingArea}
-              className="flex-1 h-10 rounded-xl bg-primary text-primary-foreground font-inter text-sm font-medium flex items-center justify-center gap-1.5 disabled:opacity-50"
+              className="flex-1 h-10 rounded-lg bg-primary text-primary-foreground font-inter text-sm font-medium flex items-center justify-center gap-1.5 disabled:opacity-50"
             >
               <Check className="w-4 h-4" />
               {savingArea ? "Salvando..." : "Salvar"}
             </button>
             <button
               onClick={() => { setShowAreaForm(false); setEditingAreaId(null); }}
-              className="h-10 px-4 rounded-xl border border-border text-muted-foreground font-inter text-sm"
+              className="h-10 px-4 rounded-lg border border-border text-muted-foreground font-inter text-sm"
             >
               Cancelar
             </button>
@@ -233,14 +230,14 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
         const isAddingComm = showCommunityFormFor === area.id && !editingCommunityId;
 
         return (
-          <div key={area.id} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div key={area.id} className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
             {/* Area header */}
             <div className="flex items-center gap-2 p-3">
               <button
                 onClick={() => setExpandedArea(isOpen ? null : area.id)}
                 className="flex items-center gap-3 flex-1 text-left"
               >
-                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                   <MapPin className="w-4 h-4 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -248,7 +245,7 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
                   {area.description && (
                     <p className="text-muted-foreground font-inter text-xs truncate">{area.description}</p>
                   )}
-                  <p className="text-muted-foreground font-inter text-[10px]">
+                  <p className="text-muted-foreground font-inter text-xs">
                     {areaComms.length} comunidade{areaComms.length !== 1 ? "s" : ""}
                   </p>
                 </div>
@@ -286,7 +283,7 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
                           type="text"
                           value={communityForm.name}
                           onChange={e => setCommunityForm(f => ({ ...f, name: e.target.value }))}
-                          className="w-full h-9 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-inter"
+                          className="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-inter"
                         />
                         <div className="flex gap-2">
                           <button
@@ -339,7 +336,7 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
                       value={communityForm.name}
                       onChange={e => setCommunityForm(f => ({ ...f, name: e.target.value }))}
                       autoFocus
-                      className="w-full h-9 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-inter"
+                      className="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-inter"
                     />
                     <div className="flex gap-2">
                       <button
@@ -377,7 +374,7 @@ export default function AdminAreasTab({ churchId }: { churchId?: string | null }
       {!showAreaForm && (
         <button
           onClick={openNewAreaForm}
-          className="w-full flex items-center justify-center gap-2 p-3 rounded-2xl border-2 border-dashed border-primary/30 text-primary hover:bg-primary/5 transition-colors"
+          className="w-full flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-primary/30 text-primary hover:bg-primary/5 transition-colors"
         >
           <Plus className="w-4 h-4" />
           <span className="font-inter text-sm font-medium">Adicionar nova área</span>

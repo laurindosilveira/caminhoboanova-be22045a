@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
@@ -37,7 +37,7 @@ function ContactCard({ c }: { c: Contact }) {
   const hasParents = !!(c.father_name || c.mother_name);
 
   return (
-    <div className="bg-card border border-border rounded-2xl overflow-hidden">
+    <div className="bg-card border border-border rounded-lg overflow-hidden">
       {/* Member row */}
       <button
         onClick={() => hasParents && setExpanded(v => !v)}
@@ -54,10 +54,10 @@ function ContactCard({ c }: { c: Contact }) {
           <p className="font-montserrat font-bold text-foreground text-sm truncate">{c.full_name}</p>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {c.community && (
-              <span className="text-muted-foreground font-inter text-[10px]">{c.community}</span>
+              <span className="text-muted-foreground font-inter text-xs">{c.community}</span>
             )}
             {age(c.birth_date) && (
-              <span className="text-muted-foreground font-inter text-[10px]">{age(c.birth_date)}</span>
+              <span className="text-muted-foreground font-inter text-xs">{age(c.birth_date)}</span>
             )}
             {c.phone && (
               <a
@@ -65,7 +65,7 @@ function ContactCard({ c }: { c: Contact }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={e => e.stopPropagation()}
-                className="flex items-center gap-1 text-[#25D366] font-inter text-[10px] font-medium hover:underline"
+                className="flex items-center gap-1 text-[#25D366] font-inter text-xs font-medium hover:underline"
               >
                 <MessageCircle className="w-3 h-3" />
                 {c.phone}
@@ -76,7 +76,7 @@ function ContactCard({ c }: { c: Contact }) {
 
         {hasParents && (
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            <span className="text-[10px] font-inter text-muted-foreground">pais</span>
+            <span className="text-xs font-inter text-muted-foreground">pais</span>
             {expanded
               ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
               : <ChevronDown className="w-4 h-4 text-muted-foreground" />
@@ -94,7 +94,7 @@ function ContactCard({ c }: { c: Contact }) {
                 <span className="text-base leading-none">👨</span>
                 <div className="min-w-0">
                   <p className="font-inter text-xs font-semibold text-foreground truncate">{c.father_name}</p>
-                  <p className="font-inter text-[10px] text-muted-foreground">Pai</p>
+                  <p className="font-inter text-xs text-muted-foreground">Pai</p>
                 </div>
               </div>
               {c.father_phone && (
@@ -116,7 +116,7 @@ function ContactCard({ c }: { c: Contact }) {
                 <span className="text-base leading-none">👩</span>
                 <div className="min-w-0">
                   <p className="font-inter text-xs font-semibold text-foreground truncate">{c.mother_name}</p>
-                  <p className="font-inter text-[10px] text-muted-foreground">Mãe</p>
+                  <p className="font-inter text-xs text-muted-foreground">Mãe</p>
                 </div>
               </div>
               {c.mother_phone && (
@@ -139,32 +139,36 @@ function ContactCard({ c }: { c: Contact }) {
 }
 
 export default function LeaderContactsTab() {
-  const { profile } = useAuth();
-  const { effectiveArea } = useAreaSwitch();
+  const { profile, role } = useAuth();
+  const { effectiveArea, effectiveTurmaId } = useAreaSwitch();
   const { toast } = useToast();
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    fetchContacts();
-  }, [profile?.turma_id, effectiveArea]);
-
-  async function fetchContacts() {
+  const fetchContacts = useCallback(async () => {
     setLoading(true);
+    const churchId = profile?.church_id ?? null;
+    const myArea = effectiveArea || profile?.area;
+
+    if (role === "lider" && !effectiveTurmaId) {
+      setContacts([]);
+      setLoading(false);
+      return;
+    }
 
     let query = supabase
       .from("profiles")
       .select("user_id, full_name, phone, birth_date, father_name, father_phone, mother_name, mother_phone, community")
       .order("full_name");
+    if (churchId) query = query.eq("church_id", churchId);
 
-    // Scope to leader's turma if assigned, otherwise to area
-    if (profile?.turma_id) {
-      query = query.eq("turma_id", profile.turma_id);
+    // Scope to the real group currently selected by this leader/admin.
+    if (effectiveTurmaId) {
+      query = query.eq("turma_id", effectiveTurmaId);
     } else {
-      const myArea = effectiveArea || profile?.area;
-      if (myArea) query = query.eq("area", myArea as any);
+      if (myArea) query = query.eq("area", myArea);
     }
 
     const { data, error } = await query;
@@ -175,7 +179,11 @@ export default function LeaderContactsTab() {
       setContacts(data ?? []);
     }
     setLoading(false);
-  }
+  }, [effectiveArea, effectiveTurmaId, profile?.area, profile?.church_id, role, toast]);
+
+  useEffect(() => {
+    fetchContacts();
+  }, [fetchContacts]);
 
   const filtered = contacts.filter(c =>
     !search ||
@@ -191,13 +199,13 @@ export default function LeaderContactsTab() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
           <Users className="w-5 h-5 text-primary" />
         </div>
         <div>
           <h2 className="font-montserrat font-black text-foreground text-base">Contatos</h2>
           <p className="text-muted-foreground text-xs font-inter">
-            {profile?.turma_id ? "Membros da sua turma" : "Membros da sua área"} · {contacts.length} pessoa{contacts.length !== 1 ? "s" : ""}
+            {effectiveTurmaId ? "Membros do grupo selecionado" : "Membros da sua área"} · {contacts.length} pessoa{contacts.length !== 1 ? "s" : ""}
           </p>
         </div>
       </div>
@@ -209,19 +217,19 @@ export default function LeaderContactsTab() {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Buscar por nome ou responsável..."
-          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
         />
       </div>
 
       {loading ? (
         <div className="space-y-2">
           {[1, 2, 3, 4].map(i => (
-            <div key={i} className="h-16 bg-muted rounded-2xl animate-pulse" />
+            <div key={i} className="h-16 bg-muted rounded-lg animate-pulse" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12">
-          <div className="w-14 h-14 mx-auto rounded-2xl bg-muted flex items-center justify-center mb-3">
+          <div className="w-14 h-14 mx-auto rounded-lg bg-muted flex items-center justify-center mb-3">
             <Users className="w-7 h-7 text-muted-foreground" />
           </div>
           <p className="text-muted-foreground font-inter text-sm">
@@ -234,7 +242,7 @@ export default function LeaderContactsTab() {
           {withParents.length > 0 && (
             <div className="space-y-2">
               {!search && (
-                <p className="font-inter text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-1">
+                <p className="font-inter text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">
                   Com contato dos pais ({withParents.length})
                 </p>
               )}
@@ -245,7 +253,7 @@ export default function LeaderContactsTab() {
           {/* Members without parent contacts */}
           {withoutParents.length > 0 && !search && (
             <div className="space-y-2 mt-4">
-              <p className="font-inter text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-1">
+              <p className="font-inter text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">
                 Sem contato dos pais ({withoutParents.length})
               </p>
               {withoutParents.map(c => <ContactCard key={c.user_id} c={c} />)}

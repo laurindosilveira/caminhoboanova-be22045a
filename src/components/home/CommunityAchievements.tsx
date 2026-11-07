@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
@@ -19,17 +19,13 @@ export default function CommunityAchievements() {
   const [stats, setStats] = useState<CommunityStats | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (currentArea) fetchStats();
-  }, [currentArea]);
-
-  async function fetchStats() {
+  const fetchStats = useCallback(async () => {
     setLoading(true);
     // Get member IDs from the selected area so admins see updated numbers when switching
     const { data: members } = await supabase
       .from("profiles")
       .select("user_id")
-      .eq("area", currentArea as any);
+      .eq("area", currentArea);
 
     const memberIds = (members ?? []).map(m => m.user_id);
     if (memberIds.length === 0) {
@@ -71,7 +67,11 @@ export default function CommunityAchievements() {
       streakDays: streak,
     });
     setLoading(false);
-  }
+  }, [currentArea]);
+
+  useEffect(() => {
+    if (currentArea) fetchStats();
+  }, [currentArea, fetchStats]);
 
   if (loading) {
     return <div className="bg-muted rounded-2xl h-36 animate-pulse" />;
@@ -139,7 +139,7 @@ export default function CommunityAchievements() {
               <span className="font-montserrat font-black text-foreground text-base leading-none">
                 {typeof a.value === "number" ? a.value.toLocaleString("pt-BR") : a.value}
               </span>
-              <span className="text-[10px] font-inter text-muted-foreground text-center leading-tight">{a.label}</span>
+              <span className="text-xs font-inter text-muted-foreground text-center leading-tight">{a.label}</span>
             </div>
           ))}
         </div>

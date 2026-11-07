@@ -52,50 +52,118 @@ function calculateEnergy(dates: string[]): number {
 
 type StatsData = Omit<UserStats, "loading">;
 
+type StatsInputs = {
+  activities: Array<{ id: string; type: string; title: string; subtitle: string | null; order_num: number; points: number | null; church_id: string | null }>;
+  user_progress: Array<{ activity_id: string; completed_at: string; church_id: string | null }>;
+  devotional_progress: Array<{ devotional_id: string; completed_at: string; is_recovery: boolean; awarded_points: number | null; church_id: string | null }>;
+  lesson_progress: Array<{ lesson_id: string; church_id: string | null }>;
+  attendance: Array<{ event_id: string; status: string; church_id: string | null }>;
+  worship: Array<{ id: string; status: string; church_id: string | null }>;
+  achievement_unlocks: Array<{ achievement_key: string; bonus_points: number | null; church_id: string | null }>;
+  courses: Array<{ id: string; church_id: string | null }>;
+  lessons: Array<{ id: string; course_id: string; church_id: string | null }>;
+  challenges: Array<{ id: string; completed: boolean }>;
+  game_config: Array<{ key: string; value: number }>;
+  custom_event_types: Array<{ value: string; gives_points: boolean; points: number | null; area: string | null; church_id: string | null }>;
+  attended_events: Array<{ id: string; type: string }> | null;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseStatsInputs(value: unknown): StatsInputs | null {
+  if (!isRecord(value)) return null;
+  const array = (key: string) => Array.isArray(value[key]) ? value[key] : [];
+  return {
+    activities: array("activities") as StatsInputs["activities"],
+    user_progress: array("user_progress") as StatsInputs["user_progress"],
+    devotional_progress: array("devotional_progress") as StatsInputs["devotional_progress"],
+    lesson_progress: array("lesson_progress") as StatsInputs["lesson_progress"],
+    attendance: array("attendance") as StatsInputs["attendance"],
+    worship: array("worship") as StatsInputs["worship"],
+    achievement_unlocks: array("achievement_unlocks") as StatsInputs["achievement_unlocks"],
+    courses: array("courses") as StatsInputs["courses"],
+    lessons: array("lessons") as StatsInputs["lessons"],
+    challenges: array("challenges") as StatsInputs["challenges"],
+    game_config: array("game_config") as StatsInputs["game_config"],
+    custom_event_types: array("custom_event_types") as StatsInputs["custom_event_types"],
+    attended_events: array("attended_events") as StatsInputs["attended_events"],
+  };
+}
+
 async function fetchUserStats(
   userId: string,
   churchId: string | null | undefined,
   currentArea?: string,
 ): Promise<StatsData> {
   const scope = `student-stats:${userId}:${churchId ?? "global"}:${currentArea || "all"}`;
-  const results = await Promise.allSettled([
-    cachedStudentQuery(`${scope}:activities`, () => supabase.from("activities").select("id, type, title, subtitle, order_num, points, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null').order("order_num"), [] as any[]),
-    cachedStudentQuery(`${scope}:user_progress`, () => churchId ? supabase.from("user_progress").select("activity_id, completed_at, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("user_progress").select("activity_id, completed_at, church_id").eq("user_id", userId), [] as any[]),
-    cachedStudentQuery(`${scope}:devotional_progress`, () => churchId ? supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery, awarded_points, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery, awarded_points, church_id").eq("user_id", userId), [] as any[]),
-    churchId
-      ? cachedStudentQuery(`${scope}:lesson_progress`, () => supabase.from("lesson_progress").select("lesson_id, church_id").eq("user_id", userId).eq("is_completed", true).or(`church_id.is.null,church_id.eq.${churchId}`), [] as any[])
-      : cachedStudentQuery(`${scope}:lesson_progress`, () => supabase.from("lesson_progress").select("lesson_id, church_id").eq("user_id", userId).eq("is_completed", true), [] as any[]),
-    cachedStudentQuery(`${scope}:attendance`, () => churchId ? supabase.from("attendance").select("event_id, status, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("attendance").select("event_id, status, church_id").eq("user_id", userId), [] as any[]),
-    cachedStudentQuery(`${scope}:worship`, () => churchId ? supabase.from("worship_attendance").select("id, status, church_id").eq("user_id", userId).eq("status", "aprovado").eq("church_id", churchId) : supabase.from("worship_attendance").select("id, status, church_id").eq("user_id", userId).eq("status", "aprovado"), [] as any[]),
-    cachedStudentQuery(`${scope}:achievement_unlocks`, () => churchId ? supabase.from("achievement_unlocks").select("achievement_key, bonus_points, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("achievement_unlocks").select("achievement_key, bonus_points, church_id").eq("user_id", userId), [] as any[]),
-    cachedStudentQuery(`${scope}:courses`, () => supabase.from("courses").select("id, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'), [] as any[]),
-    cachedStudentQuery(`${scope}:lessons`, () => supabase.from("lessons").select("id, course_id, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'), [] as any[]),
-    cachedStudentQuery(`${scope}:challenges`, () => supabase.from("challenge_participants").select("id, completed").eq("user_id", userId).eq("completed", true), [] as any[]),
-    (supabase as any).rpc("get_game_config"),
-    cachedStudentQuery(`${scope}:custom_event_types`, () => supabase.from("custom_event_types").select("value, gives_points, points, area, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'), [] as any[]),
-  ]);
+  const bundledResult = await cachedStudentQuery<StatsInputs | null>(
+    `${scope}:bundled-v1`,
+    async () => {
+      const result = await supabase.rpc("get_my_user_stats_inputs", {
+        p_church_id: churchId ?? undefined,
+      });
+      return { data: parseStatsInputs(result.data), error: result.error };
+    },
+    null,
+  );
 
-  const [
-    activitiesRes, progressRes, devProgressRes, lessonResponsesRes, attendanceRes,
-    worshipDataRes, achievementUnlocksRes, coursesDataRes, lessonsDataRes,
-    challengeDataRes, gameConfigRes, customEventTypesDataRes
-  ] = results.map(r => r.status === 'fulfilled' ? r.value : { data: null, error: (r as any).reason });
+  let inputs = bundledResult.data;
+  if (!inputs) {
+    const [
+      activitiesRes, progressRes, devProgressRes, lessonResponsesRes, attendanceRes,
+      worshipDataRes, achievementUnlocksRes, coursesDataRes, lessonsDataRes,
+      challengeDataRes, gameConfigRes, customEventTypesDataRes,
+    ] = await Promise.all([
+      cachedStudentQuery(`${scope}:activities`, () => supabase.from("activities").select("id, type, title, subtitle, order_num, points, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null').order("order_num"), []),
+      cachedStudentQuery(`${scope}:user_progress`, () => churchId ? supabase.from("user_progress").select("activity_id, completed_at, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("user_progress").select("activity_id, completed_at, church_id").eq("user_id", userId), []),
+      cachedStudentQuery(`${scope}:devotional_progress`, () => churchId ? supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery, awarded_points, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("devotional_progress").select("devotional_id, completed_at, is_recovery, awarded_points, church_id").eq("user_id", userId), []),
+      churchId
+        ? cachedStudentQuery(`${scope}:lesson_progress`, () => supabase.from("lesson_progress").select("lesson_id, church_id").eq("user_id", userId).eq("is_completed", true).or(`church_id.is.null,church_id.eq.${churchId}`), [])
+        : cachedStudentQuery(`${scope}:lesson_progress`, () => supabase.from("lesson_progress").select("lesson_id, church_id").eq("user_id", userId).eq("is_completed", true), []),
+      cachedStudentQuery(`${scope}:attendance`, () => churchId ? supabase.from("attendance").select("event_id, status, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("attendance").select("event_id, status, church_id").eq("user_id", userId), []),
+      cachedStudentQuery(`${scope}:worship`, () => churchId ? supabase.from("worship_attendance").select("id, status, church_id").eq("user_id", userId).eq("status", "aprovado").eq("church_id", churchId) : supabase.from("worship_attendance").select("id, status, church_id").eq("user_id", userId).eq("status", "aprovado"), []),
+      cachedStudentQuery(`${scope}:achievement_unlocks`, () => churchId ? supabase.from("achievement_unlocks").select("achievement_key, bonus_points, church_id").eq("user_id", userId).eq("church_id", churchId) : supabase.from("achievement_unlocks").select("achievement_key, bonus_points, church_id").eq("user_id", userId), []),
+      cachedStudentQuery(`${scope}:courses`, () => supabase.from("courses").select("id, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'), []),
+      cachedStudentQuery(`${scope}:lessons`, () => supabase.from("lessons").select("id, course_id, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'), []),
+      cachedStudentQuery(`${scope}:challenges`, () => supabase.from("challenge_participants").select("id, completed").eq("user_id", userId).eq("completed", true), []),
+      supabase.rpc("get_game_config"),
+      cachedStudentQuery(`${scope}:custom_event_types`, () => supabase.from("custom_event_types").select("value, gives_points, points, area, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'), []),
+    ]);
+
+    inputs = {
+      activities: activitiesRes.data ?? [],
+      user_progress: progressRes.data ?? [],
+      devotional_progress: devProgressRes.data ?? [],
+      lesson_progress: lessonResponsesRes.data ?? [],
+      attendance: attendanceRes.data ?? [],
+      worship: worshipDataRes.data ?? [],
+      achievement_unlocks: achievementUnlocksRes.data ?? [],
+      courses: coursesDataRes.data ?? [],
+      lessons: lessonsDataRes.data ?? [],
+      challenges: challengeDataRes.data ?? [],
+      game_config: gameConfigRes.data ?? [],
+      custom_event_types: customEventTypesDataRes.data ?? [],
+      attended_events: null,
+    };
+  }
 
   const overlay = await getPendingStudentOverlay(userId);
-  const activities = activitiesRes.data ?? [];
-  const progress = progressRes.data ?? [];
-  const devProgress = mergeByKey(devProgressRes.data ?? [], overlay.devotionalProgress as any[], "devotional_id");
-  const lessonResponses = mergeByKey(lessonResponsesRes.data ?? [], overlay.lessonProgress as any[], "lesson_id");
-  const attendance = mergeByKey(attendanceRes.data ?? [], overlay.attendance as any[], "event_id");
-  const worshipData = [...(worshipDataRes.data ?? []), ...overlay.worshipAttendance];
-  const achievementUnlocks = achievementUnlocksRes.data ?? [];
-  const coursesData = coursesDataRes.data ?? [];
-  const lessonsData = lessonsDataRes.data ?? [];
-  const challengeData = challengeDataRes.data ?? [];
-  const gameConfig = gameConfigRes.data ?? [];
-  const customEventTypesData = customEventTypesDataRes.data ?? [];
+  const activities = inputs.activities;
+  const progress = inputs.user_progress;
+  const devProgress = mergeByKey(inputs.devotional_progress, overlay.devotionalProgress, "devotional_id");
+  const lessonResponses = mergeByKey(inputs.lesson_progress, overlay.lessonProgress, "lesson_id");
+  const attendance = mergeByKey(inputs.attendance, overlay.attendance, "event_id");
+  const worshipData = [...inputs.worship, ...overlay.worshipAttendance];
+  const achievementUnlocks = inputs.achievement_unlocks;
+  const coursesData = inputs.courses;
+  const lessonsData = inputs.lessons;
+  const challengeData = inputs.challenges;
+  const gameConfig = inputs.game_config;
+  const customEventTypesData = inputs.custom_event_types;
 
-  const cfgMap = new Map<string, number>((gameConfig ?? []).map((r: any) => [r.key, Number(r.value)]));
+  const cfgMap = new Map<string, number>((gameConfig ?? []).map((r) => [r.key, Number(r.value)]));
   const cfg = {
     lessonPoints:          cfgMap.get("lesson_points")             ?? 20,
     devotionalPoints:      cfgMap.get("devotional_points")         ?? 5,
@@ -113,28 +181,28 @@ async function fetchUserStats(
     cfgMap.get("level_5_threshold") ?? 200,
   ];
 
-  const completedIds = new Set(progress.map((p: any) => p.activity_id));
+  const completedIds = new Set(progress.map((p) => p.activity_id));
   const allDates = [
-    ...progress.map((p: any) => p.completed_at),
-    ...devProgress.map((p: any) => p.completed_at),
+    ...progress.map((p) => p.completed_at),
+    ...devProgress.map((p) => p.completed_at),
   ];
 
   const activityPoints = activities
-    .filter((a: any) => completedIds.has(a.id) && a.type !== "devocional" && a.type !== "formacao" && a.type !== "encontro")
-    .reduce((sum: number, a: any) => sum + (a.points ?? 0), 0);
+    .filter((a) => completedIds.has(a.id) && a.type !== "devocional" && a.type !== "formacao" && a.type !== "encontro")
+    .reduce((sum, a) => sum + (a.points ?? 0), 0);
 
-  const devotionalPoints = devProgress.reduce((sum: number, dp: any) => {
+  const devotionalPoints = devProgress.reduce((sum, dp) => {
     if (typeof dp.awarded_points === "number") return sum + dp.awarded_points;
     if (dp.is_recovery) return sum + cfg.devotionalRecoveryPts;
     const dow = new Date(dp.completed_at).getDay();
     return sum + (dow === 0 || dow === 6 ? cfg.devotionalWeekendPts : cfg.devotionalPoints);
   }, 0);
 
-  const relevantCustomTypes = (customEventTypesData ?? []).filter((t: any) =>
+  const relevantCustomTypes = (customEventTypesData ?? []).filter((t) =>
     !t.area || !currentArea || t.area === currentArea
   );
   const customTypeMap = new Map<string, { gives_points: boolean; points: number }>();
-  relevantCustomTypes.forEach((t: any) => {
+  relevantCustomTypes.forEach((t) => {
     const existing = customTypeMap.get(t.value);
     if (!existing || t.area === currentArea) {
       customTypeMap.set(t.value, {
@@ -144,35 +212,37 @@ async function fetchUserStats(
     }
   });
 
-  const presentAttendance = (attendance ?? []).filter((a: any) => a.status === "presente");
-  const attendedEventIds = presentAttendance.map((a: any) => a.event_id).filter(Boolean);
-  let eventTypeById = new Map<string, string>();
-  if (attendedEventIds.length > 0) {
+  const presentAttendance = (attendance ?? []).filter((a) => a.status === "presente");
+  const attendedEventIds = presentAttendance.map((a) => a.event_id).filter(Boolean);
+  const eventTypeById = new Map<string, string>();
+  if (inputs.attended_events !== null) {
+    inputs.attended_events.forEach((event) => eventTypeById.set(event.id, event.type));
+  } else if (attendedEventIds.length > 0) {
     const { data: eventsData } = await supabase
       .from("events")
       .select("id, type")
       .in("id", attendedEventIds);
-    (eventsData ?? []).forEach((e: any) => eventTypeById.set(e.id, e.type));
+    (eventsData ?? []).forEach((e) => eventTypeById.set(e.id, e.type));
   }
 
-  const completedLessonIds = new Set((lessonResponses ?? []).map((r: any) => r.lesson_id));
+  const completedLessonIds = new Set((lessonResponses ?? []).map((r) => r.lesson_id));
   const lessonStudyPoints = completedLessonIds.size * cfg.lessonPoints;
 
-  const attendancePoints = presentAttendance.reduce((sum: number, a: any) => {
+  const attendancePoints = presentAttendance.reduce((sum, a) => {
     const eventType = eventTypeById.get(a.event_id);
     const custom = eventType ? customTypeMap.get(eventType) : undefined;
     if (custom && custom.gives_points) return sum + custom.points;
     return sum + cfg.attendancePoints;
   }, 0);
   const worshipPoints = (worshipData ?? []).length * cfg.worshipPoints;
-  const achievementBonusPoints = (achievementUnlocks ?? []).reduce((sum: number, a: any) => sum + (a.bonus_points ?? 0), 0);
+  const achievementBonusPoints = (achievementUnlocks ?? []).reduce((sum, a) => sum + (a.bonus_points ?? 0), 0);
   const challengePoints = (challengeData ?? []).length * cfg.challengePoints;
 
   let courseBonusPoints = 0;
   const allLessons = lessonsData ?? [];
-  (coursesData ?? []).forEach((course: any) => {
-    const courseLessons = allLessons.filter((l: any) => l.course_id === course.id);
-    if (courseLessons.length > 0 && courseLessons.every((l: any) => completedLessonIds.has(l.id))) {
+  (coursesData ?? []).forEach((course) => {
+    const courseLessons = allLessons.filter((l) => l.course_id === course.id);
+    if (courseLessons.length > 0 && courseLessons.every((l) => completedLessonIds.has(l.id))) {
       courseBonusPoints += cfg.courseBonus;
     }
   });
@@ -185,7 +255,7 @@ async function fetchUserStats(
     streakDays: calculateStreak(allDates),
     faithEnergy: calculateEnergy(allDates),
     completedCount: completedIds.size,
-    nextActivity: activities.find((a: any) => !completedIds.has(a.id)) ?? null,
+    nextActivity: activities.find((a) => !completedIds.has(a.id)) ?? null,
     totalActivities: activities.length,
   };
 }
@@ -205,10 +275,35 @@ export function useUserStats(
   churchId: string | null | undefined,
   currentArea?: string,
 ): UserStats {
+  const persistedKey = userId
+    ? `caminho:user-stats:v1:${userId}:${churchId ?? "global"}:${currentArea || "all"}`
+    : null;
+  let initialData: StatsData | undefined;
+  if (persistedKey) {
+    try {
+      const stored = localStorage.getItem(persistedKey);
+      initialData = stored ? JSON.parse(stored) as StatsData : undefined;
+    } catch {
+      initialData = undefined;
+    }
+  }
+
   const { data, isLoading } = useQuery({
     queryKey: ["userStats", userId, churchId, currentArea],
-    queryFn: () => fetchUserStats(userId!, churchId, currentArea),
+    queryFn: async () => {
+      const stats = await fetchUserStats(userId!, churchId, currentArea);
+      if (persistedKey) {
+        try {
+          localStorage.setItem(persistedKey, JSON.stringify(stats));
+        } catch {
+          // Best effort only; live stats still render normally.
+        }
+      }
+      return stats;
+    },
     enabled: !!userId,
+    initialData,
+    initialDataUpdatedAt: initialData ? 0 : undefined,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });

@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock, BookOpen, BarChart3, GraduationCap, FileText, BookMarked } from "lucide-react";
+import { Users, CalendarDays, MessageSquare, Bell, ChevronDown, ChevronUp, Clock, BookOpen, BarChart3, GraduationCap, FileText, BookMarked, Settings, Sparkles } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const AttendanceTab = lazy(() => import("@/components/admin/tabs/AttendanceTab"));
 const MessagesTab = lazy(() => import("@/components/admin/tabs/MessagesTab"));
@@ -10,14 +11,14 @@ const ParticipantsTab = lazy(() => import("@/components/admin/tabs/ParticipantsT
 const AdminPushTab = lazy(() => import("@/components/admin/tabs/AdminPushTab"));
 const PushStatusList = lazy(() => import("@/components/admin/tabs/PushStatusList"));
 const CourseGuideSubTab = lazy(() => import("@/components/admin/tabs/leader/CourseGuideSubTab"));
-const OverviewTab = lazy(() => import("@/components/admin/tabs/OverviewTab"));
+const LeaderCareDashboard = lazy(() => import("@/components/admin/tabs/leader/LeaderCareDashboard"));
 const ReportsTab = lazy(() => import("@/components/admin/tabs/ReportsTab"));
 const LeaderTurmaManagement = lazy(() => import("@/components/admin/tabs/leader/LeaderTurmaManagement"));
 const LeaderGuideContent = lazy(() => import("@/components/home/LeaderGuideContent"));
 import LeaderWaitingRoom from "@/components/home/LeaderWaitingRoom";
+import type { Database } from "@/integrations/supabase/types";
 
-
-import { AREA_COMMUNITIES, ALL_COMMUNITIES, getCommunitiesForArea } from "@/config/areas";
+type CommunityName = Database["public"]["Enums"]["community_name"];
 
 type Activity = {
   id: string; type: string; title: string; subtitle: string | null; order_num: number; points: number; church_id?: string | null;
@@ -26,33 +27,97 @@ type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
   confirmation_year?: number | null;
+  turma_id?: string | null;
   completed_lesson_count?: number;
   completed_devotional_count?: number;
   completed_event_count?: number;
   faith_points?: number;
   church_id?: string | null;
+  progress_total?: number;
+  last_activity_at?: string | null;
+  last_activity_source?: string | null;
+  last_devotional_at?: string | null;
+  recent_attendance_statuses?: string[];
+  health_status?: string;
+  is_priority?: boolean;
+  needs_pastor?: boolean;
+  avatar_url?: string | null;
+  father_name?: string | null;
+  mother_name?: string | null;
+  father_phone?: string | null;
+  mother_phone?: string | null;
+  address?: string | null;
 };
-type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
 type Turma = { id: string; name: string; area: string | null; church_id?: string | null };
 
 type SubTab = "visao" | "alunos" | "encontros" | "roteiros" | "comunicacao" | "push" | "gerencia" | "relatorios" | "guia";
 
-const SUB_TABS: { id: SubTab; label: string; icon: typeof Users }[] = [
-  { id: "visao", label: "Visão", icon: BarChart3 },
-  { id: "alunos", label: "Discípulos", icon: Users },
-  { id: "encontros", label: "Encontros", icon: CalendarDays },
-  { id: "roteiros", label: "Roteiros", icon: BookOpen },
-  { id: "guia", label: "Guia", icon: BookMarked },
-  { id: "relatorios", label: "Relatórios", icon: FileText },
-  { id: "comunicacao", label: "Avisos", icon: MessageSquare },
-  { id: "push", label: "Push", icon: Bell },
-  { id: "gerencia", label: "Profissão de Fé", icon: GraduationCap },
+type SubTabDefinition = {
+  id: SubTab;
+  label: string;
+  description: string;
+  section: string;
+  icon: typeof Users;
+  adminOnly?: boolean;
+};
+
+const SUB_TABS: SubTabDefinition[] = [
+  { id: "visao", label: "Hoje", description: "Prioridades e próximos passos", section: "Acompanhamento", icon: Sparkles },
+  { id: "alunos", label: "Pessoas e cursos", description: "Discípulos, aprovações e liberações", section: "Pessoas", icon: Users },
+  { id: "encontros", label: "Agenda e presença", description: "Encontros, chamada e avaliações", section: "Encontros", icon: CalendarDays },
+  { id: "roteiros", label: "Roteiro do encontro", description: "Conteúdo para conduzir a reunião", section: "Encontros", icon: BookOpen },
+  { id: "guia", label: "Guia da lição", description: "Orientações do curso selecionado", section: "Conteúdo", icon: BookMarked },
+  { id: "comunicacao", label: "Avisos", description: "Mensagens para o grupo", section: "Comunicação", icon: MessageSquare },
+  { id: "push", label: "Notificações", description: "Envios imediatos ou agendados", section: "Comunicação", icon: Bell },
+  { id: "relatorios", label: "Relatórios", description: "Progresso e presença do grupo", section: "Análise", icon: FileText },
+  { id: "gerencia", label: "Configurações", description: "Turma, profissão de fé e reinício", section: "Administração", icon: Settings, adminOnly: true },
 ];
+
+type ParticipantSummaryRow = {
+  user_id: string;
+  full_name: string;
+  community: string | null;
+  area: string | null;
+  birth_date: string | null;
+  phone: string | null;
+  turma_id: string | null;
+  confirmation_year: number | null;
+  avatar_url: string | null;
+  father_name: string | null;
+  mother_name: string | null;
+  father_phone: string | null;
+  mother_phone: string | null;
+  address: string | null;
+  church_id: string | null;
+  completed_activity_ids: string[] | null;
+  completed_lesson_count: number | null;
+  completed_devotional_count: number | null;
+  completed_event_count: number | null;
+  progress_total: number | null;
+  last_activity_at: string | null;
+  last_activity_source: string | null;
+  last_devotional_at: string | null;
+  recent_attendance_statuses: string[] | null;
+  health_status: string | null;
+  is_priority: boolean | null;
+  needs_pastor: boolean | null;
+};
+
+type LeaderRpcResult<T> = { data: T | null; error: { message: string } | null };
+const callLeaderRpc = supabase.rpc.bind(supabase) as unknown as <T = unknown>(
+  functionName: string,
+  args?: Record<string, unknown>,
+) => PromiseLike<LeaderRpcResult<T>>;
 
 export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }) {
   const { profile, role } = useAuth();
-  const { effectiveArea } = useAreaSwitch();
+  const { effectiveArea, effectiveTurmaId } = useAreaSwitch();
+  const { toast } = useToast();
   const canView = role === "admin" || role === "lider";
+  const visibleSubTabs = useMemo(
+    () => SUB_TABS.filter((tab) => !tab.adminOnly || role === "admin"),
+    [role],
+  );
 
   const [expanded, setExpanded] = useState(asTab);
   const [activeSubTab, setActiveSubTab] = useState<SubTab>("visao");
@@ -69,14 +134,14 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
   const contentRef = useRef<HTMLDivElement>(null);
 
   const handleSwipe = useCallback((direction: "left" | "right") => {
-    const currentIdx = SUB_TABS.findIndex(t => t.id === activeSubTab);
+    const currentIdx = visibleSubTabs.findIndex(t => t.id === activeSubTab);
     const nextIdx = direction === "left"
-      ? Math.min(currentIdx + 1, SUB_TABS.length - 1)
+      ? Math.min(currentIdx + 1, visibleSubTabs.length - 1)
       : Math.max(currentIdx - 1, 0);
     if (nextIdx !== currentIdx) {
-      scrollToTab(SUB_TABS[nextIdx].id);
+      scrollToTab(visibleSubTabs[nextIdx].id);
     }
-  }, [activeSubTab, scrollToTab]);
+  }, [activeSubTab, scrollToTab, visibleSubTabs]);
 
   useEffect(() => {
     const el = contentRef.current;
@@ -104,17 +169,23 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
     };
   }, [expanded, handleSwipe]);
 
+  useEffect(() => {
+    if (!visibleSubTabs.some((tab) => tab.id === activeSubTab)) {
+      setActiveSubTab("visao");
+    }
+  }, [activeSubTab, visibleSubTabs]);
+
   const [loading, setLoading] = useState(false);
+  const fetchRequestId = useRef(0);
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [plans, setPlans] = useState<Record<string, PlanInfo>>({});
   const [turmas, setTurmas] = useState<Turma[]>([]);
-  const [dataLoaded, setDataLoaded] = useState(false);
   const [waitingCount, setWaitingCount] = useState(0);
 
   const turmaArea = effectiveArea || profile?.area || "";
   const churchId = profile?.church_id ?? null;
+  const managedTurmaId = effectiveTurmaId ?? profile?.turma_id ?? null;
 
   // Fetch waiting room count for the leader's area
   useEffect(() => {
@@ -129,152 +200,125 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
       const { data, error } = await waitingQuery;
       if (!error && data) {
         const myId = (await supabase.auth.getUser()).data.user?.id;
-        const filtered = data.filter((p: any) => p.user_id !== myId && (!p.area || p.area === turmaArea) && (!churchId || p.church_id === churchId));
+        const filtered = data.filter((participant) => participant.user_id !== myId && (!participant.area || participant.area === turmaArea) && (!churchId || participant.church_id === churchId));
         setWaitingCount(filtered.length);
       }
     }
     fetchWaitingCount();
   }, [canView, turmaArea, expanded, churchId]);
 
-  async function fetchData() {
-    // Admins can view any area even without a turma_id
+  const fetchData = useCallback(async () => {
     const isAdmin = role === "admin";
-    if (!profile?.turma_id && !isAdmin) return;
+    if (!churchId || (!managedTurmaId && !isAdmin)) return;
+    const requestId = ++fetchRequestId.current;
     setLoading(true);
 
-    let profilesQuery = supabase.from("profiles").select("user_id, full_name, community, area, birth_date, phone, turma_id, confirmation_year, avatar_url, father_name, mother_name, father_phone, mother_phone, address, church_id");
-    if (churchId) profilesQuery = profilesQuery.eq("church_id", churchId);
-    
-    if (isAdmin) {
-      // Admin: fetch all profiles from the effective area
-      profilesQuery = profilesQuery.eq("area", turmaArea as any);
-    } else {
-      // Leader: fetch only their turma
-      profilesQuery = profilesQuery.eq("turma_id", profile!.turma_id!);
-    }
+    const summaryArgs: Record<string, unknown> = { p_church_id: churchId };
+    if (managedTurmaId) summaryArgs.p_turma_id = managedTurmaId;
+    else if (turmaArea) summaryArgs.p_area = turmaArea;
 
     const [
-      { data: activitiesData },
-      { data: profilesData },
-      userResult,
-      { data: turmasData },
+      activitiesResult,
+      summariesResult,
+      turmasResult,
     ] = await Promise.all([
       supabase.from("activities").select("*").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null").order("order_num"),
-      profilesQuery,
-      supabase.auth.getUser(),
-      churchId
-        ? supabase.from("turmas").select("id, name, area, church_id").eq("is_active", true).eq("church_id", churchId)
-        : supabase.from("turmas").select("id, name, area, church_id").eq("is_active", true).is("church_id", null),
+      callLeaderRpc<ParticipantSummaryRow[]>("get_leader_participant_summaries", summaryArgs),
+      supabase.from("turmas").select("id, name, area, church_id").eq("is_active", true).eq("church_id", churchId),
     ]);
 
-    const myId = userResult.data.user?.id ?? "";
-    const profilesList = (profilesData ?? []).filter(p => p.user_id !== myId);
+    const loadError = activitiesResult.error ?? summariesResult.error ?? turmasResult.error;
+    if (requestId !== fetchRequestId.current) return;
+    if (loadError) {
+      setActivities([]);
+      setParticipants([]);
+      setTurmas([]);
+      setLoading(false);
+      toast({
+        title: "Não foi possível carregar a Sala do Líder",
+        description: loadError.message,
+        variant: "destructive",
+      });
+      return;
+    }
 
-    const userIds = profilesList.map(p => p.user_id);
-    const communitiesInScope = [...new Set(profilesList.map(p => p.community).filter(Boolean))];
-    const now = new Date();
-    const churchScope = churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null";
-    const [
-      { data: progressData },
-      { data: lessonResponsesData },
-      { data: devotionalProgressData },
-      { data: attendanceData },
-      rankingResponses,
-      { data: plansData },
-      { data: assessData },
-    ] = userIds.length > 0
-      ? await Promise.all([
-          supabase.from("user_progress").select("user_id, activity_id").in("user_id", userIds).or(churchScope),
-          supabase.from("lesson_progress").select("user_id, lesson_id").in("user_id", userIds).eq("is_completed", true).or(churchScope),
-          supabase.from("devotional_progress").select("user_id, devotional_id, completed_at").in("user_id", userIds).or(churchScope),
-          supabase.from("attendance").select("user_id, status").in("user_id", userIds).eq("status", "presente").or(churchScope),
-          Promise.all(
-            communitiesInScope.map((community) =>
-              supabase.rpc("get_community_ranking" as any, { _community: community as any, _church_id: churchId })
-            )
-          ),
-          supabase.from("discipleship_plans").select("user_id, health_status, is_priority").in("user_id", userIds).or(churchScope),
-          supabase.from("spiritual_assessments").select("user_id, needs_pastor")
-            .in("user_id", userIds)
-            .or(churchScope)
-            .eq("month", now.getMonth() + 1)
-            .eq("year", now.getFullYear()),
-        ])
-      : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, [] as any, { data: [] }, { data: [] }];
+    const summaryRows = summariesResult.data ?? [];
+    const communitiesInScope = [
+      ...new Set(summaryRows.map((row) => row.community).filter((value): value is string => Boolean(value))),
+    ];
+    const rankingResponses = await Promise.all(
+      communitiesInScope.map((community) =>
+        supabase.rpc("get_community_ranking", {
+          _community: community as CommunityName,
+          _church_id: churchId,
+        }),
+      ),
+    );
+    if (requestId !== fetchRequestId.current) return;
 
     const rankingMap = new Map<string, number>();
     const rankingFailedCommunities = new Set<string>();
-    (rankingResponses ?? []).forEach((response: any, index: number) => {
+    (rankingResponses ?? []).forEach((response, index) => {
       const community = communitiesInScope[index];
       if (response?.error) {
         if (community) rankingFailedCommunities.add(community);
         return;
       }
-      (response.data ?? []).forEach((item: any) => {
+      (response.data ?? []).forEach((item) => {
         rankingMap.set(item.user_id, Number(item.faith_points ?? 0));
       });
     });
 
-    const participantList: Participant[] = profilesList.map((p) => {
-      const userProgress = (progressData ?? []).filter((pr) => pr.user_id === p.user_id);
-      const lessonCount = new Set(
-        (lessonResponsesData ?? [])
-          .filter((response) => response.user_id === p.user_id)
-          .map((response) => response.lesson_id)
-      ).size;
-      const devotionals = (devotionalProgressData ?? []).filter((progress) => progress.user_id === p.user_id);
-      const devotionalCount = devotionals.length;
-      const completedActivityIds = userProgress.map((pr) => pr.activity_id);
-      const completedEventCount = (attendanceData ?? []).filter(a => a.user_id === p.user_id).length;
+    const participantList: Participant[] = summaryRows.map((row) => {
+      const lessonCount = Number(row.completed_lesson_count ?? 0);
+      const devotionalCount = Number(row.completed_devotional_count ?? 0);
 
       return {
-        ...p,
-        completed_count: userProgress.length + lessonCount + devotionalCount,
-        completed_activity_ids: completedActivityIds,
+        ...row,
+        full_name: row.full_name ?? "",
+        community: row.community ?? "Aguardando definição",
+        area: row.area ?? "Sem área",
+        birth_date: row.birth_date ?? "",
+        phone: row.phone ?? "",
+        completed_count: lessonCount + devotionalCount,
+        completed_activity_ids: row.completed_activity_ids ?? [],
         completed_lesson_count: lessonCount,
         completed_devotional_count: devotionalCount,
-        completed_event_count: completedEventCount,
-        faith_points: rankingFailedCommunities.has(p.community)
+        completed_event_count: Number(row.completed_event_count ?? 0),
+        progress_total: Number(row.progress_total ?? 0),
+        recent_attendance_statuses: row.recent_attendance_statuses ?? [],
+        health_status: row.health_status ?? "saudavel",
+        is_priority: row.is_priority ?? false,
+        needs_pastor: row.needs_pastor ?? false,
+        faith_points: row.community && rankingFailedCommunities.has(row.community)
           ? undefined
-          : rankingMap.get(p.user_id),
-        turma_id: p.turma_id,
-      } as any;
+          : rankingMap.get(row.user_id),
+      };
     });
 
-    const plansMap: Record<string, PlanInfo> = {};
-    (plansData ?? []).forEach((pl: any) => {
-      plansMap[pl.user_id] = { health_status: pl.health_status, is_priority: pl.is_priority ?? false };
-    });
-    (assessData ?? []).forEach((a: any) => {
-      if (!plansMap[a.user_id]) plansMap[a.user_id] = { health_status: "atencao", is_priority: false };
-      plansMap[a.user_id].needs_pastor = a.needs_pastor;
-    });
-
-    setActivities(activitiesData ?? []);
+    setActivities(activitiesResult.data ?? []);
     setParticipants(participantList);
-    setTurmas(turmasData ?? []);
-    setPlans(plansMap);
+    setTurmas(
+      role === "lider" && managedTurmaId
+        ? (turmasResult.data ?? []).filter((turma) => turma.id === managedTurmaId)
+        : (turmasResult.data ?? []),
+    );
     setLoading(false);
-    setDataLoaded(true);
-  }
+  }, [churchId, managedTurmaId, role, toast, turmaArea]);
 
   // Re-fetch when area changes (admin switching) or on first expand
   useEffect(() => {
     if (expanded && canView) {
-      setDataLoaded(false);
-      fetchData();
+      void fetchData();
     }
-  }, [expanded, canView, turmaArea, churchId]);
-
-  useEffect(() => {
-    if (expanded && !dataLoaded && canView) {
-      fetchData();
-    }
-  }, [expanded, dataLoaded, canView]);
+  }, [expanded, canView, turmaArea, churchId, fetchData]);
 
   if (!canView) return null;
 
-  const communities = getCommunitiesForArea(turmaArea ?? "");
+  const communities = [
+    ...new Set(participants.map((participant) => participant.community).filter(Boolean)),
+  ].sort((left, right) => left.localeCompare(right, "pt-BR"));
+  const managedTurma = turmas.find((turma) => turma.id === managedTurmaId) ?? null;
 
   return (
     <div className={asTab ? "" : "mx-5"}>
@@ -288,7 +332,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
             <div className="w-10 h-10 rounded-xl flex items-center justify-center relative" style={{ background: "var(--gradient-hero)" }}>
               <span className="text-lg">📋</span>
               {waitingCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-xs font-bold flex items-center justify-center">
                   {waitingCount}
                 </span>
               )}
@@ -324,7 +368,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
           {/* Sub-tab selector */}
           <div className="relative pb-4">
             {(() => {
-              const currentTab = SUB_TABS.find(tab => tab.id === activeSubTab) ?? SUB_TABS[0];
+              const currentTab = visibleSubTabs.find(tab => tab.id === activeSubTab) ?? visibleSubTabs[0];
               const CurrentIcon = currentTab.icon;
 
               return (
@@ -340,8 +384,9 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                         <CurrentIcon className="h-5 w-5" />
                       </div>
                       <div className="min-w-0">
-                        <p className="font-inter text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Subaba atual</p>
+                        <p className="font-inter text-xs font-bold uppercase tracking-wide text-muted-foreground">{currentTab.section}</p>
                         <p className="truncate font-montserrat text-sm font-black text-foreground">{currentTab.label}</p>
+                        <p className="truncate font-inter text-[11px] text-muted-foreground">{currentTab.description}</p>
                       </div>
                     </div>
                     {isSubTabMenuOpen ? (
@@ -353,32 +398,46 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
 
                   {isSubTabMenuOpen && (
                     <div className="absolute left-0 right-0 top-[calc(100%-0.75rem)] z-30 max-h-72 overflow-y-auto rounded-2xl border border-border bg-card p-2 shadow-2xl">
-                      {SUB_TABS.map(tab => {
+                      {visibleSubTabs.map((tab, index) => {
                         const Icon = tab.icon;
                         const isActive = activeSubTab === tab.id;
                         const showBadge = tab.id === "alunos" && waitingCount > 0;
+                        const showSection = index === 0 || visibleSubTabs[index - 1]?.section !== tab.section;
 
                         return (
-                          <button
-                            type="button"
-                            key={tab.id}
-                            onClick={() => scrollToTab(tab.id)}
-                            className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
-                              isActive
-                                ? "bg-primary text-primary-foreground"
-                                : "text-foreground hover:bg-muted"
-                            }`}
-                          >
-                            <Icon className="h-5 w-5 shrink-0" />
-                            <span className="min-w-0 flex-1 font-inter text-sm font-semibold">{tab.label}</span>
-                            {showBadge && (
-                              <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
-                                isActive ? "bg-primary-foreground text-primary" : "bg-destructive text-destructive-foreground"
-                              }`}>
-                                {waitingCount}
-                              </span>
+                          <div key={tab.id}>
+                            {showSection && (
+                              <p className="px-3 pb-1 pt-2 font-inter text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
+                                {tab.section}
+                              </p>
                             )}
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => scrollToTab(tab.id)}
+                              className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
+                                isActive
+                                  ? "bg-primary text-primary-foreground"
+                                  : "text-foreground hover:bg-muted"
+                              }`}
+                            >
+                              <Icon className="h-5 w-5 shrink-0" />
+                              <span className="min-w-0 flex-1">
+                                <span className="block font-inter text-sm font-semibold">{tab.label}</span>
+                                <span className={`block truncate font-inter text-[11px] ${
+                                  isActive ? "text-primary-foreground/75" : "text-muted-foreground"
+                                }`}>
+                                  {tab.description}
+                                </span>
+                              </span>
+                              {showBadge && (
+                                <span className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold ${
+                                  isActive ? "bg-primary-foreground text-primary" : "bg-destructive text-destructive-foreground"
+                                }`}>
+                                  {waitingCount}
+                                </span>
+                              )}
+                            </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -435,13 +494,17 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                 className="animate-[tab-slide-in_0.35s_ease-out]"
               >
               {activeSubTab === "visao" && (
-                <OverviewTab
-                  participants={participants}
-                  activities={activities}
-                  plans={plans}
-                  onSelectParticipant={(p) => {
-                    setHighlightedParticipant(p);
-                    setActiveSubTab("encontros");
+                <LeaderCareDashboard
+                  area={turmaArea || null}
+                  churchId={churchId}
+                  turmaId={managedTurmaId}
+                  participants={participants.map((participant) => ({
+                    user_id: participant.user_id,
+                    full_name: participant.full_name,
+                    birth_date: participant.birth_date,
+                  }))}
+                  onNavigate={(target) => {
+                    setActiveSubTab(target === "agenda" ? "encontros" : "alunos");
                   }}
                 />
               )}
@@ -455,7 +518,14 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                       onAssigned={() => setWaitingCount(prev => Math.max(0, prev - 1))}
                     />
                   )}
-                  <ParticipantsTab participants={participants} activities={activities} communities={communities} />
+                  <ParticipantsTab
+                    participants={participants}
+                    activities={activities}
+                    communities={communities}
+                    turmaId={managedTurmaId}
+                    turmaArea={turmaArea}
+                    onDataChanged={() => void fetchData()}
+                  />
                 </div>
               )}
 
@@ -466,6 +536,8 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                   communities={communities}
                   adminArea={turmaArea}
                   churchId={churchId}
+                  turmaId={managedTurmaId}
+                  turmaName={managedTurma?.name ?? turmaArea}
                   initialParticipant={highlightedParticipant}
                   onClearInitial={() => setHighlightedParticipant(null)}
                 />
@@ -476,15 +548,24 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
               )}
 
               {activeSubTab === "comunicacao" && (
-                <MessagesTab churchId={churchId} />
+                <MessagesTab leaderMode={role === "lider"} churchId={churchId} />
               )}
 
               {activeSubTab === "push" && (
                 <div className="space-y-4">
-                  <AdminPushTab turmas={turmas} churchId={churchId} />
-                  <div className="border-t border-border pt-4">
-                    <PushStatusList adminArea={turmaArea} />
-                  </div>
+                  <AdminPushTab
+                    turmas={turmas}
+                    churchId={churchId}
+                    leaderMode={role === "lider"}
+                    managedTurmaId={managedTurmaId}
+                    areas={[...new Set(turmas.map((turma) => turma.area).filter((area): area is string => Boolean(area)))]}
+                    communities={communities}
+                  />
+                  {role === "admin" && (
+                    <div className="border-t border-border pt-4">
+                      <PushStatusList adminArea={turmaArea} />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -492,7 +573,7 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
                 <ReportsTab />
               )}
 
-              {activeSubTab === "gerencia" && (
+              {activeSubTab === "gerencia" && role === "admin" && (
                 <LeaderTurmaManagement defaultArea={turmaArea} defaultChurchId={churchId} />
               )}
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -77,20 +77,14 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
     questions: [""] as string[],
   });
 
-  useEffect(() => {
-    fetchDevotionals();
-    fetchEventReleases();
-    fetchDevotionalMode();
-  }, [lesson.id, churchId]);
-
-  async function fetchDevotionalMode() {
+  const fetchDevotionalMode = useCallback(async () => {
     const { data } = await supabase
       .from("lessons")
       .select("devotional_mode")
       .eq("id", lesson.id)
       .maybeSingle();
-    if (data) setDevotionalMode(((data as any).devotional_mode ?? "10_days") as "10_days" | "5_days");
-  }
+    if (data) setDevotionalMode((data.devotional_mode ?? "10_days") as "10_days" | "5_days");
+  }, [lesson.id]);
 
   async function saveDevotionalMode(mode: "10_days" | "5_days") {
     if (!canEditLessonProps) {
@@ -99,12 +93,12 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
     }
     setSavingMode(true);
     setDevotionalMode(mode);
-    await supabase.from("lessons").update({ devotional_mode: mode } as any).eq("id", lesson.id);
+    await supabase.from("lessons").update({ devotional_mode: mode }).eq("id", lesson.id);
     setSavingMode(false);
     toast({ title: mode === "5_days" ? "Modo 5 dias ativado" : "Modo 10 dias ativado" });
   }
 
-  async function fetchDevotionals() {
+  const fetchDevotionals = useCallback(async () => {
     setLoading(true);
     const { data } = await supabase
       .from("devotional_content")
@@ -114,9 +108,9 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
       .order("day_number");
     setDevotionals((data ?? []) as Devotional[]);
     setLoading(false);
-  }
+  }, [churchId, lesson.id]);
 
-  async function fetchEventReleases() {
+  const fetchEventReleases = useCallback(async () => {
     const { data } = await supabase
       .from("events")
       .select("id, event_date, area, released_devotional_days")
@@ -137,12 +131,18 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
         id: ev.id,
         event_date: ev.event_date,
         area: ev.area,
-        released_devotional_days: (ev as any).released_devotional_days ?? null,
+        released_devotional_days: ev.released_devotional_days ?? null,
         intervalDays,
       };
     });
     setEventReleases(releases);
-  }
+  }, [churchId, lesson.id]);
+
+  useEffect(() => {
+    fetchDevotionals();
+    fetchEventReleases();
+    fetchDevotionalMode();
+  }, [fetchDevotionalMode, fetchDevotionals, fetchEventReleases]);
 
   async function toggleDevotionalDay(eventId: string, dayNum: number) {
     const ev = eventReleases.find(e => e.id === eventId);
@@ -157,7 +157,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
 
     await supabase
       .from("events")
-      .update({ released_devotional_days: next } as any)
+      .update({ released_devotional_days: next })
       .eq("id", eventId);
 
     setEventReleases(prev =>
@@ -277,7 +277,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
         onChange={e => onChange(e.target.value)}
         rows={rows}
         placeholder={placeholder}
-        className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+        className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
       />
     </div>
   );
@@ -285,7 +285,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
-        <div className="w-10 h-10 rounded-2xl bg-brand-green/10 flex items-center justify-center mb-3 animate-pulse">
+        <div className="w-10 h-10 rounded-lg bg-brand-green/10 flex items-center justify-center mb-3 animate-pulse">
           <BookOpen className="w-5 h-5 text-brand-green" />
         </div>
         <p className="text-muted-foreground font-inter text-sm">Carregando devocionais...</p>
@@ -301,7 +301,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
           <ChevronLeft className="w-4 h-4" /> Voltar
         </button>
 
-        <div className="rounded-2xl p-4" style={{ background: "var(--gradient-hero)" }}>
+        <div className="rounded-lg p-4" style={{ background: "var(--gradient-hero)" }}>
           <p className="text-primary-foreground/60 font-inter text-xs mb-1">
             📖 Devocional · Dia {editing.day_number} · Lição {lesson.order_num}
           </p>
@@ -309,15 +309,15 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
         </div>
 
         {/* Title */}
-        <div className="bg-card rounded-2xl border border-border p-4">
+        <div className="bg-card rounded-lg border border-border p-4">
           <p className="font-inter text-xs font-semibold text-muted-foreground mb-1.5">Título do devocional</p>
           <input type="text" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
             placeholder="Ex: Dia 1 — A graça de Deus"
-            className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+            className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
         </div>
 
         {/* Bible */}
-        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+        <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <span className="text-sm">✝️</span>
             <p className="font-montserrat font-bold text-foreground text-sm">Texto Bíblico</p>
@@ -328,7 +328,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
               <input type="text" value={form.bible_reference}
                 onChange={e => setForm(p => ({ ...p, bible_reference: e.target.value }))}
                 placeholder="Ex: João 3:16"
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
             </div>
             <Field label="Texto bíblico completo" value={form.bible_text}
               onChange={v => setForm(p => ({ ...p, bible_text: v }))} rows={5}
@@ -337,7 +337,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
         </div>
 
         {/* Reflection */}
-        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+        <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <BookOpen className="w-4 h-4 text-brand-green" />
             <p className="font-montserrat font-bold text-foreground text-sm">📖 Reflexão</p>
@@ -350,7 +350,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
         </div>
 
         {/* Questions */}
-        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+        <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <Pen className="w-4 h-4 text-primary" />
             <p className="font-montserrat font-bold text-foreground text-sm">💬 Perguntas</p>
@@ -358,13 +358,13 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
           <div className="p-4 space-y-3">
             {form.questions.map((q, i) => (
               <div key={i} className="flex gap-2">
-                <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center font-montserrat font-bold text-primary text-[10px] flex-shrink-0 mt-2">{i + 1}</span>
+                <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center font-montserrat font-bold text-primary text-xs flex-shrink-0 mt-2">{i + 1}</span>
                 <textarea value={q} onChange={e => updateQuestion(i, e.target.value)} rows={2}
                   placeholder={`Pergunta ${i + 1}...`}
-                  className="flex-1 px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
+                  className="flex-1 px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
                 {form.questions.length > 1 && (
                   <button onClick={() => setForm(p => ({ ...p, questions: p.questions.filter((_, idx) => idx !== i) }))}
-                    className="p-2 text-destructive hover:bg-destructive/10 rounded-xl transition-colors mt-1">
+                    className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors mt-1">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 )}
@@ -378,7 +378,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
         </div>
 
         {/* Practice */}
-        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+        <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <span className="text-sm">🧭</span>
             <p className="font-montserrat font-bold text-foreground text-sm">Prática do Dia</p>
@@ -391,7 +391,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
         </div>
 
         {/* Prayer */}
-        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+        <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <Heart className="w-4 h-4 text-primary" />
             <p className="font-montserrat font-bold text-foreground text-sm">🙏 Oração</p>
@@ -405,13 +405,13 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
 
         <div className="grid grid-cols-2 gap-2">
           <button onClick={handleSave} disabled={saving}
-            className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-inter text-sm font-medium text-primary-foreground disabled:opacity-70"
+            className="flex items-center justify-center gap-2 py-3.5 rounded-lg font-inter text-sm font-medium text-primary-foreground disabled:opacity-70"
             style={{ background: "var(--gradient-hero)" }}>
             <Save className="w-4 h-4" />
             {saving ? "Salvando..." : saved ? "✅ Salvo!" : "Salvar"}
           </button>
           <button onClick={() => handleDelete(editing.id)}
-            className="flex items-center justify-center gap-2 py-3.5 rounded-2xl border-2 border-destructive text-destructive font-inter text-sm font-medium hover:bg-destructive/10 transition-colors">
+            className="flex items-center justify-center gap-2 py-3.5 rounded-lg border-2 border-destructive text-destructive font-inter text-sm font-medium hover:bg-destructive/10 transition-colors">
             <Trash2 className="w-4 h-4" /> Excluir
           </button>
         </div>
@@ -426,7 +426,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
         <ChevronLeft className="w-4 h-4" /> Voltar à lição
       </button>
 
-      <div className="rounded-2xl p-4" style={{ background: "var(--gradient-hero)" }}>
+      <div className="rounded-lg p-4" style={{ background: "var(--gradient-hero)" }}>
         <p className="text-primary-foreground/60 font-inter text-xs mb-1">Devocionais da semana · Lição {lesson.order_num}</p>
         <h2 className="font-montserrat font-black text-primary-foreground text-lg">{lesson.title}</h2>
         <p className="text-primary-foreground/70 font-inter text-xs mt-1">
@@ -435,7 +435,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
       </div>
 
       {/* Window mode toggle */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
           <CalendarDays className="w-4 h-4 text-primary" />
           <p className="font-montserrat font-bold text-foreground text-sm">Janela de Devocionais</p>
@@ -448,35 +448,35 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => devotionalMode !== "10_days" && saveDevotionalMode("10_days")}
-              className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 transition-colors ${
+              className={`flex flex-col items-center gap-1 py-3 px-2 rounded-lg border-2 transition-colors ${
                 devotionalMode === "10_days"
                   ? "border-primary bg-primary/10 text-primary"
                   : "border-border bg-background text-muted-foreground hover:bg-muted/30"
               }`}
             >
               <span className="font-montserrat font-bold text-base">10 dias</span>
-              <span className="font-inter text-[10px] text-center leading-tight">
+              <span className="font-inter text-xs text-center leading-tight">
                 Até 10 devocionais, um por dia útil (padrão)
               </span>
             </button>
             <button
               onClick={() => devotionalMode !== "5_days" && saveDevotionalMode("5_days")}
-              className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 transition-colors ${
+              className={`flex flex-col items-center gap-1 py-3 px-2 rounded-lg border-2 transition-colors ${
                 devotionalMode === "5_days"
                   ? "border-brand-green bg-brand-green/10 text-brand-green"
                   : "border-border bg-background text-muted-foreground hover:bg-muted/30"
               }`}
             >
               <span className="font-montserrat font-bold text-base">5 dias</span>
-              <span className="font-inter text-[10px] text-center leading-tight">
+              <span className="font-inter text-xs text-center leading-tight">
                 5 devocionais na 1ª semana + recuperação na 2ª semana
               </span>
             </button>
           </div>
           {devotionalMode === "5_days" && (
-            <div className="rounded-xl bg-brand-green/5 border border-brand-green/20 p-3 space-y-1">
-              <p className="font-inter text-[10px] font-semibold text-brand-green">Como funciona o modo 5 dias:</p>
-              <ul className="font-inter text-[10px] text-muted-foreground space-y-0.5 list-disc list-inside">
+            <div className="rounded-lg bg-brand-green/5 border border-brand-green/20 p-3 space-y-1">
+              <p className="font-inter text-xs font-semibold text-brand-green">Como funciona o modo 5 dias:</p>
+              <ul className="font-inter text-xs text-muted-foreground space-y-0.5 list-disc list-inside">
                 <li>Os 5 primeiros devocionais são liberados na 1ª semana (dias 1–5)</li>
                 <li>Se não fizer no dia certo, pode recuperar na 2ª semana (dias 6–10)</li>
                 <li>Na recuperação, apenas 1 por dia — se perder o dia, fica bloqueado</li>
@@ -493,11 +493,11 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
           const isGlobal = !dev.church_id;
           return (
             <button key={dev.id} onClick={() => openEdit(dev)}
-              className="w-full flex items-center gap-3 p-4 bg-card rounded-2xl border border-border shadow-sm text-left hover:bg-muted/30 transition-colors">
-              <div className="w-10 h-10 rounded-xl bg-brand-green/10 flex items-center justify-center flex-shrink-0 relative">
+              className="w-full flex items-center gap-3 p-4 bg-card rounded-lg border border-border shadow-sm text-left hover:bg-muted/30 transition-colors">
+              <div className="w-10 h-10 rounded-lg bg-brand-green/10 flex items-center justify-center flex-shrink-0 relative">
                 <span className="font-montserrat font-bold text-brand-green text-sm">{dev.day_number}</span>
                 {isGlobal && (
-                  <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center text-[10px]" title="Global">
+                  <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center text-xs" title="Global">
                     <Globe className="w-2.5 h-2.5 text-white" />
                   </div>
                 )}
@@ -507,7 +507,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
                   <p className="font-montserrat font-bold text-foreground text-sm">{dev.title || `Dia ${dev.day_number}`}</p>
                   {isGlobal && <Lock className="w-3 h-3 text-amber-500" />}
                 </div>
-                <p className="text-muted-foreground font-inter text-[10px] truncate">
+                <p className="text-muted-foreground font-inter text-xs truncate">
                   {dev.bible_reference ? `✝️ ${dev.bible_reference}` : "Sem texto bíblico"}
                   {dev.reflection ? " · 📖 Reflexão" : ""}
                 </p>
@@ -521,7 +521,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
       {/* Add button */}
       {devotionals.length < 12 && (
         <button onClick={handleAddDay}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-brand-green/40 text-brand-green font-inter text-sm font-medium hover:bg-brand-green/5 transition-colors">
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border-2 border-dashed border-brand-green/40 text-brand-green font-inter text-sm font-medium hover:bg-brand-green/5 transition-colors">
           <Plus className="w-4 h-4" /> Adicionar Dia {devotionals.length + 1}
         </button>
       )}
@@ -536,7 +536,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
 
       {/* ── Release config per event ── */}
       {eventReleases.length > 0 && devotionals.length > 0 && (
-        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+        <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <CalendarDays className="w-4 h-4 text-primary" />
             <p className="font-montserrat font-bold text-foreground text-sm">Liberação por Encontro</p>
@@ -558,13 +558,13 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
                         {ev.area ?? "Sem área"} · {format(new Date(ev.event_date), "d 'de' MMM 'às' HH:mm", { locale: ptBR })}
                       </p>
                       {ev.intervalDays !== null && (
-                        <p className="text-muted-foreground font-inter text-[10px] mt-0.5">
+                        <p className="text-muted-foreground font-inter text-xs mt-0.5">
                           Intervalo desde encontro anterior: {ev.intervalDays} dias
                         </p>
                       )}
                     </div>
                     {isAutoLimited && (
-                      <span className="flex items-center gap-1 bg-amber-500/10 text-amber-600 rounded-full px-2 py-0.5 text-[10px] font-inter font-semibold whitespace-nowrap">
+                      <span className="flex items-center gap-1 bg-amber-500/10 text-amber-600 rounded-full px-2 py-0.5 text-xs font-inter font-semibold whitespace-nowrap">
                         <AlertTriangle className="w-3 h-3" /> Máx 5 auto
                       </span>
                     )}
@@ -581,7 +581,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
                           key={dev.day_number}
                           disabled={isBlocked}
                           onClick={() => !isBlocked && toggleDevotionalDay(ev.id, dev.day_number)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-inter font-medium transition-colors ${
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-inter font-medium transition-colors ${
                             isBlocked
                               ? "border-border bg-muted/40 text-muted-foreground opacity-50 cursor-not-allowed"
                               : isChecked
@@ -605,7 +605,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
                   </div>
 
                   {isAutoLimited && (
-                    <p className="text-amber-600/80 font-inter text-[10px]">
+                    <p className="text-amber-600/80 font-inter text-xs">
                       Intervalo curto — dias 6+ bloqueados automaticamente. Ajuste a data do encontro para liberar mais devocionais.
                     </p>
                   )}
@@ -617,7 +617,7 @@ export default function LessonDevotionalEditor({ lesson, onBack, churchId }: Pro
       )}
 
       {eventReleases.length === 0 && devotionals.length > 0 && (
-        <div className="bg-muted/30 rounded-2xl border border-dashed border-border p-4 text-center">
+        <div className="bg-muted/30 rounded-lg border border-dashed border-border p-4 text-center">
           <CalendarDays className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
           <p className="font-inter text-xs text-muted-foreground">
             Nenhum encontro agendado para esta lição. Adicione um evento Confirmatório vinculado a esta lição na aba Agenda para configurar a liberação dos devocionais.

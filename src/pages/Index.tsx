@@ -5,29 +5,24 @@ import { ShieldCheck, Loader2, Church, Lock, Eye, EyeOff, X } from "lucide-react
 import { motion } from "framer-motion";
 
 import HeroHeader from "@/components/home/HeroHeader";
-import AnnouncementsSection from "@/components/home/AnnouncementsSection";
 import FocusSection from "@/components/home/FocusSection";
-import JourneyPath from "@/components/home/JourneyPath";
 import DiscipleProfile from "@/components/home/DiscipleProfile";
 import EditProfileForm from "@/components/home/EditProfileForm";
-import NextMeetingCard from "@/components/home/NextMeetingCard";
 import NotificationSettings from "@/components/home/NotificationSettings";
 import InstallAppCard from "@/components/home/InstallAppCard";
 import TypingMetricsPanel from "@/components/home/TypingMetricsPanel";
-import PushActivationBanner from "@/components/home/PushActivationBanner";
 import WhatsAppBlockedBanner from "@/components/home/WhatsAppBlockedBanner";
-import RemindersSection from "@/components/home/RemindersSection";
-import PersonalizedGreeting from "@/components/home/PersonalizedGreeting";
-import BirthdayHighlights from "@/components/home/BirthdayHighlights";
 import BottomNav, { type Tab } from "@/components/home/BottomNav";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUserStats } from "@/hooks/useUserStats";
 import { useAppNotifications } from "@/hooks/useAppNotifications";
+import { usePushSubscriptionHealth } from "@/hooks/usePushSubscriptionHealth";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import { supabase } from "@/integrations/supabase/client";
 import CelebrationModal, { type CelebrationType } from "@/components/gamification/CelebrationModal";
 import NextCourseActivityCard from "@/components/home/NextCourseActivityCard";
+import { getPasswordPolicyError } from "@/lib/passwordPolicy";
 
 // Lazy load tab contents for better performance
 const CommunityTab = lazy(() => import("@/components/home/CommunityTab"));
@@ -35,14 +30,29 @@ const DiscipleshipTab = lazy(() => import("@/components/home/DiscipleshipTab"));
 const UserAgendaTab = lazy(() => import("@/components/home/UserAgendaTab"));
 const AchievementsGrid = lazy(() => import("@/components/home/AchievementsGrid"));
 const WorshipPlayerSection = lazy(() => import("@/components/home/WorshipPlayerSection"));
+const AnnouncementsSection = lazy(() => import("@/components/home/AnnouncementsSection"));
+const JourneyPath = lazy(() => import("@/components/home/JourneyPath"));
+const NextMeetingCard = lazy(() => import("@/components/home/NextMeetingCard"));
+const PushActivationBanner = lazy(() => import("@/components/home/PushActivationBanner"));
+const RemindersSection = lazy(() => import("@/components/home/RemindersSection"));
+const PersonalizedGreeting = lazy(() => import("@/components/home/PersonalizedGreeting"));
+const BirthdayHighlights = lazy(() => import("@/components/home/BirthdayHighlights"));
+const LeaderRoomSection = lazy(() => import("@/components/home/LeaderRoomSection"));
 
 
 type ProfileSubTab = "meu-perfil" | "minha-jornada" | "configuracoes";
 type LessonNavigationMode = "choice" | "devotional";
 type CelebrationItem = { type: CelebrationType; points?: number };
 
+function BackgroundHomeServices() {
+  useAppNotifications();
+  usePushSubscriptionHealth();
+  return null;
+}
+
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>("jornada");
+  const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set(["jornada"]));
   const [targetLessonId, setTargetLessonId] = useState<string | null>(null);
   const [targetLessonMode, setTargetLessonMode] = useState<LessonNavigationMode>("choice");
   const [profileSubTab, setProfileSubTab] = useState<ProfileSubTab>("meu-perfil");
@@ -56,11 +66,13 @@ export default function Index() {
   const [pwdLoading, setPwdLoading] = useState(false);
   const [pwdError, setPwdError] = useState<string | null>(null);
   const [pwdSuccess, setPwdSuccess] = useState(false);
+  const [secondaryContentReady, setSecondaryContentReady] = useState(false);
 
   async function handleChangePassword(e: React.FormEvent) {
     e.preventDefault();
     setPwdError(null);
-    if (newPassword.length < 6) { setPwdError("A senha deve ter pelo menos 6 caracteres."); return; }
+    const policyError = getPasswordPolicyError(newPassword);
+    if (policyError) { setPwdError(policyError); return; }
     if (newPassword !== confirmPassword) { setPwdError("As senhas não coincidem."); return; }
     setPwdLoading(true);
     const { error } = await supabase.auth.updateUser({ password: newPassword });
@@ -84,14 +96,58 @@ export default function Index() {
 
   // Redirect to presentation if not standalone/installed and not logged in
   useEffect(() => {
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
     if (!isStandalone && !authLoading && !user) {
       navigate("/apresentacao", { replace: true });
     }
   }, [authLoading, user, navigate]);
 
   const stats = useUserStats(user?.id, profile?.church_id, currentArea);
-  useAppNotifications();
+
+  useEffect(() => {
+    const showSecondaryContent = () => setSecondaryContentReady(true);
+    if ("requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(showSecondaryContent, { timeout: 1_200 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+    const timer = window.setTimeout(showSecondaryContent, 700);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+    const profileTab = params.get("profileTab");
+    const validTabs: Tab[] = ["jornada", "conquistas", "agenda", "comunidade", "perfil", "discipulado", "adoracao", "lider"];
+    const validProfileTabs: ProfileSubTab[] = ["meu-perfil", "minha-jornada", "configuracoes"];
+
+    if (profileTab && validProfileTabs.includes(profileTab as ProfileSubTab)) {
+      setActiveTab("perfil");
+      setProfileSubTab(profileTab as ProfileSubTab);
+      return;
+    }
+
+    if (tab && validTabs.includes(tab as Tab)) {
+      setActiveTab(tab as Tab);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "lider" && role !== "admin" && role !== "lider") {
+      setActiveTab("jornada");
+    }
+  }, [activeTab, role]);
+
+  // Preserve data-heavy tabs after their first visit. Returning to a tab is then
+  // immediate and does not repeat its initial queries or discard local state.
+  useEffect(() => {
+    setVisitedTabs((previous) => {
+      if (previous.has(activeTab)) return previous;
+      const next = new Set(previous);
+      next.add(activeTab);
+      return next;
+    });
+  }, [activeTab]);
 
   // Load confetti preference
   useEffect(() => {
@@ -180,6 +236,7 @@ export default function Index() {
 
   return (
     <div id="main-content" className="min-h-screen bg-background flex flex-col max-w-md mx-auto relative">
+      {secondaryContentReady && <BackgroundHomeServices />}
       {/* Hero header — always visible */}
       <HeroHeader
         streakDays={stats.streakDays}
@@ -198,10 +255,14 @@ export default function Index() {
         }>
 
         {/* ===== JORNADA ===== */}
-        {activeTab === "jornada" && (
-          <>
+        {(activeTab === "jornada" || visitedTabs.has("jornada")) && (
+          <div hidden={activeTab !== "jornada"}>
             {/* 1. Alertas Críticos e Notificações (PWA/Push) */}
-            <PushActivationBanner />
+            {secondaryContentReady && (
+              <Suspense fallback={null}>
+                <PushActivationBanner />
+              </Suspense>
+            )}
 
             {/* 2. Cabeçalho de Foco (Ação Principal do Dia) */}
             <motion.div
@@ -214,7 +275,11 @@ export default function Index() {
             </motion.div>
 
             {/* 3. Saudação e Comunidade (Menos destaque, mais social) */}
-            <PersonalizedGreeting />
+            {secondaryContentReady && (
+              <Suspense fallback={null}>
+                <PersonalizedGreeting />
+              </Suspense>
+            )}
             
             {/* 4. Eventos e Avisos (Contexto) */}
             <motion.div
@@ -222,12 +287,16 @@ export default function Index() {
               animate={{ opacity: 1 }}
               transition={{ duration: 0.4, delay: 0.3 }}
             >
-              <NextMeetingCard
-                churchId={profile?.church_id}
-                currentArea={currentArea}
-                onNavigateToAgenda={() => setActiveTab("agenda")}
-              />
-              <AnnouncementsSection />
+              {secondaryContentReady && (
+                <Suspense fallback={null}>
+                  <NextMeetingCard
+                    churchId={profile?.church_id}
+                    currentArea={currentArea}
+                    onNavigateToAgenda={() => setActiveTab("agenda")}
+                  />
+                  <AnnouncementsSection />
+                </Suspense>
+              )}
             </motion.div>
 
             {/* 5. A Jornada (Visualização do Progresso) */}
@@ -237,25 +306,33 @@ export default function Index() {
               transition={{ duration: 0.5, delay: 0.4 }}
               className="mb-8"
             >
-              <JourneyPath onSelectLesson={(lessonId) => {
-                setTargetLessonId(lessonId);
-                setTargetLessonMode("choice");
-                setActiveTab("discipulado");
-              }} />
+              {secondaryContentReady && (
+                <Suspense fallback={<div className="min-h-24" aria-label="Preparando sua jornada" />}>
+                  <JourneyPath onSelectLesson={(lessonId) => {
+                    setTargetLessonId(lessonId);
+                    setTargetLessonMode("choice");
+                    setActiveTab("discipulado");
+                  }} />
+                </Suspense>
+              )}
             </motion.div>
 
             {/* 6. Utilidades e Lembretes (Rodapé da página) */}
-            <BirthdayHighlights area={currentArea} variant="journey" />
-            <RemindersSection
-              onNavigateToDiscipulado={() => setActiveTab("discipulado")}
-              onNavigateToAgenda={() => setActiveTab("agenda")}
-            />
-          </>
+            {secondaryContentReady && (
+              <Suspense fallback={null}>
+                <BirthdayHighlights area={currentArea} variant="journey" />
+                <RemindersSection
+                  onNavigateToDiscipulado={() => setActiveTab("discipulado")}
+                  onNavigateToAgenda={() => setActiveTab("agenda")}
+                />
+              </Suspense>
+            )}
+          </div>
         )}
 
         {/* ===== CONQUISTAS ===== */}
-        {activeTab === "conquistas" && (
-          <div key={`conquistas-${currentArea}`} className="pt-4">
+        {(activeTab === "conquistas" || visitedTabs.has("conquistas")) && (
+          <div hidden={activeTab !== "conquistas"} key={`conquistas-${currentArea}`} className="pt-4">
             <ErrorBoundary
               fallback={
                 <div className="px-5 py-6">
@@ -279,10 +356,18 @@ export default function Index() {
         )}
 
         {/* ===== AGENDA ===== */}
-        {activeTab === "agenda" && <UserAgendaTab key={`agenda-${currentArea}`} />}
+        {(activeTab === "agenda" || visitedTabs.has("agenda")) && (
+          <div hidden={activeTab !== "agenda"}>
+            <UserAgendaTab key={`agenda-${currentArea}`} />
+          </div>
+        )}
 
         {/* ===== COMUNIDADE ===== */}
-        {activeTab === "comunidade" && <CommunityTab key={`comunidade-${currentArea}`} />}
+        {(activeTab === "comunidade" || visitedTabs.has("comunidade")) && (
+          <div hidden={activeTab !== "comunidade"}>
+            <CommunityTab key={`comunidade-${currentArea}`} />
+          </div>
+        )}
 
         {/* ===== ADORAÇÃO ===== */}
         {activeTab === "adoracao" && (
@@ -292,16 +377,25 @@ export default function Index() {
         )}
 
         {/* ===== DISCIPULADO ===== */}
-        {activeTab === "discipulado" && (
-          <DiscipleshipTab
-            key={`discipulado-${currentArea}`}
-            targetLessonId={targetLessonId}
-            targetLessonMode={targetLessonMode}
-            onTargetLessonConsumed={() => {
-              setTargetLessonId(null);
-              setTargetLessonMode("choice");
-            }}
-          />
+        {(activeTab === "discipulado" || visitedTabs.has("discipulado")) && (
+          <div hidden={activeTab !== "discipulado"}>
+            <DiscipleshipTab
+              key={`discipulado-${currentArea}`}
+              targetLessonId={targetLessonId}
+              targetLessonMode={targetLessonMode}
+              onTargetLessonConsumed={() => {
+                setTargetLessonId(null);
+                setTargetLessonMode("choice");
+              }}
+            />
+          </div>
+        )}
+
+        {/* ===== SALA DO LÍDER ===== */}
+        {activeTab === "lider" && (role === "admin" || role === "lider") && (
+          <div className="px-5 pt-5 pb-4">
+            <LeaderRoomSection asTab />
+          </div>
         )}
 
         {/* ===== PERFIL ===== */}
@@ -477,7 +571,7 @@ export default function Index() {
                       type={showNewPwd ? "text" : "password"}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Mínimo 6 caracteres"
+                      placeholder="Mínimo 10 caracteres, com letra e número"
                       className="w-full pl-10 pr-11 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all"
                       required
                     />

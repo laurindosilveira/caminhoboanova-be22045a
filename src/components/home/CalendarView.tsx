@@ -107,7 +107,7 @@ export default function CalendarView({ events }: Props) {
         <div className="flex flex-wrap gap-1.5">
           <button
             onClick={() => setFilterType(null)}
-            className={`px-2.5 py-1 rounded-full text-[10px] font-montserrat font-bold transition-colors ${
+            className={`px-2.5 py-1 rounded-full text-xs font-montserrat font-bold transition-colors ${
               !filterType ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
             }`}
           >
@@ -119,7 +119,7 @@ export default function CalendarView({ events }: Props) {
               <button
                 key={type}
                 onClick={() => setFilterType(filterType === type ? null : type)}
-                className={`px-2.5 py-1 rounded-full text-[10px] font-montserrat font-bold transition-colors flex items-center gap-1 ${
+                className={`px-2.5 py-1 rounded-full text-xs font-montserrat font-bold transition-colors flex items-center gap-1 ${
                   filterType === type
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground hover:bg-muted/80"
@@ -139,7 +139,7 @@ export default function CalendarView({ events }: Props) {
         <div className="grid grid-cols-7 border-b border-border">
           {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map(d => (
             <div key={d} className="py-2 text-center">
-              <span className="text-[10px] font-montserrat font-bold text-muted-foreground uppercase">{d}</span>
+              <span className="text-xs font-montserrat font-bold text-muted-foreground uppercase">{d}</span>
             </div>
           ))}
         </div>
@@ -219,18 +219,18 @@ export default function CalendarView({ events }: Props) {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <span className={`text-[9px] font-montserrat font-bold px-2 py-0.5 rounded-full ${info.dot}/10 text-foreground`}>
+                          <span className={`text-xs font-montserrat font-bold px-2 py-0.5 rounded-full ${info.dot}/10 text-foreground`}>
                             {info.label}
                           </span>
                         </div>
                         <p className="font-montserrat font-bold text-foreground text-sm">{event.title}</p>
                         <div className="flex items-center gap-3 mt-1 flex-wrap">
-                          <span className="flex items-center gap-1 text-muted-foreground text-[10px] font-inter">
+                          <span className="flex items-center gap-1 text-muted-foreground text-xs font-inter">
                             <Clock className="w-3 h-3" />
                             {format(d, "HH:mm")}
                           </span>
                           {event.location && (
-                            <span className="flex items-center gap-1 text-muted-foreground text-[10px] font-inter">
+                            <span className="flex items-center gap-1 text-muted-foreground text-xs font-inter">
                               <MapPin className="w-3 h-3" />
                               {event.location}
                             </span>

@@ -7,7 +7,7 @@ describe("ignoreAsyncError", () => {
     const thenable = {
       then: (_onFulfilled, onRejected) => {
         onRejected?.(new Error("audit failed"));
-        return Promise.resolve(undefined) as any;
+        return Promise.resolve(undefined);
       },
     } as PromiseLike<unknown>;
 

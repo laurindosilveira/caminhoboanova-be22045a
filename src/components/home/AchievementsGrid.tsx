@@ -21,6 +21,13 @@ import GameRulesDialog from "./GameRulesDialog";
 import GameConfigDialog from "./GameConfigDialog";
 import PlayerDetailSheet from "./PlayerDetailSheet";
 import AchievementsConfigDialog, { AchievementDef } from "./AchievementsConfigDialog";
+import type { Database } from "@/integrations/supabase/types";
+
+type CommunityName = Database["public"]["Enums"]["community_name"];
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Erro inesperado.";
+}
 
 interface AchievementsGridProps {
   faithPoints: number;
@@ -85,7 +92,7 @@ export const DEFAULT_ACHIEVEMENT_DEFS: AchievementDef[] = [
 ];
 
 export default function AchievementsGrid({ faithPoints, streakDays, completedCount }: AchievementsGridProps) {
-  const { profile, role } = useAuth();
+  const { profile, role, user } = useAuth();
   const { effectiveArea, isOverriding, switchNonce } = useAreaSwitch();
   const canManage = role === "admin" || role === "lider";
   const myUserId = profile?.user_id;
@@ -139,14 +146,14 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
   // Falls back to defaults if table doesn't exist yet in this environment.
   const fetchAchievementDefs = useCallback(async () => {
     const { data, error } = await supabase
-      .from("achievement_definitions" as any)
+      .from("achievement_definitions")
       .select("*")
       .eq("is_active", true)
       .order("sort_order");
-    if (error || !data || (data as any).length === 0) {
+    if (error || !data || data.length === 0) {
       setAchievementDefs(DEFAULT_ACHIEVEMENT_DEFS);
     } else {
-      setAchievementDefs(data as unknown as AchievementDef[]);
+      setAchievementDefs(data);
     }
   }, []);
 
@@ -165,17 +172,17 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     try {
       const rankingResults = await Promise.all(
         communities.map((community) =>
-          supabase.rpc("get_community_ranking" as any, {
-            _community: community as any,
+          supabase.rpc("get_community_ranking", {
+            _community: community as CommunityName,
             _church_id: profile?.church_id ?? null,
           })
         )
       );
 
       const allMembers: RankingMember[] = [];
-      rankingResults.forEach((result: any) => {
+      rankingResults.forEach((result) => {
         if (result.error) return;
-        (result.data ?? []).forEach((item: any) => {
+        (result.data ?? []).forEach((item) => {
           allMembers.push({
             user_id: item.user_id,
             full_name: getSafeName(item.full_name),
@@ -195,7 +202,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
 
       if (canManage && profile?.church_id) {
         const { data: exclusions, error: exclusionsError } = await supabase
-          .from("ranking_exclusions" as any)
+          .from("ranking_exclusions")
           .select("user_id")
           .eq("church_id", profile.church_id);
         if (exclusionsError) {
@@ -204,7 +211,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
           return;
         }
 
-        const excludedIds = (exclusions ?? []).map((row: any) => row.user_id);
+        const excludedIds = (exclusions ?? []).map((row) => row.user_id);
         if (excludedIds.length === 0) {
           setExcludedMembers([]);
         } else {
@@ -218,8 +225,8 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
             return;
           }
           setExcludedMembers((profiles ?? [])
-            .filter((item: any) => activeCommunities.includes(item.community))
-            .map((item: any) => ({
+            .filter((item) => activeCommunities.includes(item.community))
+            .map((item) => ({
               user_id: item.user_id,
               full_name: getSafeName(item.full_name),
               completed_count: 0,
@@ -230,7 +237,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
       } else {
         setExcludedMembers([]);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Erro ao carregar ranking da area:", error);
       setMembers([]);
       toast.error("Nao foi possivel atualizar o ranking desta area.");
@@ -241,7 +248,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
 
   const setRankingParticipation = useCallback(async (member: RankingMember, included: boolean) => {
     setUpdatingRankingUserId(member.user_id);
-    const { error } = await supabase.rpc("set_ranking_participation" as any, {
+    const { error } = await supabase.rpc("set_ranking_participation", {
       _user_id: member.user_id,
       _included: included,
     });
@@ -289,7 +296,6 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     // Fetch qualitative data
     async function fetchQualitative() {
       try {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const fifteenDaysAgo = new Date(Date.now() - 15 * 86400000).toISOString();
       const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000).toISOString();
@@ -342,10 +348,10 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
       ]);
 
       // Filter lessons/devotionals to only those belonging to courses unlocked for this area
-      const unlockedCourseIds = new Set((courseUnlocks ?? []).map((u: any) => u.course_id));
-      const areaLessonIds = new Set((allLessons ?? []).filter((l: any) => unlockedCourseIds.has(l.course_id)).map((l: any) => l.id));
+      const unlockedCourseIds = new Set((courseUnlocks ?? []).map((unlock) => unlock.course_id));
+      const areaLessonIds = new Set((allLessons ?? []).filter((lesson) => unlockedCourseIds.has(lesson.course_id)).map((lesson) => lesson.id));
       const totalLessonsCount = areaLessonIds.size;
-      const totalDevsCount = (allDevContent ?? []).filter((d: any) => d.lesson_id && areaLessonIds.has(d.lesson_id)).length;
+      const totalDevsCount = (allDevContent ?? []).filter((devotional) => devotional.lesson_id && areaLessonIds.has(devotional.lesson_id)).length;
 
       setDevCount(devC ?? 0);
       setWorshipCount(worC ?? 0);
@@ -402,7 +408,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
       }
     }
     fetchQualitative();
-  }, [profile, fetchAreaRanking, activeCommunities, currentArea, switchNonce]);
+  }, [profile, fetchAreaRanking, activeCommunities, currentArea, switchNonce, user]);
 
   // Map metric name -> current value
   const metricValues: Record<string, number> = {
@@ -440,7 +446,6 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
   // Auto-save newly unlocked achievements
   useEffect(() => {
     async function saveNewUnlocks() {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user || !unlocksLoaded) return;
 
       const newlyUnlocked = achievements.filter(a => a.unlocked && !unlockedKeys.has(a.key));
@@ -449,13 +454,17 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
       // Track for animation
       setNewlyUnlockedKeys(new Set(newlyUnlocked.map(a => a.key)));
 
-      for (const a of newlyUnlocked) {
-        await supabase.from("achievement_unlocks").insert({
+      const { error } = await supabase.from("achievement_unlocks").insert(
+        newlyUnlocked.map((achievement) => ({
           user_id: user.id,
-          achievement_key: a.key,
-          bonus_points: a.bonusPoints,
+          achievement_key: achievement.key,
+          bonus_points: achievement.bonusPoints,
           church_id: profile?.church_id ?? null,
-        });
+        })),
+      );
+      if (error) {
+        console.error("Erro ao salvar conquistas desbloqueadas:", error);
+        return;
       }
 
       setUnlockedKeys(prev => {
@@ -478,7 +487,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
     }
     saveNewUnlocks();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [faithPoints, streakDays, completedCount, devCount, worshipCount, attendanceCount, chatCount, prayerCount, isApto, unlocksLoaded]);
+  }, [faithPoints, streakDays, completedCount, devCount, worshipCount, attendanceCount, chatCount, prayerCount, isApto, unlocksLoaded, profile?.church_id, user]);
 
   const unlockedCount = achievements.filter(a => a.unlocked).length;
 
@@ -573,8 +582,8 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
       ]);
       toast.success(`✅ Pontuações resetadas para ${userIds.length} participantes!`);
       await fetchAreaRanking();
-    } catch (err: any) {
-      toast.error("Erro ao resetar: " + (err.message ?? ""));
+    } catch (err: unknown) {
+      toast.error("Erro ao resetar: " + getErrorMessage(err));
     }
     setResettingGame(false);
     setShowResetConfirm(false);
@@ -616,7 +625,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
             totalDevotionals,
             totalEvents,
           }} />
-          <span className="text-[10px] font-inter font-bold text-muted-foreground bg-muted rounded-lg px-2 py-1">
+          <span className="text-xs font-inter font-bold text-muted-foreground bg-muted rounded-lg px-2 py-1">
             {unlockedCount}/{achievements.length}
           </span>
         </div>
@@ -661,7 +670,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
               <div className="px-4 py-2.5 bg-accent/10 flex items-center gap-2">
                 <Lock className="w-3.5 h-3.5 text-accent-foreground" />
                 <span className="font-montserrat font-bold text-foreground text-xs">Ranking encerrado</span>
-                <span className="text-[10px] font-inter text-muted-foreground ml-auto">
+                <span className="text-xs font-inter text-muted-foreground ml-auto">
                   {new Date(s.closed_at).toLocaleDateString("pt-BR")}
                 </span>
               </div>
@@ -679,7 +688,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
                 ))}
               </div>
               <div className="px-4 py-2 border-t border-border">
-                <p className="text-muted-foreground font-inter text-[10px]">{s.total_participants} participantes</p>
+                <p className="text-muted-foreground font-inter text-xs">{s.total_participants} participantes</p>
               </div>
             </div>
           ))}
@@ -700,7 +709,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
             <AlertDialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
               <AlertDialogTrigger asChild>
                 <button
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-destructive/10 text-destructive text-[10px] font-inter font-bold hover:bg-destructive/20 transition-colors"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-destructive/10 text-destructive text-xs font-inter font-bold hover:bg-destructive/20 transition-colors"
                 >
                   <AlertTriangle className="w-3 h-3" />
                   Resetar
@@ -776,7 +785,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
                     </p>
                     <p className="text-muted-foreground text-xs font-inter">{Number(m.completed_count)} atividades · {Number(m.faith_points)} pts</p>
                     {(m.base_points || m.course_bonus || m.achievement_bonus || m.other_bonus) ? (
-                      <div className="flex flex-wrap gap-x-2 text-[10px] text-muted-foreground mt-0.5 opacity-80 leading-tight">
+                      <div className="flex flex-wrap gap-x-2 text-xs text-muted-foreground mt-0.5 opacity-80 leading-tight">
                         {!!m.base_points && <span>Base: {m.base_points}</span>}
                         {!!m.course_bonus && <span>Curso: +{m.course_bonus}</span>}
                         {!!m.achievement_bonus && <span>Conq: +{m.achievement_bonus}</span>}
@@ -881,7 +890,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
               >
                 <span className="text-3xl block mb-2">{a.unlocked ? a.icon : "🔒"}</span>
                 <p className="font-montserrat font-bold text-card-foreground text-sm leading-tight">
-                  {a.secret && a.unlocked && <span className="text-amber-500 text-[10px] font-inter block mb-0.5">✨ SURPRESA!</span>}
+                  {a.secret && a.unlocked && <span className="text-amber-500 text-xs font-inter block mb-0.5">✨ SURPRESA!</span>}
                   {a.title}
                 </p>
                 <p className="text-muted-foreground text-xs font-inter mt-1">{a.desc}</p>
@@ -898,7 +907,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
                         e.stopPropagation();
                         shareAchievement(a);
                       }}
-                      className="flex items-center gap-1 text-[10px] font-inter font-semibold text-secondary hover:text-secondary/80 transition-colors"
+                      className="flex items-center gap-1 text-xs font-inter font-semibold text-secondary hover:text-secondary/80 transition-colors"
                     >
                       <Share2 className="w-3 h-3" />
                       Compartilhar
@@ -907,10 +916,10 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
                 ) : (
                   <div className="mt-2">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-muted-foreground text-[10px] font-inter font-semibold">
+                      <span className="text-muted-foreground text-xs font-inter font-semibold">
                         {a.current}/{a.target}
                       </span>
-                      <span className="text-muted-foreground text-[10px] font-inter">
+                      <span className="text-muted-foreground text-xs font-inter">
                         {Math.round(progressPct)}%
                       </span>
                     </div>
@@ -922,7 +931,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
                         className="h-full rounded-full bg-secondary/50"
                       />
                     </div>
-                    <p className="text-muted-foreground text-[10px] font-inter mt-1">
+                    <p className="text-muted-foreground text-xs font-inter mt-1">
                       Faltam {Math.max(0, a.target - a.current)}
                     </p>
                   </div>
@@ -937,7 +946,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
           <div className="rounded-2xl p-4 border border-dashed border-amber-400/30 bg-amber-400/5 flex flex-col items-center justify-center text-center col-span-2">
             <span className="text-3xl mb-2">❓</span>
             <p className="font-montserrat font-bold text-foreground/60 text-sm">Conquistas secretas</p>
-            <p className="text-muted-foreground text-[10px] font-inter mt-1">
+            <p className="text-muted-foreground text-xs font-inter mt-1">
               {achievements.filter(a => a.secret && !a.unlocked).length} conquista{achievements.filter(a => a.secret && !a.unlocked).length > 1 ? "s" : ""} escondida{achievements.filter(a => a.secret && !a.unlocked).length > 1 ? "s" : ""} — continue sua jornada!
             </p>
           </div>

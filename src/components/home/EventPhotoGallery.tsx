@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
@@ -39,11 +39,7 @@ export default function EventPhotoGallery() {
   const [viewingPhoto, setViewingPhoto] = useState<Photo | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    fetchAlbums();
-  }, [currentArea, profile?.church_id]);
-
-  async function fetchAlbums() {
+  const fetchAlbums = useCallback(async () => {
     setLoading(true);
     // Get events that have photos (or are past events)
     let eventsQuery = supabase
@@ -63,7 +59,7 @@ export default function EventPhotoGallery() {
     const { data: photosData } = await photosQuery;
 
     const photosByEvent = new Map<string, { count: number; cover: string | null }>();
-    (photosData ?? []).forEach((p: any) => {
+    (photosData ?? []).forEach((p) => {
       if (p.status !== "aprovado" && !isLeaderOrAdmin && p.user_id !== profile?.user_id) return;
       const entry = photosByEvent.get(p.event_id) || { count: 0, cover: null };
       entry.count++;
@@ -71,7 +67,7 @@ export default function EventPhotoGallery() {
       photosByEvent.set(p.event_id, entry);
     });
 
-    const relevantEvents = (events ?? []).filter((event: any) => !event.area || event.area === currentArea);
+    const relevantEvents = (events ?? []).filter((event) => !event.area || event.area === currentArea);
 
     const albumList: EventAlbum[] = relevantEvents
       .filter(e => {
@@ -107,7 +103,11 @@ export default function EventPhotoGallery() {
     albumList.sort((a, b) => new Date(b.event_date).getTime() - new Date(a.event_date).getTime());
     setAlbums(albumList);
     setLoading(false);
-  }
+  }, [currentArea, isLeaderOrAdmin, profile?.church_id, profile?.user_id]);
+
+  useEffect(() => {
+    fetchAlbums();
+  }, [fetchAlbums]);
 
   async function openAlbum(album: EventAlbum) {
     setSelectedAlbum(album);
@@ -121,7 +121,7 @@ export default function EventPhotoGallery() {
     const { data } = await photoQuery;
 
     // Get user names
-    const userIds = [...new Set((data ?? []).map((p: any) => p.user_id))];
+    const userIds = [...new Set((data ?? []).map((photo) => photo.user_id))];
     let profilesQuery = supabase
       .from("profiles")
       .select("user_id, full_name")
@@ -129,9 +129,9 @@ export default function EventPhotoGallery() {
     if (profile?.church_id) profilesQuery = profilesQuery.eq("church_id", profile.church_id);
     const { data: profiles } = await profilesQuery;
 
-    const nameMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p.full_name]));
+    const nameMap = new Map((profiles ?? []).map((participant) => [participant.user_id, participant.full_name]));
 
-    setPhotos((data ?? []).map((p: any) => ({
+    setPhotos((data ?? []).map((p) => ({
       ...p,
       user_name: nameMap.get(p.user_id) || "Desconhecido",
     })));
@@ -273,7 +273,7 @@ export default function EventPhotoGallery() {
           <p className="text-primary-foreground/60 font-inter text-xs mt-1">
             📅 {format(new Date(selectedAlbum.event_date), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}
           </p>
-          <p className="text-primary-foreground/50 font-inter text-[10px] mt-1">
+          <p className="text-primary-foreground/50 font-inter text-xs mt-1">
             {approvedPhotos.length} foto{approvedPhotos.length !== 1 ? "s" : ""} aprovada{approvedPhotos.length !== 1 ? "s" : ""}
             {isLeaderOrAdmin && pendingPhotos.length > 0 && ` · ${pendingPhotos.length} pendente${pendingPhotos.length !== 1 ? "s" : ""}`}
           </p>
@@ -304,7 +304,7 @@ export default function EventPhotoGallery() {
         />
 
         {!isLeaderOrAdmin && (
-          <p className="text-muted-foreground font-inter text-[10px] text-center -mt-2">
+          <p className="text-muted-foreground font-inter text-xs text-center -mt-2">
             📋 Suas fotos serão visíveis após aprovação do líder
           </p>
         )}
@@ -339,7 +339,7 @@ export default function EventPhotoGallery() {
                       <X className="w-4 h-4 text-white" />
                     </button>
                   </div>
-                  <p className="absolute top-1 left-1 bg-black/50 text-white text-[9px] font-inter px-1.5 py-0.5 rounded">
+                  <p className="absolute top-1 left-1 bg-black/50 text-white text-xs font-inter px-1.5 py-0.5 rounded">
                     {photo.user_name}
                   </p>
                 </div>
@@ -360,7 +360,7 @@ export default function EventPhotoGallery() {
                 <div key={photo.id} className="relative rounded-xl overflow-hidden border border-border opacity-60">
                   <img src={photo.file_url} alt="" className="w-full aspect-square object-cover" />
                   <div className="absolute bottom-0 inset-x-0 bg-black/40 py-1 text-center">
-                    <span className="text-white text-[9px] font-inter">⏳ Pendente</span>
+                    <span className="text-white text-xs font-inter">⏳ Pendente</span>
                   </div>
                 </div>
               ))}
@@ -439,14 +439,14 @@ export default function EventPhotoGallery() {
                   </div>
                 )}
                 {album.photo_count > 0 && (
-                  <span className="absolute top-2 right-2 bg-black/60 text-white text-[10px] font-inter px-2 py-0.5 rounded-full">
+                  <span className="absolute top-2 right-2 bg-black/60 text-white text-xs font-inter px-2 py-0.5 rounded-full">
                     {album.photo_count} 📷
                   </span>
                 )}
               </div>
               <div className="p-3">
                 <p className="font-montserrat font-bold text-foreground text-xs truncate">{album.title}</p>
-                <p className="text-muted-foreground font-inter text-[10px] mt-0.5">
+                <p className="text-muted-foreground font-inter text-xs mt-0.5">
                   {format(new Date(album.event_date), "d 'de' MMM yyyy", { locale: ptBR })}
                 </p>
               </div>

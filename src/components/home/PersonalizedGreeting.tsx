@@ -48,7 +48,7 @@ export default function PersonalizedGreeting() {
     const period = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
 
     let msg = `${period}, ${firstName}! `;
-    const churchName = (profile as any)?.churches?.name;
+    const churchName = profile?.churches?.name;
     if (churchName) {
       msg = `${period}, ${firstName}! Bem-vindo à ${churchName}. `;
     } else if (profile?.community && !churchName) {

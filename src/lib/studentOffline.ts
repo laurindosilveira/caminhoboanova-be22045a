@@ -11,6 +11,20 @@ type SnapshotRecord<T = unknown> = {
   updatedAt: string;
 };
 
+type LiveQueryCacheEntry = {
+  data: unknown;
+  expiresAt: number;
+};
+
+type CachedStudentQueryOptions = {
+  force?: boolean;
+  maxAgeMs?: number;
+};
+
+const DEFAULT_LIVE_CACHE_MS = 2 * 60 * 1000;
+const liveQueryCache = new Map<string, LiveQueryCacheEntry>();
+const liveQueryRequests = new Map<string, Promise<{ data: unknown; fromCache: boolean; error?: unknown }>>();
+
 export type StudentOfflineAction =
   | {
       id: string;
@@ -168,19 +182,54 @@ export async function cachedStudentQuery<T>(
   key: string,
   fetcher: () => Promise<{ data: T | null; error?: unknown }>,
   fallback: T,
+  options: CachedStudentQueryOptions = {},
 ): Promise<{ data: T; fromCache: boolean; error?: unknown }> {
   if (isStudentOffline()) {
     return { data: (await getSnapshot<T>(key)) ?? fallback, fromCache: true };
   }
 
-  try {
-    const result = await fetcher();
-    if (result.error) throw result.error;
-    const data = (result.data ?? fallback) as T;
-    await setSnapshot(key, data);
-    return { data, fromCache: false };
-  } catch (error) {
-    return { data: (await getSnapshot<T>(key)) ?? fallback, fromCache: true, error };
+  const cached = liveQueryCache.get(key);
+  if (!options.force && cached && cached.expiresAt > Date.now()) {
+    return { data: cached.data as T, fromCache: true };
+  }
+
+  if (!options.force) {
+    const pending = liveQueryRequests.get(key);
+    if (pending) {
+      return pending as Promise<{ data: T; fromCache: boolean; error?: unknown }>;
+    }
+  }
+
+  const request = (async () => {
+    try {
+      const result = await fetcher();
+      if (result.error) throw result.error;
+      const data = (result.data ?? fallback) as T;
+      liveQueryCache.set(key, {
+        data,
+        expiresAt: Date.now() + (options.maxAgeMs ?? DEFAULT_LIVE_CACHE_MS),
+      });
+      void setSnapshot(key, data);
+      return { data, fromCache: false };
+    } catch (error) {
+      if (cached) return { data: cached.data as T, fromCache: true, error };
+      return { data: (await getSnapshot<T>(key)) ?? fallback, fromCache: true, error };
+    }
+  })().finally(() => {
+    liveQueryRequests.delete(key);
+  });
+
+  liveQueryRequests.set(key, request as Promise<{ data: unknown; fromCache: boolean; error?: unknown }>);
+  return request;
+}
+
+export function invalidateCachedStudentQueries(prefix?: string) {
+  if (!prefix) {
+    liveQueryCache.clear();
+    return;
+  }
+  for (const key of liveQueryCache.keys()) {
+    if (key.startsWith(prefix)) liveQueryCache.delete(key);
   }
 }
 
@@ -385,8 +434,11 @@ export async function getPendingStudentOverlay(userId: string) {
   };
 }
 
-export function mergeByKey<T extends Record<string, unknown>>(base: T[], overlay: T[], key: keyof T) {
-  const map = new Map<string, T>();
+export function mergeByKey<
+  T extends object,
+  U extends object,
+>(base: T[], overlay: U[], key: keyof T & keyof U): Array<T | U> {
+  const map = new Map<string, T | U>();
   base.forEach((item) => map.set(String(item[key]), item));
   overlay.forEach((item) => map.set(String(item[key]), item));
   return [...map.values()];

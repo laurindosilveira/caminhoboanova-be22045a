@@ -1,17 +1,20 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Download } from "lucide-react";
+import { fetchAllSupabaseRows } from "@/lib/fetchAllSupabaseRows";
+import { isEventVisibleInGroupScope } from "@/lib/eventScope";
 
-type Participant = {
+export type TurmaReportParticipant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
 };
-type Activity = { id: string; type: string; title: string; points: number; order_num: number; subtitle: string | null };
+export type TurmaReportActivity = { id: string; type: string; title: string; points: number; order_num: number; subtitle: string | null };
 
 type Props = {
-  participants: Participant[];
-  activities: Activity[];
+  participants: TurmaReportParticipant[];
+  activities: TurmaReportActivity[];
   turmaName: string;
+  turmaId?: string | null;
 };
 
 function parseLocalDate(value?: string | null) {
@@ -52,7 +55,7 @@ const APTIDAO_CFG: Record<string, { label: string }> = {
   nao_apto: { label: "Nao Apto no Momento" },
 };
 
-export default function TurmaReportPDF({ participants, activities, turmaName }: Props) {
+export default function TurmaReportPDF({ participants, activities, turmaName, turmaId = null }: Props) {
   const [loading, setLoading] = useState(false);
 
   async function generateFullReport() {
@@ -67,56 +70,125 @@ export default function TurmaReportPDF({ participants, activities, turmaName }: 
       const [
         { data: plansData },
         { data: assessData },
-        { data: attendRec },
         { data: notesData },
         { data: evalsData },
         { data: worshipData },
-        { data: devProgressData },
-        { data: lessonRespData },
+        { count: lessonTotal },
+        { count: devotionalTotal },
       ] = await Promise.all([
         supabase.from("discipleship_plans").select("*").in("user_id", userIds),
         supabase.from("spiritual_assessments").select("*").in("user_id", userIds).eq("month", now.getMonth() + 1).eq("year", now.getFullYear()),
-        supabase.from("attendance").select("user_id, status, event_id").in("user_id", userIds),
         supabase.from("pastoral_notes").select("*").in("user_id", userIds).order("created_at", { ascending: false }),
         supabase.from("meeting_evaluations").select("*").in("user_id", userIds),
         supabase.from("worship_attendance").select("user_id, status, worship_date").in("user_id", userIds),
-        supabase.from("devotional_progress").select("user_id, devotional_id").in("user_id", userIds),
-        supabase.from("lesson_progress").select("user_id, lesson_id").in("user_id", userIds).eq("is_completed", true),
+        supabase.from("lessons").select("id", { count: "exact", head: true }),
+        supabase.from("devotional_content").select("id", { count: "exact", head: true }),
       ]);
+      const journeyActivityTotal = (lessonTotal ?? 0) + (devotionalTotal ?? 0);
+
+      type AttendanceRow = { user_id: string; status: string; event_id: string };
+      type DevotionalRow = { user_id: string; devotional_id: string };
+      type LessonRow = { user_id: string; lesson_id: string };
+      const [attendanceResult, devotionalResult, lessonResult] = await Promise.all([
+        fetchAllSupabaseRows<AttendanceRow>((from, to) =>
+          supabase
+            .from("attendance")
+            .select("user_id, status, event_id")
+            .in("user_id", userIds)
+            .order("user_id")
+            .range(from, to),
+        ),
+        fetchAllSupabaseRows<DevotionalRow>((from, to) =>
+          supabase
+            .from("devotional_progress")
+            .select("user_id, devotional_id")
+            .in("user_id", userIds)
+            .order("user_id")
+            .range(from, to),
+        ),
+        fetchAllSupabaseRows<LessonRow>((from, to) =>
+          supabase
+            .from("lesson_progress")
+            .select("user_id, lesson_id")
+            .in("user_id", userIds)
+            .eq("is_completed", true)
+            .order("user_id")
+            .range(from, to),
+        ),
+      ]);
+      const pageError = attendanceResult.error ?? devotionalResult.error ?? lessonResult.error;
+      if (pageError) throw new Error(pageError.message);
+      const allAttendRec = attendanceResult.data ?? [];
+      const devProgressData = devotionalResult.data ?? [];
+      const lessonRespData = lessonResult.data ?? [];
 
       // Fetch event details for attendance
-      const allEventIds = [...new Set((attendRec ?? []).map(a => a.event_id))];
+      const allEventIds = [...new Set(allAttendRec.map(a => a.event_id))];
       const { data: eventsData } = allEventIds.length > 0
-        ? await supabase.from("events").select("id, title, event_date").in("id", allEventIds)
+        ? await supabase.from("events").select("id, title, event_date, turma_id, area, target_user_id").in("id", allEventIds)
         : { data: [] };
       const evMap = new Map((eventsData ?? []).map(e => [e.id, e]));
+      const reportArea = participants[0]?.area ?? "";
+      const scopedEventIds = new Set(
+        (eventsData ?? [])
+          .filter((event) =>
+            isEventVisibleInGroupScope(event, {
+              turmaId,
+              area: reportArea,
+              userId: null,
+            }),
+          )
+          .map((event) => event.id),
+      );
+      const attendRec = allAttendRec.filter((attendance) =>
+        scopedEventIds.has(attendance.event_id)
+        && ["presente", "faltou", "falta", "justificou", "justificado"].includes(attendance.status),
+      );
 
       // Fetch event details for meeting evaluations
       const evalEventIds = [...new Set((evalsData ?? []).map(e => e.event_id))];
       const { data: evalEventsData } = evalEventIds.length > 0
-        ? await supabase.from("events").select("id, title, event_date").in("id", evalEventIds)
+        ? await supabase.from("events").select("id, title, event_date, turma_id, area, target_user_id").in("id", evalEventIds)
         : { data: [] };
       const evalEvMap = new Map((evalEventsData ?? []).map(e => [e.id, e]));
+      const scopedEvalEventIds = new Set(
+        (evalEventsData ?? [])
+          .filter((event) =>
+            isEventVisibleInGroupScope(event, {
+              turmaId,
+              area: reportArea,
+              userId: null,
+            }),
+          )
+          .map((event) => event.id),
+      );
+      const scopedEvalsData = (evalsData ?? []).filter((evaluation) =>
+        scopedEvalEventIds.has(evaluation.event_id),
+      );
 
       // Index data by user_id
       const plansMap = new Map((plansData ?? []).map(p => [p.user_id, p]));
       const assessMap = new Map((assessData ?? []).map(a => [a.user_id, a]));
-      const attendMap = new Map<string, typeof attendRec>();
+      type AttendanceEntry = (typeof attendRec)[number];
+      type PastoralNoteEntry = NonNullable<typeof notesData>[number];
+      type EvaluationEntry = NonNullable<typeof evalsData>[number];
+      type WorshipEntry = NonNullable<typeof worshipData>[number];
+      const attendMap = new Map<string, AttendanceEntry[]>();
       for (const a of (attendRec ?? [])) {
         if (!attendMap.has(a.user_id)) attendMap.set(a.user_id, []);
         attendMap.get(a.user_id)!.push(a);
       }
-      const notesMap = new Map<string, typeof notesData>();
+      const notesMap = new Map<string, PastoralNoteEntry[]>();
       for (const n of (notesData ?? [])) {
         if (!notesMap.has(n.user_id)) notesMap.set(n.user_id, []);
         notesMap.get(n.user_id)!.push(n);
       }
-      const evalsMap = new Map<string, any[]>();
-      for (const e of (evalsData ?? [])) {
+      const evalsMap = new Map<string, EvaluationEntry[]>();
+      for (const e of scopedEvalsData) {
         if (!evalsMap.has(e.user_id)) evalsMap.set(e.user_id, []);
         evalsMap.get(e.user_id)!.push(e);
       }
-      const worshipMap = new Map<string, any[]>();
+      const worshipMap = new Map<string, WorshipEntry[]>();
       for (const w of (worshipData ?? [])) {
         if (!worshipMap.has(w.user_id)) worshipMap.set(w.user_id, []);
         worshipMap.get(w.user_id)!.push(w);
@@ -220,10 +292,15 @@ export default function TurmaReportPDF({ participants, activities, turmaName }: 
           doc.setFillColor(248, 249, 252);
           doc.rect(margin, y - 4, W - margin * 2, 6, "F");
         }
-        const pct = activities.length > 0 ? Math.round((p.completed_count / activities.length) * 100) : 0;
+        const completedJourneyActivities =
+          (lessonUniqueMap.get(p.user_id)?.size ?? 0)
+          + (devCountMap.get(p.user_id) ?? 0);
+        const pct = journeyActivityTotal > 0
+          ? Math.round((completedJourneyActivities / journeyActivityTotal) * 100)
+          : 0;
         const age = calcAge(p.birth_date);
         const att = attendMap.get(p.user_id) ?? [];
-        const present = att.filter((a: any) => normalizeAttendanceStatus(a.status) === "presente").length;
+        const present = att.filter((attendance) => normalizeAttendanceStatus(attendance.status) === "presente").length;
         const attPct = att.length > 0 ? Math.round((present / att.length) * 100) : 0;
         const plan = plansMap.get(p.user_id);
         const aptLabel = plan?.aptidao ? (APTIDAO_CFG[plan.aptidao]?.label?.split(" ")[0] ?? "—") : "—";
@@ -255,7 +332,12 @@ export default function TurmaReportPDF({ participants, activities, turmaName }: 
         const doneForm = formacoes.filter(a => completedIds.has(a.id)).length;
         const doneDev = devocionais.filter(a => completedIds.has(a.id)).length;
         const doneEnc = encontros.filter(a => completedIds.has(a.id)).length;
-        const pct = activities.length > 0 ? Math.round((p.completed_count / activities.length) * 100) : 0;
+        const completedLessons = lessonUniqueMap.get(p.user_id)?.size ?? 0;
+        const completedDevotionals = devCountMap.get(p.user_id) ?? 0;
+        const completedJourneyActivities = completedLessons + completedDevotionals;
+        const pct = journeyActivityTotal > 0
+          ? Math.round((completedJourneyActivities / journeyActivityTotal) * 100)
+          : 0;
         const age = calcAge(p.birth_date);
 
         // Participant header
@@ -290,16 +372,16 @@ export default function TurmaReportPDF({ participants, activities, turmaName }: 
 
         // Progresso
         addSection("PROGRESSO DA JORNADA");
-        addRow("Progresso geral", `${p.completed_count}/${activities.length} (${pct}%)`);
-        addRow("Devocionais (app)", `${doneDev}/${devocionais.length}`);
-        addRow("Formacoes", `${doneForm}/${formacoes.length}`);
-        addRow("Encontros (app)", `${doneEnc}/${encontros.length}`);
-        addRow("Devocionais concluidos", `${devCountMap.get(p.user_id) ?? 0}`);
-        addRow("Licoes respondidas", `${lessonUniqueMap.get(p.user_id)?.size ?? 0}`);
+        addRow("Progresso geral", `${completedJourneyActivities}/${journeyActivityTotal} (${pct}%)`);
+        addRow("Devocionais concluidos", `${completedDevotionals}/${devotionalTotal ?? 0}`);
+        addRow("Licoes concluidas", `${completedLessons}/${lessonTotal ?? 0}`);
+        addRow("Outros devocionais registrados", `${doneDev}/${devocionais.length}`);
+        addRow("Formacoes complementares", `${doneForm}/${formacoes.length}`);
+        addRow("Encontros complementares", `${doneEnc}/${encontros.length}`);
 
         // Activity checklist
         y += 2;
-        addText("Atividades:", margin, y, 8, true, "#555");
+        addText("Registros complementares:", margin, y, 8, true, "#555");
         y += 4;
         for (const act of activities) {
           checkPage(5);
@@ -328,9 +410,9 @@ export default function TurmaReportPDF({ participants, activities, turmaName }: 
         addSection("PRESENCA NOS ENCONTROS");
         const userAtt = attendMap.get(p.user_id) ?? [];
         if (userAtt.length > 0) {
-          const present = userAtt.filter((a: any) => normalizeAttendanceStatus(a.status) === "presente").length;
-          const absent = userAtt.filter((a: any) => normalizeAttendanceStatus(a.status) === "faltou").length;
-          const justified = userAtt.filter((a: any) => normalizeAttendanceStatus(a.status) === "justificou").length;
+          const present = userAtt.filter((attendance) => normalizeAttendanceStatus(attendance.status) === "presente").length;
+          const absent = userAtt.filter((attendance) => normalizeAttendanceStatus(attendance.status) === "faltou").length;
+          const justified = userAtt.filter((attendance) => normalizeAttendanceStatus(attendance.status) === "justificou").length;
           const attPct = Math.round((present / userAtt.length) * 100);
           addRow("Presente", `${present} encontro(s)`);
           addRow("Faltou", `${absent} encontro(s)`);
@@ -340,7 +422,7 @@ export default function TurmaReportPDF({ participants, activities, turmaName }: 
           y += 2;
           addText("Historico:", margin, y, 8, true, "#555");
           y += 4;
-          const sorted = [...userAtt].sort((a: any, b: any) => {
+          const sorted = [...userAtt].sort((a, b) => {
             const da = evMap.get(a.event_id)?.event_date ?? "";
             const db = evMap.get(b.event_id)?.event_date ?? "";
             return getTimeOrMax(da) - getTimeOrMax(db);
@@ -364,7 +446,7 @@ export default function TurmaReportPDF({ participants, activities, turmaName }: 
         const userWorship = worshipMap.get(p.user_id) ?? [];
         if (userWorship.length > 0) {
           addSection("PRESENCA EM CULTOS");
-          const approved = userWorship.filter((w: any) => w.status === "aprovado").length;
+          const approved = userWorship.filter((worship) => worship.status === "aprovado").length;
           addRow("Cultos confirmados", `${approved} de ${userWorship.length} registro(s)`);
         }
 
@@ -453,7 +535,7 @@ export default function TurmaReportPDF({ participants, activities, turmaName }: 
     <button
       onClick={generateFullReport}
       disabled={loading || participants.length === 0}
-      className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-primary-foreground font-inter text-xs font-medium transition-colors disabled:opacity-50"
+      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-primary-foreground font-inter text-xs font-medium transition-colors disabled:opacity-50"
       title="Baixar relatório completo da turma em PDF"
     >
       <Download className="w-4 h-4" />

@@ -24,7 +24,7 @@ export default function BrandLogo({
       {!compact && (
         <div className={cn("leading-none", inverse ? "text-white" : "text-foreground")}>
           <span className="block font-inter text-[0.62rem] font-extrabold uppercase tracking-[0.28em]">
-            Discipulado
+            Caminho
           </span>
           <span className="mt-0.5 block font-montserrat text-3xl font-black tracking-[-0.04em]">
             3M

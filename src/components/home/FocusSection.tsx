@@ -159,11 +159,20 @@ export default function FocusSection({ onNavigateToDiscipulado }: FocusSectionPr
 
       const studiedLessons = new Set(lessonResponses?.map(r => r.lesson_id) || []);
 
-      const pendingLessonEntry = agenda.schedule.find(e =>
-        !studiedLessons.has(e.lessonId) && today.getTime() >= new Date(e.eventDate).setHours(0, 0, 0, 0)
-      );
+      const fourteenDaysAgo = new Date(today);
+      fourteenDaysAgo.setDate(today.getDate() - 14);
 
-      if (pendingLessonEntry) {
+      const pendingLessonEntry = agenda.schedule.find(e => {
+        const eventDay = new Date(e.eventDate);
+        eventDay.setHours(0, 0, 0, 0);
+        return !studiedLessons.has(e.lessonId)
+          && today.getTime() >= eventDay.getTime()
+          && eventDay.getTime() >= fourteenDaysAgo.getTime();
+      });
+
+      const showExpiredLessonOnHome = false;
+
+      if (showExpiredLessonOnHome && pendingLessonEntry) {
         setNextActivity({
           type: "lesson",
           title: pendingLessonEntry.lessonTitle,

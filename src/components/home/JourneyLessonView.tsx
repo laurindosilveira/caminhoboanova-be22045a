@@ -16,11 +16,36 @@ import {
   isStudentOffline,
   mergeByKey,
 } from "@/lib/studentOffline";
+import {
+  getStoredLessonMediaProgress,
+  storeLessonMediaProgress,
+} from "@/lib/lessonMediaProgress";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
-import { saveAs } from "file-saver";
-import jsPDF from "jspdf";
+import type { Paragraph as DocxParagraph } from "docx";
+import type { Database } from "@/integrations/supabase/types";
+
+type Tables = Database["public"]["Tables"];
+type LeaderGuide = Tables["leader_guide"]["Row"];
+type LessonContentRow = Tables["lesson_content"]["Row"];
+type TurmaLessonContentRow = Tables["turma_lesson_content"]["Row"];
+type LessonResponseRow = Pick<Tables["lesson_responses"]["Row"], "question_key" | "response">;
+type LessonProgressDetail = Pick<
+  Tables["lesson_progress"]["Row"],
+  "lesson_id" | "video_watched" | "audio_listened" | "updated_at" | "completed_at"
+>;
+type AreaName = Database["public"]["Enums"]["area_name"];
+
+type LeaderNotes = {
+  participation_notes: string;
+  questions_notes: string;
+  pastoral_care_notes: string;
+  follow_up_notes: string;
+};
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 type Lesson = {
   id: string;
@@ -77,8 +102,8 @@ type Props = {
 };
 
 export default function JourneyLessonView({ lesson, onBack, isAdmin = false, targetUserId, isLateAccess = false, overrideId = null, awardedPoints = null, onComplete }: Props) {
-  const { profile, role } = useAuth();
-  const { effectiveArea } = useAreaSwitch();
+  const { profile, role, user: authUser } = useAuth();
+  const { effectiveArea, effectiveTurmaId } = useAreaSwitch();
   const [content, setContent] = useState<LessonContent>(getDefaultContent(lesson.order_num));
   const [responses, setResponses] = useState<Response>({});
   const [bibleRef, setBibleRef] = useState<string | null>(null);
@@ -90,9 +115,9 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
   const [audioListened, setAudioListened] = useState(false);
   const [saveAttempted, setSaveAttempted] = useState(false);
   const [showCompletionAnim, setShowCompletionAnim] = useState(false);
-  const [leaderGuide, setLeaderGuide] = useState<any>(null);
+  const [leaderGuide, setLeaderGuide] = useState<LeaderGuide | null>(null);
   const [showLeaderGuideEditor, setShowLeaderGuideEditor] = useState(false);
-  const [leaderNotes, setLeaderNotes] = useState<any>({
+  const [leaderNotes, setLeaderNotes] = useState<LeaderNotes>({
     participation_notes: "",
     questions_notes: "",
     pastoral_care_notes: "",
@@ -116,7 +141,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
           .select("*")
           .eq("lesson_id", lesson.id)
           .eq("church_id", profile?.church_id ?? null)
-          .eq("area", area as any)
+          .eq("area", area as AreaName)
           .maybeSingle(),
       ]);
 
@@ -136,17 +161,18 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
   // Load lesson content from DB — checks turma override first, then global content
   useEffect(() => {
     async function loadContent() {
+      setContentLoaded(false);
       const defaults = getDefaultContent(lesson.order_num);
 
       // 1. Load global content
-      const { data: globalData } = await cachedStudentQuery(
+      const { data: globalData } = await cachedStudentQuery<LessonContentRow | null>(
         `lesson-content:${lesson.id}`,
         () => supabase
           .from("lesson_content")
           .select("*")
           .eq("lesson_id", lesson.id)
           .maybeSingle(),
-        null as any,
+        null,
       );
 
       const global: LessonContent = globalData ? {
@@ -159,49 +185,49 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
         prayer_prompt: globalData.prayer_prompt || defaults.prayer_prompt,
         video_link: globalData.video_link ?? "",
         audio_link: globalData.audio_link ?? "",
-        pdf_link: (globalData as any).pdf_link ?? "",
+        pdf_link: globalData.pdf_link ?? "",
       } : defaults;
 
       // 2. Check for turma-specific override
-      const { data: { user } } = await supabase.auth.getUser();
-      const uid = targetUserId ?? user?.id;
-      if (uid) {
+      let contentTurmaId = effectiveTurmaId ?? profile?.turma_id ?? null;
+      if (targetUserId) {
         const { data: profileData } = await supabase
           .from("profiles")
           .select("turma_id")
-          .eq("user_id", uid)
+          .eq("user_id", targetUserId)
           .maybeSingle();
+        contentTurmaId = profileData?.turma_id ?? null;
+      }
 
-        if (profileData?.turma_id) {
-          const { data: ov } = await cachedStudentQuery(
-            `turma-lesson-content:${profileData.turma_id}:${lesson.id}`,
-            () => supabase
-              .from("turma_lesson_content" as any)
-              .select("*")
-              .eq("turma_id", profileData.turma_id)
-              .eq("lesson_id", lesson.id)
-              .maybeSingle(),
-            null as any,
-          );
+      if (contentTurmaId) {
+        const { data: ov } = await cachedStudentQuery<TurmaLessonContentRow | null>(
+          `turma-lesson-content:${contentTurmaId}:${lesson.id}`,
+          () => supabase
+            .from("turma_lesson_content")
+            .select("*")
+            .eq("turma_id", contentTurmaId)
+            .eq("lesson_id", lesson.id)
+            .maybeSingle(),
+          null,
+        );
 
-          if (ov) {
-            const override = ov as any;
-            // Merge: override fields take priority over global when set
-            setContent({
-              greeting: override.greeting || global.greeting,
-              icebreaker: override.icebreaker || global.icebreaker,
-              summary: override.summary || global.summary,
-              bible_texts: override.bible_texts?.length ? override.bible_texts : global.bible_texts,
-              questions: override.questions?.length ? override.questions : global.questions,
-              practice: override.practice || global.practice,
-              prayer_prompt: override.prayer_prompt || global.prayer_prompt,
-              video_link: override.video_link ?? global.video_link,
-              audio_link: override.audio_link ?? global.audio_link,
-              pdf_link: override.pdf_link ?? global.pdf_link,
-            });
-            setContentLoaded(true);
-            return;
-          }
+        if (ov) {
+          const override = ov;
+          // Merge: override fields take priority over global when set
+          setContent({
+            greeting: override.greeting || global.greeting,
+            icebreaker: override.icebreaker || global.icebreaker,
+            summary: override.summary || global.summary,
+            bible_texts: override.bible_texts?.length ? override.bible_texts : global.bible_texts,
+            questions: override.questions?.length ? override.questions : global.questions,
+            practice: override.practice || global.practice,
+            prayer_prompt: override.prayer_prompt || global.prayer_prompt,
+            video_link: override.video_link ?? global.video_link,
+            audio_link: override.audio_link ?? global.audio_link,
+            pdf_link: override.pdf_link ?? global.pdf_link,
+          });
+          setContentLoaded(true);
+          return;
         }
       }
 
@@ -209,41 +235,40 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
       setContentLoaded(true);
     }
     loadContent();
-  }, [lesson.id, lesson.order_num, targetUserId]);
+  }, [effectiveTurmaId, lesson.id, lesson.order_num, profile?.turma_id, targetUserId]);
 
   // Load user responses
   useEffect(() => {
     async function loadResponses() {
-      const { data: { user } } = await supabase.auth.getUser();
-      const uid = targetUserId ?? user?.id;
+      const uid = targetUserId ?? authUser?.id;
       if (!uid) return;
       const [{ data, error }, { data: progress, error: progressError }, overlay] = await Promise.all([
-        cachedStudentQuery(
+        cachedStudentQuery<LessonResponseRow[]>(
           `lesson-responses:${uid}:${lesson.id}`,
           () => supabase
             .from("lesson_responses")
             .select("question_key, response")
             .eq("lesson_id", lesson.id)
             .eq("user_id", uid),
-          [] as any[],
+          [],
         ),
-        cachedStudentQuery(
+        cachedStudentQuery<LessonProgressDetail | null>(
           `lesson-progress-detail:${uid}:${lesson.id}`,
           () => supabase
             .from("lesson_progress")
-            .select("lesson_id, video_watched, audio_listened, updated_at")
+            .select("lesson_id, video_watched, audio_listened, updated_at, completed_at")
             .eq("lesson_id", lesson.id)
             .eq("user_id", uid)
             .maybeSingle(),
-          null as any,
+          null,
         ),
         getPendingStudentOverlay(uid),
       ]);
-      const mergedResponses = mergeByKey(data ?? [], overlay.lessonResponses.filter((item) => item.lesson_id === lesson.id) as any[], "question_key");
+      const mergedResponses = mergeByKey(data ?? [], overlay.lessonResponses.filter((item) => item.lesson_id === lesson.id), "question_key");
       const pendingProgress = overlay.lessonProgress.find((item) => item.lesson_id === lesson.id);
       if (error && !isStudentOffline()) {
         toast.error("Não foi possível carregar as respostas da lição.", {
-          description: String((error as any)?.message ?? error),
+          description: getErrorMessage(error),
         });
       } else if (mergedResponses) {
         const map: Response = {};
@@ -251,16 +276,17 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
         setResponses(map);
       }
       const effectiveProgress = pendingProgress ?? progress;
-      if ((!progressError || pendingProgress) && effectiveProgress) {
-        setVideoWatched(!!effectiveProgress.video_watched);
-        setAudioListened(!!effectiveProgress.audio_listened);
-        const savedAt = effectiveProgress.updated_at ?? effectiveProgress.completed_at;
+      const storedProgress = getStoredLessonMediaProgress(uid, lesson.id);
+      if (!progressError || pendingProgress || storedProgress.videoWatched || storedProgress.audioListened) {
+        setVideoWatched(!!effectiveProgress?.video_watched || storedProgress.videoWatched);
+        setAudioListened(!!effectiveProgress?.audio_listened || storedProgress.audioListened);
+        const savedAt = effectiveProgress?.updated_at ?? effectiveProgress?.completed_at;
         if (savedAt) setLastSaved(new Date(savedAt));
       }
       hasLoadedResponses.current = true;
     }
-    loadResponses();
-  }, [lesson.id, targetUserId]);
+    void loadResponses();
+  }, [authUser?.id, lesson.id, targetUserId]);
 
   useEffect(() => {
     if (isAdmin || !contentLoaded || !hasLoadedResponses.current) return;
@@ -270,8 +296,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
 
     const timeoutId = window.setTimeout(async () => {
       if (isStudentOffline()) {
-        const { data: { user } } = await supabase.auth.getUser();
-        const uid = targetUserId ?? user?.id;
+        const uid = targetUserId ?? authUser?.id;
         if (uid) {
           await enqueueStudentAction({
             type: "save_lesson_draft",
@@ -306,7 +331,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     }, 1200);
 
     return () => window.clearTimeout(timeoutId);
-  }, [responses, lesson.id, isAdmin, contentLoaded, videoWatched, audioListened]);
+  }, [responses, lesson.id, isAdmin, contentLoaded, videoWatched, audioListened, profile?.church_id, targetUserId, authUser?.id]);
 
   // Validation: check all required fields
   const visibleQuestions = content.questions
@@ -337,7 +362,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
       leader_id: profile.user_id,
       lesson_id: lesson.id,
       church_id: profile.church_id,
-      area: (effectiveArea || profile.area) as any,
+      area: (effectiveArea || profile.area) as AreaName,
       ...leaderNotes,
     }, { onConflict: "lesson_id,church_id,area" });
     setSavingLeaderNotes(false);
@@ -358,8 +383,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
       return;
     }
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    const uid = targetUserId ?? user?.id;
+    const uid = targetUserId ?? authUser?.id;
 
     if (isStudentOffline() && uid) {
       await enqueueStudentAction({
@@ -426,6 +450,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
   }
 
   async function handleDownloadPDF() {
+    const pdfModulePromise = import("jspdf");
     // Fetch devotionals for this lesson
     const { data: devs } = await supabase
       .from("devotional_content")
@@ -433,19 +458,18 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
       .eq("lesson_id", lesson.id)
       .order("day_number");
 
-    // Fetch completed devotional IDs
-    const { data: { user } } = await supabase.auth.getUser();
     let completedDevIds = new Set<string>();
-    if (user) {
+    if (authUser) {
       const { data: prog } = await supabase
         .from("devotional_progress")
         .select("devotional_id")
-        .eq("user_id", user.id);
-      completedDevIds = new Set((prog ?? []).map((p: any) => p.devotional_id));
+        .eq("user_id", authUser.id);
+      completedDevIds = new Set((prog ?? []).map((progress) => progress.devotional_id));
     }
 
     const completedDevs = (devs ?? []).filter(d => completedDevIds.has(d.id));
 
+    const { default: jsPDF } = await pdfModulePromise;
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pageW = pdf.internal.pageSize.getWidth();
     const margin = 15;
@@ -548,7 +572,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
       addSectionTitle(`DEVOCIONAIS CONCLUIDOS (${completedDevs.length}/${(devs ?? []).length})`);
       y += 2;
 
-      completedDevs.forEach((dev: any) => {
+      completedDevs.forEach((dev) => {
         checkPage(20);
         addSectionTitle(`Dia ${dev.day_number} - ${dev.title || ""}`);
 
@@ -622,8 +646,8 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
           text,
         });
         return;
-      } catch (err: any) {
-        if (err.name === "AbortError") return; // User cancelled
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === "AbortError") return; // User cancelled
       }
     }
 
@@ -634,7 +658,12 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
   }
 
   async function handleDownloadWord() {
-    const sections: Paragraph[] = [];
+    const [docx, fileSaver] = await Promise.all([
+      import("docx"),
+      import("file-saver"),
+    ]);
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
+    const sections: DocxParagraph[] = [];
 
     // Title
     sections.push(new Paragraph({
@@ -682,7 +711,28 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
 
     const doc = new Document({ sections: [{ children: sections }] });
     const blob = await Packer.toBlob(doc);
-    saveAs(blob, `Licao_${lesson.order_num}_${lesson.title.replace(/\s+/g, "_")}.docx`);
+    fileSaver.saveAs(blob, `Licao_${lesson.order_num}_${lesson.title.replace(/\s+/g, "_")}.docx`);
+  }
+
+  function markMediaOpened(media: "video" | "audio") {
+    const uid = targetUserId ?? authUser?.id;
+    const progress = media === "video"
+      ? { videoWatched: true }
+      : { audioListened: true };
+
+    if (uid) storeLessonMediaProgress(uid, lesson.id, progress);
+    if (media === "video") setVideoWatched(true);
+    else setAudioListened(true);
+
+    if (isAdmin || !uid || isStudentOffline()) return;
+
+    void supabase.rpc("mark_lesson_media_progress", {
+      p_lesson_id: lesson.id,
+      p_video_watched: media === "video",
+      p_audio_listened: media === "audio",
+    }).then(({ error }) => {
+      if (error) setDraftError(error.message);
+    });
   }
 
   // ResponseField is intentionally inlined as a JSX helper (not a component)
@@ -720,7 +770,6 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
           onBack={() => {
             setShowLeaderGuideEditor(false);
             // Reload leader data after edit
-            const area = effectiveArea || profile?.area;
             supabase.from("leader_guide").select("*").eq("lesson_id", lesson.id).maybeSingle().then(({ data }) => {
               if (data) setLeaderGuide(data);
             });
@@ -803,7 +852,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
                           <div className="space-y-2">
                             {leaderGuide.questions.map((q: string, i: number) => (
                               <div key={i} className="flex gap-2 p-2.5 bg-white/50 rounded-xl border border-amber-200/50">
-                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-700 text-white flex items-center justify-center font-montserrat font-bold text-[10px]">{i + 1}</span>
+                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-700 text-white flex items-center justify-center font-montserrat font-bold text-xs">{i + 1}</span>
                                 <p className="text-amber-900 font-inter text-xs leading-relaxed whitespace-pre-wrap">{q}</p>
                               </div>
                             ))}
@@ -820,10 +869,10 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
                   <div className="mt-6 pt-6 border-t border-amber-200">
                     <p className="font-montserrat font-bold text-amber-900 text-sm mb-4 font-black">📝 Espaço para Anotações (Compartilhado)</p>
                     <div className="space-y-3">
-                      <NoteField label="Participações importantes:" value={leaderNotes.participation_notes} onChange={v => setLeaderNotes((prev: any) => ({ ...prev, participation_notes: v }))} />
-                      <NoteField label="Dúvidas levantadas:" value={leaderNotes.questions_notes} onChange={v => setLeaderNotes((prev: any) => ({ ...prev, questions_notes: v }))} />
-                      <NoteField label="Adolescentes que precisam de atenção pastoral:" value={leaderNotes.pastoral_care_notes} onChange={v => setLeaderNotes((prev: any) => ({ ...prev, pastoral_care_notes: v }))} />
-                      <NoteField label="Aplicações importantes para próximos encontros:" value={leaderNotes.follow_up_notes} onChange={v => setLeaderNotes((prev: any) => ({ ...prev, follow_up_notes: v }))} />
+                      <NoteField label="Participações importantes:" value={leaderNotes.participation_notes} onChange={v => setLeaderNotes((prev) => ({ ...prev, participation_notes: v }))} />
+                      <NoteField label="Dúvidas levantadas:" value={leaderNotes.questions_notes} onChange={v => setLeaderNotes((prev) => ({ ...prev, questions_notes: v }))} />
+                      <NoteField label="Adolescentes que precisam de atenção pastoral:" value={leaderNotes.pastoral_care_notes} onChange={v => setLeaderNotes((prev) => ({ ...prev, pastoral_care_notes: v }))} />
+                      <NoteField label="Aplicações importantes para próximos encontros:" value={leaderNotes.follow_up_notes} onChange={v => setLeaderNotes((prev) => ({ ...prev, follow_up_notes: v }))} />
                       
                       <button 
                         onClick={handleSaveLeaderNotes}
@@ -872,7 +921,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
           </div>
           <div className="p-4">
             <a href={content.video_link} target="_blank" rel="noopener noreferrer"
-              onClick={() => setVideoWatched(true)}
+              onClick={() => markMediaOpened("video")}
               className="flex items-center gap-3 p-3 bg-primary/10 rounded-xl text-primary hover:bg-primary/20 transition-colors">
               <Play className="w-5 h-5" />
               <span className="font-inter text-sm font-medium">Assistir episódio</span>
@@ -880,7 +929,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
               {!videoWatched && <Link className="w-4 h-4 ml-auto" />}
             </a>
             {saveAttempted && !videoWatched && (
-              <p className="text-destructive font-inter text-[10px] mt-1.5 flex items-center gap-1">
+              <p className="text-destructive font-inter text-xs mt-1.5 flex items-center gap-1">
                 <AlertCircle className="w-3 h-3" /> Assista o vídeo antes de salvar
               </p>
             )}
@@ -897,7 +946,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
           </div>
           <div className="p-4">
             <a href={content.audio_link} target="_blank" rel="noopener noreferrer"
-              onClick={() => setAudioListened(true)}
+              onClick={() => markMediaOpened("audio")}
               className="flex items-center gap-3 p-3 bg-secondary/10 rounded-xl text-secondary hover:bg-secondary/20 transition-colors">
               <Volume2 className="w-5 h-5" />
               <span className="font-inter text-sm font-medium">Ouvir áudio</span>
@@ -905,7 +954,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
               {!audioListened && <Link className="w-4 h-4 ml-auto" />}
             </a>
             {saveAttempted && !audioListened && (
-              <p className="text-destructive font-inter text-[10px] mt-1.5 flex items-center gap-1">
+              <p className="text-destructive font-inter text-xs mt-1.5 flex items-center gap-1">
                 <AlertCircle className="w-3 h-3" /> Ouça o áudio antes de salvar
               </p>
             )}
@@ -997,7 +1046,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
             <Pen className="w-4 h-4 text-primary" />
             <p className="font-montserrat font-bold text-foreground text-sm">💬 Perguntas para Diálogo</p>
             {!isAdmin && (
-              <span className={`ml-auto font-inter text-[10px] ${draftError ? "text-destructive" : "text-muted-foreground"}`}>
+              <span className={`ml-auto font-inter text-xs ${draftError ? "text-destructive" : "text-muted-foreground"}`}>
                 {draftError ? "Falha no salvamento automático" : lastSaved ? "Rascunho salvo" : "Salvamento automático"}
               </span>
             )}
@@ -1145,7 +1194,7 @@ function LeaderSection({ icon, title, content }: { icon: React.ReactNode; title:
 function NoteField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div className="space-y-1">
-      <label className="font-inter text-[10px] font-bold text-amber-800/80 uppercase tracking-tight">{label}</label>
+      <label className="font-inter text-xs font-bold text-amber-800/80 uppercase tracking-tight">{label}</label>
       <textarea
         value={value}
         onChange={e => onChange(e.target.value)}

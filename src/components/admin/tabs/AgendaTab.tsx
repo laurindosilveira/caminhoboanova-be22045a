@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AREAS, ALL_COMMUNITIES } from "@/config/areas";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -10,6 +10,12 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { getSubsequentLessonEvents } from "@/lib/lessonScheduleCascade";
+import AgendaCourseControlDialog from "@/components/admin/AgendaCourseControlDialog";
+import {
+  activateAgendaCourseControl,
+  isCourseOpenWithoutRestrictions,
+  type AgendaCourseScope,
+} from "@/lib/agendaCourseAccess";
 
 type Event = {
   id: string;
@@ -34,6 +40,12 @@ type LessonOption = {
   course_id: string;
 };
 
+type CourseControlPrompt = {
+  scope: AgendaCourseScope;
+  courseTitle: string;
+  onContinue: (activateControl: boolean) => Promise<void>;
+};
+
 const EMPTY_FORM = {
   title: "", description: "", event_date: "", location: "", type: "encontro", area: "", community: "", linked_lesson_id: "",
   scope: "area" as "area" | "turma", turmaId: "",
@@ -51,7 +63,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
   const { profile } = useAuth();
   const { churchId: profileChurchId } = useChurch();
   const churchId = churchIdOverride ?? profileChurchId;
-  const { effectiveArea } = useAreaSwitch();
+  const { effectiveArea, effectiveTurmaId } = useAreaSwitch();
   const currentArea = effectiveArea || profile?.area || "";
   const { allTypes, customTypes, getLabel, getEmoji, getColor, refetch: refetchTypes } = useCustomEventTypes(currentArea);
 
@@ -65,7 +77,14 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [editLessonId, setEditLessonId] = useState<string>("");
   const [showCascadeDialog, setShowCascadeDialog] = useState(false);
-  const [cascadePending, setCascadePending] = useState<{ eventId: string; oldLessonId: string | null; newLessonId: string } | null>(null);
+  const [cascadePending, setCascadePending] = useState<{
+    eventId: string;
+    oldLessonId: string | null;
+    newLessonId: string;
+    referenceEvent: Event;
+    agendaControlScope: AgendaCourseScope | null;
+  } | null>(null);
+  const [courseControlPrompt, setCourseControlPrompt] = useState<CourseControlPrompt | null>(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
 
   // Create custom event type modal state
@@ -78,14 +97,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
   });
   const [savingType, setSavingType] = useState(false);
 
-  useEffect(() => { 
-    if (churchId) {
-      fetchEvents(); 
-      fetchLessons(); 
-    }
-  }, [churchId]);
-
-  async function fetchEvents() {
+  const fetchEvents = useCallback(async () => {
     if (!churchId) return;
     setLoading(true);
 
@@ -95,9 +107,9 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
     }
     setEvents((data ?? []) as Event[]);
     setLoading(false);
-  }
+  }, [churchId]);
 
-  async function fetchLessons() {
+  const fetchLessons = useCallback(async () => {
     const [{ data: coursesData, error: coursesError }, { data: lessonsData, error: lessonsError }] = await Promise.all([
       supabase.from("courses").select("id, title, order_num, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null").order("order_num"),
       supabase.from("lessons").select("id, title, order_num, course_id, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null").order("order_num"),
@@ -114,16 +126,24 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
       });
     });
     setLessons(options);
-  }
+  }, [churchId]);
+
+  useEffect(() => {
+    if (churchId) {
+      fetchEvents();
+      fetchLessons();
+    }
+  }, [churchId, fetchEvents, fetchLessons]);
 
   function openNewForm() {
     setEditingFullEventId(null);
-    const defaultScope = leaderMode && profile?.turma_id ? "turma" : "area";
+    const defaultTurmaId = effectiveTurmaId ?? profile?.turma_id ?? null;
+    const defaultScope = defaultTurmaId ? "turma" : "area";
     setForm({
       ...EMPTY_FORM,
       area: currentArea,
       scope: defaultScope,
-      turmaId: leaderMode && profile?.turma_id ? profile.turma_id : "",
+      turmaId: defaultTurmaId ?? "",
     });
     setShowForm(true);
   }
@@ -131,6 +151,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
   function openEditForm(event: Event) {
     setEditingFullEventId(event.id);
     const dateForInput = event.event_date ? format(new Date(event.event_date), "yyyy-MM-dd'T'HH:mm") : "";
+    const selectedTurmaId = event.turma_id ?? null;
     setForm({
       title: event.title,
       description: event.description ?? "",
@@ -140,15 +161,74 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
       area: event.area ?? currentArea,
       community: event.community ?? "",
       linked_lesson_id: event.linked_lesson_id ?? "",
-      scope: event.turma_id ? "turma" : "area",
-      turmaId: event.turma_id ?? "",
+      scope: selectedTurmaId ? "turma" : "area",
+      turmaId: selectedTurmaId ?? "",
     });
     setShowForm(true);
   }
 
+  async function continueWithCourseControlChoice(
+    lessonId: string,
+    turmaId: string | null,
+    area: string | null,
+    onContinue: (activateControl: boolean, scope: AgendaCourseScope | null) => Promise<void>,
+  ) {
+    const lesson = lessons.find(item => item.id === lessonId);
+    if (!lesson) {
+      await onContinue(false, null);
+      return;
+    }
+
+    const scope: AgendaCourseScope = {
+      courseId: lesson.course_id,
+      churchId: churchId ?? null,
+      turmaId,
+      area: area || currentArea || null,
+    };
+
+    try {
+      const isOpen = await isCourseOpenWithoutRestrictions(scope);
+      if (!isOpen) {
+        await onContinue(false, scope);
+        return;
+      }
+
+      setCourseControlPrompt({
+        scope,
+        courseTitle: lesson.course_title,
+        onContinue: activateControl => onContinue(activateControl, scope),
+      });
+      setSaving(false);
+    } catch (error) {
+      toast.error("Não foi possível verificar a liberação do curso", {
+        description: error instanceof Error ? error.message : "Tente novamente.",
+      });
+      setSaving(false);
+    }
+  }
+
+  async function activateControlAfterSave(scope: AgendaCourseScope | null) {
+    if (!scope) return;
+    try {
+      await activateAgendaCourseControl(scope);
+      toast.success("Controle pela Agenda ativado para este grupo.");
+    } catch (error) {
+      toast.error("Evento salvo, mas o controle pela Agenda não foi ativado", {
+        description: error instanceof Error ? error.message : "Tente novamente.",
+      });
+    }
+  }
+
   async function handleSave() {
     if (!form.title || !form.event_date) return;
-    
+
+    const activeTurmaId = effectiveTurmaId ?? (leaderMode ? profile?.turma_id ?? null : null);
+    const selectedFormTurmaId = form.turmaId || activeTurmaId || null;
+    if (form.linked_lesson_id && form.scope === "turma" && !selectedFormTurmaId) {
+      toast.error("Selecione um grupo antes de programar uma lição.");
+      return;
+    }
+
     // Protection: If a lesson is linked, area must be selected (if scope is area)
     if (form.linked_lesson_id && form.scope === "area" && !form.area) {
       toast.error("Selecione uma Área para esta lição!", {
@@ -165,6 +245,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
       return;
     }
 
+    const targetTurmaId = form.scope === "turma" ? selectedFormTurmaId : null;
     const payload = {
       title: form.title,
       description: form.description || null,
@@ -172,62 +253,101 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
       location: form.location || null,
       type: form.type,
       church_id: churchId,
-      area: leaderMode
-        ? (form.scope === "area" ? currentArea || null : null)
-        : (form.area || null),
-      community: leaderMode ? null : (form.community || null),
-      linked_lesson_id: leaderMode ? null : (form.linked_lesson_id || null),
-      turma_id: leaderMode
-        ? (form.scope === "turma" ? form.turmaId || null : null)
+      area: !targetTurmaId && form.scope === "area"
+        ? (leaderMode ? currentArea || null : form.area || null)
         : null,
+      community: leaderMode ? null : (form.community || null),
+      linked_lesson_id: form.linked_lesson_id || null,
+      turma_id: targetTurmaId,
     };
 
-    if (editingFullEventId) {
-      const oldEvent = events.find(e => e.id === editingFullEventId);
-      const oldLessonId = oldEvent?.linked_lesson_id ?? null;
-      const newLessonId = payload.linked_lesson_id;
+    const oldEvent = editingFullEventId
+      ? events.find(event => event.id === editingFullEventId)
+      : null;
+    const oldLessonId = oldEvent?.linked_lesson_id ?? null;
+    const newLessonId = payload.linked_lesson_id;
 
-      if (oldLessonId !== newLessonId && newLessonId && oldEvent) {
-        const subsequentEvents = getSubsequentLessonEvents(events, oldEvent);
-        if (subsequentEvents.length > 0) {
-          await supabase.from("events").update({ ...payload, linked_lesson_id: oldLessonId }).eq("id", editingFullEventId);
-          setCascadePending({ eventId: editingFullEventId, oldLessonId, newLessonId });
-          setShowCascadeDialog(true);
-          setShowForm(false);
-          setEditingFullEventId(null);
+    const commitSave = async (agendaControlScope: AgendaCourseScope | null) => {
+      setSaving(true);
+      if (editingFullEventId) {
+        if (oldLessonId !== newLessonId && newLessonId && oldEvent) {
+          const cascadeReference: Event = { ...oldEvent, ...payload };
+          const subsequentEvents = getSubsequentLessonEvents(events, cascadeReference, {
+            legacyArea: payload.area || form.area || currentArea || null,
+          });
+          if (subsequentEvents.length > 0) {
+            const { error } = await supabase
+              .from("events")
+              .update({ ...payload, linked_lesson_id: oldLessonId })
+              .eq("id", editingFullEventId);
+            if (error) {
+              toast.error("Erro ao atualizar evento", { description: error.message });
+              setSaving(false);
+              return;
+            }
+            setCascadePending({
+              eventId: editingFullEventId,
+              oldLessonId,
+              newLessonId,
+              referenceEvent: cascadeReference,
+              agendaControlScope,
+            });
+            setShowCascadeDialog(true);
+            setShowForm(false);
+            setEditingFullEventId(null);
+            setSaving(false);
+            return;
+          }
+        }
+
+        const { error } = await supabase.from("events").update(payload).eq("id", editingFullEventId);
+        if (error) {
+          toast.error("Erro ao atualizar evento", { description: error.message });
           setSaving(false);
           return;
         }
+        await activateControlAfterSave(agendaControlScope);
+        toast.success("Evento atualizado!");
+      } else {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError) {
+          toast.error("Erro ao identificar o lider", { description: userError.message });
+          setSaving(false);
+          return;
+        }
+        const { error } = await supabase.from("events").insert({ ...payload, created_by: user?.id });
+        if (error) {
+          toast.error("Erro ao criar evento", { description: error.message });
+          setSaving(false);
+          return;
+        }
+        await activateControlAfterSave(agendaControlScope);
+        toast.success("Evento criado!");
       }
 
-      const { error } = await supabase.from("events").update(payload).eq("id", editingFullEventId);
-      if (error) {
-        toast.error("Erro ao atualizar evento", { description: error.message });
-        setSaving(false);
-        return;
-      }
-      toast.success("Evento atualizado!");
-    } else {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError) {
-        toast.error("Erro ao identificar o lider", { description: userError.message });
-        setSaving(false);
-        return;
-      }
-      const { error } = await supabase.from("events").insert({ ...payload, created_by: user?.id });
-      if (error) {
-        toast.error("Erro ao criar evento", { description: error.message });
-        setSaving(false);
-        return;
-      }
-      toast.success("Evento criado!");
+      setForm({ ...EMPTY_FORM });
+      setShowForm(false);
+      setEditingFullEventId(null);
+      setSaving(false);
+      void fetchEvents();
+    };
+
+    const shouldConfirmCourseControl = Boolean(
+      newLessonId && (!editingFullEventId || oldLessonId !== newLessonId),
+    );
+    if (shouldConfirmCourseControl && newLessonId) {
+      await continueWithCourseControlChoice(
+        newLessonId,
+        targetTurmaId,
+        payload.area || form.area || currentArea || null,
+        async (activateControl, scope) => {
+          await commitSave(activateControl ? scope : null);
+        },
+      );
+      return;
     }
 
-    setForm({ ...EMPTY_FORM });
-    setShowForm(false);
-    setEditingFullEventId(null);
-    setSaving(false);
-    fetchEvents();
+    await commitSave(null);
   }
 
   async function handleDelete(id: string) {
@@ -251,32 +371,61 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
     const oldLessonId = event.linked_lesson_id;
     const newLessonId = editLessonId || null;
 
-    if (oldLessonId !== newLessonId && newLessonId) {
-      const subsequentEvents = getSubsequentLessonEvents(events, event);
-      if (subsequentEvents.length > 0) {
-        setCascadePending({ eventId, oldLessonId, newLessonId });
-        setShowCascadeDialog(true);
+    const commitLessonChange = async (agendaControlScope: AgendaCourseScope | null) => {
+      if (oldLessonId !== newLessonId && newLessonId) {
+        const subsequentEvents = getSubsequentLessonEvents(events, event, {
+          legacyArea: event.area || currentArea || null,
+        });
+        if (subsequentEvents.length > 0) {
+          setCascadePending({
+            eventId,
+            oldLessonId,
+            newLessonId,
+            referenceEvent: event,
+            agendaControlScope,
+          });
+          setShowCascadeDialog(true);
+          return;
+        }
+      }
+
+      const { error } = await supabase
+        .from("events")
+        .update({ linked_lesson_id: newLessonId })
+        .eq("id", eventId);
+      if (error) {
+        toast.error("Erro ao atualizar licao", { description: error.message });
         return;
       }
-    }
+      await activateControlAfterSave(agendaControlScope);
+      setEditingEventId(null);
+      toast.success("Licao atualizada!");
+      void fetchEvents();
+    };
 
-    const { error } = await supabase.from("events").update({ linked_lesson_id: newLessonId }).eq("id", eventId);
-    if (error) {
-      toast.error("Erro ao atualizar licao", { description: error.message });
+    if (oldLessonId !== newLessonId && newLessonId) {
+      await continueWithCourseControlChoice(
+        newLessonId,
+        event.turma_id,
+        event.area || currentArea || null,
+        async (activateControl, scope) => {
+          await commitLessonChange(activateControl ? scope : null);
+        },
+      );
       return;
     }
-    setEditingEventId(null);
-    toast.success("Licao atualizada!");
-    fetchEvents();
+
+    await commitLessonChange(null);
   }
 
   async function executeCascade(doCascade: boolean) {
     if (!cascadePending) return;
-    const { eventId, oldLessonId, newLessonId } = cascadePending;
-    const event = events.find(e => e.id === eventId);
-    if (!event) return;
+    const { eventId, newLessonId, referenceEvent, agendaControlScope } = cascadePending;
 
-    const { error: baseUpdateError } = await supabase.from("events").update({ linked_lesson_id: newLessonId }).eq("id", eventId);
+    const { error: baseUpdateError } = await supabase
+      .from("events")
+      .update({ linked_lesson_id: newLessonId })
+      .eq("id", eventId);
     if (baseUpdateError) {
       toast.error("Erro ao atualizar licao", { description: baseUpdateError.message });
       setShowCascadeDialog(false);
@@ -285,7 +434,9 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
     }
 
     if (doCascade) {
-      const subsequent = getSubsequentLessonEvents(events, event);
+      const subsequent = getSubsequentLessonEvents(events, referenceEvent, {
+        legacyArea: referenceEvent.area || currentArea || null,
+      });
 
       if (subsequent.length > 0) {
         const newLesson = lessons.find(l => l.id === newLessonId);
@@ -297,6 +448,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
 
           const newIdx = allLessonsOrdered.findIndex(l => l.id === newLessonId);
           if (newIdx >= 0) {
+            let updatedEventCount = 1;
             for (let i = 0; i < subsequent.length; i++) {
               const nextLessonIdx = newIdx + 1 + i;
               if (nextLessonIdx < allLessonsOrdered.length) {
@@ -309,9 +461,10 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
                   setCascadePending(null);
                   return;
                 }
+                updatedEventCount += 1;
               }
             }
-            toast.success(`Licoes atualizadas em ${subsequent.length + 1} eventos!`);
+            toast.success(`Licoes atualizadas em ${updatedEventCount} eventos!`);
           }
         }
       }
@@ -319,6 +472,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
       toast.success("Licao atualizada (sem cascata)!");
     }
 
+    await activateControlAfterSave(agendaControlScope);
     setShowCascadeDialog(false);
     setCascadePending(null);
     setEditingEventId(null);
@@ -347,7 +501,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
         points: newTypeForm.gives_points ? newTypeForm.points : 0,
         area: currentArea || null,
         created_by: user?.id,
-      } as any)
+      })
       .select()
       .single();
 
@@ -357,7 +511,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
       toast.success(`Tipo "${newTypeForm.label}" criado!`);
       await refetchTypes();
       // Auto-select the new type in the form
-      setForm(f => ({ ...f, type: (data as any).value }));
+      setForm(f => ({ ...f, type: data.value }));
       setShowCreateTypeModal(false);
       setNewTypeForm({ label: "", emoji: "📅", gives_points: false, points: 10 });
     }
@@ -384,24 +538,49 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
     return `Curso ${lesson.course_order} - Licao ${lesson.order_num}: ${lesson.title}`;
   };
 
+  async function handleCourseControlChoice(activateControl: boolean) {
+    const pending = courseControlPrompt;
+    if (!pending) return;
+    setCourseControlPrompt(null);
+    setSaving(true);
+    await pending.onContinue(activateControl);
+  }
+
+  const selectedTurmaId = effectiveTurmaId ?? (leaderMode ? profile?.turma_id ?? null : null);
+  const groupScopedEvents = selectedTurmaId
+    ? events.filter(event =>
+        event.turma_id === selectedTurmaId ||
+        (!event.turma_id && (!event.area || event.area === currentArea))
+      )
+    : events;
   const filteredEvents = leaderMode
-    ? events.filter(e =>
+    ? groupScopedEvents.filter(e =>
         (e.area === currentArea) ||
-        (e.turma_id && e.turma_id === profile?.turma_id)
+        (e.turma_id && e.turma_id === selectedTurmaId)
       )
     : areaFilter === "all"
-      ? events
-      : events.filter(e => !e.area || e.area === areaFilter);
+      ? groupScopedEvents
+      : groupScopedEvents.filter(e => !e.area || e.area === areaFilter);
 
   const isEditing = !!editingFullEventId;
 
   return (
     <div className="space-y-4">
+      <AgendaCourseControlDialog
+        open={Boolean(courseControlPrompt)}
+        courseTitle={courseControlPrompt?.courseTitle ?? ""}
+        onCancel={() => {
+          setCourseControlPrompt(null);
+          setSaving(false);
+        }}
+        onKeepOpen={() => void handleCourseControlChoice(false)}
+        onActivateControl={() => void handleCourseControlChoice(true)}
+      />
       <div className="flex items-center justify-between">
         <p className="font-montserrat font-bold text-foreground text-base">Eventos e Encontros</p>
         <button
           onClick={openNewForm}
-          className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-inter font-medium text-primary-foreground"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-inter font-medium text-primary-foreground"
           style={{ background: "var(--gradient-hero)" }}
         >
           <Plus className="w-3.5 h-3.5" /> Novo evento
@@ -409,7 +588,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
       </div>
 
       {/* Area filter — hidden in leaderMode */}
-      {!leaderMode && (
+      {!leaderMode && !selectedTurmaId && (
         <div className="flex gap-1.5 flex-wrap">
           {["all", ...AREAS].map(val => (
             <button
@@ -431,7 +610,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
       {showCreateTypeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 animate-in fade-in px-4"
           onClick={() => setShowCreateTypeModal(false)}>
-          <div className="w-full max-w-sm bg-card rounded-2xl shadow-2xl overflow-hidden"
+          <div className="w-full max-w-sm bg-card rounded-lg shadow-2xl overflow-hidden"
             onClick={e => e.stopPropagation()}>
 
             {/* Header */}
@@ -456,7 +635,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
                   value={newTypeForm.label}
                   onChange={e => setNewTypeForm(f => ({ ...f, label: e.target.value }))}
                   placeholder="Ex: Visita pastoral, reuniao de lideres..."
-                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
 
@@ -467,7 +646,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
                   {EMOJI_OPTIONS.map(em => (
                     <button key={em}
                       onClick={() => setNewTypeForm(f => ({ ...f, emoji: em }))}
-                      className={`w-9 h-9 rounded-xl text-lg transition-all ${
+                      className={`w-9 h-9 rounded-lg text-lg transition-all ${
                         newTypeForm.emoji === em
                           ? "bg-primary/20 ring-2 ring-primary scale-110"
                           : "bg-muted hover:bg-muted/80"
@@ -481,17 +660,17 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
                     value={EMOJI_OPTIONS.includes(newTypeForm.emoji) ? "" : newTypeForm.emoji}
                     onChange={e => e.target.value && setNewTypeForm(f => ({ ...f, emoji: e.target.value.slice(-2) }))}
                     placeholder="ou cole"
-                    className="flex-1 min-w-[70px] px-2 py-1 rounded-xl border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-primary text-center"
+                    className="flex-1 min-w-[70px] px-2 py-1 rounded-lg border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-primary text-center"
                   />
                 </div>
               </div>
 
               {/* Points toggle */}
-              <div className="bg-muted/30 rounded-xl p-3 space-y-3">
+              <div className="bg-muted/30 rounded-lg p-3 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-inter text-sm font-semibold text-foreground">Da pontuacao?</p>
-                    <p className="font-inter text-[10px] text-muted-foreground mt-0.5">
+                    <p className="font-inter text-xs text-muted-foreground mt-0.5">
                       Participar deste evento somara pontos de fe
                     </p>
                   </div>
@@ -521,7 +700,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
                         max={100}
                         value={newTypeForm.points}
                         onChange={e => setNewTypeForm(f => ({ ...f, points: Math.max(1, parseInt(e.target.value) || 1) }))}
-                        className="flex-1 px-2 py-1.5 rounded-xl border border-border bg-background text-foreground font-montserrat font-bold text-base text-center focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="flex-1 px-2 py-1.5 rounded-lg border border-border bg-background text-foreground font-montserrat font-bold text-base text-center focus:outline-none focus:ring-2 focus:ring-primary"
                       />
                       <button
                         onClick={() => setNewTypeForm(f => ({ ...f, points: Math.min(100, f.points + 1) }))}
@@ -535,7 +714,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
 
               {/* Area info */}
               {currentArea && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/5 border border-primary/10">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/5 border border-primary/10">
                   <MapPin className="w-3.5 h-3.5 text-primary flex-shrink-0" />
                   <p className="font-inter text-xs text-primary">
                     Este tipo ficara visivel apenas para <strong>{currentArea}</strong>
@@ -548,13 +727,13 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
                 <button
                   onClick={handleCreateType}
                   disabled={savingType || !newTypeForm.label.trim()}
-                  className="flex-1 py-3 rounded-xl text-sm font-inter font-medium text-primary-foreground disabled:opacity-50"
+                  className="flex-1 py-3 rounded-lg text-sm font-inter font-medium text-primary-foreground disabled:opacity-50"
                   style={{ background: "var(--gradient-hero)" }}>
                   {savingType ? "Criando..." : "Criar tipo"}
                 </button>
                 <button
                   onClick={() => setShowCreateTypeModal(false)}
-                  className="px-4 py-3 rounded-xl bg-muted text-foreground font-inter text-sm">
+                  className="px-4 py-3 rounded-lg bg-muted text-foreground font-inter text-sm">
                   Cancelar
                 </button>
               </div>
@@ -566,7 +745,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
       {/* Cascade confirmation dialog */}
       {showCascadeDialog && cascadePending && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in" onClick={() => { setShowCascadeDialog(false); setCascadePending(null); }}>
-          <div className="w-full max-w-sm bg-card rounded-2xl p-5 mx-4 space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-sm bg-card rounded-lg p-5 mx-4 space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="text-center">
               <span className="text-3xl">📅</span>
               <h3 className="font-montserrat font-bold text-foreground text-base mt-2">Prorrogar estudos?</h3>
@@ -575,10 +754,10 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
               </p>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => executeCascade(false)} className="flex-1 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm font-medium">
+              <button onClick={() => executeCascade(false)} className="flex-1 py-2.5 rounded-lg bg-muted text-foreground font-inter text-sm font-medium">
                 So este evento
               </button>
-              <button onClick={() => executeCascade(true)} className="flex-1 py-2.5 rounded-xl text-primary-foreground font-inter text-sm font-medium" style={{ background: "var(--gradient-hero)" }}>
+              <button onClick={() => executeCascade(true)} className="flex-1 py-2.5 rounded-lg text-primary-foreground font-inter text-sm font-medium" style={{ background: "var(--gradient-hero)" }}>
                 Prorrogar todos
               </button>
             </div>
@@ -588,22 +767,22 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
 
       {/* Form (create or edit) */}
       {showForm && (
-        <div className="bg-card rounded-2xl border border-border p-4 space-y-3 shadow-sm">
+        <div className="bg-card rounded-lg border border-border p-4 space-y-3 shadow-sm">
           <p className="font-montserrat font-bold text-foreground text-sm">
             {isEditing ? "Editar evento" : "Novo evento"}
           </p>
           <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
             placeholder="Titulo do evento *"
-            className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+            className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
           <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
             placeholder="Descricao (opcional)"
-            className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+            className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
           <div className="grid grid-cols-2 gap-2">
             <input type="datetime-local" value={form.event_date} onChange={e => setForm(f => ({ ...f, event_date: e.target.value }))}
-              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+              className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
             <input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
               placeholder="Local (opcional)"
-              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+              className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
           </div>
 
           {/* Scope selector */}
@@ -612,14 +791,14 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
               <label className="font-inter text-xs font-medium text-muted-foreground">Visível para</label>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  ...(profile?.turma_id ? [{ value: "turma" as const, label: "Minha Turma", icon: "🎓" }] : []),
+                  ...((effectiveTurmaId ?? profile?.turma_id) ? [{ value: "turma" as const, label: "Minha Turma", icon: "🎓" }] : []),
                   { value: "area" as const, label: currentArea || "Minha Área", icon: "📍" },
                 ].map(opt => (
                   <button
                     key={opt.value}
                     type="button"
                     onClick={() => setForm(f => ({ ...f, scope: opt.value }))}
-                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-inter font-medium transition-colors ${
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-inter font-medium transition-colors ${
                       form.scope === opt.value
                         ? "border-primary bg-primary/10 text-primary"
                         : "border-border bg-background text-muted-foreground"
@@ -635,7 +814,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
               <div className="space-y-1">
                 <label className="font-inter text-xs font-medium text-muted-foreground">Area</label>
                 <select value={form.area} onChange={e => setForm(f => ({ ...f, area: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                  className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
                   <option value="">Todas as areas</option>
                   {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
@@ -643,7 +822,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
               <div className="space-y-1">
                 <label className="font-inter text-xs font-medium text-muted-foreground">Comunidade</label>
                 <select value={form.community} onChange={e => setForm(f => ({ ...f, community: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                  className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
                   <option value="">Todas</option>
                   {ALL_COMMUNITIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
@@ -664,7 +843,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
                     setForm(f => ({ ...f, type: e.target.value, linked_lesson_id: "" }));
                   }
                 }}
-                className="flex-1 px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                className="flex-1 px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
               >
                 {allTypes.map(t => (
                   <option key={t.value} value={t.value}>
@@ -676,7 +855,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
               <button
                 onClick={() => setShowCreateTypeModal(true)}
                 title="Criar novo tipo de evento"
-                className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors flex-shrink-0">
+                className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors flex-shrink-0">
                 <Sparkles className="w-4 h-4 text-primary" />
               </button>
             </div>
@@ -688,7 +867,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
               return (
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-green/5 border border-brand-green/20">
                   <span className="text-xs">Pts</span>
-                  <p className="font-inter text-[10px] text-brand-green font-medium">
+                  <p className="font-inter text-xs text-brand-green font-medium">
                     {custom.gives_points
                       ? `Tipo personalizado - ${custom.points} pts por presenca`
                       : "Tipo personalizado - sem pontuacao"}
@@ -698,31 +877,37 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
             })()}
           </div>
 
-          {!leaderMode && (
-            <div className="space-y-1">
-              <label className="font-inter text-xs font-medium text-muted-foreground">Vincular a um estudo (opcional)</label>
-              <select
-                value={form.linked_lesson_id}
-                onChange={e => setForm(f => ({ ...f, linked_lesson_id: e.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
-              >
-                <option value="">Sem vinculo</option>
-                {lessons.map(l => (
-                  <option key={l.id} value={l.id}>
-                    Curso {l.course_order} - Licao {l.order_num}: {l.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div className="space-y-1">
+            <label className="font-inter text-xs font-medium text-muted-foreground">Vincular a um estudo (opcional)</label>
+            <select
+              value={form.linked_lesson_id}
+              onChange={e => {
+                const linkedLessonId = e.target.value;
+                setForm(current => ({
+                  ...current,
+                  linked_lesson_id: linkedLessonId,
+                  scope: linkedLessonId && selectedTurmaId ? "turma" : current.scope,
+                  turmaId: linkedLessonId && selectedTurmaId ? selectedTurmaId : current.turmaId,
+                }));
+              }}
+              className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+            >
+              <option value="">Sem vinculo</option>
+              {lessons.map(l => (
+                <option key={l.id} value={l.id}>
+                  Curso {l.course_order} - Licao {l.order_num}: {l.title}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div className="flex gap-2">
             <button onClick={handleSave} disabled={saving || !form.title || !form.event_date}
-              className="flex-1 py-2.5 rounded-xl text-sm font-inter font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
+              className="flex-1 py-2.5 rounded-lg text-sm font-inter font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
               style={{ background: "var(--gradient-hero)" }}>
               {saving ? "Salvando..." : isEditing ? "Salvar alteracoes" : "Salvar evento"}
             </button>
-            <button onClick={() => { setShowForm(false); setEditingFullEventId(null); }} className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm">
+            <button onClick={() => { setShowForm(false); setEditingFullEventId(null); }} className="px-4 py-2.5 rounded-lg bg-muted text-foreground font-inter text-sm">
               Cancelar
             </button>
           </div>
@@ -730,9 +915,9 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
           {/* Manage custom types */}
           {customTypes.filter(t => !t.area || t.area === currentArea).length > 0 && (
             <div className="pt-2 border-t border-border space-y-2">
-              <p className="font-inter text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Tipos personalizados desta area</p>
+              <p className="font-inter text-xs font-semibold text-muted-foreground uppercase tracking-wide">Tipos personalizados desta area</p>
               {customTypes.filter(t => !t.area || t.area === currentArea).map(t => (
-                <div key={t.id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-muted/30">
+                <div key={t.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30">
                   <span className="font-inter text-xs text-foreground">{t.emoji} {t.label}{t.gives_points ? ` - ${t.points} pts` : ""}</span>
                   <button
                     onClick={() => handleDeleteCustomType(t.id, t.value)}
@@ -762,9 +947,9 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
             const lessonLabel = getLessonLabel(event.linked_lesson_id);
             const isEditingLesson = editingEventId === event.id;
             return (
-              <div key={event.id} className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+              <div key={event.id} className="bg-card rounded-lg border border-border p-4 shadow-sm">
                 <div className="flex items-start gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex flex-col items-center justify-center flex-shrink-0">
+                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex flex-col items-center justify-center flex-shrink-0">
                     <span className="text-lg leading-none">{getEmoji(event.type)}</span>
                     <span className="font-montserrat font-black text-primary text-xs">{format(dateObj, "d", { locale: ptBR })}</span>
                   </div>
@@ -774,16 +959,16 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
                       {format(dateObj, "EEEE, d 'de' MMMM 'as' HH:mm", { locale: ptBR })}
                     </p>
                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-inter font-medium ${getColor(event.type)}`}>
+                      <span className={`px-2 py-0.5 rounded-md text-xs font-inter font-medium ${getColor(event.type)}`}>
                         {getLabel(event.type)}
                       </span>
                       {event.location && (
-                        <span className="flex items-center gap-1 text-muted-foreground text-[10px] font-inter">
+                        <span className="flex items-center gap-1 text-muted-foreground text-xs font-inter">
                           <MapPin className="w-3 h-3" />{event.location}
                         </span>
                       )}
                       {event.area && (
-                        <span className="flex items-center gap-1 text-muted-foreground text-[10px] font-inter">
+                        <span className="flex items-center gap-1 text-muted-foreground text-xs font-inter">
                           <Users className="w-3 h-3" />{event.area}
                         </span>
                       )}
@@ -792,7 +977,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
                         const ct = customTypes.find(t => t.value === event.type);
                         if (!ct || !ct.gives_points) return null;
                         return (
-                          <span className="flex items-center gap-0.5 text-brand-green text-[10px] font-inter font-semibold">
+                          <span className="flex items-center gap-0.5 text-brand-green text-xs font-inter font-semibold">
                             {ct.points} pts
                           </span>
                         );
@@ -805,7 +990,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
                         <select
                           value={editLessonId}
                           onChange={e => setEditLessonId(e.target.value)}
-                          className="flex-1 px-2 py-1.5 rounded-lg border border-border bg-background text-foreground font-inter text-[10px] focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                          className="flex-1 px-2 py-1.5 rounded-lg border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
                         >
                           <option value="">Sem vinculo</option>
                           {lessons.map(l => (
@@ -825,7 +1010,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
                       <div className="flex items-center gap-1.5 mt-2">
                         <div className="flex-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-secondary/10">
                           <BookOpen className="w-3.5 h-3.5 text-secondary flex-shrink-0" />
-                          <p className="font-inter text-[10px] text-secondary font-medium truncate">
+                          <p className="font-inter text-xs text-secondary font-medium truncate">
                             {lessonLabel}
                           </p>
                         </div>
@@ -836,7 +1021,7 @@ export default function AgendaTab({ leaderMode = false, churchId: churchIdOverri
                     ) : (
                       <button onClick={() => startEditLesson(event)} className="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
                         <BookOpen className="w-3 h-3 text-muted-foreground" />
-                        <span className="font-inter text-[10px] text-muted-foreground">+ Vincular licao</span>
+                        <span className="font-inter text-xs text-muted-foreground">+ Vincular licao</span>
                       </button>
                     )}
 

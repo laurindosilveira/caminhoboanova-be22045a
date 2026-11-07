@@ -20,36 +20,40 @@ import { cn } from "@/lib/utils";
 import CalendarView from "./CalendarView";
 import emptyAgendaImg from "@/assets/empty-agenda.png";
 import { getSubsequentLessonEvents } from "@/lib/lessonScheduleCascade";
+import AgendaCourseControlDialog from "@/components/admin/AgendaCourseControlDialog";
+import {
+  activateAgendaCourseControl,
+  isCourseOpenWithoutRestrictions,
+  type AgendaCourseScope,
+} from "@/lib/agendaCourseAccess";
 import {
   cachedStudentQuery,
   enqueueStudentAction,
   getPendingStudentOverlay,
+  invalidateCachedStudentQueries,
   isStudentOffline,
   mergeByKey,
 } from "@/lib/studentOffline";
+import { isEventVisibleInGroupScope } from "@/lib/eventScope";
+import type { Database } from "@/integrations/supabase/types";
+import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 
-type Event = {
-  id: string;
-  title: string;
-  description: string | null;
-  event_date: string;
-  location: string | null;
-  area: string | null;
-  community: string | null;
-  type: string;
-  linked_lesson_id: string | null;
-  turma_id?: string | null;
-  church_id?: string | null;
-};
+type Tables = Database["public"]["Tables"];
+type Event = Tables["events"]["Row"];
+type AttendanceRow = Tables["attendance"]["Row"];
+type AttendanceInsert = Tables["attendance"]["Insert"];
+type AttendanceUpdate = Tables["attendance"]["Update"];
+type CourseRow = Pick<Tables["courses"]["Row"], "id" | "title" | "order_num">;
+type LessonRow = Pick<Tables["lessons"]["Row"], "id" | "title" | "order_num" | "course_id">;
+type LessonContentRow = Pick<Tables["lesson_content"]["Row"], "lesson_id" | "summary" | "bible_texts" | "prayer_prompt">;
+type AreaName = Database["public"]["Enums"]["area_name"];
+type CommunityName = Database["public"]["Enums"]["community_name"];
 
 type LessonContentInfo = { lesson_id: string; summary: string; bible_texts: string[]; prayer_prompt: string };
-type AttendanceRecord = {
-  event_id: string;
-  status: string;
-  confirmation_source?: "user" | "leader" | "both" | null;
-  user_requested_at?: string | null;
-  leader_confirmed_at?: string | null;
-};
+type AttendanceRecord = Pick<
+  AttendanceRow,
+  "event_id" | "status" | "confirmation_source" | "user_requested_at" | "leader_confirmed_at"
+>;
 type LessonInfo = { id: string; title: string; order_num: number; course_title: string; course_order: number };
 type EventParticipant = {
   user_id: string;
@@ -91,6 +95,7 @@ type LessonOption = {
   order_num: number;
   course_title: string;
   course_order: number;
+  course_id: string;
 };
 
 const EMPTY_FORM: EventFormData = { title: "", description: "", event_date: "", location: "", area: "", community: "", type: "encontro", linked_lesson_id: "" };
@@ -184,10 +189,12 @@ function DateTimePickerField({ value, onChange }: { value: string; onChange: (va
 }
 
 export default function UserAgendaTab() {
-  const { profile, role } = useAuth();
-  const { effectiveArea } = useAreaSwitch();
+  const { profile, role, user } = useAuth();
+  const { effectiveArea, effectiveTurmaId, switchNonce } = useAreaSwitch();
   const canManage = role === "admin" || role === "lider";
   const currentArea = effectiveArea || profile?.area || "";
+  const currentTurmaId = effectiveTurmaId ?? profile?.turma_id ?? null;
+  const dataScope = `student-agenda:${user?.id ?? "anon"}:${profile?.church_id ?? "global"}:${currentTurmaId ?? "no-group"}:${currentArea || "all"}`;
 
   // Custom event types (merged static + DB)
   const { allTypes, customTypes, getLabel, getEmoji, getColor, refetch: refetchTypes } = useCustomEventTypes(currentArea);
@@ -209,7 +216,15 @@ export default function UserAgendaTab() {
   const [form, setForm] = useState<EventFormData>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [showCascadeDialog, setShowCascadeDialog] = useState(false);
-  const [cascadePending, setCascadePending] = useState<{ eventId: string; oldLessonId: string | null; newLessonId: string } | null>(null);
+  const [cascadePending, setCascadePending] = useState<{
+    eventId: string;
+    oldLessonId: string | null;
+    newLessonId: string;
+    agendaControlScope?: AgendaCourseScope;
+  } | null>(null);
+  const [pendingCourseDecision, setPendingCourseDecision] = useState<{
+    courseTitle: string;
+  } | null>(null);
 
   // Create custom type modal state
   const [showCreateTypeModal, setShowCreateTypeModal] = useState(false);
@@ -236,35 +251,34 @@ export default function UserAgendaTab() {
   useEffect(() => {
     async function fetch() {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      const scope = `student-agenda:${user?.id ?? "anon"}:${profile?.church_id ?? "global"}:${currentArea || "all"}`;
       const churchId = profile?.church_id;
       const [eventsRes, attResult, coursesRes, lessonsRes, lessonContentRes, overlay] = await Promise.all([
-        cachedStudentQuery(`${scope}:events`, () => {
+        cachedStudentQuery(`${dataScope}:events`, () => {
           let query = supabase.from("events").select("*").order("event_date", { ascending: false });
           if (churchId) query = query.eq("church_id", churchId);
           return query;
-        }, [] as any[]),
+        }, [] as Event[]),
         user
-          ? cachedStudentQuery(`${scope}:attendance`, () => supabase.from("attendance").select("event_id, status, confirmation_source, user_requested_at, leader_confirmed_at").eq("user_id", user.id), [] as any[])
-          : Promise.resolve({ data: [] as any[] }),
-        cachedStudentQuery(`${scope}:courses`, () => supabase.from("courses").select("id, title, order_num").order("order_num"), [] as any[]),
-        cachedStudentQuery(`${scope}:lessons`, () => supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"), [] as any[]),
-        cachedStudentQuery(`${scope}:lesson-content`, () => supabase.from("lesson_content").select("lesson_id, summary, bible_texts, prayer_prompt"), [] as any[]),
+          ? cachedStudentQuery<AttendanceRecord[]>(`${dataScope}:attendance`, () => supabase.from("attendance").select("event_id, status, confirmation_source, user_requested_at, leader_confirmed_at").eq("user_id", user.id), [])
+          : Promise.resolve({ data: [] as AttendanceRecord[] }),
+        cachedStudentQuery<CourseRow[]>(`${dataScope}:courses`, () => supabase.from("courses").select("id, title, order_num").order("order_num"), []),
+        cachedStudentQuery<LessonRow[]>(`${dataScope}:lessons`, () => supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"), []),
+        cachedStudentQuery<LessonContentRow[]>(`${dataScope}:lesson-content`, () => supabase.from("lesson_content").select("lesson_id, summary, bible_texts, prayer_prompt"), []),
         user ? getPendingStudentOverlay(user.id) : Promise.resolve(null),
       ]);
       const eventsData = eventsRes.data;
-      const attendanceData = user && overlay ? mergeByKey(attResult.data, overlay.attendance as any[], "event_id") : attResult.data;
+      const attendanceData = user && overlay ? mergeByKey(attResult.data, overlay.attendance, "event_id") : attResult.data;
       const coursesData = coursesRes.data;
       const lessonsData = lessonsRes.data;
       const lessonContentData = lessonContentRes.data;
       const all = (eventsData ?? []) as Event[];
       const isManager = role === "admin" || role === "lider";
       const filtered = all.filter(e => {
-        // Personal events: only show to target user
-        if ((e as any).target_user_id && (e as any).target_user_id !== user?.id) return false;
-        // Filter all events by area
-        if (e.area && e.area !== currentArea) return false;
+        if (!isEventVisibleInGroupScope(e, {
+          turmaId: currentTurmaId,
+          area: currentArea,
+          userId: user?.id,
+        })) return false;
         // Community filter: skip for confirmatorio (area-wide) and for managers
         const isConfirmatorio = e.type === "confirmatorio";
         if (e.community && !isManager && !isConfirmatorio && e.community !== profile?.community) return false;
@@ -280,26 +294,28 @@ export default function UserAgendaTab() {
       courses.forEach(c => {
         lessons.filter(l => l.course_id === c.id).forEach(l => {
           infoMap.set(l.id, { id: l.id, title: l.title, order_num: l.order_num, course_title: c.title, course_order: c.order_num });
-          opts.push({ id: l.id, title: l.title, order_num: l.order_num, course_title: c.title, course_order: c.order_num });
+          opts.push({
+            id: l.id,
+            title: l.title,
+            order_num: l.order_num,
+            course_title: c.title,
+            course_order: c.order_num,
+            course_id: c.id,
+          });
         });
       });
       setLessonInfoMap(infoMap);
       setLessonOptions(opts);
 
       const contentMap = new Map<string, LessonContentInfo>();
-      (lessonContentData ?? []).forEach((lc: any) => {
+      (lessonContentData ?? []).forEach((lc) => {
         contentMap.set(lc.lesson_id, lc);
       });
       setLessonContentMap(contentMap);
       setLoading(false);
     }
-    if (profile) fetch();
-  }, [profile, currentArea]);
-
-  // Fetch pending attendance whenever events list changes (leaders only)
-  useEffect(() => {
-    if (canManage && events.length > 0) fetchPendingAttendance();
-  }, [events, canManage]);
+    if (profile) void fetch();
+  }, [currentArea, currentTurmaId, dataScope, profile, role, switchNonce, user]);
 
   // Realtime
   useEffect(() => {
@@ -310,28 +326,31 @@ export default function UserAgendaTab() {
         { event: '*', schema: 'public', table: 'events' },
         () => {
           async function refetch() {
-            const { data: { user: currentUser } } = await supabase.auth.getUser();
+            invalidateCachedStudentQueries(`${dataScope}:events`);
             let eventsQuery = supabase.from("events").select("*").order("event_date", { ascending: false });
             if (profile?.church_id) eventsQuery = eventsQuery.eq("church_id", profile.church_id);
             const { data: eventsData } = await eventsQuery;
             const all = (eventsData ?? []) as Event[];
             const isManager = role === "admin" || role === "lider";
             const filtered = all.filter(e => {
-              if ((e as any).target_user_id && (e as any).target_user_id !== currentUser?.id) return false;
-              if (e.area && e.area !== currentArea) return false;
+              if (!isEventVisibleInGroupScope(e, {
+                turmaId: currentTurmaId,
+                area: currentArea,
+                userId: user?.id,
+              })) return false;
               const isConfirmatorio = e.type === "confirmatorio";
               if (e.community && !isManager && !isConfirmatorio && e.community !== profile?.community) return false;
               return true;
             });
             setEvents(filtered);
           }
-          if (profile) refetch();
+          if (profile) void refetch();
         }
       )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [profile, currentArea]);
+  }, [currentArea, currentTurmaId, dataScope, profile, role, switchNonce, user]);
 
   useEffect(() => {
     if (!profile?.user_id) return;
@@ -341,7 +360,8 @@ export default function UserAgendaTab() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "attendance", filter: `user_id=eq.${profile.user_id}` },
-        (payload: any) => {
+        (payload: RealtimePostgresChangesPayload<AttendanceRow>) => {
+          invalidateCachedStudentQueries(`${dataScope}:attendance`);
           setAttendanceRecords(prev => {
             const oldRecord = payload.old as AttendanceRecord | undefined;
             const newRecord = payload.new as AttendanceRecord | undefined;
@@ -356,7 +376,7 @@ export default function UserAgendaTab() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [profile?.user_id]);
+  }, [dataScope, profile?.user_id]);
 
   const now = new Date();
 
@@ -392,7 +412,6 @@ export default function UserAgendaTab() {
     .sort((a, b) => new Date(b.event_date).getTime() - new Date(a.event_date).getTime());
 
   async function handleCheckIn(eventId: string, status: "pendente_presente" | "pendente_falta", justification?: string) {
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const existing = attendanceRecords.find(a => a.event_id === eventId);
     const finalStatuses = new Set(["presente", "faltou", "justificou"]);
@@ -407,7 +426,7 @@ export default function UserAgendaTab() {
     }
 
     const requestedAt = new Date().toISOString();
-    const payload: any = {
+    const payload: AttendanceUpdate = {
       status,
       confirmation_source: "user",
       user_requested_at: requestedAt,
@@ -417,7 +436,7 @@ export default function UserAgendaTab() {
       await enqueueStudentAction({
         type: "attendance_upsert",
         userId: user.id,
-        churchId: (profile as any)?.church_id ?? null,
+        churchId: profile?.church_id ?? null,
         payload: {
           eventId,
           status,
@@ -438,14 +457,14 @@ export default function UserAgendaTab() {
     if (existing) {
       const result = await supabase
         .from("attendance")
-        .update(payload as any)
+        .update(payload)
         .eq("event_id", eventId)
         .eq("user_id", user.id);
       error = result.error;
     } else {
       const result = await supabase
         .from("attendance")
-        .insert({ event_id: eventId, user_id: user.id, church_id: (profile as any)?.church_id ?? null, ...payload } as any);
+        .insert({ event_id: eventId, user_id: user.id, church_id: profile?.church_id ?? null, ...payload } satisfies AttendanceInsert);
       error = result.error;
     }
     if (error) {
@@ -485,11 +504,38 @@ export default function UserAgendaTab() {
     setShowForm(true);
   }
 
-  async function handleSaveEvent() {
+  async function handleSaveEvent(accessDecision?: "keep_open" | "scheduled") {
     if (!form.title.trim() || !form.event_date) {
       toast.error("Preencha título e data do evento");
       return;
     }
+
+    const oldLessonId = editingEvent?.linked_lesson_id ?? null;
+    const selectedLesson = form.linked_lesson_id
+      ? lessonOptions.find((lesson) => lesson.id === form.linked_lesson_id)
+      : null;
+    const courseScope: AgendaCourseScope | null = selectedLesson
+      ? {
+          courseId: selectedLesson.course_id,
+          churchId: profile?.church_id ?? null,
+          turmaId: editingEvent?.turma_id ?? currentTurmaId,
+          area: currentTurmaId ? currentArea || null : form.area || currentArea || null,
+        }
+      : null;
+
+    if (selectedLesson && oldLessonId !== selectedLesson.id && !accessDecision && courseScope) {
+      try {
+        if (await isCourseOpenWithoutRestrictions(courseScope)) {
+          setPendingCourseDecision({ courseTitle: selectedLesson.course_title });
+          return;
+        }
+      } catch (error) {
+        console.error("Erro ao verificar o modo de liberação do curso:", error);
+        toast.error("Não foi possível verificar a liberação do curso.");
+        return;
+      }
+    }
+
     setSaving(true);
     const normalizedEventDate = form.event_date ? new Date(form.event_date) : null;
     if (!normalizedEventDate || Number.isNaN(normalizedEventDate.getTime())) {
@@ -502,15 +548,16 @@ export default function UserAgendaTab() {
       description: form.description.trim() || null,
       event_date: normalizedEventDate.toISOString(),
       location: form.location.trim() || null,
-      area: form.area || null,
+      area: currentTurmaId ? currentArea || null : form.area || null,
       community: form.community || null,
       type: form.type,
       linked_lesson_id: form.linked_lesson_id || null,
       church_id: profile?.church_id ?? null,
+      turma_id: editingEvent?.turma_id ?? currentTurmaId,
     };
 
+    let didSave = false;
     if (editingEvent) {
-      const oldLessonId = editingEvent.linked_lesson_id ?? null;
       const newLessonId = payload.linked_lesson_id;
 
       // Check cascade for lesson change
@@ -531,7 +578,12 @@ export default function UserAgendaTab() {
             setSaving(false);
             return;
           }
-          setCascadePending({ eventId: editingEvent.id, oldLessonId, newLessonId });
+          setCascadePending({
+            eventId: editingEvent.id,
+            oldLessonId,
+            newLessonId,
+            agendaControlScope: accessDecision === "scheduled" ? courseScope ?? undefined : undefined,
+          });
           setShowCascadeDialog(true);
           setShowForm(false);
           setSaving(false);
@@ -550,18 +602,29 @@ export default function UserAgendaTab() {
         toast.error("Erro ao atualizar evento");
         console.error(error);
       } else {
+        didSave = true;
         toast.success("Evento atualizado!");
         setShowForm(false);
       }
     } else {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from("events").insert({ ...payload, created_by: user?.id ?? null } as any);
+      const { error } = await supabase.from("events").insert({ ...payload, created_by: user?.id ?? null });
       if (error) {
         toast.error("Erro ao criar evento");
         console.error(error);
       } else {
+        didSave = true;
         toast.success("Evento criado!");
         setShowForm(false);
+      }
+    }
+
+    if (didSave && accessDecision === "scheduled" && courseScope) {
+      try {
+        await activateAgendaCourseControl(courseScope);
+        toast.success("Controle de atividades ativado para este grupo.");
+      } catch (error) {
+        console.error("Erro ao ativar controle pela Agenda:", error);
+        toast.error("O evento foi salvo, mas não foi possível ativar o controle do curso.");
       }
     }
     setSaving(false);
@@ -569,7 +632,7 @@ export default function UserAgendaTab() {
 
   async function executeCascade(doCascade: boolean) {
     if (!cascadePending) return;
-    const { eventId, oldLessonId, newLessonId } = cascadePending;
+    const { eventId, oldLessonId, newLessonId, agendaControlScope } = cascadePending;
     const event = events.find(e => e.id === eventId);
     if (!event) return;
 
@@ -636,6 +699,16 @@ export default function UserAgendaTab() {
       toast.success("Lição atualizada (sem cascata)!");
     }
 
+    if (agendaControlScope) {
+      try {
+        await activateAgendaCourseControl(agendaControlScope);
+        toast.success("Controle de atividades ativado para este grupo.");
+      } catch (error) {
+        console.error("Erro ao ativar controle pela Agenda:", error);
+        toast.error("As lições foram atualizadas, mas o controle do curso não pôde ser ativado.");
+      }
+    }
+
     setShowCascadeDialog(false);
     setCascadePending(null);
   }
@@ -655,10 +728,10 @@ export default function UserAgendaTab() {
     }
   }
 
-  async function fetchPendingAttendance() {
+  const fetchPendingAttendance = useCallback(async () => {
     if (!canManage) return;
-    // Filter by events in this area
-    const areaEventIds = events.filter(e => !e.area || e.area === currentArea).map(e => e.id);
+    // `events` is already restricted to the selected group (or legacy area).
+    const areaEventIds = events.map(e => e.id);
     if (areaEventIds.length === 0) { setPendingAttendance([]); return; }
     const { data, error } = await supabase
       .from("attendance")
@@ -684,8 +757,8 @@ export default function UserAgendaTab() {
       profilesQuery,
       eventsQuery,
     ]);
-    const profileMap = new Map((profilesData ?? []).map((p: any) => [p.user_id, p]));
-    const evMap = new Map((eventsData ?? []).map((e: any) => [e.id, e]));
+    const profileMap = new Map((profilesData ?? []).map((participant) => [participant.user_id, participant]));
+    const evMap = new Map((eventsData ?? []).map((event) => [event.id, event]));
     setPendingAttendance(data.map(a => ({
       ...a,
       full_name: profileMap.get(a.user_id)?.full_name ?? "Desconhecido",
@@ -693,7 +766,12 @@ export default function UserAgendaTab() {
       event_title: evMap.get(a.event_id)?.title ?? "Evento",
       event_date: evMap.get(a.event_id)?.event_date ?? a.created_at,
     })));
-  }
+  }, [canManage, events, profile?.church_id]);
+
+  // Fetch pending attendance whenever the leader's visible event set changes.
+  useEffect(() => {
+    if (canManage && events.length > 0) void fetchPendingAttendance();
+  }, [canManage, events.length, fetchPendingAttendance]);
 
   async function handleAttendanceApproval(id: string, action: "presente" | "justificou" | "rejeitado") {
     setSavingApproval(id);
@@ -702,13 +780,12 @@ export default function UserAgendaTab() {
       const result = await supabase.from("attendance").delete().eq("id", id);
       error = result.error;
     } else {
-      const { data: { user } } = await supabase.auth.getUser();
       const result = await supabase.from("attendance").update({
         status: action,
         confirmation_source: "both",
         confirmed_by: user?.id ?? null,
         leader_confirmed_at: new Date().toISOString(),
-      } as any).eq("id", id);
+      }).eq("id", id);
       error = result.error;
     }
     if (error) {
@@ -750,16 +827,16 @@ export default function UserAgendaTab() {
       .select("user_id, full_name, community, area, turma_id, church_id, enrollment_status")
       .neq("user_id", profile?.user_id ?? "");
 
-    const targetTurmaId = event.turma_id ?? (profile as any)?.turma_id ?? null;
+    const targetTurmaId = event.turma_id ?? currentTurmaId;
     if (targetTurmaId) {
       profilesQuery = profilesQuery.eq("turma_id", targetTurmaId);
     } else if (event.community) {
-      profilesQuery = profilesQuery.eq("community", event.community as any);
+      profilesQuery = profilesQuery.eq("community", event.community as CommunityName);
     } else {
-      profilesQuery = profilesQuery.eq("area", (event.area ?? currentArea) as any);
+      profilesQuery = profilesQuery.eq("area", (event.area ?? currentArea) as AreaName);
     }
 
-    const eventChurchId = event.church_id ?? (profile as any)?.church_id ?? null;
+    const eventChurchId = event.church_id ?? profile?.church_id ?? null;
     if (eventChurchId) profilesQuery = profilesQuery.eq("church_id", eventChurchId);
 
     const [{ data: participantsData, error: participantsError }, { data: attendanceData, error: attendanceError }] = await Promise.all([
@@ -777,7 +854,7 @@ export default function UserAgendaTab() {
       return;
     }
 
-    setEventParticipants((participantsData ?? []).filter((p: any) => p.enrollment_status !== "rejected") as EventParticipant[]);
+    setEventParticipants((participantsData ?? []).filter((participant) => participant.enrollment_status !== "rejected"));
     setEventAttendance((attendanceData ?? []) as EventAttendance[]);
     setLoadingEventAttendance(false);
   }
@@ -785,15 +862,14 @@ export default function UserAgendaTab() {
   async function markEventAttendance(userId: string, status: "presente" | "faltou") {
     if (!selectedAttendanceEvent) return;
     setSavingEventAttendance(userId);
-    const { data: { user } } = await supabase.auth.getUser();
     const existing = eventAttendance.find(a => a.user_id === userId);
     const isPending = existing?.status === "pendente_presente" || existing?.status === "pendente_falta";
-    const payload: any = {
+    const payload: AttendanceUpdate = {
       status,
       confirmation_source: isPending ? "both" : "leader",
       confirmed_by: user?.id ?? null,
       leader_confirmed_at: new Date().toISOString(),
-      church_id: selectedAttendanceEvent.church_id ?? (profile as any)?.church_id ?? null,
+      church_id: selectedAttendanceEvent.church_id ?? profile?.church_id ?? null,
     };
 
     const result = existing
@@ -802,7 +878,7 @@ export default function UserAgendaTab() {
           event_id: selectedAttendanceEvent.id,
           user_id: userId,
           ...payload,
-        } as any).select("id, event_id, user_id, status, confirmation_source").single();
+        } satisfies AttendanceInsert).select("id, event_id, user_id, status, confirmation_source").single();
 
     if (result.error) {
       toast.error("Nao foi possivel registrar a presenca.");
@@ -824,7 +900,6 @@ export default function UserAgendaTab() {
     if (!newTypeForm.label.trim()) { toast.error("Digite um nome para o tipo"); return; }
     setSavingType(true);
     const slug = newTypeForm.label.trim().toLowerCase().replace(/[^a-z0-9]/g, "_") + "_" + Date.now();
-    const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase.from("custom_event_types").insert({
       value: slug,
       label: newTypeForm.label.trim(),
@@ -833,7 +908,7 @@ export default function UserAgendaTab() {
       points: newTypeForm.gives_points ? newTypeForm.points : 0,
       area: currentArea || null,
       created_by: user?.id ?? null,
-    } as any);
+    });
     if (error) { toast.error("Erro ao criar tipo"); console.error(error); }
     else {
       toast.success(`Tipo "${newTypeForm.label}" criado!`);
@@ -882,7 +957,7 @@ export default function UserAgendaTab() {
             >
               <ClipboardList className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Presenças</span>
-              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full bg-destructive text-white text-[10px] font-bold flex items-center justify-center px-1">
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full bg-destructive text-white text-xs font-bold flex items-center justify-center px-1">
                 {pendingAttendance.length}
               </span>
             </button>
@@ -967,7 +1042,7 @@ export default function UserAgendaTab() {
               </button>
             </div>
             {weekOffset !== 0 && (
-              <button onClick={() => setWeekOffset(0)} className="text-[10px] font-inter font-semibold text-primary hover:underline mx-auto block">
+              <button onClick={() => setWeekOffset(0)} className="text-xs font-inter font-semibold text-primary hover:underline mx-auto block">
                 Voltar para esta semana
               </button>
             )}
@@ -984,10 +1059,10 @@ export default function UserAgendaTab() {
                       <span className={`font-montserrat font-black text-sm ${isToday ? "text-primary" : "text-foreground"}`}>
                         {format(day, "d")}
                       </span>
-                      {isToday && <span className="text-[9px] font-inter font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">HOJE</span>}
+                      {isToday && <span className="text-xs font-inter font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">HOJE</span>}
                     </div>
                     {dayEvents.length === 0 ? (
-                      <p className="text-muted-foreground font-inter text-[10px] ml-1">—</p>
+                      <p className="text-muted-foreground font-inter text-xs ml-1">—</p>
                     ) : (
                       <div className="space-y-1.5">
                         {dayEvents.map(evt => {
@@ -998,7 +1073,7 @@ export default function UserAgendaTab() {
                               <span className="text-sm">{typeInfo.emoji}</span>
                               <span className="font-inter text-xs text-foreground font-medium">{time}</span>
                               <span className="font-inter text-xs text-foreground truncate">{evt.title}</span>
-                              {evt.location && <span className="text-muted-foreground text-[10px] font-inter truncate hidden sm:inline">📍 {evt.location}</span>}
+                              {evt.location && <span className="text-muted-foreground text-xs font-inter truncate hidden sm:inline">📍 {evt.location}</span>}
                             </div>
                           );
                         })}
@@ -1120,9 +1195,9 @@ export default function UserAgendaTab() {
                   <span className="text-base">{cfg.icon}</span>
                   <div className="flex-1 min-w-0">
                     <p className="font-inter text-sm text-foreground truncate">{evt.title}</p>
-                    <p className="font-inter text-[10px] text-muted-foreground">{dateStr}</p>
+                    <p className="font-inter text-xs text-muted-foreground">{dateStr}</p>
                   </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-inter font-semibold ${cfg.cls}`}>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-inter font-semibold ${cfg.cls}`}>
                     {cfg.label}
                   </span>
                 </div>
@@ -1176,6 +1251,20 @@ export default function UserAgendaTab() {
         </div>
       )}
 
+      <AgendaCourseControlDialog
+        open={Boolean(pendingCourseDecision)}
+        courseTitle={pendingCourseDecision?.courseTitle ?? "Curso selecionado"}
+        onCancel={() => setPendingCourseDecision(null)}
+        onKeepOpen={() => {
+          setPendingCourseDecision(null);
+          void handleSaveEvent("keep_open");
+        }}
+        onActivateControl={() => {
+          setPendingCourseDecision(null);
+          void handleSaveEvent("scheduled");
+        }}
+      />
+
       {/* ── MODAL DE APROVAÇÃO DE PRESENÇAS ────────── */}
       <Dialog open={showPendingModal} onOpenChange={(open) => { if (!open) setShowPendingModal(false); }}>
         <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
@@ -1184,7 +1273,7 @@ export default function UserAgendaTab() {
               <ClipboardList className="w-4 h-4 text-primary" />
               Aprovação de Presenças
               {pendingAttendance.length > 0 && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-inter font-bold bg-primary/10 text-primary">
+                <span className="px-2 py-0.5 rounded-full text-xs font-inter font-bold bg-primary/10 text-primary">
                   {pendingAttendance.length} pendente{pendingAttendance.length !== 1 ? "s" : ""}
                 </span>
               )}
@@ -1212,14 +1301,14 @@ export default function UserAgendaTab() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-inter font-semibold text-sm text-foreground">{a.full_name}</p>
-                        {a.community && <p className="font-inter text-[10px] text-muted-foreground">{a.community}</p>}
+                        {a.community && <p className="font-inter text-xs text-muted-foreground">{a.community}</p>}
                         <p className="font-inter text-xs text-foreground mt-0.5">📅 {a.event_title}</p>
                         {eventDate && (
-                          <p className="font-inter text-[10px] text-muted-foreground">
+                          <p className="font-inter text-xs text-muted-foreground">
                             {format(eventDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                           </p>
                         )}
-                        <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-inter font-semibold ${isPresence ? "bg-brand-green/10 text-brand-green" : "bg-accent/20 text-accent-foreground"}`}>
+                        <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-inter font-semibold ${isPresence ? "bg-brand-green/10 text-brand-green" : "bg-accent/20 text-accent-foreground"}`}>
                           {isPresence ? "Solicitando presença" : "Solicitando justificativa"}
                         </span>
                       </div>
@@ -1272,7 +1361,7 @@ export default function UserAgendaTab() {
                 <p className="text-muted-foreground font-inter text-xs mt-1">
                   {format(new Date(selectedAttendanceEvent.event_date), "EEEE, dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                 </p>
-                <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-inter text-muted-foreground">
+                <div className="mt-2 flex flex-wrap gap-2 text-xs font-inter text-muted-foreground">
                   {selectedAttendanceEvent.location && <span className="rounded-full bg-card px-2 py-1">{selectedAttendanceEvent.location}</span>}
                   {(selectedAttendanceEvent.area || currentArea) && <span className="rounded-full bg-card px-2 py-1">{selectedAttendanceEvent.area ?? currentArea}</span>}
                 </div>
@@ -1302,7 +1391,7 @@ export default function UserAgendaTab() {
                     {pendingUsers.length > 0 && (
                       <div className="rounded-2xl border border-accent/30 bg-accent/10 p-3">
                         <p className="font-montserrat font-bold text-foreground text-xs">Solicitações Pendentes</p>
-                        <p className="text-muted-foreground font-inter text-[10px] mt-1">
+                        <p className="text-muted-foreground font-inter text-xs mt-1">
                           Estes usuários pediram confirmação. Você pode aprová-los aqui ou na área de aprovação.
                         </p>
                         <div className="mt-2 space-y-1.5">
@@ -1315,7 +1404,7 @@ export default function UserAgendaTab() {
                                 <div className="flex items-center justify-between mb-2">
                                   <div className="min-w-0">
                                     <p className="font-inter text-xs font-semibold text-foreground truncate">{p.full_name ?? "Sem nome"}</p>
-                                    <p className="text-[9px] font-bold text-accent-foreground uppercase">
+                                    <p className="text-xs font-bold text-accent-foreground uppercase">
                                       {isPresenceRequest ? "Solicitou Presença" : "Solicitou Justificativa"}
                                     </p>
                                   </div>
@@ -1324,14 +1413,14 @@ export default function UserAgendaTab() {
                                   <button
                                     onClick={() => markEventAttendance(p.user_id, "presente")}
                                     disabled={isSaving}
-                                    className="rounded-lg bg-brand-green/20 py-1.5 text-[10px] font-inter font-bold text-brand-green hover:bg-brand-green/30 disabled:opacity-50"
+                                    className="rounded-lg bg-brand-green/20 py-1.5 text-xs font-inter font-bold text-brand-green hover:bg-brand-green/30 disabled:opacity-50"
                                   >
                                     {isSaving ? "..." : "Aprovar"}
                                   </button>
                                   <button
                                     onClick={() => markEventAttendance(p.user_id, "faltou")}
                                     disabled={isSaving}
-                                    className="rounded-lg bg-destructive/10 py-1.5 text-[10px] font-inter font-bold text-destructive hover:bg-destructive/20 disabled:opacity-50"
+                                    className="rounded-lg bg-destructive/10 py-1.5 text-xs font-inter font-bold text-destructive hover:bg-destructive/20 disabled:opacity-50"
                                   >
                                     Rejeitar
                                   </button>
@@ -1360,7 +1449,7 @@ export default function UserAgendaTab() {
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="min-w-0">
                                     <p className="font-inter text-sm font-semibold text-foreground truncate">{p.full_name ?? "Sem nome"}</p>
-                                    {p.community && <p className="font-inter text-[10px] text-muted-foreground">{p.community}</p>}
+                                    {p.community && <p className="font-inter text-xs text-muted-foreground">{p.community}</p>}
                                   </div>
                                 </div>
                                 <div className="mt-3 grid grid-cols-2 gap-2">
@@ -1401,7 +1490,7 @@ export default function UserAgendaTab() {
                               <div key={p.user_id} className="rounded-xl border border-border/50 bg-muted/10 px-3 py-2 flex items-center justify-between">
                                 <div className="min-w-0">
                                   <p className="font-inter text-xs font-semibold text-foreground truncate">{p.full_name ?? "Sem nome"}</p>
-                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
                                     isPresent ? "bg-brand-green/10 text-brand-green" : "bg-destructive/10 text-destructive"
                                   }`}>
                                     {isPresent ? "PRESENTE" : "FALTOU"}
@@ -1411,7 +1500,7 @@ export default function UserAgendaTab() {
                                   <button
                                     onClick={() => markEventAttendance(p.user_id, isPresent ? "faltou" : "presente")}
                                     disabled={isSaving}
-                                    className="text-[10px] font-inter font-bold text-primary hover:underline px-2 py-1 disabled:opacity-50"
+                                    className="text-xs font-inter font-bold text-primary hover:underline px-2 py-1 disabled:opacity-50"
                                   >
                                     {isSaving ? "..." : "Alterar"}
                                   </button>
@@ -1578,6 +1667,13 @@ export default function UserAgendaTab() {
             </div>
             <div>
               <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">📖 Vincular a um estudo</label>
+              <div className="mb-2 rounded-xl border border-primary/25 bg-primary/5 p-3">
+                <p className="font-inter text-xs font-bold text-foreground">Modo guiado pela Agenda</p>
+                <p className="mt-1 font-inter text-[11px] leading-relaxed text-muted-foreground">
+                  Ao vincular uma lição e definir a data, o curso seguirá a liberação programada do Caminho.
+                  As aulas e os devocionais respeitarão as datas, os intervalos e as regras de pontuação.
+                </p>
+              </div>
               <select
                 value={form.linked_lesson_id}
                 onChange={e => setForm(f => ({ ...f, linked_lesson_id: e.target.value }))}
@@ -1599,7 +1695,7 @@ export default function UserAgendaTab() {
               <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => setShowForm(false)} disabled={saving}>
                 <X className="w-3.5 h-3.5" /> Cancelar
               </Button>
-              <Button size="sm" className="flex-1 gap-1.5" onClick={handleSaveEvent} disabled={saving}>
+              <Button size="sm" className="flex-1 gap-1.5" onClick={() => void handleSaveEvent()} disabled={saving}>
                 <Save className="w-3.5 h-3.5" /> {saving ? "Salvando..." : "Salvar"}
               </Button>
             </div>
@@ -1684,16 +1780,16 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
             {format(dateObj, "EEEE, d 'de' MMMM 'às' HH:mm", { locale: ptBR })}
           </p>
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-            <span className={`px-2 py-0.5 rounded-md text-[10px] font-inter font-medium ${typeInfo.color}`}>
+            <span className={`px-2 py-0.5 rounded-md text-xs font-inter font-medium ${typeInfo.color}`}>
               {typeInfo.label}
             </span>
             {event.location && (
-              <span className="flex items-center gap-1 text-muted-foreground text-[10px] font-inter">
+              <span className="flex items-center gap-1 text-muted-foreground text-xs font-inter">
                 <MapPin className="w-3 h-3" />{event.location}
               </span>
             )}
             {event.area && (
-              <span className="flex items-center gap-1 text-muted-foreground text-[10px] font-inter">
+              <span className="flex items-center gap-1 text-muted-foreground text-xs font-inter">
                 <Users className="w-3 h-3" />{event.area}
               </span>
             )}
@@ -1748,14 +1844,14 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
                   className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors text-primary"
                 >
                   <ExternalLink className="w-3 h-3" />
-                  <span className="font-inter text-[10px] font-semibold">Google Agenda</span>
+                  <span className="font-inter text-xs font-semibold">Google Agenda</span>
                 </a>
                 <button
                   onClick={handleDownloadIcs}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-secondary/10 hover:bg-secondary/20 transition-colors text-secondary"
                 >
                   <Download className="w-3 h-3" />
-                  <span className="font-inter text-[10px] font-semibold">Apple Calendar (.ics)</span>
+                  <span className="font-inter text-xs font-semibold">Apple Calendar (.ics)</span>
                 </button>
               </div>
             );
@@ -1767,7 +1863,7 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
                 className="flex items-center gap-1.5 mt-2 px-2.5 py-1.5 rounded-lg bg-secondary/10 hover:bg-secondary/20 transition-colors w-full text-left"
               >
                 <BookOpen className="w-3.5 h-3.5 text-secondary flex-shrink-0" />
-                <p className="font-inter text-[10px] text-secondary font-medium truncate">
+                <p className="font-inter text-xs text-secondary font-medium truncate">
                   📖 Ligado ao Curso {linkedLesson.course_order} — Lição {linkedLesson.order_num}: {linkedLesson.title}
                 </p>
               </button>
@@ -1819,7 +1915,7 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
                       <p className={`font-montserrat font-bold text-xs ${numColor}`}>
                         ⏳ {label}
                       </p>
-                      <p className="font-inter text-[10px] text-muted-foreground">
+                      <p className="font-inter text-xs text-muted-foreground">
                         {description}
                       </p>
                     </div>
@@ -1847,7 +1943,7 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
                 <div className="mt-2 space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-200 p-3 rounded-xl bg-muted/40 border border-border">
                   {lessonContent.bible_texts && lessonContent.bible_texts.length > 0 && lessonContent.bible_texts[0] !== "" && (
                     <div>
-                      <p className="font-inter text-[10px] font-bold text-foreground mb-1">📖 Conteúdo a estudar</p>
+                      <p className="font-inter text-xs font-bold text-foreground mb-1">📖 Conteúdo a estudar</p>
                       {lessonContent.bible_texts.map((t, i) => (
                         <p key={i} className="font-inter text-[11px] text-muted-foreground leading-relaxed">• {t}</p>
                       ))}
@@ -1855,13 +1951,13 @@ function EventCard({ event, past = false, linkedLesson, lessonContent, attendanc
                   )}
                   {lessonContent.summary && (
                     <div>
-                      <p className="font-inter text-[10px] font-bold text-foreground mb-1">📝 Resumo</p>
+                      <p className="font-inter text-xs font-bold text-foreground mb-1">📝 Resumo</p>
                       <p className="font-inter text-[11px] text-muted-foreground leading-relaxed">{lessonContent.summary}</p>
                     </div>
                   )}
                   {lessonContent.prayer_prompt && (
                     <div>
-                      <p className="font-inter text-[10px] font-bold text-foreground mb-1">🙏 Preparação espiritual</p>
+                      <p className="font-inter text-xs font-bold text-foreground mb-1">🙏 Preparação espiritual</p>
                       <p className="font-inter text-[11px] text-muted-foreground leading-relaxed">{lessonContent.prayer_prompt}</p>
                     </div>
                   )}

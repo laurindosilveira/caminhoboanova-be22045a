@@ -19,7 +19,7 @@ const IOS_STEPS = [
 ];
 
 // Store the beforeinstallprompt event globally
-let deferredPrompt: any = null;
+let deferredPrompt: BeforeInstallPromptEvent | null = null;
 
 if (typeof window !== "undefined") {
   window.addEventListener("beforeinstallprompt", (e) => {
@@ -38,14 +38,14 @@ export default function Install() {
   useEffect(() => {
     // Check if already installed as PWA
     const isStandalone = window.matchMedia("(display-mode: standalone)").matches
-      || (navigator as any).standalone === true;
+      || navigator.standalone === true;
     setIsInstalled(isStandalone);
 
     // Check if install prompt is available
     setCanInstall(!!deferredPrompt);
 
     // Listen for new prompt
-    const handler = (e: Event) => {
+    const handler = (e: BeforeInstallPromptEvent) => {
       e.preventDefault();
       deferredPrompt = e;
       setCanInstall(true);
@@ -100,7 +100,7 @@ export default function Install() {
           <div className="flex items-center gap-3 mb-2">
             <BrandLogo inverse compact markClassName="h-14 w-14" />
             <div>
-              <h1 className="font-montserrat font-black text-primary-foreground text-xl">Instalar Discipulado 3M</h1>
+              <h1 className="font-montserrat font-black text-primary-foreground text-xl">Instalar CAMINHO</h1>
               <p className="text-primary-foreground/60 font-inter text-xs">
                 Tenha sua jornada de discipulado sempre à mão
               </p>
@@ -116,7 +116,7 @@ export default function Install() {
             <span className="text-2xl">✅</span>
             <div>
               <p className="font-montserrat font-bold text-foreground text-sm">App já instalado!</p>
-              <p className="font-inter text-xs text-muted-foreground">O Discipulado 3M já está na sua tela inicial.</p>
+              <p className="font-inter text-xs text-muted-foreground">O CAMINHO já está na sua tela inicial.</p>
             </div>
           </div>
         )}
@@ -177,7 +177,7 @@ export default function Install() {
                     <span className="text-4xl">🤖</span>
                     <div className="text-center">
                       <p className="font-montserrat font-bold text-foreground text-sm">Android</p>
-                      <p className="text-muted-foreground font-inter text-[10px] mt-0.5">Samsung, Motorola, Xiaomi...</p>
+                      <p className="text-muted-foreground font-inter text-xs mt-0.5">Samsung, Motorola, Xiaomi...</p>
                     </div>
                   </button>
                   <button
@@ -187,7 +187,7 @@ export default function Install() {
                     <span className="text-4xl">🍎</span>
                     <div className="text-center">
                       <p className="font-montserrat font-bold text-foreground text-sm">iPhone</p>
-                      <p className="text-muted-foreground font-inter text-[10px] mt-0.5">iOS 16.4 ou superior</p>
+                      <p className="text-muted-foreground font-inter text-xs mt-0.5">iOS 16.4 ou superior</p>
                     </div>
                   </button>
                 </div>

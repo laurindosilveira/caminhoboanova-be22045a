@@ -9,9 +9,19 @@ import {
   TrendingUp, Clock, Globe, ArrowRight, Church, Sparkles,
   Menu, X, Play
 } from "lucide-react";
-import heroPhone from "@/assets/landing-hero-phone.png";
-import communityImg from "@/assets/landing-community.png";
-import dashboardImg from "@/assets/landing-dashboard.png";
+import heroPhoneAvif from "@/assets/landing-hero-phone.avif";
+import heroPhoneAvif640 from "@/assets/landing-hero-phone-640.avif";
+import heroPhoneWebp from "@/assets/landing-hero-phone.webp";
+import heroPhoneWebp640 from "@/assets/landing-hero-phone-640.webp";
+import communityAvif from "@/assets/landing-community.avif";
+import communityAvif480 from "@/assets/landing-community-480.avif";
+import communityWebp from "@/assets/landing-community.webp";
+import communityWebp480 from "@/assets/landing-community-480.webp";
+import dashboardAvif from "@/assets/landing-dashboard.avif";
+import dashboardAvif768 from "@/assets/landing-dashboard-768.avif";
+import dashboardWebp from "@/assets/landing-dashboard.webp";
+import dashboardWebp768 from "@/assets/landing-dashboard-768.webp";
+import BrandLogo from "@/components/BrandLogo";
 
 // ─── SEO: JSON-LD structured data ────────────────────────
 function JsonLdScript() {
@@ -19,7 +29,7 @@ function JsonLdScript() {
     const jsonLd = {
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
-      name: "Caminho — Plataforma de Discipulado Digital",
+      name: "Caminho 3M — Plataforma de Discipulado Digital",
       applicationCategory: "ReligiousApp",
       operatingSystem: "Web",
       description:
@@ -91,7 +101,7 @@ function JsonLdScript() {
     });
 
     // SEO meta tags
-    document.title = "Caminho — Plataforma de Discipulado Digital para Igrejas";
+    document.title = "Caminho 3M — Plataforma de Discipulado Digital para Igrejas";
     let metaDesc = document.querySelector('meta[name="description"]');
     if (!metaDesc) {
       metaDesc = document.createElement("meta");
@@ -128,7 +138,8 @@ const fadeUp = {
   }),
 };
 
-const WHATSAPP_LINK = "https://wa.me/5551999999999?text=Olá!%20Gostaria%20de%20saber%20mais%20sobre%20o%20Caminho.";
+const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL?.trim() || "contato@caminhoboanova.com.br";
+const WHATSAPP_LINK = import.meta.env.VITE_SUPPORT_WHATSAPP_URL?.trim() || `mailto:${SUPPORT_EMAIL}`;
 
 const FEATURES = [
   { icon: BookOpen, title: "Trilha de Discipulado", desc: "Cursos estruturados com lições, devocionais diários e acompanhamento espiritual progressivo.", color: "bg-gradient-to-br from-[hsl(var(--brand-green))] to-[hsl(160,60%,35%)]" },
@@ -220,12 +231,7 @@ export default function Apresentacao() {
       {/* ─── NAVBAR ─────────────────────────────────────── */}
       <nav className="fixed top-0 w-full z-50 backdrop-blur-xl bg-background/80 border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
-              <Church className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="font-montserrat font-bold text-lg tracking-tight text-foreground">Caminho</span>
-          </div>
+          <BrandLogo markClassName="h-10 w-10" />
           <div className="hidden md:flex items-center gap-8 text-sm font-inter font-medium text-muted-foreground">
             <a href="#funcionalidades" className="hover:text-primary transition-colors">Funcionalidades</a>
             <a href="#beneficios" className="hover:text-primary transition-colors">Benefícios</a>
@@ -341,12 +347,19 @@ export default function Apresentacao() {
             <motion.div initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.8, delay: 0.3 }} className="relative flex justify-center lg:justify-end">
               <div className="relative">
                 <div className="absolute inset-0 bg-primary/10 rounded-[3rem] blur-2xl scale-110" />
-                <img
-                  src={heroPhone}
-                  alt="App Caminho em smartphone mostrando trilha de discipulado"
-                  loading="eager"
-                  className="relative w-[320px] sm:w-[380px] drop-shadow-2xl"
-                />
+                <picture>
+                  <source type="image/avif" srcSet={`${heroPhoneAvif640} 640w, ${heroPhoneAvif} 928w`} sizes="(max-width: 640px) 320px, 380px" />
+                  <source type="image/webp" srcSet={`${heroPhoneWebp640} 640w, ${heroPhoneWebp} 928w`} sizes="(max-width: 640px) 320px, 380px" />
+                  <img
+                    src={heroPhoneWebp}
+                    alt="App Caminho 3M em smartphone mostrando trilha de discipulado"
+                    loading="eager"
+                    fetchPriority="high"
+                    width="928"
+                    height="1152"
+                    className="relative w-[320px] sm:w-[380px] drop-shadow-2xl"
+                  />
+                </picture>
               </div>
             </motion.div>
           </div>
@@ -423,12 +436,18 @@ export default function Apresentacao() {
             </motion.div>
 
             <motion.div initial={{ opacity: 0, x: 40 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.7 }}>
-              <img
-                src={communityImg}
-                alt="Comunidade conectada através do app Caminho"
-                loading="lazy"
-                className="w-full max-w-md mx-auto"
-              />
+              <picture>
+                <source type="image/avif" srcSet={`${communityAvif480} 480w, ${communityAvif} 800w`} sizes="(max-width: 640px) 90vw, 448px" />
+                <source type="image/webp" srcSet={`${communityWebp480} 480w, ${communityWebp} 800w`} sizes="(max-width: 640px) 90vw, 448px" />
+                <img
+                  src={communityWebp}
+                  alt="Comunidade conectada através do app Caminho"
+                  loading="lazy"
+                  width="800"
+                  height="600"
+                  className="mx-auto w-full max-w-md"
+                />
+              </picture>
             </motion.div>
           </div>
         </div>
@@ -440,7 +459,7 @@ export default function Apresentacao() {
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} custom={0} className="text-center max-w-2xl mx-auto mb-16">
             <p className="text-primary font-inter font-semibold text-sm uppercase tracking-wider mb-3">Transformação real</p>
             <h2 className="text-3xl sm:text-4xl font-montserrat font-black tracking-tight mb-4 text-foreground">
-              Antes e depois do <span className="bg-clip-text text-transparent" style={{ backgroundImage: "var(--gradient-hero)" }}>Caminho</span>
+              Antes e depois do <span className="bg-clip-text text-transparent" style={{ backgroundImage: "var(--gradient-hero)" }}>Caminho 3M</span>
             </h2>
             <p className="text-muted-foreground text-lg font-inter">Veja como o app transforma a realidade do discipulado na sua igreja.</p>
           </motion.div>
@@ -534,12 +553,18 @@ export default function Apresentacao() {
           </motion.div>
           <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }}>
             <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-primary/10 border border-border">
-              <img
-                src={dashboardImg}
-                alt="Dashboard administrativo do Caminho com métricas de engajamento"
-                loading="lazy"
-                className="w-full"
-              />
+              <picture>
+                <source type="image/avif" srcSet={`${dashboardAvif768} 768w, ${dashboardAvif} 1200w`} sizes="(max-width: 900px) 94vw, 1100px" />
+                <source type="image/webp" srcSet={`${dashboardWebp768} 768w, ${dashboardWebp} 1200w`} sizes="(max-width: 900px) 94vw, 1100px" />
+                <img
+                  src={dashboardWebp}
+                  alt="Dashboard administrativo do Caminho com métricas de engajamento"
+                  loading="lazy"
+                  width="1200"
+                  height="896"
+                  className="w-full"
+                />
+              </picture>
               <div className="absolute inset-0 bg-gradient-to-t from-background/60 via-transparent to-transparent" />
             </div>
           </motion.div>
@@ -819,7 +844,7 @@ export default function Apresentacao() {
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
                   <Church className="w-5 h-5 text-primary-foreground" />
                 </div>
-                <span className="text-background font-montserrat font-bold text-lg">Caminho</span>
+                <span className="text-background font-montserrat font-bold text-lg">Caminho 3M</span>
               </div>
               <p className="text-sm font-inter leading-relaxed text-muted-foreground/80">
                 Plataforma de discipulado digital que conecta igrejas, engaja membros e fortalece a fé todos os dias.
@@ -867,10 +892,10 @@ export default function Apresentacao() {
               <h4 className="text-background font-montserrat font-bold text-sm mb-4">Legal</h4>
               <ul className="space-y-2.5 font-inter text-sm">
                 {[
-                  { href: "#", label: "Política de Privacidade" },
-                  { href: "#", label: "Termos de Uso" },
-                  { href: "#", label: "Política de Cookies" },
-                  { href: "#", label: "LGPD — Seus Dados" },
+                  { href: "/privacidade", label: "Política de Privacidade" },
+                  { href: "/termos", label: "Termos de Uso" },
+                  { href: "/cookies", label: "Política de Cookies" },
+                  { href: "/cancelamento-e-reembolso", label: "Cancelamento e reembolso" },
                 ].map((link, i) => (
                   <li key={i}>
                     <a href={link.href} className="text-muted-foreground/70 hover:text-background transition-colors">{link.label}</a>
@@ -885,11 +910,11 @@ export default function Apresentacao() {
               <ul className="space-y-3 font-inter text-sm">
                 <li className="flex items-start gap-2.5">
                   <Globe className="w-4 h-4 mt-0.5 text-primary flex-shrink-0" />
-                  <span className="text-muted-foreground/70">contato@caminhoapp.com.br</span>
+                  <a href={`mailto:${SUPPORT_EMAIL}`} className="text-muted-foreground/70 hover:text-background transition-colors">{SUPPORT_EMAIL}</a>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <Smartphone className="w-4 h-4 mt-0.5 text-primary flex-shrink-0" />
-                  <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer" className="text-muted-foreground/70 hover:text-background transition-colors">(51) 99999-9999</a>
+                  <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer" className="text-muted-foreground/70 hover:text-background transition-colors">Atendimento comercial</a>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <Church className="w-4 h-4 mt-0.5 text-primary flex-shrink-0" />
@@ -901,7 +926,7 @@ export default function Apresentacao() {
 
           {/* Divisor e copyright */}
           <div className="border-t border-muted-foreground/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-xs font-inter text-muted-foreground/50">© {new Date().getFullYear()} Caminho — Plataforma de discipulado digital. Todos os direitos reservados.</p>
+            <p className="text-xs font-inter text-muted-foreground/50">© {new Date().getFullYear()} Caminho 3M — Plataforma de discipulado digital. Todos os direitos reservados.</p>
             <p className="text-xs font-inter text-muted-foreground/40">Feito com ❤️ para igrejas que transformam vidas.</p>
           </div>
         </div>

@@ -10,6 +10,13 @@ interface BirthdayPerson {
   day: number;
 }
 
+interface BirthdayRow {
+  user_id?: string;
+  full_name: string;
+  birth_date: string;
+  community?: string | null;
+}
+
 interface BirthdayHighlightsProps {
   area: string;
   variant?: "journey" | "community";
@@ -19,7 +26,7 @@ function parseLocalDate(date: string) {
   return new Date(`${date}T00:00:00`);
 }
 
-function mapBirthdayRows(rows: any[] | null | undefined, currentMonth: number): BirthdayPerson[] {
+function mapBirthdayRows(rows: BirthdayRow[] | null | undefined, currentMonth: number): BirthdayPerson[] {
   return (rows ?? [])
     .filter((person) => {
       if (!person.birth_date) return false;
@@ -33,6 +40,12 @@ function mapBirthdayRows(rows: any[] | null | undefined, currentMonth: number): 
       day: parseLocalDate(person.birth_date).getDate(),
     }))
     .sort((a, b) => a.day - b.day || a.full_name.localeCompare(b.full_name, "pt-BR"));
+}
+
+function getBirthdayKey(birthday: BirthdayPerson, index: number, prefix: string) {
+  return birthday.user_id
+    ? `${prefix}-${birthday.user_id}`
+    : `${prefix}-${birthday.full_name}-${birthday.birth_date}-${index}`;
 }
 
 export default function BirthdayHighlights({ area, variant = "community" }: BirthdayHighlightsProps) {
@@ -55,7 +68,7 @@ export default function BirthdayHighlights({ area, variant = "community" }: Birt
 
     async function fetchBirthdays() {
       setLoading(true);
-      const { data, error } = await (supabase as any).rpc("get_area_birthdays", {
+      const { data, error } = await supabase.rpc("get_area_birthdays", {
         _area: area,
         _month: currentMonth,
       });
@@ -69,7 +82,7 @@ export default function BirthdayHighlights({ area, variant = "community" }: Birt
         const { data: fallbackData, error: fallbackError } = await supabase
           .from("profiles")
           .select("user_id, full_name, birth_date, community, area")
-          .eq("area", area as any);
+          .eq("area", area);
 
         if (fallbackError) {
           console.warn("BirthdayHighlights: profiles fallback failed", fallbackError.message);
@@ -125,8 +138,8 @@ export default function BirthdayHighlights({ area, variant = "community" }: Birt
 
           {todaysBirthdays.length > 0 && (
             <div className="mb-3 space-y-2">
-              {todaysBirthdays.map((birthday) => (
-                <div key={`today-${birthday.full_name}-${birthday.birth_date}`} className="rounded-xl bg-secondary/10 border border-secondary/20 px-3 py-2.5">
+              {todaysBirthdays.map((birthday, index) => (
+                <div key={getBirthdayKey(birthday, index, "today")} className="rounded-xl bg-secondary/10 border border-secondary/20 px-3 py-2.5">
                   <p className="font-montserrat font-bold text-foreground text-sm truncate">
                     {birthday.full_name}
                   </p>
@@ -139,16 +152,16 @@ export default function BirthdayHighlights({ area, variant = "community" }: Birt
           )}
 
           <div className="grid grid-cols-1 gap-2">
-            {birthdays.slice(0, todaysBirthdays.length > 0 ? 4 : 5).map((birthday) => {
+            {birthdays.slice(0, todaysBirthdays.length > 0 ? 4 : 5).map((birthday, index) => {
               const isToday = birthday.day === currentDay;
               return (
-                <div key={`${birthday.full_name}-${birthday.birth_date}`} className="flex items-center gap-2 rounded-xl bg-background/60 px-3 py-2">
+                <div key={getBirthdayKey(birthday, index, "month")} className="flex items-center gap-2 rounded-xl bg-background/60 px-3 py-2">
                   <span className={`w-9 text-center font-montserrat font-black text-sm ${isToday ? "text-secondary" : "text-foreground"}`}>
                     {String(birthday.day).padStart(2, "0")}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="font-inter font-semibold text-card-foreground text-xs truncate">{birthday.full_name}</p>
-                    {isToday && <p className="font-inter text-[10px] text-secondary font-bold">Hoje</p>}
+                    {isToday && <p className="font-inter text-xs text-secondary font-bold">Hoje</p>}
                   </div>
                 </div>
               );
@@ -177,7 +190,7 @@ export default function BirthdayHighlights({ area, variant = "community" }: Birt
             const isToday = birthday.day === currentDay;
             return (
               <div
-                key={`${birthday.full_name}-${birthday.birth_date}`}
+                key={getBirthdayKey(birthday, index, "community")}
                 className={`flex items-center gap-3 px-4 py-3 ${index < birthdays.length - 1 ? "border-b border-border" : ""} ${isToday ? "bg-secondary/5" : ""}`}
               >
                 {isToday ? (

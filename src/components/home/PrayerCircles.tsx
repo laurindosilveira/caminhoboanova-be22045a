@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
@@ -52,7 +52,7 @@ export default function PrayerCircles() {
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
-  const fetchRequests = async () => {
+  const fetchRequests = useCallback(async () => {
     setLoading(true);
     // Destructuring to check for specific profile info if needed
     const { data, error } = await supabase
@@ -74,19 +74,19 @@ export default function PrayerCircles() {
       
       const prayingIds = new Set(interactions?.map(i => i.request_id) || []);
 
-      const mapped = (data || []).map((r: any) => ({
+      const mapped = (data || []).map(r => ({
         ...r,
-        user_name: (r as any).profiles?.full_name || (r as any).profiles_user_id_fkey?.full_name,
+        user_name: r.profiles?.full_name,
         is_praying: prayingIds.has(r.id)
       }));
       setRequests(mapped);
     }
     setLoading(false);
-  };
+  }, [user]);
 
   useEffect(() => {
     if (user) fetchRequests();
-  }, [user, currentArea]);
+  }, [currentArea, fetchRequests, user]);
 
   const handleSubmit = async () => {
     if (!newRequest.trim() || !user) return;
@@ -211,7 +211,7 @@ export default function PrayerCircles() {
               <div className="flex items-center gap-2">
                 <select 
                   value={visibility}
-                  onChange={(e) => setVisibility(e.target.value as any)}
+                  onChange={(e) => setVisibility(e.target.value as PrayerRequest["visibility"])}
                   className="bg-muted text-foreground text-xs rounded-lg px-2 py-1.5 border-none focus:ring-1 focus:ring-primary"
                 >
                   <option value="public">Visível para a turma</option>
@@ -273,9 +273,9 @@ export default function PrayerCircles() {
                   <div>
                     <p className="font-montserrat font-bold text-xs">
                       {request.visibility === 'anonymous' ? 'Anônimo' : request.user_name}
-                      {request.visibility === 'leaders_only' && <span className="ml-1.5 text-[10px] text-primary">(Apenas líderes)</span>}
+                      {request.visibility === 'leaders_only' && <span className="ml-1.5 text-xs text-primary">(Apenas líderes)</span>}
                     </p>
-                    <p className="text-[10px] text-muted-foreground font-inter">
+                    <p className="text-xs text-muted-foreground font-inter">
                       {new Date(request.created_at).toLocaleDateString('pt-BR')}
                     </p>
                   </div>
@@ -283,7 +283,7 @@ export default function PrayerCircles() {
 
                 <div className="flex items-center gap-1">
                   {request.status === 'answered' && (
-                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-green/20 text-brand-green text-[10px] font-bold">
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-green/20 text-brand-green text-xs font-bold">
                       <CheckCircle2 className="w-3 h-3" /> RESPONDIDO
                     </span>
                   )}
@@ -320,7 +320,7 @@ export default function PrayerCircles() {
               </p>
 
               <div className="flex items-center justify-between pt-3 border-t border-border/50">
-                <div className="flex items-center gap-1.5 text-muted-foreground font-inter text-[10px]">
+                <div className="flex items-center gap-1.5 text-muted-foreground font-inter text-xs">
                   <Users className="w-3 h-3" />
                   {request.prayers_count > 0 
                     ? `${request.prayers_count} ${request.prayers_count === 1 ? 'pessoa orando' : 'pessoas orando'}` 
@@ -349,7 +349,7 @@ export default function PrayerCircles() {
           <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="font-montserrat font-bold text-destructive text-xs">Atenção Líder</p>
-            <p className="text-[10px] text-muted-foreground font-inter">
+            <p className="text-xs text-muted-foreground font-inter">
               Existem pedidos sensíveis marcados em vermelho que requerem atenção pastoral especial.
             </p>
           </div>

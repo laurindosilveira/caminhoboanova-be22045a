@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowDown,
@@ -11,6 +11,7 @@ import {
   CircleAlert,
   Clock3,
   HeartHandshake,
+  Info,
   MessageCircle,
   NotebookPen,
   BookOpenCheck,
@@ -27,6 +28,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+
+const PlayerDetailSheet = lazy(() => import("@/components/home/PlayerDetailSheet"));
 
 type CareMember = {
   assigned_to: string | null;
@@ -85,17 +88,17 @@ type SortKey = "priority" | "name" | "activity" | "progress" | "due";
 
 const STATUS = {
   critical: {
-    label: "Critico",
+    label: "Crítico",
     className: "border-red-200 bg-red-50 text-red-700",
     dotClassName: "bg-red-500",
   },
   attention: {
-    label: "Atencao",
+    label: "Atenção",
     className: "border-amber-200 bg-amber-50 text-amber-800",
     dotClassName: "bg-amber-500",
   },
   healthy: {
-    label: "Saudavel",
+    label: "Saudável",
     className: "border-emerald-200 bg-emerald-50 text-emerald-700",
     dotClassName: "bg-emerald-500",
   },
@@ -104,9 +107,9 @@ const STATUS = {
 const SOURCE_LABELS: Record<string, string> = {
   access: "acesso",
   activity: "atividade",
-  attendance: "presenca",
+  attendance: "presença",
   devotional: "devocional",
-  lesson: "licao",
+  lesson: "lição",
   worship: "culto",
 };
 
@@ -125,7 +128,7 @@ function initials(name: string) {
 }
 
 function relativeDate(value: string | null) {
-  if (!value) return "Nunca";
+  if (!value) return "Sem atividade registrada";
   return formatDistanceToNow(new Date(value), { addSuffix: true, locale: ptBR });
 }
 
@@ -155,12 +158,14 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [sort, setSort] = useState<SortKey>("priority");
   const [selected, setSelected] = useState<CareMember | null>(null);
+  const [activitySummaryMember, setActivitySummaryMember] = useState<CareMember | null>(null);
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const [notes, setNotes] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [nextEvent, setNextEvent] = useState<NextEvent | null>(null);
   const [nextLesson, setNextLesson] = useState<NextLesson | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
   const fetchMembers = useCallback(async () => {
     if (!churchId) {
@@ -188,6 +193,7 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
       setMembers([]);
     } else {
       setMembers(data ?? []);
+      setLastUpdatedAt(new Date());
     }
     setLoading(false);
   }, [area, churchId, toast, turmaId]);
@@ -240,6 +246,10 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
     attention: members.filter((member) => member.care_status === "attention").length,
     healthy: members.filter((member) => member.care_status === "healthy").length,
     overdue: members.filter((member) => isOverdue(member.next_action_due_at)).length,
+    active7: members.filter((member) => (
+      member.last_activity_at
+      && new Date(member.last_activity_at).getTime() >= Date.now() - 7 * 86_400_000
+    )).length,
   }), [members]);
 
   const actionQueue = useMemo(
@@ -394,10 +404,10 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
 
         <div className="mt-5 grid grid-cols-2 border-y border-border md:grid-cols-4">
           {[
-            { label: "Criticos", value: counts.critical, icon: CircleAlert, color: "text-red-600" },
-            { label: "Em atencao", value: counts.attention, icon: AlertCircle, color: "text-amber-600" },
-            { label: "Saudaveis", value: counts.healthy, icon: ShieldCheck, color: "text-emerald-600" },
-            { label: "Atrasados", value: counts.overdue, icon: Clock3, color: "text-slate-600" },
+            { label: "Total no grupo", value: members.length, icon: UserRoundCheck, color: "text-slate-700" },
+            { label: "Ativos em 7 dias", value: counts.active7, icon: BookOpenCheck, color: "text-cyan-700" },
+            { label: "Precisam de atenção", value: counts.critical + counts.attention, icon: AlertCircle, color: "text-amber-600" },
+            { label: "Acompanhamentos atrasados", value: counts.overdue, icon: Clock3, color: "text-red-600" },
           ].map(({ label, value, icon: Icon, color }) => (
             <div key={label} className="flex min-h-20 items-center gap-3 border-border px-3 py-4 odd:border-r md:border-r md:last:border-r-0">
               <Icon className={`h-5 w-5 ${color}`} />
@@ -408,12 +418,24 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
             </div>
           ))}
         </div>
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2.5 text-cyan-950">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-cyan-700" />
+          <p className="text-xs leading-5">
+            <strong>Ativo</strong> significa que houve acesso, lição, devocional, presença ou culto nos últimos 7 dias.
+            Evento sem chamada preenchida aparece como <strong>sem registro</strong> e não é contado como falta.
+            {lastUpdatedAt && (
+              <span className="block text-cyan-800">
+                Dados atualizados às {lastUpdatedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.
+              </span>
+            )}
+          </p>
+        </div>
       </section>
 
       <section aria-labelledby="attention-queue-title">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <h3 id="attention-queue-title" className="font-montserrat text-base font-bold text-foreground">Quem precisa de atencao</h3>
+            <h3 id="attention-queue-title" className="font-montserrat text-base font-bold text-foreground">Quem precisa de atenção</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">Prioridades ordenadas por risco e prazo</p>
           </div>
           <span className="text-xs font-semibold text-muted-foreground">{actionQueue.length} na fila</span>
@@ -605,6 +627,10 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
               member={selected}
               saving={saving}
               onResolvePastoral={resolvePastoralRequest}
+              onViewActivities={(member) => {
+                setActivitySummaryMember(member);
+                closeDialog();
+              }}
             />
           )}
           {selected && dialogMode === "contact" && (
@@ -647,6 +673,28 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
           )}
         </DialogContent>
       </Dialog>
+
+      {activitySummaryMember && (
+        <Suspense
+          fallback={(
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="rounded-2xl bg-card px-6 py-5 text-sm font-semibold text-foreground shadow-2xl">
+                Carregando resumo de atividades...
+              </div>
+            </div>
+          )}
+        >
+          <PlayerDetailSheet
+            userId={activitySummaryMember.user_id}
+            fullName={activitySummaryMember.full_name}
+            currentArea={area ?? undefined}
+            onClose={() => setActivitySummaryMember(null)}
+            onPointsChanged={() => {
+              void fetchMembers();
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
@@ -774,7 +822,17 @@ function MemberCard({ member, saving, onComplete, onContact, onDetails, onSchedu
   );
 }
 
-function MemberDetails({ member, saving, onResolvePastoral }: { member: CareMember; saving: boolean; onResolvePastoral: (member: CareMember) => void }) {
+function MemberDetails({
+  member,
+  saving,
+  onResolvePastoral,
+  onViewActivities,
+}: {
+  member: CareMember;
+  saving: boolean;
+  onResolvePastoral: (member: CareMember) => void;
+  onViewActivities: (member: CareMember) => void;
+}) {
   return (
     <>
       <DialogHeader>
@@ -798,6 +856,10 @@ function MemberDetails({ member, saving, onResolvePastoral }: { member: CareMemb
         <Metric label="Responsavel" value={member.assigned_to_name ?? "Lider atual"} />
       </div>
       {member.pastoral_request_note && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-900"><strong>Pedido pastoral:</strong> {member.pastoral_request_note}</div>}
+      <Button className="w-full" onClick={() => onViewActivities(member)}>
+        <BookOpenCheck className="mr-2 h-4 w-4" />
+        Ver resumo completo de atividades
+      </Button>
       {member.needs_pastor && (
         <Button variant="outline" disabled={saving} onClick={() => void onResolvePastoral(member)} className="border-emerald-300 text-emerald-800">
           <HeartHandshake className="mr-2 h-4 w-4" /> Marcar pedido pastoral como tratado

@@ -6,12 +6,14 @@ import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import { ChevronDown, ChevronUp, Search, X, Users2, BookOpenCheck, ChevronLeft } from "lucide-react";
 import SimpleStat from "@/components/ui/SimpleStat";
 import TurmaCard from "@/components/ui/TurmaCard";
 
 import AdminHeader from "@/components/admin/AdminHeader";
 import AdminBottomNav, { AdminTab } from "@/components/admin/AdminBottomNav";
+import AdminOrganizationHub, { type OrganizationChurch } from "@/components/admin/AdminOrganizationHub";
 
 // Lazy-loaded tab components
 const CoursesTab = lazy(() => import("@/components/admin/tabs/CoursesTab"));
@@ -44,7 +46,7 @@ type Participant = {
 };
 type PlanInfo = { health_status: string; is_priority: boolean; needs_pastor?: boolean };
 type Turma = { id: string; name: string; area: string | null; year: number; is_active: boolean; description: string | null; church_id?: string | null };
-type Church = { id: string; name: string; slug: string; city: string | null; state: string | null; is_active: boolean | null };
+type Church = OrganizationChurch;
 
 const AREA_ICONS: Record<string, string> = {
   "Área 1": "🌳", "Área 2": "🔥", "Área 3": "💧", "Área 4": "🌬️",
@@ -64,7 +66,8 @@ function TabSkeleton() {
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { profile, role, isSuper, signOut } = useAuth();
+  const { profile, role, isSuper, signOut, user } = useAuth();
+  const { effectiveTurmaId, availableTurmas, setEffectiveTurma } = useAreaSwitch();
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -82,44 +85,54 @@ export default function AdminDashboard() {
   const [expandedArea, setExpandedArea] = useState<string | null>(null);
   const [turmaSearch, setTurmaSearch] = useState("");
 
-  // For leaders, auto-select their turma (or use a placeholder if they have none yet)
+  // Leaders open the real group selected in their profile. The context only
+  // exposes groups assigned through turma_leaders.
   useEffect(() => {
     if (role !== "lider") return;
-    if (!loading && !selectedTurma) {
-      if (profile?.turma_id && turmas.length > 0) {
-        const myTurma = turmas.find(t => t.id === profile.turma_id);
+    if (!loading) {
+      const managedTurmaId = effectiveTurmaId ?? profile?.turma_id ?? null;
+      if (managedTurmaId && selectedTurma?.id !== managedTurmaId && turmas.length > 0) {
+        const myTurma = turmas.find(t => t.id === managedTurmaId);
         if (myTurma) {
           setSelectedTurma(myTurma);
-        } else {
+        } else if (!selectedTurma) {
           // turma_id set but not found in active list — use placeholder so they can manage it
-          setSelectedTurma({ id: profile.turma_id || "", name: "Minha Área", area: profile.area ?? null, year: new Date().getFullYear(), is_active: true, description: null });
+          setSelectedTurma({ id: managedTurmaId, name: "Meu grupo", area: profile?.area ?? null, year: new Date().getFullYear(), is_active: true, description: null });
           setActiveTab("turma");
         }
-      } else if (!profile?.turma_id) {
+      } else if (!managedTurmaId && !selectedTurma) {
         // No turma yet — skip selector, go straight to turma management tab
-        setSelectedTurma({ id: "new-leader-turma", name: "Minha Área", area: profile?.area ?? null, year: new Date().getFullYear(), is_active: true, description: null });
+        setSelectedTurma({ id: "new-leader-turma", name: "Meu grupo", area: profile?.area ?? null, year: new Date().getFullYear(), is_active: true, description: null });
         setActiveTab("turma");
       }
     }
-  }, [role, profile, turmas, selectedTurma, loading]);
+  }, [effectiveTurmaId, role, profile, turmas, selectedTurma, loading]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [{ data: churchesData }, { data: profilesData }, userResult] = await Promise.all([
-      supabase.from("churches").select("id, name, slug, city, state, is_active").order("name"),
-      supabase.from("profiles").select("user_id, full_name, community, area, birth_date, phone, turma_id, confirmation_year, avatar_url, father_name, mother_name, father_phone, mother_phone, address, email, church_id"),
-      supabase.auth.getUser(),
+    const requestedChurchId = isSuper ? selectedChurchId : profile?.church_id ?? null;
+    let profilesQuery = supabase
+      .from("profiles")
+      .select("user_id, full_name, community, area, birth_date, phone, turma_id, confirmation_year, avatar_url, father_name, mother_name, father_phone, mother_phone, address, email, church_id");
+    if (requestedChurchId) {
+      profilesQuery = profilesQuery.eq("church_id", requestedChurchId);
+    } else if (!isSuper) {
+      profilesQuery = profilesQuery.is("church_id", null);
+    }
+
+    const [{ data: churchesData }, { data: profilesData }] = await Promise.all([
+      supabase.from("churches").select("id, name, slug, city, state, address, group_naming, is_active").order("name"),
+      profilesQuery,
     ]);
 
-    const myId = userResult.data.user?.id ?? "";
-    const myProfile = (profilesData ?? []).find(p => p.user_id === myId);
+    const myId = user?.id ?? profile?.user_id ?? "";
     const allChurches = ((churchesData as Church[] | null) ?? []).filter(church => church.is_active !== false);
     const allowedChurches = isSuper
       ? allChurches
-      : allChurches.filter(church => church.id === myProfile?.church_id);
+      : allChurches.filter(church => church.id === profile?.church_id);
     const scopedChurchId = isSuper
       ? selectedChurchId ?? allowedChurches[0]?.id ?? null
-      : myProfile?.church_id ?? null;
+      : profile?.church_id ?? null;
 
     setChurches(allowedChurches);
     if (scopedChurchId && selectedChurchId !== scopedChurchId) {
@@ -248,15 +261,15 @@ export default function AdminDashboard() {
     setPlans(plansMap);
     setChurchLimit(subResult.data?.member_limit ?? null);
     setLoading(false);
-  }, [isSuper, selectedChurchId]);
+  }, [isSuper, profile?.church_id, profile?.user_id, selectedChurchId, user?.id]);
 
   useEffect(() => {
-    if (role !== "admin" && role !== "lider") {
+    if (role !== "admin" && role !== "lider" && !isSuper) {
       navigate("/");
       return;
     }
     void fetchData();
-  }, [fetchData, navigate, role]);
+  }, [fetchData, isSuper, navigate, role]);
 
   // Memoized filtered participants (by turma — used for overview, scores, etc.)
   const isAreaScope = selectedTurma?.id.startsWith("area::") ?? false;
@@ -319,14 +332,24 @@ export default function AdminDashboard() {
     const found = turmas.find(t => t.area === turma.area);
     if (found) {
       setSelectedTurma(found);
+      if (availableTurmas.some((item) => item.id === found.id)) {
+        void setEffectiveTurma(found.id);
+      }
       setActiveTab("care");
     }
-  }, [turmas]);
+  }, [availableTurmas, setEffectiveTurma, turmas]);
+
+  const handleSelectManagedTurma = useCallback((turma: Turma) => {
+    setSelectedTurma(turma);
+    if (availableTurmas.some((item) => item.id === turma.id)) {
+      void setEffectiveTurma(turma.id);
+    }
+  }, [availableTurmas, setEffectiveTurma]);
 
   // ===== TURMA SELECTOR SCREEN =====
   if (!selectedTurma) {
     return (
-      <TurmaSelector
+      <AdminOrganizationHub
         loading={loading}
         turmas={turmas}
         participants={participants}
@@ -334,13 +357,9 @@ export default function AdminDashboard() {
         adminArea={profile?.area ?? ""}
         churches={churches}
         selectedChurchId={selectedChurchId}
-        selectedChurchName={selectedChurch?.name ?? profile?.churches?.name ?? ""}
         onSelectChurch={handleSelectChurch}
-        expandedArea={expandedArea}
-        setExpandedArea={setExpandedArea}
-        turmaSearch={turmaSearch}
-        setTurmaSearch={setTurmaSearch}
-        onSelectTurma={setSelectedTurma}
+        onSelectTurma={handleSelectManagedTurma}
+        onRefresh={fetchData}
         onBack={() => navigate("/")}
       />
     );
@@ -362,11 +381,17 @@ export default function AdminDashboard() {
         participants={filteredParticipants}
         activities={activities}
         turmaLabel={turmaName}
+        turmaId={selectedTurma.id}
         onChangeCommunity={handleChangeCommunity}
       />
 
       <div className="mx-auto flex w-full max-w-[1440px] items-start">
-        <AdminBottomNav active={activeTab} onChange={setActiveTab} userRole={role as "admin" | "lider" | null} isSuper={isSuper} />
+        <AdminBottomNav
+          active={activeTab}
+          onChange={setActiveTab}
+          userRole={isSuper ? "admin" : role as "admin" | "lider" | null}
+          isSuper={isSuper}
+        />
 
         <main className="min-w-0 flex-1 px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-10">
           {loading ? (
@@ -410,13 +435,19 @@ export default function AdminDashboard() {
               <LeaderTurmaManagement
                 defaultArea={selectedTurma.area ?? profile?.area ?? ""}
                 defaultChurchId={currentChurchId}
+                defaultTurmaId={isAreaScope ? null : selectedTurma.id}
               />
             )}
             {activeTab === "avisos" && <MessagesTab leaderMode={role === "lider"} churchId={currentChurchId} />}
             {activeTab === "agenda" && <AgendaTab leaderMode={role === "lider"} churchId={currentChurchId} />}
             {activeTab === "contatos" && <LeaderContactsTab />}
             {activeTab === "courses" && <CoursesTab churchId={currentChurchId} />}
-            {activeTab === "leaders" && <AdminLeadersTab turmas={isAreaScope ? turmas.filter(t => t.area === selectedTurma.area) : turmas} />}
+            {activeTab === "leaders" && (
+              <AdminLeadersTab
+                turmas={isAreaScope ? turmas.filter(t => t.area === selectedTurma.area) : turmas}
+                churchId={currentChurchId}
+              />
+            )}
             {activeTab === "push" && <AdminPushTab turmas={isAreaScope ? turmas.filter(t => t.area === selectedTurma.area) : turmas} churchId={currentChurchId} />}
             {activeTab === "users" && <UsersTab onSelectTurma={handleSelectTurmaFromUsers} />}
             {activeTab === "whatsapp" && <WhatsAppAuditTab />}
