@@ -3,10 +3,12 @@ import { AlertCircle, Bell, HelpCircle, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { requestNotificationPermission } from "@/lib/notifications";
-import { subscribeToWebPush, isWebPushSubscribed } from "@/lib/webPush";
+import { getWebPushStatus, syncWebPushSubscription } from "@/lib/webPush";
 import PushTroubleshootHelp from "@/components/home/PushTroubleshootHelp";
 
-type BannerMode = "leader" | "automatic" | "blocked";
+function getCurrentPermission(): NotificationPermission { return Notification.permission; }
+
+type BannerMode = "leader" | "automatic" | "blocked" | "install";
 
 /**
  * Banner shown on the Jornada tab when the current device still does not
@@ -32,9 +34,15 @@ export default function PushActivationBanner() {
 
     setPermission(Notification.permission);
 
-    const alreadySubscribed = await isWebPushSubscribed();
-    if (alreadySubscribed) {
+    const status = await getWebPushStatus();
+    if (status.browserSubscribed && status.serverSubscribed) {
       setVisible(false);
+      return;
+    }
+
+    if (status.isIos && !status.isStandalone) {
+      setMode("install");
+      setVisible(true);
       return;
     }
 
@@ -71,6 +79,10 @@ export default function PushActivationBanner() {
 
   async function handleActivate() {
     if (!user) return;
+    if (mode === "install") {
+      setShowHelp(true);
+      return;
+    }
     if (Notification.permission === "denied") {
       setMode("blocked");
       setShowHelp(true);
@@ -82,9 +94,10 @@ export default function PushActivationBanner() {
     try {
       const granted = await requestNotificationPermission();
       if (!granted) {
-        setPermission(Notification.permission);
-        setMode(Notification.permission === "denied" ? "blocked" : mode);
-        setError(Notification.permission === "denied"
+        const currentPermission = getCurrentPermission();
+        setPermission(currentPermission);
+        setMode(currentPermission === "denied" ? "blocked" : mode);
+        setError(currentPermission === "denied"
           ? "As notificacoes estao bloqueadas neste navegador."
           : "Voce ainda precisa permitir as notificacoes para este dispositivo.");
         return;
@@ -96,7 +109,7 @@ export default function PushActivationBanner() {
         return;
       }
 
-      const subscribed = await subscribeToWebPush(vapidData.publicKey);
+      const subscribed = await syncWebPushSubscription(vapidData.publicKey);
       if (!subscribed) {
         setError("Nao foi possivel salvar a inscricao push deste dispositivo.");
         return;
@@ -105,6 +118,8 @@ export default function PushActivationBanner() {
       await supabase.from("notification_preferences").upsert({
         user_id: user.id,
         master_enabled: true,
+        push_enabled: true,
+        local_enabled: true,
         devocional: true,
         eventos: true,
         streak: true,
@@ -147,13 +162,18 @@ export default function PushActivationBanner() {
   }
 
   const isBlocked = mode === "blocked" || permission === "denied";
+  const needsInstall = mode === "install";
   const title = isBlocked
     ? "Notificacoes bloqueadas"
+    : needsInstall
+      ? "Instale o app para ativar"
     : mode === "leader"
       ? "Ative suas notificacoes"
       : "Receba lembretes da jornada";
   const message = isBlocked
     ? "Este navegador bloqueou as notificacoes. Veja como liberar e depois volte para ativar."
+    : needsInstall
+      ? "No iPhone e iPad, as notificacoes funcionam quando o app esta adicionado a tela inicial."
     : mode === "leader"
       ? "Seu lider pediu para voce ativar os avisos deste dispositivo para nao perder nada da jornada."
       : "Ative avisos de devocional, turma, eventos e mensagens importantes neste dispositivo.";
@@ -194,15 +214,15 @@ export default function PushActivationBanner() {
             )}
             <div className="mt-4">
               <button
-                onClick={isBlocked ? () => setShowHelp(true) : handleActivate}
+                onClick={isBlocked || needsInstall ? () => setShowHelp(true) : handleActivate}
                 disabled={activating}
                 className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-montserrat font-black disabled:opacity-50 transition-all shadow-md active:scale-95 ${
                   isBlocked ? "bg-destructive text-destructive-foreground" : "text-primary-foreground"
                 }`}
                 style={isBlocked ? undefined : { background: "var(--gradient-hero)" }}
               >
-                {isBlocked ? <HelpCircle className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
-                {isBlocked ? "VER COMO DESBLOQUEAR" : activating ? "ATIVANDO..." : "ATIVAR AGORA"}
+                {isBlocked || needsInstall ? <HelpCircle className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+                {isBlocked || needsInstall ? "VER AJUDA" : activating ? "ATIVANDO..." : "ATIVAR AGORA"}
               </button>
             </div>
           </div>

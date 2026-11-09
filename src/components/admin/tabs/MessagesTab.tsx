@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
@@ -7,24 +7,19 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { getAreaForCommunity, getCommunitiesForArea } from "@/config/areas";
+import type { Database } from "@/integrations/supabase/types";
 
-type Message = {
-  id: string;
-  title: string;
-  body: string;
-  area: string | null;
-  community: string | null;
-  turma_id: string | null;
-  church_id?: string | null;
-  created_at: string;
-};
+type Tables = Database["public"]["Tables"];
+type Message = Tables["messages"]["Row"];
+type MessageTarget = "all" | "area" | "community" | "turma";
+type AreaName = Database["public"]["Enums"]["area_name"];
+type CommunityName = Database["public"]["Enums"]["community_name"];
 
-type Turma = {
-  id: string;
-  name: string;
-  area: string | null;
-  church_id?: string | null;
-};
+type Turma = Pick<Tables["turmas"]["Row"], "id" | "name" | "area">;
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Erro inesperado.";
+}
 
 const FINAL_PUSH_COPY = {
   title: "Novo aviso no app",
@@ -33,14 +28,14 @@ const FINAL_PUSH_COPY = {
 };
 
 type Props = {
-  /** When true, restricts sending options to only the leader's own area/turma */
+  /** When true, restricts sending to the leader's currently selected group. */
   leaderMode?: boolean;
   churchId?: string | null;
 };
 
 export default function MessagesTab({ leaderMode = false, churchId }: Props) {
   const { profile } = useAuth();
-  const { effectiveArea } = useAreaSwitch();
+  const { effectiveArea, effectiveTurmaId } = useAreaSwitch();
   const currentChurchId = churchId ?? profile?.church_id ?? null;
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,9 +44,9 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
   const [form, setForm] = useState({
     title: "",
     body: "",
-    target: (leaderMode ? "turma" : "area") as "all" | "area" | "community" | "turma",
+    target: (leaderMode ? "turma" : "area") as MessageTarget,
     community: "",
-    turmaId: leaderMode && profile?.turma_id ? profile.turma_id : "",
+    turmaId: effectiveTurmaId ?? profile?.turma_id ?? "",
   });
   const [deleting, setDeleting] = useState<string | null>(null);
   const [turmas, setTurmas] = useState<Turma[]>([]);
@@ -63,39 +58,12 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
 
   const communities = getCommunitiesForArea(effectiveArea ?? "");
 
-  useEffect(() => {
-    void loadTurmasAndMessages();
-  }, [currentChurchId, effectiveArea]);
-
-  async function loadTurmasAndMessages() {
-    let turmasQuery = supabase
-      .from("turmas")
-      .select("id, name, area")
-      .eq("is_active", true)
-      .order("name");
-    if (currentChurchId) {
-      turmasQuery = (turmasQuery as any).eq("church_id", currentChurchId);
-    }
-    const { data: turmasData, error: turmasError } = await turmasQuery;
-
-    if (turmasError) {
-      toast.error(`Erro ao carregar turmas: ${turmasError.message}`);
-      setTurmas([]);
-      await fetchMessages([]);
-      return;
-    }
-
-    const scopedTurmas = (turmasData ?? []).filter((turma) => !effectiveArea || turma.area === effectiveArea);
-    setTurmas(scopedTurmas);
-    await fetchMessages(scopedTurmas);
-  }
-
-  async function fetchMessages(currentTurmas: Turma[] = turmas) {
+  const fetchMessages = useCallback(async (currentTurmas: Turma[]) => {
     setLoading(true);
     let messagesQuery = supabase.from("messages").select("*").order("created_at", { ascending: false });
-    if (currentChurchId) {
-      messagesQuery = (messagesQuery as any).or(`church_id.is.null,church_id.eq.${currentChurchId}`);
-    }
+    messagesQuery = currentChurchId
+      ? messagesQuery.or(`church_id.is.null,church_id.eq.${currentChurchId}`)
+      : messagesQuery.is("church_id", null);
     const { data, error } = await messagesQuery;
     if (error) {
       toast.error(`Erro ao carregar comunicados: ${error.message}`);
@@ -111,8 +79,9 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
       if (message.area) return message.area === effectiveArea;
       if (message.community) return getAreaForCommunity(message.community) === effectiveArea;
       if (message.turma_id) {
-        const turma = currentTurmas.find((item) => item.id === message.turma_id);
-        return turma?.area === effectiveArea;
+        return effectiveTurmaId
+          ? message.turma_id === effectiveTurmaId
+          : currentTurmas.some((item) => item.id === message.turma_id && item.area === effectiveArea);
       }
       return false;
     });
@@ -137,15 +106,53 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
     }
 
     const counts: Record<string, number> = {};
-    (viewsData ?? []).forEach((view: any) => {
+    (viewsData ?? []).forEach((view) => {
       counts[view.message_id] = (counts[view.message_id] ?? 0) + 1;
     });
     setViewCounts(counts);
     setLoading(false);
-  }
+  }, [currentChurchId, effectiveArea, effectiveTurmaId]);
+
+  const loadTurmasAndMessages = useCallback(async () => {
+    let turmasQuery = supabase
+      .from("turmas")
+      .select("id, name, area")
+      .eq("is_active", true)
+      .order("name");
+    turmasQuery = currentChurchId
+      ? turmasQuery.eq("church_id", currentChurchId)
+      : turmasQuery.is("church_id", null);
+    const { data: turmasData, error: turmasError } = await turmasQuery;
+
+    if (turmasError) {
+      toast.error(`Erro ao carregar turmas: ${turmasError.message}`);
+      setTurmas([]);
+      await fetchMessages([]);
+      return;
+    }
+
+    const scopedTurmas = (turmasData ?? []).filter((turma) => (
+      effectiveTurmaId ? turma.id === effectiveTurmaId : !effectiveArea || turma.area === effectiveArea
+    ));
+    setTurmas(scopedTurmas);
+    await fetchMessages(scopedTurmas);
+  }, [currentChurchId, effectiveArea, effectiveTurmaId, fetchMessages]);
+
+  useEffect(() => {
+    if (!effectiveTurmaId) return;
+    setForm((current) => ({ ...current, turmaId: effectiveTurmaId }));
+  }, [effectiveTurmaId]);
+
+  useEffect(() => {
+    void loadTurmasAndMessages();
+  }, [loadTurmasAndMessages]);
 
   async function handleSend() {
     if (!form.title.trim() || !form.body.trim()) return;
+    if (leaderMode && !effectiveTurmaId) {
+      toast.error("Selecione um grupo antes de enviar o comunicado.");
+      return;
+    }
     setSaving(true);
 
     const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -167,7 +174,7 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
       turma_id: messageTurmaId,
       church_id: currentChurchId,
       sent_by: userId,
-    } as any);
+    });
 
     if (insertError) {
       toast.error(`Erro ao criar comunicado: ${insertError.message}`);
@@ -206,14 +213,20 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
       } else {
         toast.success("Comunicado enviado.");
       }
-    } catch (error: any) {
-      toast.warning(`Comunicado criado, mas o push falhou: ${error.message}`);
+    } catch (error: unknown) {
+      toast.warning(`Comunicado criado, mas o push falhou: ${getErrorMessage(error)}`);
     }
 
-    setForm({ title: "", body: "", target: "area", community: "", turmaId: "" });
+    setForm({
+      title: "",
+      body: "",
+      target: leaderMode ? "turma" : "area",
+      community: "",
+      turmaId: effectiveTurmaId ?? "",
+    });
     setShowForm(false);
     setSaving(false);
-    await fetchMessages();
+    await fetchMessages(turmas);
   }
 
   async function handleDelete(id: string) {
@@ -264,7 +277,7 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
     const { data: profilesData, error: profilesError } = await supabase
       .from("profiles")
       .select("user_id, full_name")
-      .in("user_id", viewsData.map((view: any) => view.user_id));
+      .in("user_id", viewsData.map((view) => view.user_id));
 
     if (profilesError) {
       toast.error(`Erro ao carregar nomes: ${profilesError.message}`);
@@ -274,12 +287,12 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
     }
 
     const nameMap: Record<string, string> = {};
-    (profilesData ?? []).forEach((item: any) => {
+    (profilesData ?? []).forEach((item) => {
       nameMap[item.user_id] = item.full_name;
     });
 
     setViewers(
-      viewsData.map((view: any) => ({
+      viewsData.map((view) => ({
         name: nameMap[view.user_id] ?? "Desconhecido",
         viewedAt: view.viewed_at,
       }))
@@ -292,6 +305,13 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   }
 
+  function canManageMessage(message: Message) {
+    return !leaderMode || (
+      Boolean(effectiveTurmaId)
+      && message.turma_id === effectiveTurmaId
+    );
+  }
+
   async function sendReminderPush(message: Message) {
     setSendingPush(message.id);
     try {
@@ -301,12 +321,13 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
         .eq("message_id", message.id);
       if (viewsError) throw viewsError;
 
-      const viewedUserIds = new Set((viewsData ?? []).map((view: any) => view.user_id));
+      const viewedUserIds = new Set((viewsData ?? []).map((view) => view.user_id));
 
       let targetQuery = supabase.from("profiles").select("user_id");
+      if (currentChurchId) targetQuery = targetQuery.eq("church_id", currentChurchId);
       if (message.turma_id) targetQuery = targetQuery.eq("turma_id", message.turma_id);
-      else if (message.community) targetQuery = targetQuery.eq("community", message.community as any);
-      else if (message.area) targetQuery = targetQuery.eq("area", message.area as any);
+      else if (message.community) targetQuery = targetQuery.eq("community", message.community as CommunityName);
+      else if (message.area) targetQuery = targetQuery.eq("area", message.area as AreaName);
 
       const { data: targetUsers, error: targetError } = await targetQuery;
       if (targetError) throw targetError;
@@ -325,12 +346,13 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
       let failed = 0;
 
       for (const userId of nonViewers) {
-        const { data, error: pushError } = await supabase.functions.invoke("admin-push", {
+        const { data, error: pushError } = await supabase.functions.invoke<{ sent?: number; failed?: number }>("admin-push", {
           body: {
             title: FINAL_PUSH_COPY.reminderTitle,
             body: `Voce ainda nao viu: "${message.title}". Abra o app para conferir.`,
             target: "user",
             targetValue: userId,
+            churchId: currentChurchId,
           },
         });
         if (pushError) throw pushError;
@@ -343,8 +365,8 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
       } else {
         toast.success(`Push enviado para ${sent} dispositivo(s).${failed ? ` ${failed} falha(s).` : ""}`);
       }
-    } catch (error: any) {
-      toast.error(`Erro ao enviar push de lembrete: ${error.message}`);
+    } catch (error: unknown) {
+      toast.error(`Erro ao enviar push de lembrete: ${getErrorMessage(error)}`);
     }
     setSendingPush(null);
   }
@@ -355,7 +377,7 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
         <p className="font-montserrat font-bold text-foreground text-base">Comunicados</p>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-inter font-medium text-primary-foreground"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-inter font-medium text-primary-foreground"
           style={{ background: "var(--gradient-hero)" }}
         >
           <Plus className="w-3.5 h-3.5" /> Novo comunicado
@@ -363,30 +385,29 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
       </div>
 
       {showForm && (
-        <div className="bg-card rounded-2xl border border-border p-4 space-y-3 shadow-sm">
+        <div className="bg-card rounded-lg border border-border p-4 space-y-3 shadow-sm">
           <p className="font-montserrat font-bold text-foreground text-sm">Novo comunicado</p>
           <input
             value={form.title}
             onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
             placeholder="Titulo *"
-            className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
           <textarea
             value={form.body}
             onChange={(event) => setForm((prev) => ({ ...prev, body: event.target.value }))}
             placeholder="Mensagem *"
             rows={3}
-            className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+            className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
           />
 
           <div>
             <p className="font-inter text-xs text-muted-foreground mb-2">Enviar para:</p>
             <div className="grid grid-cols-2 gap-2">
               {(leaderMode
-                ? [
-                    ...(profile?.turma_id ? [{ value: "turma" as const, label: "Minha Turma", icon: GraduationCap }] : []),
-                    { value: "area" as const, label: effectiveArea || "Meu GC", icon: MapPin },
-                  ]
+                ? (effectiveTurmaId
+                    ? [{ value: "turma" as const, label: "Meu grupo", icon: GraduationCap }]
+                    : [])
                 : [
                     { value: "all" as const, label: "Todos", icon: Globe },
                     { value: "area" as const, label: effectiveArea || "Meu GC", icon: MapPin },
@@ -396,8 +417,8 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
               ).map((option) => (
                 <button
                   key={option.value}
-                  onClick={() => setForm((prev) => ({ ...prev, target: option.value as any }))}
-                  className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border text-xs font-inter transition-colors ${
+                  onClick={() => setForm((prev) => ({ ...prev, target: option.value }))}
+                  className={`flex flex-col items-center gap-1 p-2.5 rounded-lg border text-xs font-inter transition-colors ${
                     form.target === option.value
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-border bg-background text-muted-foreground"
@@ -414,7 +435,7 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
             <select
               value={form.community}
               onChange={(event) => setForm((prev) => ({ ...prev, community: event.target.value }))}
-              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+              className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
             >
               <option value="">Selecione a comunidade</option>
               {communities.map((community) => (
@@ -425,14 +446,14 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
 
           {form.target === "turma" && (
             leaderMode ? (
-              <div className="px-3 py-2.5 rounded-xl border border-primary/30 bg-primary/5 text-foreground font-inter text-sm">
-                {turmas.find(t => t.id === profile?.turma_id)?.name ?? "Minha turma"}
+              <div className="px-3 py-2.5 rounded-lg border border-primary/30 bg-primary/5 text-foreground font-inter text-sm">
+                {turmas.find(t => t.id === effectiveTurmaId)?.name ?? "Meu grupo"}
               </div>
             ) : (
               <select
                 value={form.turmaId}
                 onChange={(event) => setForm((prev) => ({ ...prev, turmaId: event.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
               >
                 <option value="">Selecione a turma</option>
                 {turmas.map((turma) => (
@@ -454,14 +475,14 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
                 (form.target === "community" && !form.community) ||
                 (form.target === "turma" && !form.turmaId)
               }
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-inter font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-inter font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
               style={{ background: "var(--gradient-hero)" }}
             >
               <Send className="w-4 h-4" /> {saving ? "Enviando..." : "Enviar"}
             </button>
             <button
               onClick={() => setShowForm(false)}
-              className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm"
+              className="px-4 py-2.5 rounded-lg bg-muted text-foreground font-inter text-sm"
             >
               Cancelar
             </button>
@@ -480,49 +501,51 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
       ) : (
         <div className="space-y-3">
           {messages.map((message) => (
-            <div key={message.id} className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+            <div key={message.id} className="bg-card rounded-lg border border-border p-4 shadow-sm">
               <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                   <MessageSquare className="w-4 h-4 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-montserrat font-bold text-foreground text-sm">{message.title}</h3>
                   <p className="text-muted-foreground font-inter text-xs mt-1 leading-relaxed">{message.body}</p>
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    <span className="text-muted-foreground font-inter text-[10px]">
+                    <span className="text-muted-foreground font-inter text-xs">
                       {format(new Date(message.created_at), "d 'de' MMM 'as' HH:mm", { locale: ptBR })}
                     </span>
                     {message.community ? (
-                      <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-md text-[10px] font-inter font-medium">
+                      <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-md text-xs font-inter font-medium">
                         {message.community}
                       </span>
                     ) : message.area ? (
-                      <span className="px-2 py-0.5 bg-secondary/10 text-secondary rounded-md text-[10px] font-inter font-medium">
+                      <span className="px-2 py-0.5 bg-secondary/10 text-secondary rounded-md text-xs font-inter font-medium">
                         {message.area}
                       </span>
                     ) : message.turma_id ? (
-                      <span className="px-2 py-0.5 bg-accent/10 text-accent rounded-md text-[10px] font-inter font-medium">
+                      <span className="px-2 py-0.5 bg-accent/10 text-accent rounded-md text-xs font-inter font-medium">
                         {turmas.find((turma) => turma.id === message.turma_id)?.name ?? "Turma"}
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 bg-muted text-muted-foreground rounded-md text-[10px] font-inter font-medium">
+                      <span className="px-2 py-0.5 bg-muted text-muted-foreground rounded-md text-xs font-inter font-medium">
                         Todos
                       </span>
                     )}
                   </div>
 
                   <div className="flex items-center gap-2 mt-3 flex-wrap">
-                    <button
-                      onClick={() => openViewers(message.id)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-inter font-medium transition-colors ${
-                        showViewers === message.id
-                          ? "bg-primary/15 text-primary border border-primary/30"
-                          : "bg-muted/50 text-muted-foreground hover:bg-muted border border-transparent"
-                      }`}
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      {viewCounts[message.id] ?? 0} viram
-                    </button>
+                    {canManageMessage(message) && (
+                      <button
+                        onClick={() => openViewers(message.id)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-inter font-medium transition-colors ${
+                          showViewers === message.id
+                            ? "bg-primary/15 text-primary border border-primary/30"
+                            : "bg-muted/50 text-muted-foreground hover:bg-muted border border-transparent"
+                        }`}
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        {viewCounts[message.id] ?? 0} viram
+                      </button>
+                    )}
                     <button
                       onClick={() => shareOnWhatsApp(message)}
                       className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-inter font-medium bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 transition-colors border border-transparent"
@@ -530,18 +553,20 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
                       <Share2 className="w-3.5 h-3.5" />
                       WhatsApp
                     </button>
-                    <button
-                      onClick={() => sendReminderPush(message)}
-                      disabled={sendingPush === message.id}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-inter font-medium bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors border border-transparent disabled:opacity-50"
-                    >
-                      <Bell className="w-3.5 h-3.5" />
-                      {sendingPush === message.id ? "Enviando..." : "Lembrar"}
-                    </button>
+                    {canManageMessage(message) && (
+                      <button
+                        onClick={() => sendReminderPush(message)}
+                        disabled={sendingPush === message.id}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-inter font-medium bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors border border-transparent disabled:opacity-50"
+                      >
+                        <Bell className="w-3.5 h-3.5" />
+                        {sendingPush === message.id ? "Enviando..." : "Lembrar"}
+                      </button>
+                    )}
                   </div>
 
-                  {showViewers === message.id && (
-                    <div className="mt-3 bg-muted/30 rounded-xl p-3 border border-border">
+                  {canManageMessage(message) && showViewers === message.id && (
+                    <div className="mt-3 bg-muted/30 rounded-lg p-3 border border-border">
                       <p className="font-inter text-xs font-semibold text-foreground mb-2">
                         Quem visualizou ({viewCounts[message.id] ?? 0})
                       </p>
@@ -558,12 +583,12 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
                           {viewers.map((viewer, index) => (
                             <div key={index} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-background/50">
                               <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-primary/15 flex items-center justify-center text-[10px] font-bold text-primary">
+                                <div className="w-6 h-6 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary">
                                   {viewer.name.charAt(0).toUpperCase()}
                                 </div>
                                 <span className="font-inter text-xs text-foreground">{viewer.name}</span>
                               </div>
-                              <span className="text-muted-foreground font-inter text-[10px]">
+                              <span className="text-muted-foreground font-inter text-xs">
                                 {format(new Date(viewer.viewedAt), "dd/MM HH:mm")}
                               </span>
                             </div>
@@ -573,14 +598,16 @@ export default function MessagesTab({ leaderMode = false, churchId }: Props) {
                     </div>
                   )}
                 </div>
-                <button
-                  onClick={() => handleDelete(message.id)}
-                  disabled={deleting === message.id}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 hover:bg-destructive/10 transition-colors disabled:opacity-50"
-                  title="Excluir aviso"
-                >
-                  <Trash2 className={`w-4 h-4 ${deleting === message.id ? "text-muted-foreground animate-pulse" : "text-destructive/60 hover:text-destructive"}`} />
-                </button>
+                {canManageMessage(message) && (
+                  <button
+                    onClick={() => handleDelete(message.id)}
+                    disabled={deleting === message.id}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                    title="Excluir aviso"
+                  >
+                    <Trash2 className={`w-4 h-4 ${deleting === message.id ? "text-muted-foreground animate-pulse" : "text-destructive/60 hover:text-destructive"}`} />
+                  </button>
+                )}
               </div>
             </div>
           ))}

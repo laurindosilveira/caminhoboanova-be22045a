@@ -41,7 +41,7 @@ export default function BibleModal({ reference, open, onClose }: BibleModalProps
                   <BookOpen className="w-4.5 h-4.5 text-primary-foreground" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-primary-foreground/60 font-inter text-[10px] uppercase tracking-wider font-semibold">Bíblia NVI</p>
+                  <p className="text-primary-foreground/60 font-inter text-xs uppercase tracking-wider font-semibold">Bíblia NVI</p>
                   <h3 className="font-montserrat font-bold text-primary-foreground text-sm truncate">{reference}</h3>
                 </div>
               </div>

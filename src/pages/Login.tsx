@@ -13,6 +13,9 @@ import {
   type LoginDiagnostic,
 } from "@/lib/loginDiagnostics";
 import { ignoreAsyncError } from "@/lib/safeAsync";
+import { AuthCaptcha, isAuthCaptchaEnabled } from "@/components/auth/AuthCaptcha";
+import type { User } from "@supabase/supabase-js";
+import { getAppBootstrap } from "@/lib/appBootstrap";
 
 const loginSchema = z.object({
   email: z.string().trim().email("Email inválido").max(255),
@@ -36,6 +39,11 @@ function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+function getErrorDetails(error: unknown) {
+  if (error instanceof Error) return { message: error.message, name: error.name };
+  return { message: String(error), name: "UnknownError" };
+}
+
 function loginRetryDelayMs(attempt: number) {
   return Math.min(
     PASSWORD_LOGIN_RETRY_MAX_MS,
@@ -43,7 +51,7 @@ function loginRetryDelayMs(attempt: number) {
   );
 }
 
-async function signInWithPasswordAttempt(email: string, password: string) {
+async function signInWithPasswordAttempt(email: string, password: string, captchaToken?: string) {
   let loginTimeoutId: number | undefined;
 
   try {
@@ -56,7 +64,11 @@ async function signInWithPasswordAttempt(email: string, password: string) {
     });
 
     return await Promise.race([
-      supabase.auth.signInWithPassword({ email, password }),
+      supabase.auth.signInWithPassword({
+        email,
+        password,
+        options: captchaToken ? { captchaToken } : undefined,
+      }),
       loginTimeout,
     ]);
   } finally {
@@ -66,23 +78,24 @@ async function signInWithPasswordAttempt(email: string, password: string) {
   }
 }
 
-async function signInWithPasswordRetry(email: string, password: string) {
+async function signInWithPasswordRetry(email: string, password: string, captchaToken?: string) {
   let lastResult: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>> | null = null;
+  const maxAttempts = captchaToken ? 1 : PASSWORD_LOGIN_MAX_ATTEMPTS;
 
-  for (let attempt = 1; attempt <= PASSWORD_LOGIN_MAX_ATTEMPTS; attempt += 1) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      const result = await signInWithPasswordAttempt(email, password);
+      const result = await signInWithPasswordAttempt(email, password, captchaToken);
       lastResult = result;
 
       if (!result.error) {
         return result;
       }
 
-      if (!isNetworkLikeAuthFailure(result.error) || attempt === PASSWORD_LOGIN_MAX_ATTEMPTS) {
+      if (!isNetworkLikeAuthFailure(result.error) || attempt === maxAttempts) {
         return result;
       }
     } catch (error) {
-      if (!isNetworkLikeAuthFailure(error) || attempt === PASSWORD_LOGIN_MAX_ATTEMPTS) {
+      if (!isNetworkLikeAuthFailure(error) || attempt === maxAttempts) {
         throw error;
       }
     }
@@ -100,6 +113,7 @@ export default function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const cadastroSucesso = searchParams.get("cadastro") === "sucesso";
+  const senhaCriada = searchParams.get("senha") === "criada";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -110,6 +124,13 @@ export default function Login() {
   const [passkeySupported, setPasskeySupported] = useState<boolean | null>(null);
   const [loginDiagnostic, setLoginDiagnostic] = useState<LoginDiagnostic | null>(null);
   const [diagnosticCopied, setDiagnosticCopied] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
+
+  const resetCaptcha = () => {
+    setCaptchaToken(null);
+    setCaptchaResetKey((current) => current + 1);
+  };
 
   useEffect(() => {
     // Check for passkey support
@@ -165,13 +186,16 @@ export default function Login() {
         p_email: email || null,
         p_method: 'passkey',
         p_status: 'failure',
-        p_details: { error: err.message }
+        p_details: { error: String(err?.message ?? "Erro desconhecido") }
       }), "Passkey failure audit");
       setLoading(false);
     }
   }
 
-  async function handlePostLogin(user: any, method: "password_success" | "passkey_success") {
+  async function handlePostLogin(
+    user: Pick<User, "id"> & { app_metadata?: Record<string, unknown> },
+    method: "password_success" | "passkey_success",
+  ) {
     localStorage.setItem('caminho_app_active', 'true');
 
     // Race all DB queries against a 5s timeout — if DB is slow, go to /home anyway
@@ -181,22 +205,20 @@ export default function Login() {
         new Promise<null>(resolve => setTimeout(() => resolve(null), 5000)),
       ]);
 
-    const [profileRes, isAdminRes, isLiderRes] = await Promise.all([
-      withTimeout(supabase.from('profiles').select('church_id').eq('user_id', user.id).maybeSingle()),
-      withTimeout(supabase.rpc("has_role", { _user_id: user.id, _role: "admin" })),
-      withTimeout(supabase.rpc("has_role", { _user_id: user.id, _role: "lider" })),
-    ]);
+    const bootstrap = await withTimeout(getAppBootstrap(user.id));
+    const isAdmin = bootstrap?.roles.some((role) => role.role === "admin") === true;
+    const isLider = bootstrap?.roles.some((role) => role.role === "lider") === true;
+    const requiresPasswordSetup = user.app_metadata?.requires_password_setup === true
+      || bootstrap?.profile?.requires_password_setup === true;
 
-    const isAdmin = (isAdminRes as any)?.data === true;
-    const isLider = (isLiderRes as any)?.data === true;
-
-    ignoreAsyncError(supabase.rpc('log_church_audit', {
-      p_church_id: (profileRes as any)?.data?.church_id ?? null,
+    ignoreAsyncError(supabase.rpc('log_my_church_audit', {
       p_action: method,
-      p_details: { email: user.email, user_id: user.id, timestamp: new Date().toISOString() }
+      p_details: {}
     }), "Login success audit");
 
-    if (isAdmin || isLider) {
+    if (requiresPasswordSetup) {
+      navigate("/primeiro-acesso");
+    } else if (isAdmin || isLider) {
       navigate("/admin");
     } else {
       navigate("/home");
@@ -261,14 +283,21 @@ export default function Login() {
       return;
     }
 
+    if (isAuthCaptchaEnabled && !captchaToken) {
+      setError("Conclua a verificação de segurança.");
+      return;
+    }
+
     setLoading(true);
     try {
       const { data: authData, error: authError } = await signInWithPasswordRetry(
         parsed.data.email,
         parsed.data.password,
+        captchaToken ?? undefined,
       );
 
       if (authError) {
+        resetCaptcha();
         const msg = authError.message?.toLowerCase() || "";
         const friendlyError = getPasswordLoginErrorMessage(authError);
 
@@ -296,14 +325,16 @@ export default function Login() {
       if (authData.user) {
         await handlePostLogin(authData.user, "password_success");
       }
-    } catch (err: any) {
-      console.error("Login exception:", err?.message || err);
-      const friendlyError = getPasswordLoginErrorMessage(err);
-      const errMsg = (err?.message || "").toLowerCase();
+    } catch (error: unknown) {
+      const details = getErrorDetails(error);
+      resetCaptcha();
+      console.error("Login exception:", details.name);
+      const friendlyError = getPasswordLoginErrorMessage(error);
+      const errMsg = details.message.toLowerCase();
       if (friendlyError || errMsg.includes("invalid login") || errMsg.includes("invalid credentials")) {
         setError(friendlyError ?? "Email ou senha incorretos. Verifique seus dados e tente novamente.");
       } else {
-        await showNetworkDiagnostic(err, err?.name === "AuthTimeoutError");
+        await showNetworkDiagnostic(error, details.name === "AuthTimeoutError");
       }
     } finally {
       setLoading(false);
@@ -330,6 +361,14 @@ export default function Login() {
             <div className="bg-brand-green/10 border border-brand-green/30 rounded-xl px-4 py-3 mb-4">
               <p className="text-brand-green font-inter text-sm font-medium">
                 ✅ Conta criada com sucesso! Faça login para começar.
+              </p>
+            </div>
+          )}
+
+          {senhaCriada && (
+            <div className="bg-brand-green/10 border border-brand-green/30 rounded-xl px-4 py-3 mb-4" role="status">
+              <p className="text-brand-green font-inter text-sm font-medium">
+                ✅ Senha criada com sucesso! Entre com seu e-mail e a nova senha.
               </p>
             </div>
           )}
@@ -447,10 +486,12 @@ export default function Login() {
               </div>
             )}
 
+            <AuthCaptcha onTokenChange={setCaptchaToken} resetKey={captchaResetKey} />
+
             {/* Submit */}
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || (isAuthCaptchaEnabled && !captchaToken)}
                 className="w-full py-3.5 rounded-xl font-montserrat font-bold text-primary-foreground text-base transition-all active:scale-95 disabled:opacity-60 shadow-md"
                 style={{ background: "var(--gradient-orange)" }}
               >
@@ -459,7 +500,7 @@ export default function Login() {
 
               <div className="relative flex items-center gap-3 my-4">
                 <div className="h-[1px] flex-1 bg-border"></div>
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">ou</span>
+                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">ou</span>
                 <div className="h-[1px] flex-1 bg-border"></div>
               </div>
 

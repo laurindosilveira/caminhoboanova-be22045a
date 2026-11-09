@@ -29,7 +29,7 @@ export default function HelpSection({
           </div>
           <div className="text-left flex-1">
             <p className="font-montserrat font-bold text-foreground text-sm">Pedir Ajuda</p>
-            <p className="text-muted-foreground font-inter text-[10px]">
+            <p className="text-muted-foreground font-inter text-xs">
               Está em crise, quer conversar ou precisa de oração? Seu pastor será avisado.
             </p>
           </div>
@@ -42,7 +42,7 @@ export default function HelpSection({
           </div>
           <div className="text-left">
             <p className="font-montserrat font-bold text-brand-green text-sm">Pedido enviado</p>
-            <p className="text-muted-foreground font-inter text-[10px]">Seu pastor foi notificado e vai entrar em contato com você.</p>
+            <p className="text-muted-foreground font-inter text-xs">Seu pastor foi notificado e vai entrar em contato com você.</p>
           </div>
         </div>
       )}
@@ -77,7 +77,7 @@ export default function HelpSection({
                   <span className="text-2xl">{opt.icon}</span>
                   <div className="text-left">
                     <p className="font-montserrat font-bold text-foreground text-sm">{opt.label}</p>
-                    <p className="font-inter text-[10px] text-muted-foreground">{opt.desc}</p>
+                    <p className="font-inter text-xs text-muted-foreground">{opt.desc}</p>
                   </div>
                 </button>
               ))}
@@ -112,7 +112,7 @@ export default function HelpSection({
               </button>
             </div>
 
-            <p className="text-center text-muted-foreground font-inter text-[10px]">
+            <p className="text-center text-muted-foreground font-inter text-xs">
               💚 Tudo que você compartilhar é confidencial.
             </p>
           </div>

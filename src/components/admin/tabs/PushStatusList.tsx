@@ -49,6 +49,7 @@ type ProfileRow = {
 type PushSubscriptionRow = {
   user_id: string;
   endpoint: string;
+  disabled_reason: string | null;
 };
 
 type UserRoleRow = {
@@ -120,7 +121,13 @@ export default function PushStatusList({ adminArea }: Props) {
         worshipAttendance,
       ] = await Promise.all([
         fetchRows<ProfileRow>("profiles", profilesQuery),
-        fetchRows<PushSubscriptionRow>("push_subscriptions", supabase.from("push_subscriptions").select("user_id, endpoint")),
+        fetchRows<PushSubscriptionRow>(
+          "push_subscriptions",
+          supabase
+            .from("push_subscriptions")
+            .select("user_id, endpoint, disabled_reason")
+            .is("disabled_reason", null)
+        ),
         fetchRows<UserRoleRow>("user_roles", supabase.from("user_roles").select("user_id, role")),
         fetchRows<ReminderRow>(
           "push_activation_reminders",
@@ -338,7 +345,7 @@ export default function PushStatusList({ adminArea }: Props) {
         <button
           onClick={handleSendAllReminders}
           disabled={sendingReminder === "all"}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-primary bg-primary/5 text-primary text-xs font-inter font-bold hover:bg-primary/10 transition-colors disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-primary bg-primary/5 text-primary text-xs font-inter font-bold hover:bg-primary/10 transition-colors disabled:opacity-50"
         >
           <Send className="w-3.5 h-3.5" />
           {sendingReminder === "all" ? "Enviando..." : `Pedir ativacao para ${inactiveWithoutReminder.length} aluno(s)`}

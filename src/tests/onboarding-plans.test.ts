@@ -3,9 +3,9 @@ import { STRIPE_PLANS } from '../lib/stripePlans';
 
 describe('Onboarding Plan Selection', () => {
   it('should map each plan key to the correct Stripe price_id', () => {
-    expect(STRIPE_PLANS.comunidade.price_id).toBe('price_1TBxbuJkqgigBrKjPIcaDUHo');
-    expect(STRIPE_PLANS.crescimento.price_id).toBe('price_1TBxcUJkqgigBrKjg0It5Sko');
-    expect(STRIPE_PLANS.pastoral.price_id).toBe('price_1TBxhiJkqgigBrKj55dyOxvA');
+    expect(STRIPE_PLANS.comunidade.price_id).toBe('price_1TukmLJHIVmo8Dvw2OU1NIzy');
+    expect(STRIPE_PLANS.crescimento.price_id).toBe('price_1TukjMJHIVmo8DvwenID0H30');
+    expect(STRIPE_PLANS.pastoral.price_id).toBe('price_1TukjyJHIVmo8DvwAEQwsLsL');
   });
 
   it('should have correct pricing labels for all plans', () => {

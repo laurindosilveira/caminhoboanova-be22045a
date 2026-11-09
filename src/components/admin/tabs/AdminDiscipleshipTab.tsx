@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  Heart, ChevronLeft, AlertCircle, Star, Search, Filter, LayoutGrid, List, Users, Lock, Unlock, GraduationCap, Info
+  Heart, ChevronLeft, AlertCircle, Star, Search, Filter, LayoutGrid, List, Users, Lock, Unlock, GraduationCap, Info, CalendarDays
 } from "lucide-react";
 import ParticipantSheet, { HealthBadge } from "./ParticipantSheet";
 import type { Participant, Activity } from "./ParticipantSheet";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import CourseOpenAccessDialog from "@/components/admin/CourseOpenAccessDialog";
 
 const HEALTH_CFG = {
   saudavel: { label: "Saudavel", bg: "bg-brand-green/10", text: "text-brand-green" },
@@ -31,7 +32,7 @@ type ViewMode = "list" | "table";
 type StatusFilter = "all" | "saudavel" | "atencao" | "critico" | "pastor" | "priority";
 
 export default function AdminDiscipleshipTab({ participants, activities, initialParticipant, onClearInitial }: Props) {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [selected, setSelected] = useState<Participant | null>(initialParticipant ?? null);
   const [plans, setPlans] = useState<Record<string, { health_status: string; needs_pastor?: boolean; is_priority?: boolean }>>({});
   const [search, setSearch] = useState("");
@@ -40,16 +41,24 @@ export default function AdminDiscipleshipTab({ participants, activities, initial
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [attendanceMap, setAttendanceMap] = useState<Record<string, { present: number; total: number }>>({});
   const [courses, setCourses] = useState<{ id: string; title: string; order_num: number }[]>([]);
-  const [unlockedCourseIds, setUnlockedCourseIds] = useState<Set<string>>(new Set());
+  const [courseModes, setCourseModes] = useState<Map<string, "open" | "scheduled">>(new Map());
   const [unlockLoading, setUnlockLoading] = useState<string | null>(null);
+  const [pendingOpenCourseId, setPendingOpenCourseId] = useState<string | null>(null);
+  const [hideOpenCourseWarning, setHideOpenCourseWarning] = useState(false);
 
   const myArea = profile?.area ?? "";
   const myChurchId = profile?.church_id ?? null;
 
   const fetchCourseUnlocks = useCallback(async () => {
+    let unlockQuery = supabase
+      .from("course_unlocks")
+      .select("course_id, area, turma_id, access_mode")
+      .eq("area", myArea)
+      .is("turma_id", null);
+    if (myChurchId) unlockQuery = unlockQuery.eq("church_id", myChurchId);
     const [{ data: coursesData, error: coursesError }, { data: unlocksData, error: unlocksError }, { data: releasesData }, { data: trackReleasesData }] = await Promise.all([
       supabase.from("courses").select("id, title, order_num, church_id, track_id").order("order_num"),
-      supabase.from("course_unlocks").select("course_id, area").eq("area", myArea),
+      unlockQuery,
       myChurchId
         ? supabase.from("global_course_releases").select("course_id").eq("church_id", myChurchId)
         : Promise.resolve({ data: [] }),
@@ -73,45 +82,100 @@ export default function AdminDiscipleshipTab({ participants, activities, initial
       )
     );
     setCourses(visibleCourses);
-    setUnlockedCourseIds(new Set((unlocksData ?? []).map(u => u.course_id)));
+    setCourseModes(new Map((unlocksData ?? []).map((unlock) => [
+      unlock.course_id,
+      unlock.access_mode === "open" ? "open" as const : "scheduled" as const,
+    ])));
   }, [myArea, myChurchId]);
 
   useEffect(() => {
     fetchCourseUnlocks();
   }, [fetchCourseUnlocks]);
 
-  async function toggleCourseUnlock(courseId: string) {
+  const warningPreferenceKey = user?.id
+    ? `caminho_hide_open_course_warning_${user.id}`
+    : "caminho_hide_open_course_warning";
+
+  async function releaseCourseWithoutRestrictions(courseId: string) {
     setUnlockLoading(courseId);
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    if (!user) {
       toast.error("Nao foi possivel identificar o lider.");
       setUnlockLoading(null);
       return;
     }
 
-    if (unlockedCourseIds.has(courseId)) {
-      const { error } = await supabase
+    const currentMode = courseModes.get(courseId);
+    let error: { message: string } | null = null;
+    if (currentMode) {
+      let updateQuery = supabase
         .from("course_unlocks")
-        .delete()
+        .update({
+          access_mode: "open",
+          release_source: "leader_room",
+          unlocked_by: user.id,
+          unlocked_at: new Date().toISOString(),
+        })
         .eq("course_id", courseId)
-        .eq("area", myArea);
-      if (error) {
-        toast.error("Nao foi possivel bloquear o curso");
-        setUnlockLoading(null);
-        return;
-      }
-      setUnlockedCourseIds(prev => { const n = new Set(prev); n.delete(courseId); return n; });
+        .eq("area", myArea)
+        .is("turma_id", null);
+      updateQuery = myChurchId
+        ? updateQuery.eq("church_id", myChurchId)
+        : updateQuery.is("church_id", null);
+      ({ error } = await updateQuery);
     } else {
-      const { error } = await supabase
+      ({ error } = await supabase
         .from("course_unlocks")
-        .insert({ course_id: courseId, area: myArea, unlocked_by: user.id });
-      if (error) {
-        toast.error("Nao foi possivel liberar o curso");
-        setUnlockLoading(null);
-        return;
-      }
-      setUnlockedCourseIds(prev => new Set(prev).add(courseId));
+        .insert({
+          course_id: courseId,
+          area: myArea,
+          unlocked_by: user.id,
+          church_id: myChurchId,
+          turma_id: null,
+          access_mode: "open",
+          release_source: "leader_room",
+        }));
     }
+
+    if (error) {
+      toast.error("Nao foi possivel liberar o curso", { description: error.message });
+    } else {
+      toast.success("Curso totalmente liberado", {
+        description: "Todas as licoes e todos os devocionais estao disponiveis com pontuacao completa.",
+      });
+      await fetchCourseUnlocks();
+    }
+    setUnlockLoading(null);
+  }
+
+  function requestOpenCourseRelease(courseId: string) {
+    if (localStorage.getItem(warningPreferenceKey) === "true") {
+      void releaseCourseWithoutRestrictions(courseId);
+      return;
+    }
+    setHideOpenCourseWarning(false);
+    setPendingOpenCourseId(courseId);
+  }
+
+  async function confirmOpenCourseRelease() {
+    if (!pendingOpenCourseId) return;
+    if (hideOpenCourseWarning) localStorage.setItem(warningPreferenceKey, "true");
+    const courseId = pendingOpenCourseId;
+    await releaseCourseWithoutRestrictions(courseId);
+    setPendingOpenCourseId(null);
+  }
+
+  async function removeCourseRelease(courseId: string) {
+    setUnlockLoading(courseId);
+    let deleteQuery = supabase
+      .from("course_unlocks")
+      .delete()
+      .eq("course_id", courseId)
+      .eq("area", myArea)
+      .is("turma_id", null);
+    if (myChurchId) deleteQuery = deleteQuery.eq("church_id", myChurchId);
+    const { error } = await deleteQuery;
+    if (error) toast.error("Nao foi possivel bloquear o curso", { description: error.message });
+    else await fetchCourseUnlocks();
     setUnlockLoading(null);
   }
 
@@ -199,49 +263,57 @@ export default function AdminDiscipleshipTab({ participants, activities, initial
             <GraduationCap className="w-4 h-4 text-secondary" />
             <p className="font-montserrat font-bold text-foreground text-sm">Liberacao de cursos</p>
           </div>
-          <p className="font-inter text-xs text-muted-foreground mb-2">
-            Libere os cursos que sua turma podera acessar. Cursos bloqueados ficam visiveis, mas inacessiveis.
-          </p>
-          <div className="flex items-start gap-2 p-2.5 rounded-lg bg-secondary/5 border border-secondary/20 mb-3">
-            <Info className="w-4 h-4 text-secondary flex-shrink-0 mt-0.5" />
-            <p className="font-inter text-xs text-secondary leading-relaxed">
-              <strong>Como funciona:</strong> Liberar um curso e o <strong>primeiro passo</strong>. Cada licao so ficara disponivel para o aluno quando houver um <strong>evento na Agenda</strong> vinculado a ela. Sem evento agendado, a licao permanece com "Aguardando programacao".
+          <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-300/50 mb-3 text-amber-950">
+            <Info className="w-4 h-4 text-amber-700 flex-shrink-0 mt-0.5" />
+            <p className="font-inter text-xs leading-relaxed">
+              <strong>Liberar por aqui significa acesso livre:</strong> todas as licoes e todos os devocionais ficam disponiveis imediatamente, com pontuacao completa. Para controlar datas e prazos, vincule as licoes pela aba <strong>Agenda</strong>.
             </p>
           </div>
           <div className="space-y-2">
             {courses.map(c => {
-              const isUnlocked = unlockedCourseIds.has(c.id);
+              const accessMode = courseModes.get(c.id);
+              const isOpenAccess = accessMode === "open";
               const loading = unlockLoading === c.id;
               return (
                 <div key={c.id} className={`flex items-center justify-between gap-3 p-3 rounded-lg border transition-colors ${
-                  isUnlocked ? "border-brand-green/30 bg-brand-green/5" : "border-border bg-muted/30"
+                  isOpenAccess
+                    ? "border-brand-green/30 bg-brand-green/5"
+                    : accessMode === "scheduled"
+                      ? "border-primary/25 bg-primary/5"
+                      : "border-border bg-muted/30"
                 }`}>
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      isUnlocked ? "bg-brand-green/15" : "bg-muted"
+                      isOpenAccess ? "bg-brand-green/15" : accessMode === "scheduled" ? "bg-primary/10" : "bg-muted"
                     }`}>
-                      {isUnlocked
+                      {isOpenAccess
                         ? <Unlock className="w-4 h-4 text-brand-green" />
-                        : <Lock className="w-4 h-4 text-muted-foreground" />
+                        : accessMode === "scheduled"
+                          ? <CalendarDays className="w-4 h-4 text-primary" />
+                          : <Lock className="w-4 h-4 text-muted-foreground" />
                       }
                     </div>
                     <div className="min-w-0">
                       <p className="font-montserrat font-bold text-foreground text-sm">Curso {c.order_num} - {c.title}</p>
                       <p className="font-inter text-xs text-muted-foreground">
-                        {isUnlocked ? "Liberado para a turma" : "Bloqueado"}
+                        {isOpenAccess
+                          ? "Acesso livre - conteudo completo e pontuacao integral"
+                          : accessMode === "scheduled"
+                            ? "Guiado pela Agenda - segue datas e prazos"
+                            : "Bloqueado"}
                       </p>
                     </div>
                   </div>
                   <button
-                    onClick={() => toggleCourseUnlock(c.id)}
+                    onClick={() => isOpenAccess ? void removeCourseRelease(c.id) : requestOpenCourseRelease(c.id)}
                     disabled={loading}
                     className={`px-3 py-1.5 rounded-lg font-inter text-xs font-semibold transition-colors flex-shrink-0 ${
-                      isUnlocked
+                      isOpenAccess
                         ? "bg-destructive/10 text-destructive hover:bg-destructive/20"
                         : "bg-brand-green/10 text-brand-green hover:bg-brand-green/20"
                     } disabled:opacity-40`}
                   >
-                    {loading ? "..." : isUnlocked ? "Bloquear" : "Liberar"}
+                    {loading ? "..." : isOpenAccess ? "Bloquear" : "Liberar tudo"}
                   </button>
                 </div>
               );
@@ -249,6 +321,16 @@ export default function AdminDiscipleshipTab({ participants, activities, initial
           </div>
         </div>
       )}
+
+      <CourseOpenAccessDialog
+        open={!!pendingOpenCourseId}
+        courseName={courses.find((course) => course.id === pendingOpenCourseId)?.title ?? "Curso selecionado"}
+        hideNextTime={hideOpenCourseWarning}
+        saving={!!pendingOpenCourseId && unlockLoading === pendingOpenCourseId}
+        onHideNextTimeChange={setHideOpenCourseWarning}
+        onCancel={() => setPendingOpenCourseId(null)}
+        onConfirm={() => void confirmOpenCourseRelease()}
+      />
 
       {/* Summary */}
       <div className="scroll-menu gap-2 pb-1" aria-label="Filtrar por saúde espiritual">

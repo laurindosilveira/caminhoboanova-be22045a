@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Users, Shield, Crown, ChevronDown, ChevronUp, UserPlus, UserMinus, BookOpen } from "lucide-react";
@@ -12,16 +12,32 @@ type LeaderInfo = {
   phone: string;
   role: string;
   is_super: boolean;
-  turma_id: string | null;
-  turma_name: string | null;
+  turma_ids: string[];
+  turma_names: string[];
   participant_count: number;
 };
 
-export default function AdminLeadersTab({ turmas }: { turmas: any[] }) {
+type TurmaOption = { id: string; name: string };
+type ProfileSummary = {
+  user_id: string;
+  full_name: string;
+  community: string | null;
+  area: string | null;
+  phone: string | null;
+  turma_id: string | null;
+};
+
+export default function AdminLeadersTab({
+  turmas,
+  churchId,
+}: {
+  turmas: TurmaOption[];
+  churchId?: string | null;
+}) {
   const { isSuper } = useAuth();
   const { toast } = useToast();
   const [leaders, setLeaders] = useState<LeaderInfo[]>([]);
-  const [allProfiles, setAllProfiles] = useState<any[]>([]);
+  const [allProfiles, setAllProfiles] = useState<ProfileSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedLeader, setExpandedLeader] = useState<string | null>(null);
   const [showPromote, setShowPromote] = useState(false);
@@ -29,13 +45,29 @@ export default function AdminLeadersTab({ turmas }: { turmas: any[] }) {
   const [promoting, setPromoting] = useState<string | null>(null);
   const [demoting, setDemoting] = useState<string | null>(null);
 
-  useEffect(() => { fetchLeaders(); }, []);
-
-  async function fetchLeaders() {
+  const fetchLeaders = useCallback(async () => {
     setLoading(true);
-    const [{ data: rolesData }, { data: profilesData }] = await Promise.all([
-      supabase.from("user_roles").select("user_id, role, is_super, admin_area").in("role", ["admin", "lider"]),
-      supabase.from("profiles").select("user_id, full_name, community, area, phone, turma_id"),
+    let rolesQuery = supabase
+      .from("user_roles")
+      .select("user_id, role, is_super, admin_area, church_id")
+      .in("role", ["admin", "lider"]);
+    let profilesQuery = supabase
+      .from("profiles")
+      .select("user_id, full_name, community, area, phone, turma_id, church_id");
+    let assignmentsQuery = supabase
+      .from("turma_leaders")
+      .select("user_id, turma_id, is_fallback, church_id");
+
+    if (churchId) {
+      rolesQuery = rolesQuery.eq("church_id", churchId);
+      profilesQuery = profilesQuery.eq("church_id", churchId);
+      assignmentsQuery = assignmentsQuery.eq("church_id", churchId);
+    }
+
+    const [{ data: rolesData }, { data: profilesData }, { data: assignmentsData }] = await Promise.all([
+      rolesQuery,
+      profilesQuery,
+      assignmentsQuery,
     ]);
 
     const profiles = profilesData ?? [];
@@ -43,8 +75,13 @@ export default function AdminLeadersTab({ turmas }: { turmas: any[] }) {
 
     const leaderList: LeaderInfo[] = (rolesData ?? []).map(r => {
       const p = profiles.find(pr => pr.user_id === r.user_id);
-      const turma = turmas.find(t => t.id === p?.turma_id);
-      const turmaParticipants = profiles.filter(pr => pr.turma_id === p?.turma_id && pr.user_id !== r.user_id);
+      const leaderTurmaIds = (assignmentsData ?? [])
+        .filter((assignment) => assignment.user_id === r.user_id && !assignment.is_fallback)
+        .map((assignment) => assignment.turma_id);
+      const leaderTurmas = turmas.filter((turma) => leaderTurmaIds.includes(turma.id));
+      const turmaParticipants = profiles.filter(
+        (participant) => participant.turma_id && leaderTurmaIds.includes(participant.turma_id),
+      );
       return {
         user_id: r.user_id,
         full_name: p?.full_name ?? "Sem nome",
@@ -53,8 +90,8 @@ export default function AdminLeadersTab({ turmas }: { turmas: any[] }) {
         phone: p?.phone ?? "",
         role: r.role,
         is_super: r.is_super,
-        turma_id: p?.turma_id ?? null,
-        turma_name: turma?.name ?? null,
+        turma_ids: leaderTurmaIds,
+        turma_names: leaderTurmas.map((turma) => turma.name),
         participant_count: turmaParticipants.length,
       };
     });
@@ -65,7 +102,9 @@ export default function AdminLeadersTab({ turmas }: { turmas: any[] }) {
       return a.full_name.localeCompare(b.full_name);
     }));
     setLoading(false);
-  }
+  }, [churchId, turmas]);
+
+  useEffect(() => { void fetchLeaders(); }, [fetchLeaders]);
 
   async function handlePromote(userId: string, role: "admin" | "lider") {
     setPromoting(userId);
@@ -74,6 +113,7 @@ export default function AdminLeadersTab({ turmas }: { turmas: any[] }) {
       user_id: userId,
       role,
       admin_area: profile?.area ?? null,
+      church_id: churchId ?? null,
     }, { onConflict: "user_id,role" });
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -87,18 +127,61 @@ export default function AdminLeadersTab({ turmas }: { turmas: any[] }) {
   }
 
   async function handleDemote(userId: string) {
+    const leader = leaders.find((item) => item.user_id === userId);
+    if (!leader || leader.role !== "lider") {
+      toast({
+        title: "Remoção de administrador indisponível",
+        description: "Defina outro administrador por um fluxo administrativo próprio antes de remover este cargo.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!confirm("Tem certeza que deseja remover este cargo?")) return;
     setDemoting(userId);
-    await supabase.from("user_roles").delete().eq("user_id", userId).in("role", ["admin", "lider"]);
-    toast({ title: "Cargo removido" });
-    fetchLeaders();
+    for (const turmaId of leader.turma_ids) {
+      const { error: assignmentError } = await supabase.rpc("set_turma_leader", {
+        p_user_id: userId,
+        p_turma_id: turmaId,
+        p_assigned: false,
+      });
+      if (assignmentError) {
+        toast({
+          title: "Não foi possível remover a liderança",
+          description: assignmentError.message,
+          variant: "destructive",
+        });
+        setDemoting(null);
+        await fetchLeaders();
+        return;
+      }
+    }
+
+    const { error } = await supabase
+      .from("user_roles")
+      .delete()
+      .eq("user_id", userId)
+      .eq("role", "lider");
+    if (error) {
+      toast({ title: "Não foi possível remover o cargo", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Cargo e grupos de liderança removidos" });
+    }
+    await fetchLeaders();
     setDemoting(null);
   }
 
-  async function handleAssignTurma(userId: string, turmaId: string) {
-    await supabase.from("profiles").update({ turma_id: turmaId }).eq("user_id", userId);
-    toast({ title: "Turma atribuída ✅" });
-    fetchLeaders();
+  async function handleToggleTurma(userId: string, turmaId: string, assigned: boolean) {
+    const { error } = await supabase.rpc("set_turma_leader", {
+      p_user_id: userId,
+      p_turma_id: turmaId,
+      p_assigned: assigned,
+    });
+    if (error) {
+      toast({ title: "Não foi possível atualizar o grupo", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: assigned ? "Grupo atribuído ao líder" : "Grupo removido do líder" });
+    await fetchLeaders();
   }
 
   const ROLE_BADGES: Record<string, { label: string; class: string; icon: typeof Shield }> = {
@@ -116,7 +199,7 @@ export default function AdminLeadersTab({ turmas }: { turmas: any[] }) {
   if (loading) {
     return (
       <div className="space-y-3">
-        {[1, 2, 3].map(i => <div key={i} className="h-20 rounded-2xl bg-muted animate-pulse" />)}
+        {[1, 2, 3].map(i => <div key={i} className="h-20 rounded-lg bg-muted animate-pulse" />)}
       </div>
     );
   }
@@ -131,7 +214,7 @@ export default function AdminLeadersTab({ turmas }: { turmas: any[] }) {
         {isSuper && (
           <button
             onClick={() => setShowPromote(!showPromote)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-inter font-medium text-primary-foreground"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-inter font-medium text-primary-foreground"
             style={{ background: "var(--gradient-hero)" }}
           >
             <UserPlus className="w-3.5 h-3.5" /> Promover
@@ -141,33 +224,33 @@ export default function AdminLeadersTab({ turmas }: { turmas: any[] }) {
 
       {/* Promote panel */}
       {showPromote && (
-        <div className="bg-card rounded-2xl border border-border p-4 shadow-sm space-y-3">
+        <div className="bg-card rounded-lg border border-border p-4 shadow-sm space-y-3">
           <p className="font-montserrat font-bold text-foreground text-sm">Promover Membro</p>
           <input
             value={searchPromote}
             onChange={e => setSearchPromote(e.target.value)}
             placeholder="Buscar por nome..."
-            className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
           <div className="max-h-48 overflow-y-auto space-y-1.5">
             {promotableUsers.slice(0, 10).map(p => (
               <div key={p.user_id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
                 <div>
                   <p className="font-inter text-xs font-medium text-foreground">{p.full_name}</p>
-                  <p className="font-inter text-[10px] text-muted-foreground">{p.community}</p>
+                  <p className="font-inter text-xs text-muted-foreground">{p.community}</p>
                 </div>
                 <div className="flex gap-1.5">
                   <button
                     onClick={() => handlePromote(p.user_id, "lider")}
                     disabled={promoting === p.user_id}
-                    className="px-2.5 py-1 rounded-lg bg-brand-green/10 text-brand-green text-[10px] font-inter font-medium hover:bg-brand-green/20 disabled:opacity-50"
+                    className="px-2.5 py-1 rounded-lg bg-brand-green/10 text-brand-green text-xs font-inter font-medium hover:bg-brand-green/20 disabled:opacity-50"
                   >
                     Líder
                   </button>
                   <button
                     onClick={() => handlePromote(p.user_id, "admin")}
                     disabled={promoting === p.user_id}
-                    className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-[10px] font-inter font-medium hover:bg-primary/20 disabled:opacity-50"
+                    className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs font-inter font-medium hover:bg-primary/20 disabled:opacity-50"
                   >
                     Admin
                   </button>
@@ -183,17 +266,17 @@ export default function AdminLeadersTab({ turmas }: { turmas: any[] }) {
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-2">
-        <div className="bg-card rounded-xl border border-border p-3 text-center">
+        <div className="bg-card rounded-lg border border-border p-3 text-center">
           <p className="font-montserrat font-black text-foreground text-lg">{leaders.filter(l => l.role === "admin").length}</p>
-          <p className="text-muted-foreground font-inter text-[10px]">Admins</p>
+          <p className="text-muted-foreground font-inter text-xs">Admins</p>
         </div>
-        <div className="bg-card rounded-xl border border-border p-3 text-center">
+        <div className="bg-card rounded-lg border border-border p-3 text-center">
           <p className="font-montserrat font-black text-foreground text-lg">{leaders.filter(l => l.role === "lider").length}</p>
-          <p className="text-muted-foreground font-inter text-[10px]">Líderes</p>
+          <p className="text-muted-foreground font-inter text-xs">Líderes</p>
         </div>
-        <div className="bg-card rounded-xl border border-border p-3 text-center">
+        <div className="bg-card rounded-lg border border-border p-3 text-center">
           <p className="font-montserrat font-black text-foreground text-lg">{leaders.filter(l => l.is_super).length}</p>
-          <p className="text-muted-foreground font-inter text-[10px]">Super Admins</p>
+          <p className="text-muted-foreground font-inter text-xs">Super Admins</p>
         </div>
       </div>
 
@@ -205,12 +288,12 @@ export default function AdminLeadersTab({ turmas }: { turmas: any[] }) {
           const isExpanded = expandedLeader === leader.user_id;
 
           return (
-            <div key={leader.user_id} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+            <div key={leader.user_id} className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
               <button
                 onClick={() => setExpandedLeader(isExpanded ? null : leader.user_id)}
                 className="w-full flex items-center gap-3 p-3 text-left"
               >
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${badge.class}`}>
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${badge.class}`}>
                   {leader.is_super ? <Crown className="w-4.5 h-4.5" /> : <BadgeIcon className="w-4.5 h-4.5" />}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -220,16 +303,16 @@ export default function AdminLeadersTab({ turmas }: { turmas: any[] }) {
                       <span className="px-1.5 py-0.5 rounded-full text-[8px] font-inter font-bold bg-amber-500/10 text-amber-600">SUPER</span>
                     )}
                   </div>
-                  <p className="text-muted-foreground font-inter text-[10px] mt-0.5">
+                  <p className="text-muted-foreground font-inter text-xs mt-0.5">
                     {leader.community} · {leader.area}
                   </p>
-                  {leader.turma_name && (
-                    <p className="text-primary font-inter text-[10px] mt-0.5">
-                      📚 {leader.turma_name} · {leader.participant_count} discípulo{leader.participant_count !== 1 ? "s" : ""}
+                  {leader.turma_names.length > 0 && (
+                    <p className="text-primary font-inter text-xs mt-0.5">
+                      📚 {leader.turma_names.join(", ")} · {leader.participant_count} discípulo{leader.participant_count !== 1 ? "s" : ""}
                     </p>
                   )}
                 </div>
-                <span className={`px-2 py-0.5 rounded-full text-[9px] font-inter font-semibold ${badge.class}`}>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-inter font-semibold ${badge.class}`}>
                   {badge.label}
                 </span>
                 {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
@@ -237,27 +320,39 @@ export default function AdminLeadersTab({ turmas }: { turmas: any[] }) {
 
               {isExpanded && (
                 <div className="px-3 pb-3 border-t border-border space-y-3 mt-0">
-                  {/* Assign turma */}
+                  {/* Assign one or more real groups without changing the participant's own turma. */}
                   <div className="mt-2">
-                    <p className="font-inter text-xs text-muted-foreground mb-1.5">Turma atribuída</p>
-                    <select
-                      value={leader.turma_id ?? ""}
-                      onChange={e => handleAssignTurma(leader.user_id, e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-primary"
-                    >
-                      <option value="">Sem turma</option>
-                      {turmas.map(t => (
-                        <option key={t.id} value={t.id}>{t.name} ({t.area})</option>
-                      ))}
-                    </select>
+                    <p className="font-inter text-xs text-muted-foreground mb-1.5">Grupos que lidera</p>
+                    <div className="space-y-1.5">
+                      {turmas.map((turma) => {
+                        const assigned = leader.turma_ids.includes(turma.id);
+                        return (
+                          <button
+                            type="button"
+                            key={turma.id}
+                            onClick={() => void handleToggleTurma(leader.user_id, turma.id, !assigned)}
+                            className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs ${
+                              assigned ? "border-primary bg-primary/5 text-primary" : "border-border text-foreground"
+                            }`}
+                          >
+                            <span className={`flex h-4 w-4 items-center justify-center rounded border ${
+                              assigned ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/30"
+                            }`}>
+                              {assigned ? "✓" : ""}
+                            </span>
+                            <span className="font-semibold">{turma.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   {/* Actions */}
-                  {isSuper && !leader.is_super && (
+                  {isSuper && !leader.is_super && leader.role === "lider" && (
                     <button
                       onClick={() => handleDemote(leader.user_id)}
                       disabled={demoting === leader.user_id}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-destructive/10 text-destructive text-xs font-inter font-medium hover:bg-destructive/20 disabled:opacity-50 transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-xs font-inter font-medium hover:bg-destructive/20 disabled:opacity-50 transition-colors"
                     >
                       <UserMinus className="w-3.5 h-3.5" />
                       {demoting === leader.user_id ? "Removendo..." : "Remover cargo"}

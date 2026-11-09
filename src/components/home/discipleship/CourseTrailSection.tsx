@@ -26,6 +26,7 @@ type Props = {
   expandedCourse: string | null;
   onExpandCourse: (id: string | null) => void;
   unlockedCourseIds: Set<string>;
+  openAccessCourseIds: Set<string>;
   completedLessonIds: Set<string>;
   fullyCompletedLessonIds: Set<string>;
   agendaSchedule: AgendaSchedule;
@@ -38,7 +39,7 @@ type Props = {
 
 export default function CourseTrailSection({
   courses, tracks, expandedCourse, onExpandCourse,
-  unlockedCourseIds, completedLessonIds, fullyCompletedLessonIds,
+  unlockedCourseIds, openAccessCourseIds, completedLessonIds, fullyCompletedLessonIds,
   agendaSchedule, manualLessonOverrideIds, isLeaderOrAdmin,
   isSuper, onRefresh, onSelectLesson,
 }: Props) {
@@ -204,7 +205,11 @@ export default function CourseTrailSection({
       )}
 
       {/* Waiting message */}
-      {!agendaSchedule.loading && !agendaSchedule.hasScheduledEvents && (
+      {!isLeaderOrAdmin
+        && !agendaSchedule.loading
+        && !agendaSchedule.hasScheduledEvents
+        && visibleCourses.some((course) => unlockedCourseIds.has(course.id) && !openAccessCourseIds.has(course.id))
+        && (
         <div className="bg-accent/10 rounded-2xl p-4 border border-accent/20 flex items-start gap-3">
           <CalendarDays className="w-5 h-5 text-accent-foreground flex-shrink-0 mt-0.5" />
           <div>
@@ -221,6 +226,7 @@ export default function CourseTrailSection({
         const isOpen = expandedCourse === course.id;
         const courseHasManualOverride = course.lessons.some((lesson) => manualLessonOverrideIds.has(lesson.id));
         const isCourseUnlocked = isLeaderOrAdmin || unlockedCourseIds.has(course.id) || purchasedCourseIds.has(course.id) || courseHasManualOverride;
+        const isOpenAccess = openAccessCourseIds.has(course.id);
         const doneLessons = course.lessons.filter(l => fullyCompletedLessonIds.has(l.id)).length;
         const totalLessons = course.lessons.length;
         const coursePct = totalLessons > 0 ? Math.round((doneLessons / totalLessons) * 100) : 0;
@@ -250,6 +256,11 @@ export default function CourseTrailSection({
                 {isCourseUnlocked ? (
                   <>
                     {course.subtitle && <p className="text-muted-foreground font-inter text-xs truncate">{course.subtitle}</p>}
+                    {!isLeaderOrAdmin && isOpenAccess && (
+                      <p className="mt-0.5 font-inter text-xs font-semibold text-brand-green">
+                        Acesso livre · todas as lições e devocionais
+                      </p>
+                    )}
                     <div className="flex items-center gap-2 mt-1">
                       <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                         <div className="h-full rounded-full transition-all" style={{
@@ -345,6 +356,7 @@ export default function CourseTrailSection({
                               fullyCompletedLessonIds={fullyCompletedLessonIds}
                               agendaSchedule={agendaSchedule}
                               manualLessonOverrideIds={manualLessonOverrideIds}
+                              unrestrictedAccess={isOpenAccess}
                               isLeaderOrAdmin={isLeaderOrAdmin}
                               onSelectLesson={onSelectLesson}
                             />
@@ -389,6 +401,7 @@ export default function CourseTrailSection({
                         fullyCompletedLessonIds={fullyCompletedLessonIds}
                         agendaSchedule={agendaSchedule}
                         manualLessonOverrideIds={manualLessonOverrideIds}
+                        unrestrictedAccess={isOpenAccess}
                         isLeaderOrAdmin={isLeaderOrAdmin}
                         onSelectLesson={onSelectLesson}
                       />
@@ -410,6 +423,7 @@ export default function CourseTrailSection({
                           fullyCompletedLessonIds={fullyCompletedLessonIds}
                           agendaSchedule={agendaSchedule}
                           manualLessonOverrideIds={manualLessonOverrideIds}
+                          unrestrictedAccess={isOpenAccess}
                           isLeaderOrAdmin={isLeaderOrAdmin}
                           isSuper={isSuper}
                           onRefresh={onRefresh}
@@ -457,7 +471,7 @@ export default function CourseTrailSection({
 
 function LessonButton({
   lesson, completedLessonIds, fullyCompletedLessonIds,
-  agendaSchedule, manualLessonOverrideIds, isLeaderOrAdmin,
+  agendaSchedule, manualLessonOverrideIds, unrestrictedAccess, isLeaderOrAdmin,
   isSuper, onRefresh, onSelectLesson,
 }: {
   lesson: Lesson;
@@ -465,6 +479,7 @@ function LessonButton({
   fullyCompletedLessonIds: Set<string>;
   agendaSchedule: AgendaSchedule;
   manualLessonOverrideIds: Set<string>;
+  unrestrictedAccess: boolean;
   isLeaderOrAdmin: boolean;
   isSuper?: boolean;
   onRefresh?: () => void;
@@ -489,15 +504,28 @@ function LessonButton({
   const isScheduled = agendaSchedule.scheduledLessonIds.has(lesson.id);
   const isStudyOpen = agendaSchedule.studyOpenLessonIds.has(lesson.id);
   const hasManualOverride = manualLessonOverrideIds.has(lesson.id);
-  const isLateAccess = !isLeaderOrAdmin && agendaSchedule.lateAccessLessonIds.has(lesson.id) && !isFullyDone;
-  const isAccessible = isLeaderOrAdmin || isStudyOpen || isLateAccess || isFullyDone || hasManualOverride;
-  const isLocked = !isLeaderOrAdmin && agendaSchedule.hasScheduledEvents && !isAccessible && !isFullyDone;
-  const isNotScheduled = !isLeaderOrAdmin && agendaSchedule.hasScheduledEvents && !isScheduled && !isFullyDone && !isDone && !hasManualOverride;
+  const isLateAccess = !isLeaderOrAdmin
+    && !unrestrictedAccess
+    && agendaSchedule.lateAccessLessonIds.has(lesson.id)
+    && !isFullyDone;
+  const isAccessible = isLeaderOrAdmin
+    || unrestrictedAccess
+    || isStudyOpen
+    || isLateAccess
+    || isFullyDone
+    || hasManualOverride;
+  const isLocked = !isLeaderOrAdmin && !unrestrictedAccess && !isAccessible && !isFullyDone;
+  const isNotScheduled = !isLeaderOrAdmin
+    && !unrestrictedAccess
+    && !isScheduled
+    && !isFullyDone
+    && !isDone
+    && !hasManualOverride;
 
   let lockMessage = "";
   if (isNotScheduled) lockMessage = "Aguardando agenda";
   else if (hasManualOverride) lockMessage = "Liberação manual do líder";
-  else if (isLateAccess) lockMessage = "Lição atrasada — vale 1 ponto";
+  else if (isLateAccess) lockMessage = "Lição atrasada — sem pontos";
   else if (isLocked) {
     const entry = agendaSchedule.schedule.find(e => e.lessonId === lesson.id);
     lockMessage = entry
@@ -569,9 +597,9 @@ function LessonButton({
           )}
         </div>
         {isFullyDone
-          ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-brand-green/15 text-brand-green px-2 py-0.5 rounded-full">✓ Completa</span>
-          : isLateAccess ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Atrasada · +1 ponto</span>
-          : isDone && !(isLocked || isNotScheduled) ? <span className="text-[10px] font-inter font-bold flex-shrink-0 bg-secondary/15 text-secondary px-2 py-0.5 rounded-full">Em andamento</span>
+          ? <span className="text-xs font-inter font-bold flex-shrink-0 bg-brand-green/15 text-brand-green px-2 py-0.5 rounded-full">✓ Completa</span>
+          : isLateAccess ? <span className="text-xs font-inter font-bold flex-shrink-0 bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Prazo encerrado</span>
+          : isDone && !(isLocked || isNotScheduled) ? <span className="text-xs font-inter font-bold flex-shrink-0 bg-secondary/15 text-secondary px-2 py-0.5 rounded-full">Em andamento</span>
           : (isLocked || isNotScheduled) ? <Lock className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
           : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
         }

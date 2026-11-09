@@ -11,8 +11,9 @@ import {
   Smartphone,
   X,
 } from "lucide-react";
-import { subscribeToWebPush } from "@/lib/webPush";
+import { syncWebPushSubscription } from "@/lib/webPush";
 import { supabase } from "@/integrations/supabase/client";
+import { getErrorMessage } from "@/lib/utils";
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -31,7 +32,7 @@ export default function PushTroubleshootHelp({ open, onClose }: Props) {
     try {
       const { data, error: fnError } = await supabase.functions.invoke("get-vapid-key");
       if (fnError || !data?.publicKey) throw new Error("Não foi possível obter chave VAPID do servidor");
-      const ok = await subscribeToWebPush(data.publicKey);
+      const ok = await syncWebPushSubscription(data.publicKey, { forceRefresh: true });
       if (ok) {
         setResubState("ok");
         setResubMsg("Inscrição renovada! Faça um teste de push real para confirmar.");
@@ -39,9 +40,9 @@ export default function PushTroubleshootHelp({ open, onClose }: Props) {
         setResubState("error");
         setResubMsg("Falha ao se inscrever. Verifique se a permissão do navegador está concedida.");
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       setResubState("error");
-      setResubMsg(e.message ?? "Erro desconhecido");
+      setResubMsg(getErrorMessage(e, "Erro desconhecido"));
     }
   }
 
@@ -93,7 +94,7 @@ export default function PushTroubleshootHelp({ open, onClose }: Props) {
             </div>
             <div>
               <p className="font-montserrat font-black text-foreground text-sm">Solucionar problemas</p>
-              <p className="font-inter text-[10px] text-muted-foreground">Notificações push</p>
+              <p className="font-inter text-xs text-muted-foreground">Notificações push</p>
             </div>
           </div>
           <button
@@ -120,7 +121,7 @@ export default function PushTroubleshootHelp({ open, onClose }: Props) {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-inter text-muted-foreground">Status atual:</span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-inter font-bold ${
+                <span className={`px-2 py-0.5 rounded-full text-xs font-inter font-bold ${
                   permission === "granted"
                     ? "bg-brand-green/15 text-brand-green"
                     : permission === "denied"
@@ -269,8 +270,8 @@ export default function PushTroubleshootHelp({ open, onClose }: Props) {
                 { label: "Permissão atual", value: typeof Notification !== "undefined" ? Notification.permission : "N/A" },
               ].map(({ label, value }) => (
                 <div key={label} className="flex justify-between">
-                  <span className="text-[10px] font-inter text-muted-foreground">{label}</span>
-                  <span className="text-[10px] font-inter font-medium text-foreground">{value}</span>
+                  <span className="text-xs font-inter text-muted-foreground">{label}</span>
+                  <span className="text-xs font-inter font-medium text-foreground">{value}</span>
                 </div>
               ))}
             </div>
@@ -309,7 +310,7 @@ function Step({
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-black/5 transition-colors"
       >
-        <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 font-montserrat font-black text-[10px] ${
+        <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 font-montserrat font-black text-xs ${
           status === "ok"    ? "bg-brand-green text-white" :
           status === "error" ? "bg-destructive text-white" :
           "bg-primary/10 text-primary"
