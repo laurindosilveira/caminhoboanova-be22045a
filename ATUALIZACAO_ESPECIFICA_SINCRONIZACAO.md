@@ -24,3 +24,11 @@ A resposta de teste no Android sobreviveu a troca de versao, foi conciliada e co
 4. Preparar backup verificado e um plano de retorno que mantenha a API exigida pelos clientes atualizados e preserve respostas e filas. Nao restaurar dados antigos nem remover a API indiscriminadamente. Rever a seguranca de todo procedimento de retorno antes da execucao.
 
 O historico de producao contem migracoes antigas ausentes localmente e vice-versa. Nao alterar registros de historico em massa para alinhar numeros; revisar e executar apenas uma mudanca identificada e aprovada no processo de liberacao. A migracao especifica, o aplicativo e a etapa de bloqueio nao foram publicados por este trabalho.
+
+## Estado adicional em 09/11/2026
+
+O ranking da Área 2 foi encerrado em produção por uma alteração específica, com os resultados congelados em `private.ranking_frozen_snapshots` e um comunicado na área. A função `public.get_community_ranking` foi alterada para consultar o resultado congelado nas comunidades envolvidas. Não substituir essa função por definições históricas ou migrar automaticamente arquivos antigos: isso poderia reabrir visualmente o ranking. As demais áreas continuam usando o cálculo original. Uma cópia pontual da função anterior e do ranking foi guardada localmente; não equivale a backup integral do banco.
+
+Foram registrados nove alunos do segundo ano em `profession_of_faith_records`, sem desativar contas ou alterar turmas. Não confundir esse registro com a rotina `archive_turma_professions`, que também desativa perfis.
+
+Os novos ensaios para recuperação de respostas em versões antigas, incluindo versões que gravam diretamente nas tabelas, estão em [PLANO_RECUPERACAO_CLIENTES_ANTIGOS.md](PLANO_RECUPERACAO_CLIENTES_ANTIGOS.md). São protótipos de homologação e não eliminam os bloqueios da publicação.
