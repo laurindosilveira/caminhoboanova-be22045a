@@ -46,6 +46,10 @@ function showUpdateBanner(updateSWFn: () => void) {
   `;
   document.body.appendChild(banner);
   document.getElementById("pwa-update-btn")?.addEventListener("click", () => {
+    if (document.querySelector('[data-unsaved-work="true"]')) {
+      window.alert("Salve suas respostas antes de atualizar o aplicativo.");
+      return;
+    }
     banner.remove();
     updateSWFn();
   });
@@ -58,6 +62,7 @@ if ("serviceWorker" in navigator) {
   let reloadRequested = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (reloadRequested) return;
+    if (document.querySelector('[data-unsaved-work="true"]')) return;
     reloadRequested = true;
     window.location.reload();
   });
@@ -93,7 +98,7 @@ const updateSW = registerSW({
 
   // When a new version is ready, activate it immediately.
   onNeedRefresh() {
-    updateSW(false);
+    showUpdateBanner(() => updateSW(true));
   },
 
   onOfflineReady() {

@@ -261,42 +261,41 @@ async function deleteQueuedAction(id: string) {
   await transaction(QUEUE_STORE, "readwrite", (store) => store.delete(id));
 }
 
-async function syncAction(action: StudentOfflineAction) {
-  if (action.type === "save_lesson_draft") {
-    const { error } = await supabase.rpc("save_lesson_draft", {
-      p_lesson_id: action.payload.lessonId,
-      p_responses: action.payload.responses,
-      p_video_watched: action.payload.videoWatched,
-      p_audio_listened: action.payload.audioListened,
-    });
-    if (error) throw error;
-    return;
-  }
+type LearningAction = Extract<StudentOfflineAction, { type: "save_lesson_draft" | "complete_lesson" | "complete_devotional" }>;
+export type OfflineConflict = { action: LearningAction; current: Record<string, string> };
 
-  if (action.type === "complete_lesson") {
-    const { error } = await supabase.rpc("complete_lesson", {
-      p_lesson_id: action.payload.lessonId,
-      p_responses: action.payload.responses,
-      p_video_watched: action.payload.videoWatched,
-      p_audio_listened: action.payload.audioListened,
-      p_awarded_points: action.payload.isLateAccess ? 0 : action.payload.awardedPoints,
-      p_override_release_id: action.payload.overrideId ?? null,
-    });
-    if (error) throw error;
-    return;
-  }
+function isLearningAction(action: StudentOfflineAction): action is LearningAction {
+  return action.type === "save_lesson_draft" || action.type === "complete_lesson" || action.type === "complete_devotional";
+}
 
-  if (action.type === "complete_devotional") {
-    const { error } = await supabase.rpc("complete_devotional", {
-      p_devotional_id: action.payload.devotionalId,
-      p_responses: action.payload.responses,
-      p_is_recovery: action.payload.isRecovery,
-      p_awarded_points: action.payload.awardedPoints,
-      p_override_release_id: action.payload.overrideId ?? null,
-    });
-    if (error) throw error;
-    return;
-  }
+export async function syncLearningActionWithCurrent(action: LearningAction, expected?: Record<string, string>): Promise<{ conflict: OfflineConflict | null; current: Record<string, string> }> {
+  const devotional = action.type === "complete_devotional";
+  const lesson = action.type === "save_lesson_draft" || action.type === "complete_lesson";
+  const completion = action.type === "complete_lesson" || action.type === "complete_devotional";
+  const { data, error } = await supabase.rpc("sync_offline_learning" as never, {
+    p_kind: action.type,
+    p_item_id: devotional ? action.payload.devotionalId : action.payload.lessonId,
+    p_responses: action.payload.responses,
+    p_video_watched: lesson ? action.payload.videoWatched : false,
+    p_audio_listened: lesson ? action.payload.audioListened : false,
+    p_is_recovery: devotional ? action.payload.isRecovery : false,
+    p_awarded_points: completion ? (action.type === "complete_lesson" && action.payload.isLateAccess ? 0 : action.payload.awardedPoints ?? null) : null,
+    p_override_release_id: completion ? action.payload.overrideId ?? null : null,
+    p_expected: expected ?? null,
+  } as never);
+  if (error) throw error;
+  const result = data as { status: string; current?: Record<string, string> } | null;
+  if (result?.status === "conflict") return { conflict: { action, current: result.current ?? {} }, current: result.current ?? {} };
+  if (result?.status !== "synced") throw new Error("Resposta inesperada na sincronizacao");
+  return { conflict: null, current: result.current ?? { ...(expected ?? {}), ...action.payload.responses } };
+}
+
+export async function syncLearningAction(action: LearningAction, expected?: Record<string, string>): Promise<OfflineConflict | null> {
+  return (await syncLearningActionWithCurrent(action, expected)).conflict;
+}
+
+async function syncAction(action: StudentOfflineAction): Promise<OfflineConflict | null | void> {
+  if (isLearningAction(action)) return syncLearningAction(action);
 
   if (action.type === "attendance_upsert") {
     const payload = {
@@ -341,14 +340,22 @@ async function syncAction(action: StudentOfflineAction) {
 let syncInFlight = false;
 
 export async function syncStudentOfflineQueue(userId?: string | null) {
-  if (syncInFlight || isStudentOffline()) return { synced: 0, remaining: 0 };
+  if (!userId || syncInFlight || isStudentOffline()) return { synced: 0, remaining: 0 };
   syncInFlight = true;
   let synced = 0;
 
   try {
     const actions = await getQueuedStudentActions(userId);
     for (const action of actions) {
-      await syncAction(action);
+      const conflict = await syncAction(action);
+      if (conflict) {
+        const remaining = actions.length - synced;
+        if (synced > 0) {
+          window.dispatchEvent(new CustomEvent("student-offline-queue-synced", { detail: { synced, remaining } }));
+          window.dispatchEvent(new CustomEvent("student-offline-queue-changed"));
+        }
+        return { synced, remaining, conflict };
+      }
       await deleteQueuedAction(action.id);
       synced += 1;
     }
@@ -361,6 +368,22 @@ export async function syncStudentOfflineQueue(userId?: string | null) {
   } finally {
     syncInFlight = false;
   }
+}
+
+
+// A deliberate choice only applies if the server still matches what was shown.
+export async function resolveOfflineConflict(conflict: OfflineConflict, choice: "server" | "offline"): Promise<OfflineConflict | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || user.id !== conflict.action.userId) throw new Error("Sessao expirada");
+  const queued = await getQueuedStudentActions(user.id);
+  if (!queued.some(action => action.id === conflict.action.id)) throw new Error("Rascunho nao encontrado");
+  if (choice === "offline") {
+    const nextConflict = await syncLearningAction(conflict.action, conflict.current);
+    if (nextConflict) return nextConflict;
+  }
+  await deleteQueuedAction(conflict.action.id);
+  window.dispatchEvent(new CustomEvent("student-offline-queue-changed"));
+  return null;
 }
 
 export async function getPendingStudentOverlay(userId: string) {

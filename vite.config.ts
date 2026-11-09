@@ -58,7 +58,7 @@ export default defineConfig(({ mode }) => {
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
-      registerType: "autoUpdate",
+      registerType: "prompt",
       includeAssets: ["favicon.ico", "robots.txt", "pwa-192x192.png", "pwa-512x512.png"],
       workbox: {
         cacheId: "v3",
@@ -68,8 +68,8 @@ export default defineConfig(({ mode }) => {
         globIgnores: ["migration-export/**", "**/*.zip", "**/*.sql"],
         importScripts: ["/push-sw.js"],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
-        skipWaiting: true,
-        clientsClaim: true,
+        skipWaiting: false,
+        clientsClaim: false,
         cleanupOutdatedCaches: true,
         // Navigation requests — always go to network first so routing is fresh
         navigationPreload: true,
@@ -81,28 +81,6 @@ export default defineConfig(({ mode }) => {
             options: {
               cacheName: "pages-cache",
               networkTimeoutSeconds: 3,
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
-            // Supabase REST API
-            urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\/.*/i,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "supabase-api-cache",
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
-              networkTimeoutSeconds: 5,
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
-            // Supabase auth — always network first
-            urlPattern: /^https:\/\/.*\.supabase\.co\/auth\/.*/i,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "supabase-auth-cache",
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 },
-              networkTimeoutSeconds: 5,
               cacheableResponse: { statuses: [0, 200] },
             },
           },
