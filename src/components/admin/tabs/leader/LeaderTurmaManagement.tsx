@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,7 +8,7 @@ import { GraduationCap, CheckCircle2, RefreshCw, Archive, ChevronDown, ChevronUp
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import TurmaReportPDF from "@/components/admin/TurmaReportPDF";
+import TurmaReportPDF, { type TurmaReportActivity, type TurmaReportParticipant } from "@/components/admin/TurmaReportPDF";
 import { jsPDF } from "jspdf";
 
 type Turma = {
@@ -32,13 +32,20 @@ interface ProfessionOfFaithRecord {
 type Props = {
   defaultArea?: string;
   defaultChurchId?: string | null;
+  defaultTurmaId?: string | null;
   onTurmaUpdated?: () => void;
 };
 
-export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, onTurmaUpdated }: Props) {
-  const { profile } = useAuth();
-  const { effectiveArea } = useAreaSwitch();
+export default function LeaderTurmaManagement({
+  defaultArea,
+  defaultChurchId,
+  defaultTurmaId,
+  onTurmaUpdated,
+}: Props) {
+  const { profile, role, isSuper } = useAuth();
+  const { effectiveArea, effectiveTurmaId } = useAreaSwitch();
   const { toast } = useToast();
+  const canCreateTurma = role === "admin" || isSuper;
   const [turma, setTurma] = useState<Turma | null>(null);
   const [archivedTurmas, setArchivedTurmas] = useState<Turma[]>([]);
   const [professionRecords, setProfessionRecords] = useState<ProfessionOfFaithRecord[]>([]);
@@ -53,7 +60,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
-  const [archivedPdfData, setArchivedPdfData] = useState<Record<string, { participants: any[]; activities: any[] }>>({});
+  const [archivedPdfData, setArchivedPdfData] = useState<Record<string, { participants: TurmaReportParticipant[]; activities: TurmaReportActivity[] }>>({});
   const [loadingPdf, setLoadingPdf] = useState<string | null>(null);
 
   // Create turma state
@@ -66,18 +73,17 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
   const [saving, setSaving] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", description: "" });
 
-  useEffect(() => {
-    fetchTurma();
-  }, [profile?.turma_id, defaultArea, defaultChurchId]);
-
-  async function fetchTurma() {
+  const fetchTurma = useCallback(async () => {
     setLoading(true);
 
     const churchId = defaultChurchId ?? profile?.church_id ?? "";
 
-    if (profile?.turma_id) {
+    const managedTurmaId = defaultTurmaId !== undefined
+      ? defaultTurmaId
+      : effectiveTurmaId ?? profile?.turma_id ?? null;
+    if (managedTurmaId) {
       const [{ data: turmaData }, { data: allTurmas }, { data: records }] = await Promise.all([
-        supabase.from("turmas").select("*").eq("id", profile.turma_id).single(),
+        supabase.from("turmas").select("*").eq("id", managedTurmaId).single(),
         supabase.from("turmas")
           .select("*")
           .eq("is_active", false)
@@ -119,9 +125,21 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
     }
 
     setLoading(false);
-  }
+  }, [defaultArea, defaultChurchId, defaultTurmaId, effectiveArea, effectiveTurmaId, profile?.area, profile?.church_id, profile?.turma_id]);
+
+  useEffect(() => {
+    fetchTurma();
+  }, [fetchTurma]);
 
   async function handleCreate() {
+    if (!canCreateTurma) {
+      toast({
+        title: "Somente administradores podem criar grupos",
+        description: "Peça ao administrador da igreja para criar o grupo e atribuir você como líder.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!createForm.name.trim()) return;
     setCreating(true);
 
@@ -148,15 +166,16 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
       return;
     }
 
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({ turma_id: newTurma.id } as any)
-      .eq("user_id", authUser.user!.id);
+    const { error: profileError } = await supabase.rpc("set_turma_leader", {
+      p_turma_id: newTurma.id,
+      p_user_id: authUser.user!.id,
+      p_assigned: true,
+    });
 
     if (profileError) {
-      toast({ title: "Turma criada, mas erro ao vincular", description: profileError.message, variant: "destructive" });
+      toast({ title: "Grupo criado, mas erro ao definir a liderança", description: profileError.message, variant: "destructive" });
     } else {
-      toast({ title: "Turma criada!", description: `"${createForm.name}" foi criada e vinculada ao seu perfil.` });
+      toast({ title: "Grupo criado!", description: `"${createForm.name}" foi criado e atribuído à sua liderança.` });
     }
 
     setCreateForm({ name: "", description: "" });
@@ -192,41 +211,27 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
     setArchiving(true);
 
     try {
-      const { data: turmaProfiles } = await supabase
-        .from("profiles")
-        .select("user_id, confirmation_year")
-        .eq("turma_id", turma.id);
+      const { data, error } = await supabase.rpc("archive_turma_professions", {
+        p_turma_id: turma.id,
+      });
+      if (error) throw error;
 
-      const allProfiles = turmaProfiles ?? [];
-      const secondYearUsers = allProfiles.filter(p => (p as any).confirmation_year === 2);
-
-      if (secondYearUsers.length === 0) {
-        toast({ title: "Nenhum aluno do 2º ano", description: "Não há alunos do 2º ano para realizar a profissão de fé nesta turma.", variant: "destructive" });
-        setArchiving(false);
-        setConfirmArchive(false);
-        return;
-      }
-
-      for (const student of secondYearUsers) {
-        await supabase.rpc('process_profession_of_faith', { 
-          p_user_id: student.user_id, 
-          p_turma_id: turma.id 
-        });
-      }
-
-      const firstYearCount = allProfiles.length - secondYearUsers.length;
+      const result = data as { archived_count?: number; remaining_count?: number } | null;
+      const archivedCount = result?.archived_count ?? 0;
+      const remainingCount = result?.remaining_count ?? 0;
       toast({
         title: "Sucesso!",
-        description: `${secondYearUsers.length} aluno(s) realizaram a profissão de fé e foram arquivados (vagas liberadas). ${firstYearCount} aluno(s) do 1º ano permanecem.`
+        description: `${archivedCount} aluno(s) realizaram a profissão de fé e foram arquivados. ${remainingCount} aluno(s) permanecem na turma.`,
       });
 
-      fetchTurma();
+      await fetchTurma();
       if (onTurmaUpdated) onTurmaUpdated();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Não foi possível processar a turma.";
+      toast({ title: "Erro ao processar", description: message, variant: "destructive" });
+    } finally {
       setArchiving(false);
       setConfirmArchive(false);
-    } catch (err: any) {
-      toast({ title: "Erro ao processar", description: err.message, variant: "destructive" });
-      setArchiving(false);
     }
   }
 
@@ -234,37 +239,26 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
     if (!turma) return;
     setResetting(true);
 
-    const { data: turmaProfiles } = await supabase
-      .from("profiles")
-      .select("user_id")
-      .eq("turma_id", turma.id);
+    try {
+      const { data, error } = await supabase.rpc("reset_turma_journey", {
+        p_turma_id: turma.id,
+      });
+      if (error) throw error;
 
-    const userIds = (turmaProfiles ?? []).map(p => p.user_id);
-
-    if (userIds.length === 0) {
-      toast({ title: "Nenhum membro", description: "Esta turma não possui membros.", variant: "destructive" });
+      const result = data as { member_count?: number; deleted_count?: number } | null;
+      toast({
+        title: "Jornada reiniciada!",
+        description: `O progresso de ${result?.member_count ?? 0} aluno(s) foi zerado com ${result?.deleted_count ?? 0} registro(s) removido(s).`,
+      });
+      await fetchTurma();
+      if (onTurmaUpdated) onTurmaUpdated();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Não foi possível reiniciar a jornada.";
+      toast({ title: "Erro ao reiniciar", description: message, variant: "destructive" });
+    } finally {
       setResetting(false);
       setConfirmReset(false);
-      return;
     }
-
-    await Promise.all([
-      supabase.from("user_progress").delete().in("user_id", userIds),
-      supabase.from("lesson_responses").delete().in("user_id", userIds),
-      supabase.from("lesson_progress").delete().in("user_id", userIds),
-      supabase.from("devotional_progress").delete().in("user_id", userIds),
-      supabase.from("achievement_unlocks").delete().in("user_id", userIds),
-      supabase.from("attendance").delete().in("user_id", userIds),
-      supabase.from("worship_attendance").delete().in("user_id", userIds),
-    ]);
-
-    toast({
-      title: "Jornada reiniciada!",
-      description: `Progresso de ${userIds.length} aluno(s) da turma "${turma.name}" foi zerado.`
-    });
-
-    setResetting(false);
-    setConfirmReset(false);
   }
 
   const filteredProfessionRecords = useMemo(() => {
@@ -363,7 +357,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
 
   if (loading) {
     return (
-      <div className="bg-card border border-border rounded-2xl p-8 text-center">
+      <div className="bg-card border border-border rounded-lg p-8 text-center">
         <p className="text-muted-foreground text-sm font-inter animate-pulse">Carregando dados da turma...</p>
       </div>
     );
@@ -374,41 +368,49 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
             <GraduationCap className="w-5 h-5 text-primary" />
           </div>
           <div>
             <h2 className="font-montserrat font-black text-foreground text-base">CAMINHO</h2>
-            <p className="text-muted-foreground text-xs font-inter">Você ainda não tem uma turma vinculada</p>
+            <p className="text-muted-foreground text-xs font-inter">
+              {canCreateTurma ? "Você ainda não selecionou uma turma" : "Você ainda não recebeu um grupo"}
+            </p>
           </div>
         </div>
 
-        <div className="bg-card border-2 border-dashed border-primary/30 rounded-2xl p-6 text-center">
-          <div className="w-14 h-14 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center mb-3">
+        <div className="bg-card border-2 border-dashed border-primary/30 rounded-lg p-6 text-center">
+          <div className="w-14 h-14 mx-auto rounded-lg bg-primary/10 flex items-center justify-center mb-3">
             <GraduationCap className="w-7 h-7 text-primary/60" />
           </div>
-          <p className="text-foreground font-montserrat font-bold text-sm mb-1">Nenhuma turma vinculada</p>
-          <p className="text-muted-foreground font-inter text-xs mb-4 leading-relaxed">
-            Crie sua turma para começar a gerenciar participantes, marcar presenças e acompanhar o progresso.
+          <p className="text-foreground font-montserrat font-bold text-sm mb-1">
+            {canCreateTurma ? "Nenhuma turma vinculada" : "Aguardando atribuição"}
           </p>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 mx-auto px-5 py-2.5 rounded-xl text-sm font-montserrat font-bold text-primary-foreground transition-all active:scale-95"
-            style={{ background: "var(--gradient-hero)" }}
-          >
-            <Plus className="w-4 h-4" />
-            Criar minha turma
-          </button>
+          <p className="text-muted-foreground font-inter text-xs mb-4 leading-relaxed">
+            {canCreateTurma
+              ? "Crie uma turma para começar a gerenciar participantes, marcar presenças e acompanhar o progresso."
+              : "O administrador da igreja precisa atribuir você a um grupo antes que esta área possa ser usada."}
+          </p>
+          {canCreateTurma && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="flex items-center gap-2 mx-auto px-5 py-2.5 rounded-lg text-sm font-montserrat font-bold text-primary-foreground transition-all active:scale-95"
+              style={{ background: "var(--gradient-hero)" }}
+            >
+              <Plus className="w-4 h-4" />
+              Criar turma
+            </button>
+          )}
         </div>
 
         {/* Create dialog */}
         <Dialog open={showCreate} onOpenChange={setShowCreate}>
-          <DialogContent className="max-w-sm rounded-2xl">
+          <DialogContent className="max-w-sm rounded-lg">
             <DialogHeader>
               <DialogTitle className="font-montserrat font-bold text-foreground text-base">Criar minha turma</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
-              <div className="bg-muted/50 rounded-xl px-3 py-2">
+              <div className="bg-muted/50 rounded-lg px-3 py-2">
                 <p className="text-muted-foreground font-inter text-xs">
                   GC: <span className="font-medium text-foreground">{defaultArea || effectiveArea || profile?.area || "—"}</span>
                   {" · "}Ano: <span className="font-medium text-foreground">{new Date().getFullYear()}</span>
@@ -420,7 +422,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
                   value={createForm.name}
                   onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="Ex: Confirmatório 2026"
-                  className="rounded-xl"
+                  className="rounded-lg"
                   autoFocus
                 />
               </div>
@@ -430,20 +432,20 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
                   value={createForm.description}
                   onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))}
                   placeholder="Breve descrição..."
-                  className="rounded-xl"
+                  className="rounded-lg"
                 />
               </div>
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={() => setShowCreate(false)}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-montserrat font-bold bg-muted text-muted-foreground border border-border"
+                  className="flex-1 py-2.5 rounded-lg text-sm font-montserrat font-bold bg-muted text-muted-foreground border border-border"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleCreate}
                   disabled={creating || !createForm.name.trim()}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-montserrat font-bold text-primary-foreground disabled:opacity-50"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-montserrat font-bold text-primary-foreground disabled:opacity-50"
                   style={{ background: "var(--gradient-hero)" }}
                 >
                   {creating ? "Criando..." : "Criar turma"}
@@ -462,7 +464,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
 
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
           <GraduationCap className="w-5 h-5 text-primary" />
         </div>
         <div>
@@ -472,9 +474,9 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
       </div>
 
       {/* Current turma card */}
-      <div className="bg-card border-2 border-primary/20 rounded-2xl p-4">
+      <div className="bg-card border-2 border-primary/20 rounded-lg p-4">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+          <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
             <GraduationCap className="w-6 h-6 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
@@ -489,7 +491,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
           {/* Edit button */}
           <button
             onClick={() => { setEditForm({ name: turma.name, description: turma.description || "" }); setShowEdit(true); }}
-            className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center hover:bg-primary/20 flex-shrink-0 transition-colors"
+            className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center hover:bg-primary/20 flex-shrink-0 transition-colors"
             title="Editar turma"
           >
             <Pencil className="w-4 h-4 text-primary" />
@@ -501,14 +503,14 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
           <button
             onClick={() => setConfirmArchive(true)}
             disabled={archiving}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-montserrat font-bold border-2 border-green-500/30 bg-green-500/5 text-green-700 hover:bg-green-500/10 hover:border-green-500/50 transition-all disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-montserrat font-bold border-2 border-green-500/30 bg-green-500/5 text-green-700 hover:bg-green-500/10 hover:border-green-500/50 transition-all disabled:opacity-50"
           >
             <CheckCircle2 className="w-4 h-4" />
             Grupo Confirmado
           </button>
           <button
             onClick={() => setConfirmReset(true)}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-montserrat font-bold border-2 border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/10 hover:border-destructive/50 transition-all"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-xs font-montserrat font-bold border-2 border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/10 hover:border-destructive/50 transition-all"
           >
             <RefreshCw className="w-4 h-4" />
             Reiniciar Jornada
@@ -518,12 +520,12 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
 
       {/* Edit dialog */}
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
-        <DialogContent className="max-w-sm rounded-2xl">
+        <DialogContent className="max-w-sm rounded-lg">
           <DialogHeader>
             <DialogTitle className="font-montserrat font-bold text-foreground text-base">Editar turma</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="bg-muted/50 rounded-xl px-3 py-2">
+            <div className="bg-muted/50 rounded-lg px-3 py-2">
               <p className="text-muted-foreground font-inter text-xs">
                 GC: <span className="font-medium text-foreground">{turma.area || "—"}</span>
                 {" · "}Ano: <span className="font-medium text-foreground">{turma.year}</span>
@@ -534,7 +536,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
               <Input
                 value={editForm.name}
                 onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
-                className="rounded-xl"
+                className="rounded-lg"
                 autoFocus
               />
             </div>
@@ -544,20 +546,20 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
                 value={editForm.description}
                 onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
                 placeholder="Breve descrição..."
-                className="rounded-xl"
+                className="rounded-lg"
               />
             </div>
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => setShowEdit(false)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-montserrat font-bold bg-muted text-muted-foreground border border-border"
+                className="flex-1 py-2.5 rounded-lg text-sm font-montserrat font-bold bg-muted text-muted-foreground border border-border"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleEdit}
                 disabled={saving || !editForm.name.trim()}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-montserrat font-bold text-primary-foreground disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-montserrat font-bold text-primary-foreground disabled:opacity-50"
                 style={{ background: "var(--gradient-hero)" }}
               >
                 {saving ? "Salvando..." : "Salvar"}
@@ -569,13 +571,13 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
 
       {/* Confirm archive dialog */}
       <Dialog open={confirmArchive} onOpenChange={setConfirmArchive}>
-        <DialogContent className="max-w-sm rounded-2xl">
+        <DialogContent className="max-w-sm rounded-lg">
           <DialogHeader>
             <DialogTitle className="font-montserrat font-bold text-foreground text-base">Profissão de Fé em Grupo</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-lg bg-green-500/10 flex items-center justify-center">
                 <CheckCircle2 className="w-6 h-6 text-green-600" />
               </div>
               <div>
@@ -590,12 +592,12 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
             </p>
             <div className="flex gap-2">
               <button onClick={() => setConfirmArchive(false)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-montserrat font-bold bg-muted text-muted-foreground border border-border">
+                className="flex-1 py-2.5 rounded-lg text-sm font-montserrat font-bold bg-muted text-muted-foreground border border-border">
                 Cancelar
               </button>
               <button onClick={handleArchive}
                 disabled={archiving}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-montserrat font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors">
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-montserrat font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors">
                 <CheckCircle2 className="w-4 h-4" />
                 {archiving ? "Arquivando..." : "Confirmar"}
               </button>
@@ -606,13 +608,13 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
 
       {/* Confirm reset dialog */}
       <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
-        <DialogContent className="max-w-sm rounded-2xl">
+        <DialogContent className="max-w-sm rounded-lg">
           <DialogHeader>
             <DialogTitle className="font-montserrat font-bold text-foreground text-base">Reiniciar Jornada</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-lg bg-destructive/10 flex items-center justify-center">
                 <RefreshCw className="w-6 h-6 text-destructive" />
               </div>
               <div>
@@ -634,12 +636,12 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
             </ul>
             <div className="flex gap-2">
               <button onClick={() => setConfirmReset(false)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-montserrat font-bold bg-muted text-muted-foreground border border-border">
+                className="flex-1 py-2.5 rounded-lg text-sm font-montserrat font-bold bg-muted text-muted-foreground border border-border">
                 Cancelar
               </button>
               <button onClick={handleResetJourney}
                 disabled={resetting}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-montserrat font-bold text-destructive-foreground bg-destructive hover:bg-destructive/90 disabled:opacity-50 transition-colors">
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-montserrat font-bold text-destructive-foreground bg-destructive hover:bg-destructive/90 disabled:opacity-50 transition-colors">
                 <RefreshCw className="w-4 h-4" />
                 {resetting ? "Reiniciando..." : "Reiniciar tudo"}
               </button>
@@ -653,14 +655,14 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
         <div className="mt-2">
           <button
             onClick={() => setShowArchive(!showArchive)}
-            className="w-full flex items-center gap-3 py-3 px-4 bg-muted/50 rounded-2xl border border-border hover:bg-muted transition-all"
+            className="w-full flex items-center gap-3 py-3 px-4 bg-muted/50 rounded-lg border border-border hover:bg-muted transition-all"
           >
-            <div className="w-8 h-8 rounded-xl bg-muted flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
               <Archive className="w-4 h-4 text-muted-foreground" />
             </div>
             <div className="flex-1 text-left">
               <p className="font-montserrat font-bold text-muted-foreground text-sm">Arquivo</p>
-              <p className="text-muted-foreground font-inter text-[10px]">
+              <p className="text-muted-foreground font-inter text-xs">
                 {archivedTurmas.length} turma{archivedTurmas.length !== 1 ? "s" : ""} confirmada{archivedTurmas.length !== 1 ? "s" : ""}
               </p>
             </div>
@@ -675,15 +677,15 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
               {archivedTurmas.map(at => {
                 const pdfData = archivedPdfData[at.id];
                 return (
-                  <div key={at.id} className="bg-card/50 border border-border rounded-2xl p-4 opacity-80">
+                  <div key={at.id} className="bg-card/50 border border-border rounded-lg p-4 opacity-80">
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
+                      <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
                         <Archive className="w-6 h-6 text-muted-foreground" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="font-montserrat font-bold text-foreground text-sm truncate">{at.name}</p>
-                          <span className="px-2 py-0.5 rounded-full bg-green-500/10 text-green-700 text-[10px] font-montserrat font-bold flex-shrink-0">
+                          <span className="px-2 py-0.5 rounded-full bg-green-500/10 text-green-700 text-xs font-montserrat font-bold flex-shrink-0">
                             ✓ Confirmado
                           </span>
                         </div>
@@ -693,7 +695,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
                       </div>
                       <div className="flex gap-1.5 flex-shrink-0">
                         {pdfData ? (
-                          <TurmaReportPDF participants={pdfData.participants} activities={pdfData.activities} turmaName={at.name} />
+                          <TurmaReportPDF participants={pdfData.participants} activities={pdfData.activities} turmaName={at.name} turmaId={at.id} />
                         ) : (
                           <button
                             onClick={() => loadArchivedTurmaData(at.id)}
@@ -726,14 +728,14 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
             <div className="flex items-center gap-2">
               <button 
                 onClick={exportProfessionCSV}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground text-[10px] font-montserrat font-bold transition-all border border-border"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground text-xs font-montserrat font-bold transition-all border border-border"
               >
                 <FileSpreadsheet className="w-3 h-3" />
                 Excel (CSV)
               </button>
               <button 
                 onClick={exportProfessionReport}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground text-[10px] font-montserrat font-bold transition-all border border-border"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground text-xs font-montserrat font-bold transition-all border border-border"
               >
                 <FileText className="w-3 h-3" />
                 Relatório PDF
@@ -742,30 +744,30 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
           </div>
 
           {/* Filters */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-muted/30 p-3 rounded-2xl border border-border/50">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-muted/30 p-3 rounded-lg border border-border/50">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <Input 
                 placeholder="Buscar por nome ou turma..." 
-                className="pl-9 h-9 text-xs rounded-xl"
+                className="pl-9 h-9 text-xs rounded-lg"
                 value={professionFilters.search}
                 onChange={e => setProfessionFilters(f => ({ ...f, search: e.target.value }))}
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">De:</span>
+              <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">De:</span>
               <Input 
                 type="date" 
-                className="h-9 text-xs rounded-xl"
+                className="h-9 text-xs rounded-lg"
                 value={professionFilters.startDate}
                 onChange={e => setProfessionFilters(f => ({ ...f, startDate: e.target.value }))}
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">Até:</span>
+              <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Até:</span>
               <Input 
                 type="date" 
-                className="h-9 text-xs rounded-xl"
+                className="h-9 text-xs rounded-lg"
                 value={professionFilters.endDate}
                 onChange={e => setProfessionFilters(f => ({ ...f, endDate: e.target.value }))}
               />
@@ -780,7 +782,7 @@ export default function LeaderTurmaManagement({ defaultArea, defaultChurchId, on
                     <div key={record.id} className="px-4 py-3 flex items-center justify-between gap-3 bg-card/50">
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold text-foreground truncate">{record.full_name}</p>
-                        <p className="text-[10px] text-muted-foreground font-inter">
+                        <p className="text-xs text-muted-foreground font-inter">
                           Turma Anterior: {record.turma_name || "Nenhuma"} · {new Date(record.professed_at).toLocaleDateString('pt-BR')}
                         </p>
                       </div>

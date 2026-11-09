@@ -41,7 +41,7 @@ export default function UpcomingEventReminder({ onNavigateToAgenda }: Props) {
           .limit(20),
       ]);
 
-      const nextRelevantEvent = (data ?? []).find((item: any) => {
+      const nextRelevantEvent = (data ?? []).find((item) => {
         if (item.target_user_id && item.target_user_id !== user.id) return false;
         if (item.area && profile?.area && item.area !== profile.area) return false;
         if (item.community && profile?.community && item.community !== profile.community) return false;
@@ -110,9 +110,9 @@ export default function UpcomingEventReminder({ onNavigateToAgenda }: Props) {
           </p>
           <p className="text-foreground font-inter text-xs font-medium mt-0.5">{event.title}</p>
           {event.location && (
-            <p className="text-muted-foreground font-inter text-[10px] mt-0.5">{event.location}</p>
+            <p className="text-muted-foreground font-inter text-xs mt-0.5">{event.location}</p>
           )}
-          <p className={`font-inter text-[10px] mt-1 font-semibold ${isUrgent ? "text-destructive" : "text-secondary"}`}>
+          <p className={`font-inter text-xs mt-1 font-semibold ${isUrgent ? "text-destructive" : "text-secondary"}`}>
             {countdownLabel}
           </p>
         </div>

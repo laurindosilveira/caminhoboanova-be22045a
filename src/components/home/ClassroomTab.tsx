@@ -41,6 +41,8 @@ interface CommunitySettings {
   verse_reference: string | null;
 }
 
+type ClassroomPresence = { name?: string; typing?: boolean };
+
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const d = Math.floor(diff / 86400000);
@@ -126,7 +128,7 @@ export default function ClassroomTab() {
 
       setChatMessages((chatRes.data ?? []) as ChatMessage[]);
       
-      const mappedPrayers: PrayerRequest[] = (prayerRes.data ?? []).map((p: any) => ({
+      const mappedPrayers: PrayerRequest[] = (prayerRes.data ?? []).map((p) => ({
         id: p.id,
         user_id: p.user_id,
         user_name: p.profiles?.full_name || 'Usuário',
@@ -170,7 +172,7 @@ export default function ClassroomTab() {
           filter: `community=eq.${community}`,
         },
         (payload) => {
-          setChatMessages((prev) => prev.filter(m => m.id !== (payload.old as any).id));
+          setChatMessages((prev) => prev.filter(m => m.id !== (payload.old as { id?: string }).id));
         }
       )
       .subscribe();
@@ -204,7 +206,7 @@ export default function ClassroomTab() {
             .order("created_at", { ascending: false })
             .limit(20)
             .then(({ data }) => {
-              const mapped = (data ?? []).map((p: any) => ({
+              const mapped = (data ?? []).map((p) => ({
                 id: p.id,
                 user_id: p.user_id,
                 user_name: p.profiles?.full_name || 'Usuário',
@@ -240,9 +242,9 @@ export default function ClassroomTab() {
         // Extract typing users
         const typing: string[] = [];
         for (const [uid, presences] of Object.entries(state)) {
-          const p = presences as any[];
-          if (p.some((pr: any) => pr.typing) && uid !== myUserId) {
-            const name = p[0]?.name?.split(" ")[0] || "Alguém";
+          const presenceEntries = presences as unknown as ClassroomPresence[];
+          if (presenceEntries.some((presence) => presence.typing) && uid !== myUserId) {
+            const name = presenceEntries[0]?.name?.split(" ")[0] || "Alguém";
             typing.push(name);
           }
         }
@@ -364,7 +366,7 @@ export default function ClassroomTab() {
       setUploadingFile(false);
     }
 
-    await supabase.from("community_chat").insert({
+    const { data: insertedMessage } = await supabase.from("community_chat").insert({
       community,
       user_id: myUserId,
       user_name: myName,
@@ -375,7 +377,7 @@ export default function ClassroomTab() {
       file_url: fileUrl,
       file_type: fileType,
       church_id: profile?.church_id ?? null,
-    } as any);
+    }).select("id").single();
     setChatInput("");
     setReplyTo(null);
     clearAttachment();
@@ -386,6 +388,8 @@ export default function ClassroomTab() {
       supabase.functions.invoke("notify-chat-reply", {
         body: {
           target_user_id: replyTarget.user_id,
+          parent_message_id: replyTarget.id,
+          reply_message_id: insertedMessage?.id,
           sender_name: myName,
           message_preview: msgText || (fileType === "image" ? "📷 Imagem" : "🎵 Áudio"),
         },
@@ -416,7 +420,7 @@ export default function ClassroomTab() {
     setAmenLoading(prayer.id);
     await supabase
       .from("prayer_requests")
-      .update({ prayers_count: (prayer.amen_count || 0) + 1 } as any)
+      .update({ prayers_count: (prayer.amen_count || 0) + 1 })
       .eq("id", prayer.id);
     setPrayers((prev) =>
       prev.map((p) => p.id === prayer.id ? { ...p, amen_count: (p.amen_count || 0) + 1 } : p)
@@ -434,7 +438,7 @@ export default function ClassroomTab() {
 
   async function togglePrayerStatus(prayer: PrayerRequest) {
     const newStatus = prayer.status === "respondido" ? "em_oracao" : "respondido";
-    await supabase.from("prayer_requests").update({ status: newStatus } as any).eq("id", prayer.id);
+    await supabase.from("prayer_requests").update({ status: newStatus }).eq("id", prayer.id);
     setPrayers(prev => prev.map(p => p.id === prayer.id ? { ...p, status: newStatus } : p));
   }
 
@@ -487,7 +491,7 @@ export default function ClassroomTab() {
             <span className={`text-xs font-montserrat font-bold ${isMe ? "text-primary" : "text-foreground"}`}>
               {msg.user_name.split(" ")[0]}
             </span>
-            <span className="text-[10px] text-muted-foreground font-inter">{formatDateTime(msg.created_at)}</span>
+            <span className="text-xs text-muted-foreground font-inter">{formatDateTime(msg.created_at)}</span>
           </div>
           <div className={`rounded-2xl px-3 py-2 text-sm font-inter leading-relaxed ${isRoot ? "bg-primary/5 border border-primary/20" : "bg-muted"} text-foreground`}>
             {(!msg.file_url || (msg.message && msg.message !== "📷 Imagem" && msg.message !== "🎵 Áudio")) && msg.message}
@@ -634,7 +638,7 @@ export default function ClassroomTab() {
                         {p.is_anonymous ? "Anônimo" : p.user_name}
                         <span className="font-normal ml-1">· {timeAgo(p.created_at)}</span>
                       </p>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-inter font-semibold ${
+                      <span className={`px-1.5 py-0.5 rounded-full text-xs font-inter font-semibold ${
                         p.status === "respondido" 
                           ? "bg-brand-green/15 text-brand-green" 
                           : "bg-primary/10 text-primary"
@@ -693,7 +697,7 @@ export default function ClassroomTab() {
           <span className="font-montserrat font-bold text-foreground text-sm">Chat da Turma</span>
           <div className="flex items-center gap-2 ml-auto">
             {onlineCount > 0 && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-inter text-muted-foreground">
+              <span className="inline-flex items-center gap-1 text-xs font-inter text-muted-foreground">
                 <Wifi className="w-3 h-3 text-brand-green" />
                 {onlineCount} online
               </span>
@@ -726,7 +730,7 @@ export default function ClassroomTab() {
                   {replies.length > 0 && (
                     <div className="flex items-center gap-2 py-1">
                       <div className="flex-1 h-px bg-border" />
-                      <span className="text-[10px] text-muted-foreground font-inter">{replies.length} resposta{replies.length !== 1 ? "s" : ""}</span>
+                      <span className="text-xs text-muted-foreground font-inter">{replies.length} resposta{replies.length !== 1 ? "s" : ""}</span>
                       <div className="flex-1 h-px bg-border" />
                     </div>
                   )}
@@ -746,7 +750,7 @@ export default function ClassroomTab() {
                 </div>
               )}
               {!hasMore && chatMessages.length > PAGE_SIZE && (
-                <p className="text-center text-[10px] text-muted-foreground font-inter py-1">Início da conversa</p>
+                <p className="text-center text-xs text-muted-foreground font-inter py-1">Início da conversa</p>
               )}
               {chatMessages.length === 0 ? (
                 <div className="flex items-center justify-center h-full">
@@ -781,8 +785,8 @@ export default function ClassroomTab() {
                             className={`flex items-center gap-1 px-2 py-1 mb-0.5 rounded-lg bg-muted/60 border-l-2 border-primary/40 max-w-full cursor-pointer hover:bg-muted transition-colors ${isMe ? "self-end" : "self-start"}`}
                           >
                             <Reply className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                            <span className="text-[10px] font-montserrat font-bold text-primary truncate">{msg.reply_to_name.split(" ")[0]}</span>
-                            <span className="text-[10px] font-inter text-muted-foreground truncate">{msg.reply_to_text}</span>
+                            <span className="text-xs font-montserrat font-bold text-primary truncate">{msg.reply_to_name.split(" ")[0]}</span>
+                            <span className="text-xs font-inter text-muted-foreground truncate">{msg.reply_to_text}</span>
                           </button>
                         )}
                         <div
@@ -797,7 +801,7 @@ export default function ClassroomTab() {
                           {renderFileContent(msg)}
                         </div>
                         <div className="flex items-center gap-1 mt-0.5 px-1">
-                          <span className="text-[10px] text-muted-foreground">
+                          <span className="text-xs text-muted-foreground">
                             {timeAgo(msg.created_at)}
                           </span>
                           {/* Thread badge */}
@@ -807,7 +811,7 @@ export default function ClassroomTab() {
                               className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                             >
                               <MessageCircle className="w-2.5 h-2.5" />
-                              <span className="text-[9px] font-inter font-bold">{replyCount}</span>
+                              <span className="text-xs font-inter font-bold">{replyCount}</span>
                             </button>
                           )}
                           {/* Reply button */}
@@ -843,8 +847,8 @@ export default function ClassroomTab() {
             <div className="border-t border-border px-3 pt-2 flex items-center gap-2 bg-muted/30">
               <Reply className="w-3.5 h-3.5 text-primary flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <span className="text-[10px] font-montserrat font-bold text-primary">{replyTo.user_name.split(" ")[0]}</span>
-                <p className="text-[10px] font-inter text-muted-foreground truncate">{replyTo.message.slice(0, 60)}</p>
+                <span className="text-xs font-montserrat font-bold text-primary">{replyTo.user_name.split(" ")[0]}</span>
+                <p className="text-xs font-inter text-muted-foreground truncate">{replyTo.message.slice(0, 60)}</p>
               </div>
               <button onClick={() => setReplyTo(null)} className="text-muted-foreground hover:text-foreground p-0.5">
                 <X className="w-3.5 h-3.5" />
@@ -865,7 +869,7 @@ export default function ClassroomTab() {
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-inter text-foreground truncate">{attachedFile.name}</p>
-                  <p className="text-[10px] text-muted-foreground">{(attachedFile.size / 1024).toFixed(0)} KB</p>
+                  <p className="text-xs text-muted-foreground">{(attachedFile.size / 1024).toFixed(0)} KB</p>
                 </div>
                 <button onClick={clearAttachment} className="text-muted-foreground hover:text-destructive p-1">
                   <XCircle className="w-4 h-4" />
@@ -886,7 +890,7 @@ export default function ClassroomTab() {
           {/* Typing indicator */}
           {typingUsers.length > 0 && (
             <div className="border-t border-border px-3 py-1.5 bg-muted/20">
-              <p className="text-[10px] font-inter text-muted-foreground animate-pulse">
+              <p className="text-xs font-inter text-muted-foreground animate-pulse">
                 {typingUsers.length === 1
                   ? `${typingUsers[0]} está digitando...`
                   : typingUsers.length === 2

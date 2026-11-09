@@ -10,9 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import WhatsAppPhoneInput from "@/components/ui/WhatsAppPhoneInput";
 import { validateBRPhone, type PhoneValidation } from "@/lib/phoneValidation";
+import type { Database } from "@/integrations/supabase/types";
 
 import { ALL_COMMUNITIES, fetchAreasConfig } from "@/config/areas";
 const COMMUNITIES = ALL_COMMUNITIES as unknown as readonly [string, ...string[]];
+type AreaName = Database["public"]["Enums"]["area_name"];
+type CommunityName = Database["public"]["Enums"]["community_name"];
 
 const CONFIRMATION_YEARS = [
   { value: "", label: "Não definido" },
@@ -74,16 +77,15 @@ export default function EditProfileForm() {
   
   // MFA state
   const [mfaEnabled, setMfaEnabled] = useState(false);
-  const [mfaFactors, setMfaFactors] = useState<any[]>([]);
   const [showMfaEnroll, setShowMfaEnroll] = useState(false);
   const [unenrollFactorId, setUnenrollFactorId] = useState<string | null>(null);
 
   // Validação em tempo real do WhatsApp (fora do react-hook-form para maior controle)
   const [phoneValidation, setPhoneValidation] = useState<PhoneValidation>(
-    () => validateBRPhone((profile as any)?.phone ?? "")
+    () => validateBRPhone(profile?.phone ?? "")
   );
   const [waValidation, setWaValidation] = useState<PhoneValidation>(
-    () => validateBRPhone((profile as any)?.whatsapp_number ?? "")
+    () => validateBRPhone(profile?.whatsapp_number ?? "")
   );
 
   const {
@@ -98,9 +100,9 @@ export default function EditProfileForm() {
     defaultValues: {
       full_name: profile?.full_name ?? "",
       phone: profile?.phone ?? "",
-      whatsapp_number: (profile as any)?.whatsapp_number ?? "",
+      whatsapp_number: profile?.whatsapp_number ?? "",
       birth_date: profile?.birth_date ?? "",
-      church_id: (profile as any)?.church_id ?? "",
+      church_id: profile?.church_id ?? "",
       area: profile?.area ?? "",
       community: profile?.community ?? "",
       father_name: profile?.father_name ?? "",
@@ -126,7 +128,6 @@ export default function EditProfileForm() {
       const { data: factors } = await supabase.auth.mfa.listFactors();
       const active = factors?.all?.some(f => f.status === 'verified') ?? false;
       setMfaEnabled(active);
-      setMfaFactors(factors?.all || []);
     }
     loadInitial();
   }, []);
@@ -162,8 +163,8 @@ export default function EditProfileForm() {
         .order("name");
       
       const filtered = (data || [])
-        .filter((c: any) => c.areas?.name === areaName)
-        .map((c: any) => c.name);
+        .filter((community) => community.areas?.name === areaName)
+        .map((community) => community.name);
       
       setCommunityOptions(filtered);
       setLoadingCommunities(false);
@@ -175,7 +176,7 @@ export default function EditProfileForm() {
     reset({
       full_name: profile?.full_name ?? "",
       phone: profile?.phone ?? "",
-      whatsapp_number: (profile as any)?.whatsapp_number ?? "",
+      whatsapp_number: profile?.whatsapp_number ?? "",
       birth_date: profile?.birth_date ?? "",
       community: (profile?.community as (typeof COMMUNITIES)[number]) ?? undefined,
       father_name: profile?.father_name ?? "",
@@ -186,7 +187,7 @@ export default function EditProfileForm() {
       confirmation_year: profile?.confirmation_year ? String(profile.confirmation_year) : "",
     });
     setPhoneValidation(validateBRPhone(profile?.phone ?? ""));
-    setWaValidation(validateBRPhone((profile as any)?.whatsapp_number ?? ""));
+    setWaValidation(validateBRPhone(profile?.whatsapp_number ?? ""));
     setIsEditing(false);
   }
 
@@ -252,15 +253,15 @@ export default function EditProfileForm() {
             whatsapp_last_blocked_at: waNum && !waValid?.valid ? new Date().toISOString() : null,
             birth_date: values.birth_date,
             church_id: values.church_id,
-            community: values.community,
-            area: values.area,
+            community: values.community as CommunityName,
+            area: values.area as AreaName,
             father_name: values.father_name ?? "",
             mother_name: values.mother_name ?? "",
             father_phone: values.father_phone ?? "",
             mother_phone: values.mother_phone ?? "",
             address: values.address ?? "",
             confirmation_year: values.confirmation_year ? parseInt(values.confirmation_year) : null,
-          } as any,
+          },
           { onConflict: "user_id" }
         );
 
@@ -276,7 +277,7 @@ export default function EditProfileForm() {
     }
   }
 
-  const avatarUrl = (profile as any)?.avatar_url;
+  const avatarUrl = profile?.avatar_url;
 
   const PhotoSection = () => (
     <div className="flex flex-col items-center gap-2 py-4">
@@ -341,12 +342,12 @@ export default function EditProfileForm() {
                   </p>
                 </div>
                 {mfaEnabled ? (
-                  <Badge className="bg-brand-green/10 text-brand-green border-brand-green/30 font-bold text-[10px]">ATIVO</Badge>
+                  <Badge className="bg-brand-green/10 text-brand-green border-brand-green/30 font-bold text-xs">ATIVO</Badge>
                 ) : (
                   <Button 
                     size="sm" 
                     variant="outline" 
-                    className="h-8 rounded-lg text-[10px] font-bold border-primary text-primary hover:bg-primary/5"
+                    className="h-8 rounded-lg text-xs font-bold border-primary text-primary hover:bg-primary/5"
                     onClick={() => window.open('https://supabase.com/docs/guides/auth/auth-mfa', '_blank')}
                   >
                     ATIVAR
@@ -382,7 +383,7 @@ export default function EditProfileForm() {
         >
           <PhotoSection />
           <div className="divide-y divide-border">
-            <InfoRow icon={<Shield className="w-4 h-4 text-muted-foreground" />} label="Igreja" value={(profile as any)?.churches?.name ?? "—"} />
+            <InfoRow icon={<Shield className="w-4 h-4 text-muted-foreground" />} label="Igreja" value={profile?.churches?.name ?? "—"} />
             <InfoRow icon={<User className="w-4 h-4 text-muted-foreground" />} label="Nome completo" value={profile?.full_name ?? "—"} />
             <InfoRow icon={<Phone className="w-4 h-4 text-muted-foreground" />} label="Telefone" value={profile?.phone ?? "—"} />
             <InfoRow
@@ -482,7 +483,7 @@ export default function EditProfileForm() {
             <div className="space-y-1">
               <label className="text-xs font-inter font-medium text-muted-foreground flex items-center gap-1.5">
                 Número do WhatsApp
-                <span className="text-[10px] text-muted-foreground/60 font-normal">(opcional — se diferente do telefone)</span>
+                <span className="text-xs text-muted-foreground/60 font-normal">(opcional — se diferente do telefone)</span>
               </label>
               <WhatsAppPhoneInput
                 value={watchedValues.whatsapp_number ?? ""}
@@ -498,7 +499,7 @@ export default function EditProfileForm() {
               />
               {/* Indicação visual quando o número exclusivo substitui o principal */}
               {waValidation.valid && watchedValues.whatsapp_number && (
-                <p className="text-[10px] font-inter text-brand-green px-1">
+                <p className="text-xs font-inter text-brand-green px-1">
                   ✓ Os lembretes automáticos usarão este número
                 </p>
               )}

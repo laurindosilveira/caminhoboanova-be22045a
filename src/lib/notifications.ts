@@ -77,6 +77,8 @@ export async function sendNotification(
 }
 
 export function scheduleDailyReminder() {
+  // Foreground/session helper only. Real inactive-user reminders run in the
+  // Supabase cron so they work even when the user has not opened the app.
   if (!isNotificationEnabled()) return;
 
   const now = new Date();

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { EVENT_TYPES, EventTypeConfig } from "@/config/eventTypes";
 
@@ -21,11 +21,7 @@ export function useCustomEventTypes(area?: string) {
   const [customTypes, setCustomTypes] = useState<CustomEventType[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    load();
-  }, [area]);
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     const { data } = await supabase
       .from("custom_event_types")
@@ -39,7 +35,11 @@ export function useCustomEventTypes(area?: string) {
       : all;
     setCustomTypes(filtered);
     setLoading(false);
-  }
+  }, [area]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const customAsConfig: EventTypeConfig[] = customTypes.map(t => ({
     value: t.value,

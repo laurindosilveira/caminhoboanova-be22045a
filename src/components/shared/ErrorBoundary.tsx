@@ -2,6 +2,7 @@ import React, { Component, ErrorInfo, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { captureAppError } from "@/lib/monitoring";
 
 interface Props {
   children: ReactNode;
@@ -24,29 +25,35 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("Uncaught error:", error, errorInfo);
-    
-    // Log to Supabase
-    this.logErrorToSupabase(error, errorInfo);
+    if (import.meta.env.DEV) console.error("Uncaught error:", error, errorInfo);
+    captureAppError(error, { componentStack: errorInfo.componentStack ?? "" });
+    void this.logErrorToSupabase(error, errorInfo);
   }
 
   private async logErrorToSupabase(error: Error, errorInfo: ErrorInfo) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const profile = user ? await supabase.from('profiles').select('church_id').eq('user_id', user.id).single() : null;
+      if (!user) return;
+
+      const profile = await supabase
+        .from("profiles")
+        .select("church_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!profile.data?.church_id) return;
 
       await supabase.from("frontend_error_logs").insert({
-        church_id: profile?.data?.church_id || null,
-        user_id: user?.id || null,
+        church_id: profile.data.church_id,
+        user_id: user.id,
         error_message: error.message,
         stack_trace: error.stack,
         component_stack: errorInfo.componentStack,
-        url: window.location.href,
+        url: `${window.location.origin}${window.location.pathname}`,
         user_agent: navigator.userAgent,
         severity: 'error'
       });
     } catch (logError) {
-      console.error("Failed to log error to Supabase:", logError);
+      if (import.meta.env.DEV) console.error("Failed to log error to Supabase:", logError);
     }
   }
 
@@ -68,8 +75,8 @@ export class ErrorBoundary extends Component<Props, State> {
                 Ocorreu um erro inesperado. Já notificamos nossa equipe técnica para resolver o problema.
               </p>
             </div>
-            {process.env.NODE_ENV === 'development' && (
-              <pre className="text-[10px] text-left p-4 bg-muted rounded-xl overflow-auto max-h-40 border border-border">
+            {import.meta.env.DEV && (
+              <pre className="text-xs text-left p-4 bg-muted rounded-md overflow-auto max-h-40 border border-border">
                 {this.state.error?.toString()}
               </pre>
             )}

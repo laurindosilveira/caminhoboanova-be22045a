@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
@@ -6,6 +6,18 @@ import { Zap, Clock, ChevronRight, BookOpen, GraduationCap, CalendarDays } from 
 import { useAgendaSchedule } from "@/hooks/useAgendaSchedule";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import type { Database } from "@/integrations/supabase/types";
+import {
+  getCourseIdsByMode,
+  resolveCourseUnlocks,
+  type CourseUnlockScopeRow,
+} from "@/lib/courseAccess";
+import { isEventVisibleInGroupScope } from "@/lib/eventScope";
+
+type ScheduleEvent = Pick<
+  Database["public"]["Tables"]["events"]["Row"],
+  "id" | "event_date" | "linked_lesson_id" | "title" | "type" | "area" | "community" | "turma_id" | "target_user_id"
+>;
 
 type NextItem = {
   type: "lesson" | "devotional" | "waiting_devotional";
@@ -24,12 +36,14 @@ type NextItem = {
 
 export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { onNavigateToDiscipulado: () => void }) {
   const { profile, role, user } = useAuth();
-  const { effectiveArea } = useAreaSwitch();
+  const { effectiveArea, effectiveTurmaId, switchNonce } = useAreaSwitch();
   const currentArea = effectiveArea || profile?.area || "";
+  const currentTurmaId = effectiveTurmaId ?? profile?.turma_id ?? null;
   const [nextItem, setNextItem] = useState<NextItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState("");
   const [noSchedule, setNoSchedule] = useState(false);
+  const [hasOpenAccess, setHasOpenAccess] = useState(false);
   const agendaSchedule = useAgendaSchedule();
 
   useEffect(() => {
@@ -47,31 +61,17 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    if (!currentArea || agendaSchedule.loading) return;
-    fetchNext();
-  }, [currentArea, agendaSchedule.loading, agendaSchedule.schedule]);
-
-  async function loadScheduleFallback() {
-    const eventSelectFallbacks = [
-      "id, event_date, linked_lesson_id, title, type, area, community, turma_id, target_user_id",
-      "id, event_date, linked_lesson_id, title, type, area, community, turma_id",
-      "id, event_date, linked_lesson_id, title, type, area, community",
-      "id, event_date, linked_lesson_id, title, type, area",
-    ];
-
-    let events: any[] = [];
-    for (const selectClause of eventSelectFallbacks) {
-      const result = await supabase
-        .from("events")
-        .select(selectClause)
-        .not("linked_lesson_id", "is", null)
-        .order("event_date");
-      if (!result.error) {
-        events = result.data ?? [];
-        break;
-      }
-    }
+  const loadScheduleFallback = useCallback(async () => {
+    let eventsQuery = supabase
+      .from("events")
+      .select("id, event_date, linked_lesson_id, title, type, area, community, turma_id, target_user_id")
+      .not("linked_lesson_id", "is", null)
+      .order("event_date");
+    eventsQuery = profile?.church_id
+      ? eventsQuery.eq("church_id", profile.church_id)
+      : eventsQuery.is("church_id", null);
+    const { data: eventData } = await eventsQuery;
+    const events: ScheduleEvent[] = eventData ?? [];
 
     if (events.length === 0) return [];
 
@@ -80,22 +80,29 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
       supabase.from("courses").select("id, title, order_num"),
     ]);
 
-    const lessonMap = new Map((lessons ?? []).map((lesson: any) => [lesson.id, lesson]));
-    const courseMap = new Map((courses ?? []).map((course: any) => [course.id, course]));
+    const lessonMap = new Map((lessons ?? []).map((lesson) => [lesson.id, lesson]));
+    const courseMap = new Map((courses ?? []).map((course) => [course.id, course]));
     const isManager = role === "admin" || role === "lider";
 
     return events
-      .filter((event: any) => {
+      .filter((event) => {
         if (!event.linked_lesson_id) return false;
-        if (event.target_user_id && event.target_user_id !== user?.id) return false;
-        if (event.area && event.area !== currentArea) return false;
-        if (event.turma_id && profile?.turma_id && event.turma_id !== profile.turma_id) return false;
-        if (event.turma_id && !profile?.turma_id) return false;
+        if (!isEventVisibleInGroupScope(event, {
+          turmaId: currentTurmaId,
+          area: currentArea,
+          userId: user?.id,
+        })) return false;
         const isConfirmatorio = event.type === "confirmatorio";
-        if (event.community && !isManager && !isConfirmatorio && event.community !== profile?.community) return false;
+        if (
+          !event.turma_id
+          && event.community
+          && !isManager
+          && !isConfirmatorio
+          && event.community !== profile?.community
+        ) return false;
         return true;
       })
-      .map((event: any) => {
+      .map((event) => {
         const lesson = lessonMap.get(event.linked_lesson_id);
         if (!lesson) return null;
         const course = courseMap.get(lesson.course_id);
@@ -129,15 +136,36 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
         };
       })
       .filter(Boolean);
-  }
+  }, [currentArea, currentTurmaId, profile?.church_id, profile?.community, role, user?.id]);
 
-  async function fetchNext() {
-    const effectiveSchedule = agendaSchedule.schedule.length > 0
+  const fetchNext = useCallback(async () => {
+    setLoading(true);
+    let unlocksQuery = supabase
+      .from("course_unlocks")
+      .select("course_id, area, turma_id, access_mode");
+    unlocksQuery = profile?.church_id
+      ? unlocksQuery.eq("church_id", profile.church_id)
+      : unlocksQuery.is("church_id", null);
+    const { data: unlockRows } = await unlocksQuery;
+    const resolvedUnlocks = resolveCourseUnlocks(
+      (unlockRows ?? []) as CourseUnlockScopeRow[],
+      { turmaId: currentTurmaId, area: currentArea || null },
+    );
+    const openCourseIds = getCourseIdsByMode(resolvedUnlocks, "open");
+    setHasOpenAccess(openCourseIds.size > 0);
+
+    const rawSchedule = agendaSchedule.schedule.length > 0
       ? agendaSchedule.schedule
       : await loadScheduleFallback();
+    const effectiveSchedule = rawSchedule.filter((entry) => {
+      const access = resolvedUnlocks.get(entry.courseId);
+      if (access) return access.mode === "scheduled";
+      return currentTurmaId === null;
+    });
 
     if (effectiveSchedule.length === 0) {
-      setNoSchedule(true);
+      setNextItem(null);
+      setNoSchedule(openCourseIds.size === 0);
       setLoading(false);
       return;
     }
@@ -165,6 +193,11 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const now = new Date();
+    // Lesson study requirement is only surfaced for events within the last 14 days.
+    // Older events are skipped so past locked items don't block current active windows.
+    const fourteenDaysAgo = new Date(today);
+    fourteenDaysAgo.setDate(today.getDate() - 14);
+
     const actionableEntries = effectiveSchedule.filter(
       (entry) => today >= entry.windowStart
     );
@@ -182,7 +215,12 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
         if (primaryDate) devReleaseDateMap.set(dev.id, primaryDate);
       });
 
-      // Find the EARLIEST uncompleted devotional that should be available by today
+      const eventDay = new Date(entry.eventDate);
+      eventDay.setHours(0, 0, 0, 0);
+
+      // Find the EARLIEST uncompleted devotional that should be available by today.
+      // Skip devotionals that are permanently locked: those whose release date is in the
+      // past AND whose event has already passed (nothing actionable remains for them).
       const missedOrTodayDev = lessonDevs.find(dev => {
         if (completedDevIds.has(dev.id)) return false;
         if (is5days && dev.day_number > 5) return false;
@@ -190,7 +228,10 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
         if (!devDate) return false;
         const nd = new Date(devDate);
         nd.setHours(0, 0, 0, 0);
-        return nd <= today;
+        if (nd > today) return false;
+        // Permanently locked: event has passed AND the devotional date is also in the past
+        if (eventDay < today && nd < today) return false;
+        return true;
       });
 
       if (missedOrTodayDev) {
@@ -212,12 +253,9 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
         return;
       }
 
-      // If all devotionals are done, check if lesson study is needed
-      const eventDay = new Date(entry.eventDate);
-      eventDay.setHours(0, 0, 0, 0);
-      
-      // Show lesson study if meeting day has arrived OR passed, and not studied yet
-      if (!studiedLessons.has(lessonId) && today >= eventDay) {
+      // Show lesson study only if meeting day arrived, not yet studied,
+      // and event was within the last 14 days (avoids surfacing very old requirements).
+      if (!studiedLessons.has(lessonId) && today >= eventDay && eventDay >= fourteenDaysAgo) {
         setNextItem({
           type: "lesson",
           title: `Lição ${entry.lessonOrder}: ${entry.lessonTitle}`,
@@ -286,12 +324,47 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
 
     setNextItem(null);
     setLoading(false);
-  }
+  }, [agendaSchedule.schedule, currentArea, currentTurmaId, loadScheduleFallback, profile?.church_id]);
+
+  useEffect(() => {
+    if (agendaSchedule.loading) return;
+    void fetchNext();
+  }, [agendaSchedule.loading, fetchNext, switchNonce]);
 
   if (loading || agendaSchedule.loading) {
     return (
       <div className="px-5 pt-5">
         <div className="h-48 rounded-3xl bg-muted animate-pulse" />
+      </div>
+    );
+  }
+
+  if (hasOpenAccess && !nextItem) {
+    return (
+      <div className="px-5 pt-5">
+        <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-xl">
+          <div className="bg-gradient-orange flex items-center gap-2 px-5 py-3">
+            <Zap className="h-5 w-5 fill-primary-foreground text-primary-foreground" />
+            <span className="font-montserrat text-sm font-bold tracking-wide text-primary-foreground">
+              CURSO COM ACESSO LIVRE
+            </span>
+          </div>
+          <div className="p-5 text-center">
+            <BookOpen className="mx-auto mb-3 h-12 w-12 text-secondary" />
+            <p className="font-montserrat text-base font-bold text-foreground">
+              Todas as atividades estão liberadas
+            </p>
+            <p className="mt-1 font-inter text-sm text-muted-foreground">
+              Escolha qualquer lição ou devocional do curso e avance no seu ritmo.
+            </p>
+            <button
+              onClick={onNavigateToDiscipulado}
+              className="bg-gradient-orange mt-4 w-full rounded-2xl py-3.5 font-montserrat text-sm font-black text-primary-foreground shadow-xl shadow-secondary/30 active:scale-95"
+            >
+              ESCOLHER ATIVIDADE
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -404,10 +477,10 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
         <div className="p-5">
           {/* Course context */}
           <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-            <span className="text-[10px] font-inter font-semibold text-secondary bg-secondary/10 px-2 py-0.5 rounded-full">
+            <span className="text-xs font-inter font-semibold text-secondary bg-secondary/10 px-2 py-0.5 rounded-full">
               Curso {nextItem.courseOrder} - {nextItem.courseTitle}
             </span>
-            <span className="text-[10px] font-inter text-muted-foreground">
+            <span className="text-xs font-inter text-muted-foreground">
               - Licao {nextItem.lessonOrder}
             </span>
           </div>
@@ -416,7 +489,7 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
           {nextItem.eventDate && (
             <div className="flex items-center gap-1.5 mb-3 px-2.5 py-1.5 rounded-lg bg-primary/5 border border-primary/10">
               <CalendarDays className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-              <p className="font-inter text-[10px] text-primary font-medium">
+              <p className="font-inter text-xs text-primary font-medium">
                 Encontro: {format(nextItem.eventDate, "d 'de' MMMM 'as' HH:mm", { locale: ptBR })}
               </p>
             </div>
@@ -430,7 +503,7 @@ export default function NextCourseActivityCard({ onNavigateToDiscipulado }: { on
               {isDevotional || isWaitingDevotional ? <BookOpen className="w-7 h-7 text-primary-foreground" /> : <GraduationCap className="w-7 h-7 text-primary-foreground" />}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-muted-foreground text-[10px] font-inter mb-0.5 uppercase tracking-wide">
+              <p className="text-muted-foreground text-xs font-inter mb-0.5 uppercase tracking-wide">
                 {isDevotional ? `Devocional - Dia ${nextItem.devotionalDay}` : "Estudo de Licao"}
               </p>
               <h2 className="font-montserrat font-black text-card-foreground text-lg leading-tight">

@@ -1,36 +1,29 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { lazy, Suspense, useEffect, useState, useRef } from "react";
 import { getAreaForCommunity } from "@/config/areas";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
-import { MessageCircle, GraduationCap, Sparkles, Send, Trash2, Target, Check, Users, Upload, Image, Camera, Heart, Book } from "lucide-react";
-import ClassroomTab from "./ClassroomTab";
+import { MessageCircle, GraduationCap, Sparkles, Send, Trash2, Target, Check, Users, Upload, Image, Camera, Book } from "lucide-react";
 import AnnouncementsSection from "./AnnouncementsSection";
 import PollsSection from "./PollsSection";
 import CommunityAchievements from "./CommunityAchievements";
 import PrayerPairsSection from "./PrayerPairsSection";
-import EventPhotoGallery from "./EventPhotoGallery";
 import BirthdayHighlights from "./BirthdayHighlights";
 import PrayerCircles from "./PrayerCircles";
-import PrayerDiary from "../community/PrayerDiary";
+import type { Database } from "@/integrations/supabase/types";
 
+const ClassroomTab = lazy(() => import("./ClassroomTab"));
+const EventPhotoGallery = lazy(() => import("./EventPhotoGallery"));
+const PrayerDiary = lazy(() => import("../community/PrayerDiary"));
 
-const REACTION_EMOJIS = [
-  { emoji: "🙏", label: "orando" },
-  { emoji: "❤️", label: "amém" },
-  { emoji: "🔥", label: "forte" },
-  { emoji: "🙌", label: "glória" },
-];
-
-interface Message {
-  id: string;
-  title: string;
-  body: string;
-  created_at: string;
+function CommunitySubtabFallback() {
+  return <div className="px-5 py-12 text-center text-sm text-muted-foreground">Carregando...</div>;
 }
 
-type ReactionMap = Record<string, Record<string, { count: number; hasReacted: boolean }>>;
-// { messageId: { emoji: { count, hasReacted } } }
+type ChallengeParticipant = Pick<
+  Database["public"]["Tables"]["challenge_participants"]["Row"],
+  "challenge_id" | "user_id" | "completed" | "response_text" | "file_url"
+>;
 
 interface Testimony {
   id: string;
@@ -59,17 +52,14 @@ interface Challenge {
 type SubTab = "comunidade" | "sala" | "galeria" | "diario";
 
 export default function CommunityTab() {
-  const { profile, role } = useAuth();
+  const { profile, role, user } = useAuth();
   const { effectiveArea, isOverriding } = useAreaSwitch();
   const currentArea = effectiveArea || profile?.area || "";
   const [subTab, setSubTab] = useState<SubTab>("comunidade");
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [reactions, setReactions] = useState<ReactionMap>({});
   const [testimonies, setTestimonies] = useState<Testimony[]>([]);
   const [newTestimony, setNewTestimony] = useState("");
   const [submittingTestimony, setSubmittingTestimony] = useState(false);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
-  const [loadingMessages, setLoadingMessages] = useState(true);
   const [challengeResponses, setChallengeResponses] = useState<Record<string, string>>({});
   const [challengeFiles, setChallengeFiles] = useState<Record<string, File | null>>({});
   const [completingChallenge, setCompletingChallenge] = useState<string | null>(null);
@@ -77,31 +67,6 @@ export default function CommunityTab() {
 
   useEffect(() => {
     if (!profile || !currentArea) return;
-
-    async function fetchMessages() {
-      setLoadingMessages(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      const [{ data }, { data: reactionsData }] = await Promise.all([
-        supabase
-          .from("messages")
-          .select("id, title, body, created_at")
-          .order("created_at", { ascending: false })
-          .limit(5),
-        supabase.from("message_reactions").select("message_id, emoji, user_id"),
-      ]);
-      setMessages(data ?? []);
-      // Build reactions map
-      const rMap: ReactionMap = {};
-      (reactionsData ?? []).forEach((r: any) => {
-        if (!rMap[r.message_id]) rMap[r.message_id] = {};
-        if (!rMap[r.message_id][r.emoji]) rMap[r.message_id][r.emoji] = { count: 0, hasReacted: false };
-        rMap[r.message_id][r.emoji].count++;
-        if (user && r.user_id === user.id) rMap[r.message_id][r.emoji].hasReacted = true;
-      });
-      setReactions(rMap);
-      setLoadingMessages(false);
-    }
-
 
     async function fetchTestimonies() {
       const { data } = await supabase
@@ -113,27 +78,26 @@ export default function CommunityTab() {
     }
 
     async function fetchChallenges() {
-      const { data: { user } } = await supabase.auth.getUser();
       const today = new Date().toISOString().split("T")[0];
       const { data: challengesData } = await supabase
         .from("community_challenges")
         .select("*")
         .lte("start_date", today)
         .gte("end_date", today);
-      const visibleChallenges = (challengesData ?? []).filter((challenge: any) => {
+      const visibleChallenges = (challengesData ?? []).filter((challenge) => {
         if (challenge.area) return challenge.area === currentArea;
         if (challenge.community) return getAreaForCommunity(challenge.community) === currentArea;
         return true;
       });
-      const cIds = visibleChallenges.map((c: any) => c.id);
-      let participantsData: any[] = [];
+      const cIds = visibleChallenges.map((challenge) => challenge.id);
+      let participantsData: ChallengeParticipant[] = [];
       if (cIds.length > 0) {
         const { data } = await supabase.from("challenge_participants").select("challenge_id, user_id, completed, response_text, file_url").in("challenge_id", cIds);
         participantsData = data ?? [];
       }
-      const mapped: Challenge[] = visibleChallenges.map((c: any) => {
-        const parts = participantsData.filter((p: any) => p.challenge_id === c.id);
-        const myPart = user ? parts.find((p: any) => p.user_id === user.id) : null;
+      const mapped: Challenge[] = visibleChallenges.map((c) => {
+        const parts = participantsData.filter((participant) => participant.challenge_id === c.id);
+        const myPart = user ? parts.find((participant) => participant.user_id === user.id) : null;
         return {
           id: c.id,
           title: c.title,
@@ -153,46 +117,11 @@ export default function CommunityTab() {
       setChallenges(mapped);
     }
 
-    fetchMessages();
-    fetchTestimonies();
-    fetchChallenges();
-  }, [profile, currentArea]);
-
-  async function toggleReaction(messageId: string, emoji: string) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const current = reactions[messageId]?.[emoji];
-    if (current?.hasReacted) {
-      await supabase.from("message_reactions").delete().eq("message_id", messageId).eq("user_id", user.id).eq("emoji", emoji);
-      setReactions(prev => {
-        const copy = { ...prev };
-        if (copy[messageId]?.[emoji]) {
-          copy[messageId] = { ...copy[messageId] };
-          copy[messageId][emoji] = { count: copy[messageId][emoji].count - 1, hasReacted: false };
-          if (copy[messageId][emoji].count <= 0) delete copy[messageId][emoji];
-        }
-        return copy;
-      });
-    } else {
-      await supabase.from("message_reactions").insert({
-        message_id: messageId,
-        user_id: user.id,
-        emoji,
-        church_id: profile?.church_id ?? null,
-      });
-      setReactions(prev => {
-        const copy = { ...prev };
-        if (!copy[messageId]) copy[messageId] = {};
-        copy[messageId] = { ...copy[messageId] };
-        const old = copy[messageId][emoji] ?? { count: 0, hasReacted: false };
-        copy[messageId][emoji] = { count: old.count + 1, hasReacted: true };
-        return copy;
-      });
-    }
-  }
+    void fetchTestimonies();
+    void fetchChallenges();
+  }, [currentArea, profile, user]);
 
   async function submitTestimony() {
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user || !profile || !newTestimony.trim()) return;
     setSubmittingTestimony(true);
     const { data, error } = await supabase.from("testimonies").insert({
@@ -215,7 +144,6 @@ export default function CommunityTab() {
   }
 
   async function joinChallenge(challengeId: string) {
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     await supabase.from("challenge_participants").insert({
       challenge_id: challengeId,
@@ -226,7 +154,6 @@ export default function CommunityTab() {
   }
 
   async function completeChallenge(challengeId: string) {
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const ch = challenges.find(c => c.id === challengeId);
     if (!ch) return;
@@ -334,19 +261,27 @@ export default function CommunityTab() {
 
       {/* ===== GALERIA ===== */}
       {subTab === "galeria" && (
-        <div className="px-5">
-          <EventPhotoGallery />
-        </div>
+        <Suspense fallback={<CommunitySubtabFallback />}>
+          <div className="px-5">
+            <EventPhotoGallery />
+          </div>
+        </Suspense>
       )}
 
       {/* ===== SALA DA TURMA ===== */}
-      {subTab === "sala" && <ClassroomTab />}
+      {subTab === "sala" && (
+        <Suspense fallback={<CommunitySubtabFallback />}>
+          <ClassroomTab />
+        </Suspense>
+      )}
 
       {/* ===== DIÁRIO ===== */}
       {subTab === "diario" && (
-        <div className="px-5">
-          <PrayerDiary />
-        </div>
+        <Suspense fallback={<CommunitySubtabFallback />}>
+          <div className="px-5">
+            <PrayerDiary />
+          </div>
+        </Suspense>
       )}
 
       {/* ===== COMUNIDADE ===== */}
@@ -394,10 +329,10 @@ export default function CommunityTab() {
                             <p className="text-muted-foreground font-inter text-xs mt-0.5 leading-relaxed">{ch.description}</p>
                           )}
                           <div className="flex items-center gap-3 mt-2 flex-wrap">
-                            <span className="flex items-center gap-1 text-muted-foreground text-[10px] font-inter">
+                            <span className="flex items-center gap-1 text-muted-foreground text-xs font-inter">
                               <Users className="w-3 h-3" />{ch.participant_count} participando
                             </span>
-                            <span className="text-[10px] font-inter text-muted-foreground">
+                            <span className="text-xs font-inter text-muted-foreground">
                               ⏳ {daysLeft} dia{daysLeft !== 1 ? "s" : ""} restante{daysLeft !== 1 ? "s" : ""}
                             </span>
                           </div>
@@ -510,7 +445,7 @@ export default function CommunityTab() {
                 maxLength={500}
               />
               <div className="flex items-center justify-between mt-2">
-                <span className="text-[10px] text-muted-foreground font-inter">{newTestimony.length}/500</span>
+                <span className="text-xs text-muted-foreground font-inter">{newTestimony.length}/500</span>
                 <button
                   onClick={submitTestimony}
                   disabled={!newTestimony.trim() || submittingTestimony}
@@ -532,7 +467,7 @@ export default function CommunityTab() {
                         <span className="text-base">✨</span>
                         <div>
                           <p className="font-montserrat font-bold text-card-foreground text-xs">{t.user_name}</p>
-                          <p className="text-muted-foreground text-[10px] font-inter">{timeAgo(t.created_at)}</p>
+                          <p className="text-muted-foreground text-xs font-inter">{timeAgo(t.created_at)}</p>
                         </div>
                       </div>
                       {(profile && (t.user_id === profile.user_id || role === "admin" || role === "lider")) && (

@@ -46,7 +46,7 @@ export default function RemindersSection({ onNavigateToDiscipulado, onNavigateTo
           </div>
           <div className="text-left">
             <p className="font-montserrat font-bold text-foreground text-sm">Lembretes</p>
-            <p className="font-inter text-[10px] text-muted-foreground">
+            <p className="font-inter text-xs text-muted-foreground">
               {isOpen ? "Toque para recolher" : "Toque para ver seus avisos"}
             </p>
           </div>

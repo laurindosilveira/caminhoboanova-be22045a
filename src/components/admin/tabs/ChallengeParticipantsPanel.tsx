@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Users, MessageSquare, FileText, ExternalLink, CheckCircle2, Clock, ChevronDown, ChevronUp } from "lucide-react";
 import { format } from "date-fns";
@@ -25,11 +25,7 @@ export default function ChallengeParticipantsPanel({ challengeId, requiresText, 
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchParticipants();
-  }, [challengeId]);
-
-  async function fetchParticipants() {
+  const fetchParticipants = useCallback(async () => {
     setLoading(true);
     const { data } = await supabase
       .from("challenge_participants")
@@ -58,12 +54,16 @@ export default function ChallengeParticipantsPanel({ challengeId, requiresText, 
 
     setParticipants(enriched);
     setLoading(false);
-  }
+  }, [challengeId]);
+
+  useEffect(() => {
+    void fetchParticipants();
+  }, [fetchParticipants]);
 
   if (loading) {
     return (
       <div className="space-y-2 pt-2">
-        {[1, 2].map(i => <div key={i} className="h-12 rounded-xl bg-muted/50 animate-pulse" />)}
+        {[1, 2].map(i => <div key={i} className="h-12 rounded-lg bg-muted/50 animate-pulse" />)}
       </div>
     );
   }
@@ -95,9 +95,9 @@ export default function ChallengeParticipantsPanel({ challengeId, requiresText, 
       {/* Completed participants */}
       {completed.length > 0 && (
         <div className="space-y-2">
-          <p className="font-inter text-[10px] font-bold text-brand-green uppercase tracking-wider">✅ Concluídos</p>
+          <p className="font-inter text-xs font-bold text-brand-green uppercase tracking-wider">✅ Concluídos</p>
           {completed.map(p => (
-            <div key={p.id} className="bg-muted/30 rounded-xl border border-border overflow-hidden">
+            <div key={p.id} className="bg-muted/30 rounded-lg border border-border overflow-hidden">
               <button
                 onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
                 className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/50 transition-colors"
@@ -107,7 +107,7 @@ export default function ChallengeParticipantsPanel({ challengeId, requiresText, 
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-inter text-sm font-semibold text-foreground truncate">{p.full_name}</p>
-                  <p className="font-inter text-[10px] text-muted-foreground">{p.community} · Concluiu em {p.completed_at ? format(new Date(p.completed_at), "d MMM HH:mm", { locale: ptBR }) : "—"}</p>
+                  <p className="font-inter text-xs text-muted-foreground">{p.community} · Concluiu em {p.completed_at ? format(new Date(p.completed_at), "d MMM HH:mm", { locale: ptBR }) : "—"}</p>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   {p.response_text && <MessageSquare className="w-3.5 h-3.5 text-primary" />}
@@ -120,7 +120,7 @@ export default function ChallengeParticipantsPanel({ challengeId, requiresText, 
                 <div className="px-3 pb-3 space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-200 border-t border-border pt-2.5">
                   {p.response_text && (
                     <div>
-                      <p className="font-inter text-[10px] font-bold text-foreground mb-1 flex items-center gap-1">
+                      <p className="font-inter text-xs font-bold text-foreground mb-1 flex items-center gap-1">
                         <MessageSquare className="w-3 h-3 text-primary" /> Resposta em texto
                       </p>
                       <div className="bg-background rounded-lg px-3 py-2 border border-border">
@@ -130,7 +130,7 @@ export default function ChallengeParticipantsPanel({ challengeId, requiresText, 
                   )}
                   {p.file_url && (
                     <div>
-                      <p className="font-inter text-[10px] font-bold text-foreground mb-1 flex items-center gap-1">
+                      <p className="font-inter text-xs font-bold text-foreground mb-1 flex items-center gap-1">
                         <FileText className="w-3 h-3 text-primary" /> Arquivo enviado
                       </p>
                       <a
@@ -163,15 +163,15 @@ export default function ChallengeParticipantsPanel({ challengeId, requiresText, 
       {/* Pending participants */}
       {pending.length > 0 && (
         <div className="space-y-2">
-          <p className="font-inter text-[10px] font-bold text-muted-foreground uppercase tracking-wider">⏳ Pendentes</p>
+          <p className="font-inter text-xs font-bold text-muted-foreground uppercase tracking-wider">⏳ Pendentes</p>
           {pending.map(p => (
-            <div key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-muted/20 border border-border">
+            <div key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-muted/20 border border-border">
               <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
                 <Clock className="w-4 h-4 text-muted-foreground" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-inter text-sm text-foreground truncate">{p.full_name}</p>
-                <p className="font-inter text-[10px] text-muted-foreground">{p.community} · Participou em {format(new Date(p.joined_at), "d MMM", { locale: ptBR })}</p>
+                <p className="font-inter text-xs text-muted-foreground">{p.community} · Participou em {format(new Date(p.joined_at), "d MMM", { locale: ptBR })}</p>
               </div>
             </div>
           ))}

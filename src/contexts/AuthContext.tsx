@@ -1,29 +1,15 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { isPasswordRecoveryUrl } from "@/lib/passwordRecoveryRedirect";
+import {
+  getAppBootstrap,
+  invalidateAppBootstrap,
+  type BootstrapProfile,
+  type BootstrapSubscription,
+} from "@/lib/appBootstrap";
 
-interface Profile {
-  id: string;
-  user_id: string;
-  full_name: string;
-  birth_date: string;
-  phone: string;
-  whatsapp_number?: string | null;
-  community: string;
-  area: string;
-  church_id?: string | null;
-  churches?: { name: string | null } | null;
-  turma_id?: string | null;
-  father_name?: string;
-  mother_name?: string;
-  father_phone?: string;
-  mother_phone?: string;
-  address?: string;
-  avatar_url?: string;
-  confirmation_year?: number | null;
-  enrollment_status?: "pending" | "approved" | "rejected";
-}
+type Profile = BootstrapProfile;
 
 interface AuthContextType {
   user: User | null;
@@ -32,6 +18,8 @@ interface AuthContextType {
   role: "user" | "admin" | "lider" | null;
   adminArea: string | null;
   isSuper: boolean;
+  subscription: BootstrapSubscription | null;
+  requiresPasswordSetup: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -44,6 +32,8 @@ const AuthContext = createContext<AuthContextType>({
   role: null,
   adminArea: null,
   isSuper: false,
+  subscription: null,
+  requiresPasswordSetup: false,
   loading: true,
   signOut: async () => {},
   refreshProfile: async () => {},
@@ -56,58 +46,75 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<"user" | "admin" | "lider" | null>(null);
   const [adminArea, setAdminArea] = useState<string | null>(null);
   const [isSuper, setIsSuper] = useState(false);
+  const [subscription, setSubscription] = useState<BootstrapSubscription | null>(null);
   const [loading, setLoading] = useState(true);
+  const loadedUserIdRef = useRef<string | null>(null);
+  const profileRequestRef = useRef<Promise<void> | null>(null);
+  const profileRequestUserIdRef = useRef<string | null>(null);
 
-  async function fetchProfileAndRole(userId: string) {
-    const results = await Promise.allSettled([
-      // Keep the essential profile load independent from embedded relationships.
-      // If PostgREST cannot resolve profiles -> churches after a schema refresh,
-      // the user must still retain turma_id and access to the application.
-      supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
-      supabase.rpc("is_super_admin", { _user_id: userId }),
-      supabase.from("user_roles").select("role, admin_area").eq("user_id", userId).in("role", ["admin", "lider"]),
-    ]);
-
-    const profileRes = results[0].status === 'fulfilled' ? results[0].value : { data: null, error: (results[0] as any).reason };
-    const isSuperRes = results[1].status === 'fulfilled' ? results[1].value : { data: false, error: (results[1] as any).reason };
-    const roleRowsRes = results[2].status === 'fulfilled' ? results[2].value : { data: [], error: (results[2] as any).reason };
-
-    if (profileRes.error) console.error("Error fetching profile:", profileRes.error);
-    if (isSuperRes.error) console.error("Error checking super admin:", isSuperRes.error);
-    if (roleRowsRes.error) console.error("Error fetching user roles:", roleRowsRes.error);
-
-    let profileData = (profileRes.data as any) ?? null;
-    if (profileData?.church_id) {
-      const { data: church, error: churchError } = await supabase
-        .from("churches")
-        .select("name")
-        .eq("id", profileData.church_id)
-        .maybeSingle();
-      if (churchError) console.error("Error fetching profile church:", churchError);
-      profileData = { ...profileData, churches: church ?? null };
+  async function fetchProfileAndRole(userId: string, force = false) {
+    if (!force && loadedUserIdRef.current === userId) return;
+    if (!force && profileRequestRef.current && profileRequestUserIdRef.current === userId) {
+      return profileRequestRef.current;
     }
-    setProfile(profileData);
-    setIsSuper(isSuperRes.data === true);
-    const roleRows = roleRowsRes.data ?? [];
-    const selectedRoleRow = roleRows.find((row) => row.role === "admin") ?? roleRows[0] ?? null;
-    setAdminArea(selectedRoleRow?.admin_area ?? null);
-    const isAdmin = roleRows.some((row) => row.role === "admin");
-    const isLider = roleRows.some((row) => row.role === "lider");
-    if (isAdmin) setRole("admin");
-    else if (isLider) setRole("lider");
-    else setRole("user");
+
+    const loadBootstrapWithProfileRetry = async () => {
+      let bootstrap = await getAppBootstrap(userId, force);
+      const retryDelays = [150, 400, 900];
+
+      for (const delay of retryDelays) {
+        if (bootstrap.profile) break;
+        await new Promise((resolve) => window.setTimeout(resolve, delay));
+        invalidateAppBootstrap(userId);
+        bootstrap = await getAppBootstrap(userId, true);
+      }
+
+      return bootstrap;
+    };
+
+    const request = loadBootstrapWithProfileRetry()
+      .then((bootstrap) => {
+        if (profileRequestUserIdRef.current !== userId) return;
+        setProfile(bootstrap.profile);
+        setSubscription(bootstrap.subscription);
+        setIsSuper(bootstrap.is_super);
+        const selectedRole = bootstrap.roles.find((row) => row.role === "admin")
+          ?? bootstrap.roles[0]
+          ?? null;
+        setAdminArea(selectedRole?.admin_area ?? null);
+        setRole(
+          bootstrap.roles.some((row) => row.role === "admin")
+            ? "admin"
+            : bootstrap.roles.some((row) => row.role === "lider")
+              ? "lider"
+              : "user",
+        );
+        loadedUserIdRef.current = userId;
+      })
+      .catch((error) => {
+        if (profileRequestUserIdRef.current !== userId) return;
+        console.error("Error fetching app bootstrap:", error);
+        setRole("user");
+      })
+      .finally(() => {
+        if (profileRequestUserIdRef.current === userId) {
+          profileRequestRef.current = null;
+          profileRequestUserIdRef.current = null;
+        }
+      });
+
+    profileRequestRef.current = request;
+    profileRequestUserIdRef.current = userId;
+    return request;
   }
 
   useEffect(() => {
-    // Track whether the initial profile fetch has been started to avoid
-    // running it twice (once from INITIAL_SESSION, once from getSession).
-    let initialFetchDone = false;
+    // Tracks the user whose bootstrap is being loaded. Unlike a boolean,
+    // this also handles logout followed by login with a different account.
+    let activeFetchUserId: string | null = null;
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        // DEBUG TEMPORÁRIO — remover após resolver o problema
-        console.log("[AUTH DEBUG] event:", event, "| url:", window.location.href, "| user:", currentSession?.user?.email ?? null);
-
         // Recovery sessions must NOT log the user in — ResetPassword page handles them.
         // Both PASSWORD_RECOVERY and INITIAL_SESSION can carry the recovery token
         // (implicit flow fires INITIAL_SESSION with the session before PASSWORD_RECOVERY).
@@ -117,7 +124,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           window.location.hash
         );
 
-        console.log("[AUTH DEBUG] isRecoveryUrl:", isRecoveryUrl);
 
         if (event === "PASSWORD_RECOVERY" || (isRecoveryUrl && (event === "INITIAL_SESSION" || event === "SIGNED_IN"))) {
           setLoading(false);
@@ -131,14 +137,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setProfile(null);
           setRole(null);
           setAdminArea(null);
+          setSubscription(null);
+          setIsSuper(false);
+          loadedUserIdRef.current = null;
+          activeFetchUserId = null;
           setLoading(false);
           return;
         }
 
         // Handle MFA or session invalidation logic for root admin
         if (currentSession.user.email?.toLowerCase() === 'laurindosilveira@gmail.com') {
-          if (typeof (supabase.auth as any).getAuthenticatorAssuranceLevel === 'function') {
-            const { data: authData } = await (supabase.auth as any).getAuthenticatorAssuranceLevel();
+          if (typeof supabase.auth.mfa.getAuthenticatorAssuranceLevel === 'function') {
+            const { data: authData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
             if (authData?.currentLevel !== 'aal2' && window.location.pathname.startsWith('/admin-sistema')) {
                console.warn("MFA missing for root admin on system route. Redirecting.");
                window.location.href = "/";
@@ -147,12 +157,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        if (event === "TOKEN_REFRESHED") {
+        if (event === "TOKEN_REFRESHED" && loadedUserIdRef.current === currentSession.user.id) {
           return;
         }
 
-        if (!initialFetchDone || event === "SIGNED_IN" || event === "MFA_CHALLENGE_VERIFIED") {
-          initialFetchDone = true;
+        const shouldFetchBootstrap = event === "MFA_CHALLENGE_VERIFIED"
+          || loadedUserIdRef.current !== currentSession.user.id
+          || activeFetchUserId !== currentSession.user.id;
+
+        if (shouldFetchBootstrap) {
+          activeFetchUserId = currentSession.user.id;
+          setLoading(true);
           setTimeout(() => {
             fetchProfileAndRole(currentSession.user.id).finally(() => setLoading(false));
           }, 0);
@@ -164,7 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const safetyTimeout = setTimeout(() => setLoading(false), 6000);
 
     // getSession covers the case where INITIAL_SESSION never fires (some browsers).
-    // The initialFetchDone flag prevents a double fetch when both paths run.
+    // activeFetchUserId prevents a double fetch when both paths run.
     supabase.auth.getSession()
       .then(({ data: { session: currentSession } }) => {
         // Don't treat a session as normal login if we're in the recovery flow
@@ -174,14 +189,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           window.location.hash
         );
 
-        console.log("[AUTH DEBUG] getSession | user:", currentSession?.user?.email ?? null, "| isRecoveryUrl:", isRecoveryUrl, "| url:", window.location.href);
 
-        if (currentSession?.user && !initialFetchDone && !isRecoveryUrl) {
-          initialFetchDone = true;
+        if (
+          currentSession?.user
+          && loadedUserIdRef.current !== currentSession.user.id
+          && activeFetchUserId !== currentSession.user.id
+          && !isRecoveryUrl
+        ) {
+          activeFetchUserId = currentSession.user.id;
           setSession(currentSession);
           setUser(currentSession.user);
+          setLoading(true);
           fetchProfileAndRole(currentSession.user.id).finally(() => setLoading(false));
-        } else {
+        } else if (!currentSession?.user || isRecoveryUrl) {
           setLoading(false);
         }
       })
@@ -199,17 +219,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRole(null);
     setAdminArea(null);
     setIsSuper(false);
+    setSubscription(null);
+    loadedUserIdRef.current = null;
+    invalidateAppBootstrap(user?.id);
   }
 
   async function refreshProfile() {
     const currentUser = user;
     if (currentUser?.id) {
-      await fetchProfileAndRole(currentUser.id);
+      invalidateAppBootstrap(currentUser.id);
+      loadedUserIdRef.current = null;
+      await fetchProfileAndRole(currentUser.id, true);
     }
   }
 
+  const requiresPasswordSetup = user?.app_metadata?.requires_password_setup === true
+    || profile?.requires_password_setup === true;
+
   return (
-    <AuthContext.Provider value={{ user, session, profile, role, adminArea, isSuper, loading, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{
+      user,
+      session,
+      profile,
+      role,
+      adminArea,
+      isSuper,
+      subscription,
+      requiresPasswordSetup,
+      loading,
+      signOut,
+      refreshProfile,
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { lazy, Suspense, useCallback, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Search, ChevronDown, Filter, Users, CheckCircle, Clock, BookOpen,
   GraduationCap, CalendarDays, Zap, ChevronLeft, Phone, MapPin, Calendar, Star, AlertTriangle,
-  Trash2, Eye, X, ChevronRight, Church, History, Pencil, Save, Heart, Lock, Unlock
+  Trash2, Eye, X, ChevronRight, Church, History, Pencil, Save, Heart, Lock, Unlock, Info, UserMinus
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -19,13 +19,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import ParticipantSheet from "./ParticipantSheet";
+import type { Database } from "@/integrations/supabase/types";
+import CourseOpenAccessDialog from "@/components/admin/CourseOpenAccessDialog";
 
+const ParticipantSheet = lazy(() => import("./ParticipantSheet"));
+
+type Tables = Database["public"]["Tables"];
+type RemovalLog = Tables["activity_removal_log"]["Row"];
 type Activity = { id: string; type: string; title: string; points: number; order_num: number; subtitle: string | null };
 type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
   confirmation_year?: number | null;
+  turma_id?: string | null;
+  church_id?: string | null;
   completed_lesson_count?: number;
   completed_devotional_count?: number;
   completed_event_count?: number;
@@ -36,6 +43,14 @@ type Participant = {
   father_phone?: string | null;
   mother_phone?: string | null;
   address?: string | null;
+  progress_total?: number;
+  last_activity_at?: string | null;
+  last_activity_source?: string | null;
+  last_devotional_at?: string | null;
+  recent_attendance_statuses?: string[];
+  health_status?: string;
+  is_priority?: boolean;
+  needs_pastor?: boolean;
 };
 
 type StatusReason = {
@@ -112,9 +127,13 @@ function calcAge(birthDate: string) {
   return age;
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Erro inesperado.";
+}
+
 // ─── Audit Log Section ───────────────────────────────────
 function AuditLogSection({ targetUserId, userName }: { targetUserId: string; userName: string }) {
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<RemovalLog[]>([]);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -123,10 +142,10 @@ function AuditLogSection({ targetUserId, userName }: { targetUserId: string; use
     async function fetch() {
       setLoading(true);
       const { data, error } = await supabase
-        .from("activity_removal_log" as any)
+        .from("activity_removal_log")
         .select("*")
         .eq("target_user_id", targetUserId)
-        .order("removed_at", { ascending: false }) as any;
+        .order("removed_at", { ascending: false });
       if (error) {
         setLogs([]);
         setProfiles({});
@@ -138,20 +157,20 @@ function AuditLogSection({ targetUserId, userName }: { targetUserId: string; use
       setLogs(items);
 
       // Fetch admin names
-      const adminIds = [...new Set(items.map((l: any) => l.removed_by))] as string[];
+      const adminIds = [...new Set(items.map((log) => log.removed_by))];
       if (adminIds.length > 0) {
         const { data: profs, error: profilesError } = await supabase.from("profiles").select("user_id, full_name").in("user_id", adminIds);
         if (profilesError) {
           toast({ title: "Erro ao carregar responsaveis", description: profilesError.message, variant: "destructive" });
         }
         const map: Record<string, string> = {};
-        (profs ?? []).forEach((p: any) => { map[p.user_id] = p.full_name; });
+        (profs ?? []).forEach((profile) => { map[profile.user_id] = profile.full_name; });
         setProfiles(map);
       }
       setLoading(false);
     }
     fetch();
-  }, [targetUserId]);
+  }, [targetUserId, toast]);
 
   const typeEmoji: Record<string, string> = { estudo: "L", devocional: "D", presenca: "P" };
 
@@ -165,20 +184,20 @@ function AuditLogSection({ targetUserId, userName }: { targetUserId: string; use
   );
 
   return (
-    <div className="mt-3 bg-card rounded-2xl border border-border p-4 space-y-2">
+    <div className="mt-3 bg-card rounded-lg border border-border p-4 space-y-2">
       <p className="font-montserrat font-bold text-foreground text-sm mb-2">Log de remocoes</p>
-      {logs.map((log: any) => (
-        <div key={log.id} className="bg-muted/30 rounded-xl p-3 border border-border">
+      {logs.map((log) => (
+        <div key={log.id} className="bg-muted/30 rounded-lg p-3 border border-border">
           <div className="flex items-start gap-2">
             <span className="text-base">{typeEmoji[log.activity_type] ?? "🗑️"}</span>
             <div className="flex-1 min-w-0">
               <p className="font-inter text-xs text-foreground font-medium truncate">
                 {log.activity_title || log.activity_type}
               </p>
-              <p className="font-inter text-[10px] text-muted-foreground">
+              <p className="font-inter text-xs text-muted-foreground">
                 Removido por <strong>{profiles[log.removed_by] ?? "Admin"}</strong> - {log.points_removed}pts
               </p>
-              <p className="font-inter text-[10px] text-muted-foreground">
+              <p className="font-inter text-xs text-muted-foreground">
                 {new Date(log.removed_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
               </p>
             </div>
@@ -200,7 +219,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
   const [showAvatarZoom, setShowAvatarZoom] = useState(false);
   const [showAuditLog, setShowAuditLog] = useState(false);
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, role } = useAuth();
 
   // Real data states
   const [lessonCompletions, setLessonCompletions] = useState<RealLessonCompletion[]>([]);
@@ -222,20 +241,30 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     address?: string; father_name?: string; mother_name?: string;
     father_phone?: string; mother_phone?: string; turma_id?: string | null;
   };
+  type EditForm = {
+    full_name?: string;
+    phone?: string;
+    birth_date?: string;
+    address?: string;
+    father_name?: string;
+    mother_name?: string;
+    father_phone?: string;
+    mother_phone?: string;
+    confirmation_year?: number | null;
+    turma_id?: string | null;
+  };
   const [extProfile, setExtProfile] = useState<ExtendedProfile>({});
   const [turmas, setTurmas] = useState<{ id: string; name: string; area: string | null }[]>([]);
   const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState<Record<string, any>>({});
+  const [editForm, setEditForm] = useState<EditForm>({});
   const [saving, setSaving] = useState(false);
   const [showPersonalInfo, setShowPersonalInfo] = useState(false);
 
-  useEffect(() => {
-    fetchRealData();
-    fetchExtendedProfile();
-  }, [p.user_id]);
-
-  async function fetchRealData() {
+  const fetchRealData = useCallback(async () => {
     setLoading(true);
+    const churchId = p.church_id ?? null;
+    let eventsQuery = supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false });
+    if (churchId) eventsQuery = eventsQuery.eq("church_id", churchId);
 
     const [
       { data: lessonResps, error: lessonRespsError },
@@ -257,7 +286,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       supabase.from("courses").select("id, title, order_num").order("order_num"),
       supabase.from("lesson_content").select("lesson_id, questions"),
       supabase.from("devotional_content").select("id, lesson_id, title, day_number, bible_reference, questions"),
-      supabase.from("events").select("id, title, event_date, type").order("event_date", { ascending: false }),
+      eventsQuery,
       supabase.from("lesson_progress").select("lesson_id, completed_at, awarded_points").eq("user_id", p.user_id).eq("is_completed", true),
     ]);
 
@@ -300,7 +329,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     });
 
     const lCompletions: RealLessonCompletion[] = [];
-    const lessonProgressMap = new Map<string, any>((lessonProgress ?? []).map((item: any) => [item.lesson_id, item]));
+    const lessonProgressMap = new Map((lessonProgress ?? []).map((item) => [item.lesson_id, item]));
     (lessonsData ?? []).forEach(lesson => {
       const progress = lessonProgressMap.get(lesson.id);
       if (!progress) return;
@@ -373,9 +402,9 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     setWorshipRecords((worshipData ?? []) as RealWorshipRecord[]);
 
     setLoading(false);
-  }
+  }, [p.church_id, p.user_id, toast]);
 
-  async function fetchExtendedProfile() {
+  const fetchExtendedProfile = useCallback(async () => {
     const [{ data: profileData, error: profileError }, { data: turmasData, error: turmasError }] = await Promise.all([
       supabase.from("profiles").select("address, father_name, mother_name, father_phone, mother_phone, turma_id").eq("user_id", p.user_id).maybeSingle(),
       supabase.from("turmas").select("id, name, area").eq("is_active", true).order("name"),
@@ -389,7 +418,12 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     }
     setExtProfile(profileData ?? {});
     setTurmas(turmasData ?? []);
-  }
+  }, [p.user_id, toast]);
+
+  useEffect(() => {
+    void fetchRealData();
+    void fetchExtendedProfile();
+  }, [fetchExtendedProfile, fetchRealData]);
 
   function startEditing() {
     setEditForm({
@@ -404,7 +438,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
 
   async function saveEdits() {
     setSaving(true);
-    const { error } = await supabase.from("profiles").update({
+    const profileUpdates: Tables["profiles"]["Update"] = {
       full_name: editForm.full_name?.trim() || p.full_name,
       phone: editForm.phone?.trim() || p.phone,
       birth_date: editForm.birth_date || p.birth_date,
@@ -414,9 +448,12 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       father_phone: editForm.father_phone?.trim() ?? "",
       mother_phone: editForm.mother_phone?.trim() ?? "",
       confirmation_year: editForm.confirmation_year ?? null,
-      turma_id: editForm.turma_id ?? null,
-      enrollment_status: editForm.turma_id ? "approved" : "pending",
-    } as any).eq("user_id", p.user_id);
+    };
+    if (role === "admin") {
+      profileUpdates.turma_id = editForm.turma_id ?? null;
+      profileUpdates.enrollment_status = editForm.turma_id ? "approved" : "pending";
+    }
+    const { error } = await supabase.from("profiles").update(profileUpdates).eq("user_id", p.user_id);
     if (error) {
       toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
     } else {
@@ -431,7 +468,8 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       setExtProfile(prev => ({
         ...prev, address: editForm.address?.trim(), father_name: editForm.father_name?.trim(),
         mother_name: editForm.mother_name?.trim(), father_phone: editForm.father_phone?.trim(),
-        mother_phone: editForm.mother_phone?.trim(), turma_id: editForm.turma_id,
+        mother_phone: editForm.mother_phone?.trim(),
+        turma_id: role === "admin" ? editForm.turma_id : prev.turma_id,
       }));
       setEditing(false);
     }
@@ -441,14 +479,14 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
   // ── Delete handlers ──
   async function logRemoval(activityType: string, activityId: string, activityTitle: string, pointsRemoved: number) {
     if (!user) return;
-    const { error } = await supabase.from("activity_removal_log" as any).insert({
+    const { error } = await supabase.from("activity_removal_log").insert({
       removed_by: user.id,
       target_user_id: p.user_id,
       activity_type: activityType,
       activity_id: activityId,
       activity_title: activityTitle,
       points_removed: pointsRemoved,
-    } as any);
+    });
     if (error) throw error;
   }
 
@@ -469,8 +507,8 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     }
     try {
       await logRemoval("estudo", lessonId, lesson?.lesson_title ?? "", pointsRemoved);
-    } catch (logError: any) {
-      toast({ title: "Estudo removido com alerta", description: `As respostas foram removidas, mas o log falhou: ${logError.message}`, variant: "destructive" });
+    } catch (logError: unknown) {
+      toast({ title: "Estudo removido com alerta", description: `As respostas foram removidas, mas o log falhou: ${getErrorMessage(logError)}`, variant: "destructive" });
     }
     setLessonCompletions(prev => prev.filter(l => l.lesson_id !== lessonId));
     toast({ title: "Estudo removido", description: "Respostas e pontuacao foram removidas. Registro salvo no log." });
@@ -494,8 +532,8 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     }
     try {
       await logRemoval("devocional", devotionalId, dev?.title ?? "", pts);
-    } catch (logError: any) {
-      toast({ title: "Devocional removido com alerta", description: `A conclusao foi removida, mas o log falhou: ${logError.message}`, variant: "destructive" });
+    } catch (logError: unknown) {
+      toast({ title: "Devocional removido com alerta", description: `A conclusao foi removida, mas o log falhou: ${getErrorMessage(logError)}`, variant: "destructive" });
     }
     setDevotionalCompletions(prev => prev.filter(d => d.devotional_id !== devotionalId));
     toast({ title: "Devocional removido", description: "Conclusao e pontuacao foram removidas. Registro salvo no log." });
@@ -518,8 +556,8 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     }
     try {
       await logRemoval("presenca", eventId, att?.event_title ?? "", 10);
-    } catch (logError: any) {
-      toast({ title: "Presenca removida com alerta", description: `O registro foi removido, mas o log falhou: ${logError.message}`, variant: "destructive" });
+    } catch (logError: unknown) {
+      toast({ title: "Presenca removida com alerta", description: `O registro foi removido, mas o log falhou: ${getErrorMessage(logError)}`, variant: "destructive" });
     }
     setAttendanceRecords(prev => prev.filter(a => a.event_id !== eventId));
     toast({ title: "Presenca removida", description: "Registro de presenca foi removido. Registro salvo no log." });
@@ -547,22 +585,22 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
           <ChevronLeft className="w-4 h-4" /> Voltar as atividades
         </button>
 
-        <div className="bg-card rounded-2xl border border-border p-5 mb-4 shadow-sm">
+        <div className="bg-card rounded-lg border border-border p-5 mb-4 shadow-sm">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-secondary/10 text-secondary">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-secondary/10 text-secondary">
               <GraduationCap className="w-5 h-5" />
             </div>
             <div className="flex-1">
               <h3 className="font-montserrat font-bold text-foreground text-sm">{viewingLesson.lesson_title}</h3>
-              <p className="font-inter text-[10px] text-muted-foreground">
+              <p className="font-inter text-xs text-muted-foreground">
                 Estudo de licao - {viewingLesson.course_title} - +20 pts
               </p>
             </div>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-green/10 text-brand-green">Concluida</span>
+            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-brand-green/10 text-brand-green">Concluida</span>
           </div>
 
           {viewingLesson.completed_at && (
-            <div className="bg-brand-green/5 rounded-xl p-3 border border-brand-green/20 mb-3">
+            <div className="bg-brand-green/5 rounded-lg p-3 border border-brand-green/20 mb-3">
               <p className="font-inter text-xs text-brand-green">
                 Respondido em {new Date(viewingLesson.completed_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
               </p>
@@ -573,7 +611,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
             <div className="space-y-3">
               <p className="font-montserrat font-bold text-foreground text-xs">Respostas do aluno:</p>
               {viewingLesson.responses.map((r, i) => (
-                <div key={i} className="bg-muted/30 rounded-xl p-3 border border-border space-y-1.5">
+                <div key={i} className="bg-muted/30 rounded-lg p-3 border border-border space-y-1.5">
                   <p className="font-inter text-xs text-muted-foreground font-medium">{r.question}</p>
                   <p className="font-inter text-sm text-foreground leading-relaxed whitespace-pre-wrap">{r.response}</p>
                 </div>
@@ -588,7 +626,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
         </div>
 
         {/* Delete */}
-        <div className="bg-destructive/5 border border-destructive/20 rounded-2xl p-4">
+        <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-4">
           {confirmDeleteKey === `lesson-${viewingLesson.lesson_id}` ? (
             <div className="space-y-3">
               <p className="font-inter text-sm text-destructive font-medium">Tem certeza que deseja remover este estudo?</p>
@@ -596,15 +634,15 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
               <div className="flex gap-2">
                 <button onClick={() => handleDeleteLesson(viewingLesson.lesson_id)}
                   disabled={deletingId === viewingLesson.lesson_id}
-                  className="flex-1 py-2.5 rounded-xl bg-destructive text-destructive-foreground font-inter text-sm font-medium disabled:opacity-50">
+                  className="flex-1 py-2.5 rounded-lg bg-destructive text-destructive-foreground font-inter text-sm font-medium disabled:opacity-50">
                   {deletingId === viewingLesson.lesson_id ? "Removendo..." : "Confirmar remocao"}
                 </button>
-                <button onClick={() => setConfirmDeleteKey(null)} className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm">Cancelar</button>
+                <button onClick={() => setConfirmDeleteKey(null)} className="px-4 py-2.5 rounded-lg bg-muted text-foreground font-inter text-sm">Cancelar</button>
               </div>
             </div>
           ) : (
             <button onClick={() => setConfirmDeleteKey(`lesson-${viewingLesson.lesson_id}`)}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-destructive/30 text-destructive font-inter text-sm font-medium hover:bg-destructive/10 transition-colors">
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-destructive/30 text-destructive font-inter text-sm font-medium hover:bg-destructive/10 transition-colors">
               <Trash2 className="w-4 h-4" /> Remover estudo e pontuacao
             </button>
           )}
@@ -621,27 +659,27 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
           <ChevronLeft className="w-4 h-4" /> Voltar as atividades
         </button>
 
-        <div className="bg-card rounded-2xl border border-border p-5 mb-4 shadow-sm">
+        <div className="bg-card rounded-lg border border-border p-5 mb-4 shadow-sm">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-green/10 text-brand-green">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-brand-green/10 text-brand-green">
               <BookOpen className="w-5 h-5" />
             </div>
             <div className="flex-1">
               <h3 className="font-montserrat font-bold text-foreground text-sm">{viewingDevotional.title}</h3>
-              <p className="font-inter text-[10px] text-muted-foreground">
+              <p className="font-inter text-xs text-muted-foreground">
                 Devocional - {viewingDevotional.lesson_title} - +{viewingDevotional.is_weekend ? 2 : 5} pts
                 {viewingDevotional.is_weekend && <span className="text-accent-foreground ml-1">(fim de semana)</span>}
               </p>
             </div>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-green/10 text-brand-green">Concluido</span>
+            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-brand-green/10 text-brand-green">Concluido</span>
           </div>
 
           <div className="space-y-3">
-            <div className="bg-muted/50 rounded-xl p-3">
+            <div className="bg-muted/50 rounded-lg p-3">
               <p className="font-inter text-xs text-muted-foreground mb-1">Referencia biblica</p>
               <p className="font-inter text-sm text-foreground">{viewingDevotional.bible_reference || "Nao informada"}</p>
             </div>
-            <div className="bg-brand-green/5 rounded-xl p-3 border border-brand-green/20">
+            <div className="bg-brand-green/5 rounded-lg p-3 border border-brand-green/20">
               <p className="font-inter text-xs text-brand-green">
                 Concluido em {new Date(viewingDevotional.completed_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                 {viewingDevotional.is_weekend && " (recuperacao de fim de semana)"}
@@ -651,10 +689,10 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
               <div className="space-y-2">
                 <p className="font-montserrat font-bold text-foreground text-xs">Perguntas do devocional:</p>
                 {viewingDevotional.questions.filter(q => q.trim()).map((q, i) => (
-                  <div key={i} className="bg-muted/30 rounded-xl p-3 border border-border">
+                  <div key={i} className="bg-muted/30 rounded-lg p-3 border border-border">
                     <p className="font-inter text-xs text-muted-foreground mb-1">Pergunta {i + 1}:</p>
                     <p className="font-inter text-sm text-foreground">{q}</p>
-                    <p className="font-inter text-[10px] text-muted-foreground mt-1 italic">Respostas de devocionais nao sao salvas no banco</p>
+                    <p className="font-inter text-xs text-muted-foreground mt-1 italic">Respostas de devocionais nao sao salvas no banco</p>
                   </div>
                 ))}
               </div>
@@ -663,7 +701,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
         </div>
 
         {/* Delete */}
-        <div className="bg-destructive/5 border border-destructive/20 rounded-2xl p-4">
+        <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-4">
           {confirmDeleteKey === `dev-${viewingDevotional.devotional_id}` ? (
             <div className="space-y-3">
               <p className="font-inter text-sm text-destructive font-medium">Tem certeza que deseja remover este devocional?</p>
@@ -671,15 +709,15 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
               <div className="flex gap-2">
                 <button onClick={() => handleDeleteDevotional(viewingDevotional.devotional_id)}
                   disabled={deletingId === viewingDevotional.devotional_id}
-                  className="flex-1 py-2.5 rounded-xl bg-destructive text-destructive-foreground font-inter text-sm font-medium disabled:opacity-50">
+                  className="flex-1 py-2.5 rounded-lg bg-destructive text-destructive-foreground font-inter text-sm font-medium disabled:opacity-50">
                   {deletingId === viewingDevotional.devotional_id ? "Removendo..." : "Confirmar remocao"}
                 </button>
-                <button onClick={() => setConfirmDeleteKey(null)} className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm">Cancelar</button>
+                <button onClick={() => setConfirmDeleteKey(null)} className="px-4 py-2.5 rounded-lg bg-muted text-foreground font-inter text-sm">Cancelar</button>
               </div>
             </div>
           ) : (
             <button onClick={() => setConfirmDeleteKey(`dev-${viewingDevotional.devotional_id}`)}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-destructive/30 text-destructive font-inter text-sm font-medium hover:bg-destructive/10 transition-colors">
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-destructive/30 text-destructive font-inter text-sm font-medium hover:bg-destructive/10 transition-colors">
               <Trash2 className="w-4 h-4" /> Remover devocional e pontuação
             </button>
           )}
@@ -691,7 +729,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
+        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
           <BookOpen className="w-5 h-5 text-primary" />
         </div>
         <p className="text-muted-foreground font-inter text-sm">Carregando dados reais...</p>
@@ -821,17 +859,17 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       </button>
 
       {/* Profile card */}
-      <div className="bg-card rounded-2xl border border-border p-5 mb-4 shadow-sm">
+      <div className="bg-card rounded-lg border border-border p-5 mb-4 shadow-sm">
         <div className="flex items-center gap-4 mb-4">
           {p.avatar_url ? (
             <img
               src={p.avatar_url}
               alt={p.full_name}
-              className="w-14 h-14 rounded-2xl object-cover flex-shrink-0 border border-border cursor-pointer hover:opacity-80 transition-opacity"
+              className="w-14 h-14 rounded-lg object-cover flex-shrink-0 border border-border cursor-pointer hover:opacity-80 transition-opacity"
               onClick={() => setShowAvatarZoom(true)}
             />
           ) : (
-            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <div className="w-14 h-14 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
               <span className="font-montserrat font-black text-primary text-2xl">{p.full_name.charAt(0).toUpperCase()}</span>
             </div>
           )}
@@ -840,7 +878,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
           {showAvatarZoom && p.avatar_url && (
             <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6" onClick={() => setShowAvatarZoom(false)}>
               <div className="relative max-w-sm w-full" onClick={e => e.stopPropagation()}>
-                <img src={p.avatar_url} alt={p.full_name} className="w-full rounded-2xl object-contain max-h-[70vh]" />
+                <img src={p.avatar_url} alt={p.full_name} className="w-full rounded-lg object-contain max-h-[70vh]" />
                 <button
                   onClick={() => setShowAvatarZoom(false)}
                   className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-card border border-border flex items-center justify-center shadow-lg"
@@ -881,19 +919,21 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
               <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Endereco</label>
               <Input value={editForm.address ?? ""} onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))} className="text-sm" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className={`grid gap-3 ${role === "admin" ? "grid-cols-2" : "grid-cols-1"}`}>
               <div>
                 <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Ano confirmacao</label>
                 <Input type="number" min={1} max={3} value={editForm.confirmation_year ?? ""} onChange={e => setEditForm(f => ({ ...f, confirmation_year: e.target.value ? Number(e.target.value) : null }))} className="text-sm" placeholder="1 ou 2" />
               </div>
-              <div>
-                <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Turma</label>
-                <select value={editForm.turma_id ?? ""} onChange={e => setEditForm(f => ({ ...f, turma_id: e.target.value || null }))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <option value="">Sem turma</option>
-                  {turmas.map(t => <option key={t.id} value={t.id}>{t.name}{t.area ? ` (${t.area})` : ""}</option>)}
-                </select>
-              </div>
+              {role === "admin" && (
+                <div>
+                  <label className="text-xs font-inter font-semibold text-muted-foreground mb-1 block">Turma</label>
+                  <select value={editForm.turma_id ?? ""} onChange={e => setEditForm(f => ({ ...f, turma_id: e.target.value || null }))}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <option value="">Sem turma</option>
+                    {turmas.map(t => <option key={t.id} value={t.id}>{t.name}{t.area ? ` (${t.area})` : ""}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -992,7 +1032,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
           { label: "Presencas", icon: "📅", done: attendanceRecords.filter(a => a.status === "presente").length },
           { label: "Cultos", icon: "⛪", done: worshipRecords.length },
         ].map(({ label, icon, done }) => (
-          <div key={label} className="bg-card rounded-xl border border-border p-3">
+          <div key={label} className="bg-card rounded-lg border border-border p-3">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-base">{icon}</span>
               <span className="font-inter text-xs text-muted-foreground">{label}</span>
@@ -1003,7 +1043,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       </div>
 
       {/* Pontuacao detalhada */}
-      <div className="bg-card rounded-2xl border border-border p-4 mb-4">
+      <div className="bg-card rounded-lg border border-border p-4 mb-4">
         <p className="font-montserrat font-bold text-foreground text-sm mb-2">📊 Detalhamento de pontos</p>
         <div className="space-y-1.5">
           <div className="flex justify-between font-inter text-xs">
@@ -1030,7 +1070,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       </div>
 
       {/* Activity list */}
-      <div className="bg-card rounded-2xl border border-border p-4">
+      <div className="bg-card rounded-lg border border-border p-4">
         <div className="flex items-center justify-between mb-1">
           <p className="font-montserrat font-bold text-foreground text-sm">Atividades verificadas</p>
           <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
@@ -1038,7 +1078,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
             {ACTIVITY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
         </div>
-        <p className="font-inter text-[10px] text-muted-foreground mb-3">
+        <p className="font-inter text-xs text-muted-foreground mb-3">
           Somente atividades com dados reais registrados · Clique para ver respostas
         </p>
 
@@ -1053,7 +1093,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
               <div key={item.key} className="relative">
                 <div
                   onClick={item.onClick}
-                  className={`flex items-center gap-3 rounded-xl p-2.5 transition-all ${
+                  className={`flex items-center gap-3 rounded-lg p-2.5 transition-all ${
                     item.type === "estudo" || item.type === "devocional" ? "cursor-pointer hover:bg-muted/50" : ""
                   }`}
                 >
@@ -1062,13 +1102,13 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-inter text-xs text-foreground truncate">{item.title}</p>
-                    <p className="font-inter text-[10px] text-muted-foreground truncate">{item.subtitle}</p>
+                    <p className="font-inter text-xs text-muted-foreground truncate">{item.subtitle}</p>
                   </div>
-                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-medium flex items-center gap-1 ${typeColor(item.type)}`}>
+                  <span className={`px-2 py-0.5 rounded-md text-xs font-medium flex items-center gap-1 ${typeColor(item.type)}`}>
                     {typeIcon(item.type)} {typeLabel(item.type)}
                   </span>
                   <div className="flex items-center gap-1.5">
-                    <span className={`text-[10px] font-inter font-bold ${item.isWeekend ? "text-accent-foreground" : "text-accent"}`}>
+                    <span className={`text-xs font-inter font-bold ${item.isWeekend ? "text-accent-foreground" : "text-accent"}`}>
                       +{item.pts}pts{item.isWeekend ? "⚠️" : ""}
                     </span>
                     {(item.type === "estudo" || item.type === "devocional") && (
@@ -1079,7 +1119,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
 
                 {/* Inline delete confirmation */}
                 {confirmDeleteKey === item.key && (
-                  <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-3 mt-1 space-y-2">
+                  <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-3 mt-1 space-y-2">
                     <p className="font-inter text-xs text-destructive">⚠️ Remover esta atividade de {p.full_name}?</p>
                     <div className="flex gap-2">
                       <button
@@ -1109,7 +1149,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       <div className="mt-4">
         <button
           onClick={() => setShowAuditLog(!showAuditLog)}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-border text-muted-foreground font-inter text-xs font-medium hover:bg-muted/50 transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-border text-muted-foreground font-inter text-xs font-medium hover:bg-muted/50 transition-colors"
         >
           <History className="w-4 h-4" />
           {showAuditLog ? "Ocultar" : "Ver"} histórico de remoções
@@ -1126,12 +1166,15 @@ type Props = {
   participants: Participant[];
   activities: Activity[];
   communities: string[];
+  turmaId?: string | null;
+  turmaArea?: string | null;
+  onDataChanged?: () => void;
 };
 
 type StatusFilter = "todos" | "iniciando" | "andamento" | "avancado";
 
-export default function ParticipantsTab({ participants, activities, communities }: Props) {
-  const { profile } = useAuth();
+export default function ParticipantsTab({ participants, activities, communities, turmaId, turmaArea, onDataChanged }: Props) {
+  const { profile, user, role } = useAuth();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [communityFilter, setCommunityFilter] = useState("todas");
@@ -1143,59 +1186,165 @@ export default function ParticipantsTab({ participants, activities, communities 
   const [deletedParticipantIds, setDeletedParticipantIds] = useState<Set<string>>(new Set());
 
   // Course unlock management
-  const myArea = profile?.area ?? "";
+  const myArea = turmaArea || profile?.area || "Sem area";
   const [courses, setCourses] = useState<{ id: string; title: string; order_num: number }[]>([]);
-  const [unlockedCourseIds, setUnlockedCourseIds] = useState<Set<string>>(new Set());
+  const [courseModes, setCourseModes] = useState<Map<string, "open" | "scheduled">>(new Map());
+  const [courseUnlockIds, setCourseUnlockIds] = useState<Map<string, string>>(new Map());
+  const [exactCourseUnlocks, setExactCourseUnlocks] = useState<Set<string>>(new Set());
   const [unlockLoading, setUnlockLoading] = useState<string | null>(null);
+  const [pendingOpenCourseId, setPendingOpenCourseId] = useState<string | null>(null);
+  const [hideOpenCourseWarning, setHideOpenCourseWarning] = useState(false);
 
   const [statusReasons, setStatusReasons] = useState<Record<string, StatusReason[]>>({});
 
-  // Fetch course unlocks
-  useEffect(() => {
-    async function fetchCourseUnlocks() {
-      const [{ data: coursesData }, { data: unlocksData }] = await Promise.all([
-        supabase.from("courses").select("id, title, order_num").order("order_num"),
-        supabase.from("course_unlocks").select("course_id, area").eq("area", myArea),
-      ]);
-      setCourses(coursesData ?? []);
-      setUnlockedCourseIds(new Set((unlocksData ?? []).map((u: any) => u.course_id)));
-    }
-    if (myArea) fetchCourseUnlocks();
-  }, [myArea]);
+  const fetchCourseUnlocks = useCallback(async () => {
+    let unlocksQuery = supabase.from("course_unlocks").select("id, course_id, area, turma_id, access_mode");
+    if (profile?.church_id) unlocksQuery = unlocksQuery.eq("church_id", profile.church_id);
+    const [{ data: coursesData }, { data: unlocksData }] = await Promise.all([
+      supabase.from("courses").select("id, title, order_num").order("order_num"),
+      unlocksQuery,
+    ]);
+    const exactUnlocks = turmaId
+      ? (unlocksData ?? []).filter((unlock) => unlock.turma_id === turmaId)
+      : [];
+    const fallbackUnlocks = (unlocksData ?? []).filter(
+      (unlock) => unlock.turma_id === null && unlock.area === myArea,
+    );
+    const resolvedUnlocks = new Map<string, (typeof fallbackUnlocks)[number]>();
+    fallbackUnlocks.forEach((unlock) => resolvedUnlocks.set(unlock.course_id, unlock));
+    exactUnlocks.forEach((unlock) => resolvedUnlocks.set(unlock.course_id, unlock));
+    setCourses(coursesData ?? []);
+    setCourseModes(new Map([...resolvedUnlocks.values()].map((unlock) => [
+      unlock.course_id,
+      unlock.access_mode === "open" ? "open" as const : "scheduled" as const,
+    ])));
+    setCourseUnlockIds(new Map([...resolvedUnlocks.values()].map((unlock) => [unlock.course_id, unlock.id])));
+    setExactCourseUnlocks(new Set(exactUnlocks.map((unlock) => unlock.course_id)));
+  }, [myArea, profile?.church_id, turmaId]);
 
-  async function toggleCourseUnlock(courseId: string) {
+  useEffect(() => {
+    if (myArea) void fetchCourseUnlocks();
+  }, [fetchCourseUnlocks, myArea]);
+
+  const warningPreferenceKey = user?.id
+    ? `caminho_hide_open_course_warning_${user.id}`
+    : "caminho_hide_open_course_warning";
+
+  async function releaseCourseWithoutRestrictions(courseId: string) {
     setUnlockLoading(courseId);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setUnlockLoading(null); return; }
-    if (unlockedCourseIds.has(courseId)) {
-      const { error } = await supabase.from("course_unlocks").delete().eq("course_id", courseId).eq("area", myArea);
-      if (error) {
-        toast({ title: "Erro ao bloquear curso", description: error.message, variant: "destructive" });
-      } else {
-        setUnlockedCourseIds(prev => { const n = new Set(prev); n.delete(courseId); return n; });
+    if (!user) {
+      setUnlockLoading(null);
+      return;
+    }
+
+    const currentMode = courseModes.get(courseId);
+    const currentUnlockId = courseUnlockIds.get(courseId);
+    let error: { message: string } | null = null;
+
+    if (currentMode && currentUnlockId && (!turmaId || exactCourseUnlocks.has(courseId))) {
+      const { data: updatedRows, error: updateError } = await supabase
+        .from("course_unlocks")
+        .update({
+          access_mode: "open",
+          release_source: "leader_room",
+          unlocked_by: user.id,
+          unlocked_at: new Date().toISOString(),
+        })
+        .eq("id", currentUnlockId)
+        .select("id");
+      error = updateError;
+      if (!error && (!updatedRows || updatedRows.length === 0)) {
+        error = { message: "A liberação selecionada não pôde ser atualizada." };
       }
     } else {
-      const { error } = await supabase.from("course_unlocks").insert({ course_id: courseId, area: myArea, unlocked_by: user.id } as any);
-      if (error) {
-        toast({ title: "Erro ao liberar curso", description: error.message, variant: "destructive" });
-      } else {
-        setUnlockedCourseIds(prev => new Set(prev).add(courseId));
-      }
+      ({ error } = await supabase.from("course_unlocks").insert({
+        course_id: courseId,
+        area: myArea,
+        unlocked_by: user.id,
+        church_id: profile?.church_id ?? null,
+        turma_id: turmaId ?? null,
+        access_mode: "open",
+        release_source: "leader_room",
+      }));
+    }
+
+    if (error) {
+      toast({ title: "Erro ao liberar curso", description: error.message, variant: "destructive" });
+    } else {
+      toast({
+        title: "Curso totalmente liberado",
+        description: "Todas as lições e todos os devocionais estão disponíveis com pontuação completa.",
+      });
+      await fetchCourseUnlocks();
+    }
+    setUnlockLoading(null);
+  }
+
+  function requestOpenCourseRelease(courseId: string) {
+    if (localStorage.getItem(warningPreferenceKey) === "true") {
+      void releaseCourseWithoutRestrictions(courseId);
+      return;
+    }
+    setHideOpenCourseWarning(false);
+    setPendingOpenCourseId(courseId);
+  }
+
+  async function confirmOpenCourseRelease() {
+    if (!pendingOpenCourseId) return;
+    if (hideOpenCourseWarning) localStorage.setItem(warningPreferenceKey, "true");
+    const courseId = pendingOpenCourseId;
+    await releaseCourseWithoutRestrictions(courseId);
+    setPendingOpenCourseId(null);
+  }
+
+  async function removeCourseRelease(courseId: string) {
+    if (turmaId && !exactCourseUnlocks.has(courseId)) {
+      toast({
+        title: "Liberação herdada da área",
+        description: "Este acesso vale para mais de um grupo. Altere-o na administração da área para não afetar outros grupos.",
+      });
+      return;
+    }
+    setUnlockLoading(courseId);
+    const unlockId = courseUnlockIds.get(courseId);
+    const { error } = unlockId
+      ? await supabase.from("course_unlocks").delete().eq("id", unlockId)
+      : { error: null };
+    if (error) {
+      toast({ title: "Erro ao bloquear curso", description: error.message, variant: "destructive" });
+    } else {
+      await fetchCourseUnlocks();
+      toast({ title: "Liberação removida", description: "O curso voltou a ficar bloqueado para a turma." });
     }
     setUnlockLoading(null);
   }
 
   async function deleteParticipant() {
     if (!deletingParticipant) return;
+    const participantTurmaId = deletingParticipant.turma_id ?? turmaId;
+    if (!participantTurmaId) {
+      toast({
+        title: "Selecione um grupo",
+        description: "Não foi possível identificar de qual grupo a pessoa será removida.",
+        variant: "destructive",
+      });
+      return;
+    }
     setIsDeletingParticipant(true);
     try {
-      const res = await supabase.rpc("delete_user_from_discipleship" as any, {
-        _target_user_id: deletingParticipant.user_id,
+      const res = await (
+        supabase.rpc.bind(supabase) as unknown as (
+          functionName: string,
+          args: Record<string, unknown>,
+        ) => Promise<{ data: { error?: string } | null; error: { message: string } | null }>
+      )("remove_member_from_turma", {
+        p_target_user_id: deletingParticipant.user_id,
+        p_turma_id: participantTurmaId,
       });
 
       if (res.error || res.data?.error) {
         toast({
-          title: "Erro ao deletar usuario",
+          title: "Erro ao remover do grupo",
           description: res.data?.error || res.error?.message,
           variant: "destructive",
         });
@@ -1205,115 +1354,77 @@ export default function ParticipantsTab({ participants, activities, communities 
       setDeletedParticipantIds(prev => new Set(prev).add(deletingParticipant.user_id));
       if (selectedParticipant?.user_id === deletingParticipant.user_id) setSelectedParticipant(null);
       toast({
-        title: "Usuario deletado",
-        description: `${deletingParticipant.full_name} foi removido do banco de dados.`,
+        title: "Pessoa removida do grupo",
+        description: `${deletingParticipant.full_name} foi enviado para a sala de espera. O perfil, o histórico e o login foram preservados.`,
       });
       setDeletingParticipant(null);
-    } catch (err: any) {
-      toast({ title: "Erro", description: err.message, variant: "destructive" });
+      onDataChanged?.();
+    } catch (err: unknown) {
+      toast({ title: "Erro", description: getErrorMessage(err), variant: "destructive" });
     } finally {
       setIsDeletingParticipant(false);
     }
   }
 
-  // Fetch objective status reasons from DB
+  // Status reasons use the server summary, avoiding truncated raw activity lists.
   useEffect(() => {
-    async function fetchReasons() {
-      const userIds = participants.map(p => p.user_id);
-      if (userIds.length === 0) return;
+    const now = new Date();
+    const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+    const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
+    const reasons: Record<string, StatusReason[]> = {};
 
-      const now = new Date();
-      const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-      const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
+    participants.forEach((participant) => {
+      const participantReasons: StatusReason[] = [];
+      let consecutiveAbsences = 0;
+      for (const status of participant.recent_attendance_statuses ?? []) {
+        const normalizedStatus = normalizeAttendanceStatus(status);
+        if (normalizedStatus !== "faltou") break;
+        consecutiveAbsences += 1;
+      }
 
-      const [{ data: devData }, { data: attData }, { data: planData }, { data: assessData }] = await Promise.all([
-        supabase.from("devotional_progress").select("user_id, completed_at").in("user_id", userIds),
-        supabase.from("attendance").select("user_id, status, created_at").in("user_id", userIds).order("created_at", { ascending: false }),
-        supabase.from("discipleship_plans").select("user_id, health_status, is_priority").in("user_id", userIds),
-        supabase.from("spiritual_assessments").select("user_id, needs_pastor, prayer_score, presence_score, month, year")
-          .in("user_id", userIds).eq("month", now.getMonth() + 1).eq("year", now.getFullYear()),
-      ]);
+      if (consecutiveAbsences >= 3) {
+        participantReasons.push({ icon: "📅", label: `${consecutiveAbsences} faltas registradas em sequência`, severity: "high" });
+      } else if (consecutiveAbsences === 2) {
+        participantReasons.push({ icon: "📅", label: "2 faltas registradas em sequência", severity: "medium" });
+      }
 
-      // Last devotional per user
-      const lastDev: Record<string, Date> = {};
-      (devData ?? []).forEach(d => {
-        const dt = new Date(d.completed_at);
-        if (!lastDev[d.user_id] || dt > lastDev[d.user_id]) lastDev[d.user_id] = dt;
-      });
+      const lastDevotional = participant.last_devotional_at
+        ? new Date(participant.last_devotional_at)
+        : null;
+      if (!lastDevotional && Number(participant.completed_devotional_count ?? 0) === 0) {
+        participantReasons.push({ icon: "📖", label: "Nenhum devocional registrado", severity: "high" });
+      } else if (lastDevotional && lastDevotional < fourteenDaysAgo) {
+        const days = Math.floor((now.getTime() - lastDevotional.getTime()) / 86_400_000);
+        participantReasons.push({ icon: "📖", label: `Sem devocional há ${days} dias`, severity: "high" });
+      } else if (lastDevotional && lastDevotional < tenDaysAgo) {
+        const days = Math.floor((now.getTime() - lastDevotional.getTime()) / 86_400_000);
+        participantReasons.push({ icon: "📖", label: `Sem devocional há ${days} dias`, severity: "medium" });
+      }
 
-      // Consecutive absences per user
-      const userAtt: Record<string, string[]> = {};
-      (attData ?? []).forEach(a => {
-        if (!userAtt[a.user_id]) userAtt[a.user_id] = [];
-        userAtt[a.user_id].push(a.status);
-      });
+      if (participant.needs_pastor) {
+        participantReasons.push({ icon: "🙏", label: "Pediu ajuda pastoral", severity: "high" });
+      }
+      if (participant.health_status === "critico") {
+        participantReasons.push({ icon: "🚨", label: "Status crítico", severity: "high" });
+      } else if (participant.is_priority) {
+        participantReasons.push({ icon: "⚠️", label: "Prioridade pastoral", severity: "medium" });
+      }
+      if (!participant.last_activity_at) {
+        participantReasons.push({ icon: "○", label: "Nenhuma atividade registrada", severity: "medium" });
+      }
 
-      const planMap: Record<string, { health_status: string; is_priority: boolean }> = {};
-      (planData ?? []).forEach(p => { planMap[p.user_id] = { health_status: p.health_status, is_priority: p.is_priority ?? false }; });
+      if (participantReasons.length > 0) reasons[participant.user_id] = participantReasons;
+    });
 
-      const assessMap: Record<string, any> = {};
-      (assessData ?? []).forEach(a => { assessMap[a.user_id] = a; });
-
-      const reasons: Record<string, StatusReason[]> = {};
-
-      participants.forEach(p => {
-        const r: StatusReason[] = [];
-
-        // Consecutive absences
-        const statuses = userAtt[p.user_id] ?? [];
-        let consecutive = 0;
-        for (const s of statuses) {
-          const normalizedStatus = normalizeAttendanceStatus(s);
-          if (normalizedStatus === "presente") break;
-          if (normalizedStatus === "faltou") {
-            consecutive++;
-            continue;
-          }
-          continue;
-        }
-        if (consecutive >= 3) r.push({ icon: "📅", label: `${consecutive} faltas seguidas`, severity: "high" });
-        else if (consecutive === 2) r.push({ icon: "📅", label: "2 faltas seguidas", severity: "medium" });
-
-        // Devotional inactivity
-        const last = lastDev[p.user_id];
-        if (!last) {
-          r.push({ icon: "📖", label: "Nunca fez devocional", severity: "high" });
-        } else if (last < fourteenDaysAgo) {
-          const days = Math.floor((now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
-          r.push({ icon: "📖", label: `Sem devocional ha ${days} dias`, severity: "high" });
-        } else if (last < tenDaysAgo) {
-          const days = Math.floor((now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
-          r.push({ icon: "📖", label: `Sem devocional ha ${days} dias`, severity: "medium" });
-        }
-
-        // Needs pastor
-        if (assessMap[p.user_id]?.needs_pastor) {
-          r.push({ icon: "🙏", label: "Pediu ajuda pastoral", severity: "high" });
-        }
-
-        // Health status
-        const plan = planMap[p.user_id];
-        if (plan?.health_status === "critico") {
-          r.push({ icon: "🚨", label: "Status critico", severity: "high" });
-        } else if (plan?.is_priority) {
-          r.push({ icon: "⚠️", label: "Prioridade pastoral", severity: "medium" });
-        }
-
-        // Low activity progress
-        if (activities.length > 0 && p.completed_count === 0) {
-          r.push({ icon: "😴", label: "Nenhuma atividade concluída", severity: "medium" });
-        }
-
-        if (r.length > 0) reasons[p.user_id] = r;
-      });
-
-      setStatusReasons(reasons);
-    }
-    fetchReasons();
-  }, [participants, activities]);
+    setStatusReasons(reasons);
+  }, [participants]);
 
   if (selectedParticipant) {
-    return <ParticipantSheet participant={selectedParticipant} activities={activities} onBack={() => setSelectedParticipant(null)} />;
+    return (
+      <Suspense fallback={<div className="py-16 text-center text-sm text-muted-foreground">Carregando participante...</div>}>
+        <ParticipantSheet participant={selectedParticipant} activities={activities} onBack={() => setSelectedParticipant(null)} />
+      </Suspense>
+    );
   }
 
   const visibleParticipants = participants.filter((p) => !deletedParticipantIds.has(p.user_id));
@@ -1322,7 +1433,9 @@ export default function ParticipantsTab({ participants, activities, communities 
     if (search && !p.full_name.toLowerCase().includes(search.toLowerCase()) && !p.community.toLowerCase().includes(search.toLowerCase())) return false;
     if (communityFilter !== "todas" && p.community !== communityFilter) return false;
     if (yearFilter !== "todos" && p.confirmation_year !== Number(yearFilter)) return false;
-    const pct = activities.length > 0 ? (p.completed_count / activities.length) * 100 : 0;
+    const pct = (p.progress_total ?? 0) > 0
+      ? (p.completed_count / (p.progress_total ?? 1)) * 100
+      : 0;
     if (statusFilter === "iniciando" && (pct === 0 || pct >= 34)) return false;
     if (statusFilter === "andamento" && (pct < 34 || pct >= 70)) return false;
     if (statusFilter === "avancado" && pct < 70) return false;
@@ -1342,7 +1455,7 @@ export default function ParticipantsTab({ participants, activities, communities 
     <div className="space-y-4">
 
       {/* Group health summary */}
-      <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+      <div className="bg-card rounded-lg border border-border p-4 shadow-sm">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-primary" />
@@ -1356,17 +1469,17 @@ export default function ParticipantsTab({ participants, activities, communities 
 
         {/* Health distribution */}
         <div className="grid grid-cols-3 gap-2 mb-3">
-          <div className="bg-brand-green/8 border border-brand-green/20 rounded-xl p-2.5 text-center">
+          <div className="bg-brand-green/8 border border-brand-green/20 rounded-lg p-2.5 text-center">
             <p className="font-montserrat font-black text-brand-green text-xl leading-none">{healthyCount}</p>
-            <p className="text-[10px] font-inter text-muted-foreground mt-0.5">saudáveis</p>
+            <p className="text-xs font-inter text-muted-foreground mt-0.5">saudáveis</p>
           </div>
-          <div className="bg-amber-500/8 border border-amber-500/20 rounded-xl p-2.5 text-center">
+          <div className="bg-amber-500/8 border border-amber-500/20 rounded-lg p-2.5 text-center">
             <p className="font-montserrat font-black text-amber-600 dark:text-amber-400 text-xl leading-none">{attentionCount}</p>
-            <p className="text-[10px] font-inter text-muted-foreground mt-0.5">atenção</p>
+            <p className="text-xs font-inter text-muted-foreground mt-0.5">atenção</p>
           </div>
-          <div className="bg-destructive/8 border border-destructive/20 rounded-xl p-2.5 text-center">
+          <div className="bg-destructive/8 border border-destructive/20 rounded-lg p-2.5 text-center">
             <p className="font-montserrat font-black text-destructive text-xl leading-none">{alertCount}</p>
-            <p className="text-[10px] font-inter text-muted-foreground mt-0.5">alertas</p>
+            <p className="text-xs font-inter text-muted-foreground mt-0.5">alertas</p>
           </div>
         </div>
 
@@ -1377,10 +1490,10 @@ export default function ParticipantsTab({ participants, activities, communities 
             { icon: "🎓", label: "Estudos", value: totalLessons },
             { icon: "📅", label: "Presenças", value: totalPresences },
           ].map(({ icon, label, value }) => (
-            <div key={label} className="bg-muted/40 rounded-xl p-2 text-center">
+            <div key={label} className="bg-muted/40 rounded-lg p-2 text-center">
               <p className="text-sm">{icon}</p>
               <p className="font-montserrat font-black text-foreground text-base leading-none">{value}</p>
-              <p className="text-[10px] font-inter text-muted-foreground mt-0.5">{label}</p>
+              <p className="text-xs font-inter text-muted-foreground mt-0.5">{label}</p>
             </div>
           ))}
         </div>
@@ -1388,43 +1501,64 @@ export default function ParticipantsTab({ participants, activities, communities 
 
       {/* Course Unlock Management */}
       {courses.length > 0 && (
-        <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+        <div className="bg-card rounded-lg border border-border p-4 shadow-sm">
           <div className="flex items-center gap-2 mb-3">
             <GraduationCap className="w-4 h-4 text-secondary" />
             <p className="font-montserrat font-bold text-foreground text-sm">Liberação de Cursos</p>
           </div>
-          <p className="font-inter text-xs text-muted-foreground mb-3">
-            Libere os cursos que sua turma poderá acessar.
-          </p>
+          <div className="mb-3 flex items-start gap-3 rounded-xl border border-amber-300/50 bg-amber-50 p-3 text-amber-950">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+            <p className="font-inter text-xs leading-5">
+              <strong>Liberar por aqui significa acesso livre:</strong> todas as lições e todos os devocionais ficam disponíveis imediatamente e valem a pontuação completa. Para controlar datas e prazos, vincule as lições pela aba <strong>Agenda</strong>.
+            </p>
+          </div>
           <div className="space-y-2">
             {courses.map(c => {
-              const isUnlocked = unlockedCourseIds.has(c.id);
+              const accessMode = courseModes.get(c.id);
+              const isOpenAccess = accessMode === "open";
+              const isInherited = Boolean(turmaId && isOpenAccess && !exactCourseUnlocks.has(c.id));
               const loading = unlockLoading === c.id;
               return (
-                <div key={c.id} className={`flex items-center justify-between gap-3 p-3 rounded-xl border transition-colors ${
-                  isUnlocked ? "border-brand-green/30 bg-brand-green/5" : "border-border bg-muted/30"
+                <div key={c.id} className={`flex items-center justify-between gap-3 p-3 rounded-lg border transition-colors ${
+                  isOpenAccess
+                    ? "border-brand-green/30 bg-brand-green/5"
+                    : accessMode === "scheduled"
+                      ? "border-primary/25 bg-primary/5"
+                      : "border-border bg-muted/30"
                 }`}>
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      isUnlocked ? "bg-brand-green/15" : "bg-muted"
+                      isOpenAccess ? "bg-brand-green/15" : accessMode === "scheduled" ? "bg-primary/10" : "bg-muted"
                     }`}>
-                      {isUnlocked ? <Unlock className="w-4 h-4 text-brand-green" /> : <Lock className="w-4 h-4 text-muted-foreground" />}
+                      {isOpenAccess
+                        ? <Unlock className="w-4 h-4 text-brand-green" />
+                        : accessMode === "scheduled"
+                          ? <CalendarDays className="h-4 w-4 text-primary" />
+                          : <Lock className="w-4 h-4 text-muted-foreground" />}
                     </div>
                     <div className="min-w-0">
                       <p className="font-montserrat font-bold text-foreground text-sm">Curso {c.order_num} — {c.title}</p>
-                      <p className="font-inter text-[10px] text-muted-foreground">
-                        {isUnlocked ? "✅ Liberado para a turma" : "🔒 Bloqueado"}
+                      <p className="font-inter text-xs text-muted-foreground">
+                        {isInherited
+                          ? "Acesso livre herdado da área — afeta mais de um grupo"
+                          : isOpenAccess
+                          ? "Acesso livre — conteúdo completo e pontuação integral"
+                          : accessMode === "scheduled"
+                            ? "Guiado pela Agenda — segue datas e prazos"
+                            : "Bloqueado"}
                       </p>
                     </div>
                   </div>
                   <button
-                    onClick={() => toggleCourseUnlock(c.id)}
-                    disabled={loading}
+                    onClick={() => isOpenAccess ? void removeCourseRelease(c.id) : requestOpenCourseRelease(c.id)}
+                    disabled={loading || isInherited}
                     className={`px-3 py-1.5 rounded-lg font-inter text-xs font-semibold transition-colors flex-shrink-0 ${
-                      isUnlocked ? "bg-destructive/10 text-destructive hover:bg-destructive/20" : "bg-brand-green/10 text-brand-green hover:bg-brand-green/20"
+                      isOpenAccess
+                        ? "bg-destructive/10 text-destructive hover:bg-destructive/20"
+                        : "bg-brand-green/10 text-brand-green hover:bg-brand-green/20"
                     } disabled:opacity-40`}
                   >
-                    {loading ? "..." : isUnlocked ? "Bloquear" : "Liberar"}
+                    {loading ? "..." : isInherited ? "Herdado" : isOpenAccess ? "Bloquear" : "Liberar tudo"}
                   </button>
                 </div>
               );
@@ -1434,20 +1568,20 @@ export default function ParticipantsTab({ participants, activities, communities 
       )}
 
       {/* Filters */}
-      <div className="bg-card rounded-2xl border border-border p-4 space-y-3 shadow-sm">
+      <div className="bg-card rounded-lg border border-border p-4 space-y-3 shadow-sm">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             type="text" value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nome ou comunidade..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all"
+            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all"
           />
         </div>
         <div className="grid grid-cols-3 gap-2">
           <div className="relative">
             <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <select value={communityFilter} onChange={(e) => setCommunityFilter(e.target.value)}
-              className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none">
+              className="w-full pl-3 pr-8 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none">
               <option value="todas">Todas comunidades</option>
               {communities.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
@@ -1455,7 +1589,7 @@ export default function ParticipantsTab({ participants, activities, communities 
           <div className="relative">
             <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none">
+              className="w-full pl-3 pr-8 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none">
               <option value="todos">Status</option>
               <option value="iniciando">Iniciando</option>
               <option value="andamento">Em andamento</option>
@@ -1465,7 +1599,7 @@ export default function ParticipantsTab({ participants, activities, communities 
           <div className="relative">
             <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}
-              className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none">
+              className="w-full pl-3 pr-8 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-secondary transition-all appearance-none">
               <option value="todos">Todos anos</option>
               <option value="1">1º Ano</option>
               <option value="2">2º Ano</option>
@@ -1496,7 +1630,7 @@ export default function ParticipantsTab({ participants, activities, communities 
       ) : (
         <div className="space-y-3">
           {filtered.map((p) => {
-            const status = getStatusInfo(p.completed_count, activities.length);
+            const status = getStatusInfo(p.completed_count, p.progress_total ?? 0);
             const totalPts = p.faith_points ?? activities.filter(a => p.completed_activity_ids.includes(a.id)).reduce((s, a) => s + a.points, 0);
             const age = calcAge(p.birth_date);
             const reasons = statusReasons[p.user_id] ?? [];
@@ -1519,15 +1653,15 @@ export default function ParticipantsTab({ participants, activities, communities 
                     setSelectedParticipant(p);
                   }
                 }}
-                className={`w-full text-left bg-card rounded-2xl border border-border shadow-sm overflow-hidden hover:border-primary/30 transition-colors ${borderAccent}`}
+                className={`w-full text-left bg-card rounded-lg border border-border shadow-sm overflow-hidden hover:border-primary/30 transition-colors ${borderAccent}`}
               >
                 <div className="p-4 pb-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       {p.avatar_url ? (
-                        <img src={p.avatar_url} alt={p.full_name} className="w-11 h-11 rounded-xl object-cover flex-shrink-0 border border-border" />
+                        <img src={p.avatar_url} alt={p.full_name} className="w-11 h-11 rounded-lg object-cover flex-shrink-0 border border-border" />
                       ) : (
-                        <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <div className="w-11 h-11 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                           <span className="font-montserrat font-black text-primary text-lg">{p.full_name.charAt(0).toUpperCase()}</span>
                         </div>
                       )}
@@ -1537,9 +1671,9 @@ export default function ParticipantsTab({ participants, activities, communities 
                           <span className="text-muted-foreground font-inter text-xs">{p.community}</span>
                           {age !== null && <><span className="text-muted-foreground">·</span><span className="text-muted-foreground font-inter text-xs">{age} anos</span></>}
                           {p.confirmation_year ? (
-                            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-inter font-medium bg-primary/10 text-primary">{p.confirmation_year}º ano</span>
+                            <span className="px-1.5 py-0.5 rounded-md text-xs font-inter font-medium bg-primary/10 text-primary">{p.confirmation_year}º ano</span>
                           ) : (
-                            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-inter font-medium bg-destructive/10 text-destructive">Ano ?</span>
+                            <span className="px-1.5 py-0.5 rounded-md text-xs font-inter font-medium bg-destructive/10 text-destructive">Ano ?</span>
                           )}
                         </div>
                       </div>
@@ -1555,10 +1689,10 @@ export default function ParticipantsTab({ participants, activities, communities 
                           setDeletingParticipant(p);
                         }}
                         className="w-8 h-8 rounded-lg border border-destructive/20 bg-destructive/10 text-destructive hover:bg-destructive/20 flex items-center justify-center transition-colors"
-                        title={`Deletar ${p.full_name}`}
-                        aria-label={`Deletar ${p.full_name}`}
+                        title={`Remover ${p.full_name} do grupo`}
+                        aria-label={`Remover ${p.full_name} do grupo`}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <UserMinus className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -1569,7 +1703,7 @@ export default function ParticipantsTab({ participants, activities, communities 
                       {reasons.map((reason, idx) => (
                         <span
                           key={idx}
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-inter font-medium ${
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-inter font-medium ${
                             reason.severity === "high"
                               ? "bg-destructive/10 text-destructive"
                               : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
@@ -1595,23 +1729,37 @@ export default function ParticipantsTab({ participants, activities, communities 
         </div>
       )}
 
+      <CourseOpenAccessDialog
+        open={!!pendingOpenCourseId}
+        courseName={courses.find((course) => course.id === pendingOpenCourseId)?.title ?? "Curso selecionado"}
+        hideNextTime={hideOpenCourseWarning}
+        saving={!!pendingOpenCourseId && unlockLoading === pendingOpenCourseId}
+        onHideNextTimeChange={setHideOpenCourseWarning}
+        onCancel={() => setPendingOpenCourseId(null)}
+        onConfirm={() => void confirmOpenCourseRelease()}
+      />
+
       <AlertDialog open={!!deletingParticipant} onOpenChange={(open) => { if (!open) setDeletingParticipant(null); }}>
-        <AlertDialogContent className="rounded-2xl">
+        <AlertDialogContent className="rounded-lg">
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-montserrat font-bold">Deletar usuario?</AlertDialogTitle>
+            <AlertDialogTitle className="font-montserrat font-bold">
+              Remover pessoa do grupo?
+            </AlertDialogTitle>
             <AlertDialogDescription className="font-inter text-sm">
-              Tem certeza que deseja deletar <span className="font-bold text-foreground">{deletingParticipant?.full_name}</span>?
-              Esta acao e irreversivel e removera o perfil, permissoes e login deste usuario do banco de dados.
+              <span className="font-bold text-foreground">{deletingParticipant?.full_name}</span> será retirado deste grupo e enviado para a sala de espera.
+              O perfil, o histórico e o login serão preservados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl font-montserrat font-bold" disabled={isDeletingParticipant}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-lg font-montserrat font-bold" disabled={isDeletingParticipant}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={deleteParticipant}
               disabled={isDeletingParticipant}
-              className="rounded-xl font-montserrat font-bold bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="rounded-lg font-montserrat font-bold bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {isDeletingParticipant ? "Deletando..." : "Sim, deletar"}
+              {isDeletingParticipant
+                ? "Processando..."
+                : "Remover do grupo"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

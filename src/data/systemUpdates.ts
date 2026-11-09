@@ -13,8 +13,8 @@ export type AutomatedSystemUpdate = {
   }>;
 };
 
-const BUILD_VERSION = (typeof window !== 'undefined' && (window as any).__APP_VERSION__) || "0.0.0";
-const BUILD_DATE = (typeof window !== 'undefined' && (window as any).__APP_BUILD_DATE__) || new Date().toISOString();
+const BUILD_VERSION = (typeof window !== "undefined" && window.__APP_VERSION__) || "0.0.0";
+const BUILD_DATE = (typeof window !== "undefined" && window.__APP_BUILD_DATE__) || new Date().toISOString();
 
 export const AUTOMATED_SYSTEM_UPDATES: AutomatedSystemUpdate[] = [
   {

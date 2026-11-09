@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getAreaForCommunity } from "@/config/areas";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -56,7 +56,7 @@ function PollCountdown({ endsAt }: { endsAt: string | null }) {
   if (!remaining) return null;
   const isExpired = remaining === "Encerrada";
   return (
-    <span className={`inline-flex items-center gap-1 text-[10px] font-inter font-semibold ${isExpired ? "text-destructive" : "text-muted-foreground"}`}>
+    <span className={`inline-flex items-center gap-1 text-xs font-inter font-semibold ${isExpired ? "text-destructive" : "text-muted-foreground"}`}>
       <Timer className="w-3 h-3" />
       {remaining}
     </span>
@@ -79,11 +79,7 @@ export default function PollsSection() {
 
   const isManager = role === "admin" || role === "lider";
 
-  useEffect(() => {
-    if (profile && currentArea) fetchPolls();
-  }, [profile, currentArea]);
-
-  async function fetchPolls() {
+  const fetchPolls = useCallback(async () => {
     setLoading(true);
     const [{ data: pollsData }, { data: votesData }] = await Promise.all([
       supabase
@@ -101,7 +97,11 @@ export default function PollsSection() {
     setPolls(filteredPolls);
     setVotes((votesData as PollVote[]) ?? []);
     setLoading(false);
-  }
+  }, [currentArea]);
+
+  useEffect(() => {
+    if (profile && currentArea) fetchPolls();
+  }, [currentArea, fetchPolls, profile]);
 
   async function createPoll() {
     if (!user || !profile) return;
@@ -117,7 +117,7 @@ export default function PollsSection() {
       created_by: user.id,
       community: profile.community,
       area: currentArea,
-    } as any);
+    });
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
@@ -140,7 +140,7 @@ export default function PollsSection() {
       poll_id: pollId,
       user_id: user.id,
       option_index: optionIndex,
-    } as any);
+    });
     if (!error) {
       setVotes(prev => [...prev, { poll_id: pollId, user_id: user.id, option_index: optionIndex }]);
     }
@@ -148,7 +148,7 @@ export default function PollsSection() {
   }
 
   async function closePoll(pollId: string) {
-    await supabase.from("polls").update({ is_active: false } as any).eq("id", pollId);
+    await supabase.from("polls").update({ is_active: false }).eq("id", pollId);
     setPolls(prev => prev.filter(p => p.id !== pollId));
     toast({ title: "Enquete encerrada" });
   }
@@ -313,7 +313,7 @@ export default function PollsSection() {
 
                 <div className="flex items-center gap-1 mt-2.5 text-muted-foreground">
                   <Users className="w-3 h-3" />
-                  <span className="text-[10px] font-inter">{totalVotes} voto{totalVotes !== 1 ? "s" : ""}</span>
+                  <span className="text-xs font-inter">{totalVotes} voto{totalVotes !== 1 ? "s" : ""}</span>
                 </div>
               </div>
             );

@@ -6,6 +6,10 @@ import DevotionalView from "@/components/home/DevotionalView";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import {
+  buildActiveDevotionalOverrideMap,
+  isDevotionalOverrideActive,
+} from "@/lib/devotionalOverrides";
 
 type Lesson = {
   id: string;
@@ -72,6 +76,8 @@ type Props = {
   awardedPoints?: number | null;
   /** Dedicated confirmatory recovery: show only unfinished items. */
   recoveryMode?: boolean;
+  /** Course released from the Leader Room: all content is always available at full points. */
+  unrestrictedAccess?: boolean;
 };
 
 function normalizeDate(date: Date) {
@@ -99,13 +105,6 @@ function isRecoverableOnWeekend(scheduledDate: Date, today: Date) {
   const recoveryWindow = getWeekendRecoveryWindow(today);
   if (!recoveryWindow) return false;
   return scheduledDate >= recoveryWindow.monday && scheduledDate <= recoveryWindow.friday;
-}
-
-function isOverrideActive(override: DevotionalOverride | undefined, now: Date) {
-  if (!override || !override.is_unlocked) return false;
-  if (override.available_from && new Date(override.available_from) > now) return false;
-  if (override.available_until && new Date(override.available_until) < now) return false;
-  return true;
 }
 
 /**
@@ -160,7 +159,7 @@ export function computeDevotionalStatuses(
     for (const dev of activeDevs) {
       const activeOverride = overrideMap.get(dev.id);
 
-      if (released && !released.has(dev.day_number) && !isOverrideActive(activeOverride, now)) {
+      if (released && !released.has(dev.day_number) && !isDevotionalOverrideActive(activeOverride, now)) {
         statuses.set(dev.id, "future");
         lockedSet.add(dev.id);
         continue;
@@ -171,7 +170,7 @@ export function computeDevotionalStatuses(
         continue;
       }
 
-      if (isOverrideActive(activeOverride, now)) {
+      if (isDevotionalOverrideActive(activeOverride, now)) {
         statuses.set(dev.id, "available");
         continue;
       }
@@ -218,10 +217,10 @@ export function computeDevotionalStatuses(
     activeDevs.forEach((dev, index) => {
       const activeOverride = overrideMap.get(dev.id);
 
-      if (released && !released.has(dev.day_number) && !isOverrideActive(activeOverride, now)) {
+      if (released && !released.has(dev.day_number) && !isDevotionalOverrideActive(activeOverride, now)) {
         statuses.set(dev.id, "future");
         lockedSet.add(dev.id);
-      } else if (isOverrideActive(activeOverride, now) || index === 0) {
+      } else if (isDevotionalOverrideActive(activeOverride, now) || index === 0) {
         statuses.set(dev.id, "available");
       } else {
         statuses.set(dev.id, "future");
@@ -251,7 +250,7 @@ export function computeDevotionalStatuses(
   for (const dev of activeDevs) {
     const activeOverride = overrideMap.get(dev.id);
 
-    if (released && !released.has(dev.day_number) && !isOverrideActive(activeOverride, now)) {
+    if (released && !released.has(dev.day_number) && !isDevotionalOverrideActive(activeOverride, now)) {
       statuses.set(dev.id, "future");
       lockedSet.add(dev.id);
       continue;
@@ -262,7 +261,7 @@ export function computeDevotionalStatuses(
       continue;
     }
 
-    if (isOverrideActive(activeOverride, now)) {
+    if (isDevotionalOverrideActive(activeOverride, now)) {
       statuses.set(dev.id, "available");
       continue;
     }
@@ -302,6 +301,7 @@ export default function LessonChoiceView({
   overrideId = null,
   awardedPoints = null,
   recoveryMode = false,
+  unrestrictedAccess = false,
 }: Props) {
   const { role } = useAuth();
   const isLeaderOrAdmin = role === "admin" || role === "lider";
@@ -349,16 +349,17 @@ export default function LessonChoiceView({
       const devList = ((devs ?? []) as DevotionalItem[]).filter(
         (devotional) => !recoveryMode || !completedIdsFromServer.has(devotional.id),
       );
-      const overrideMap = new Map<string, DevotionalOverride>();
+      let overrideMap = new Map<string, DevotionalOverride>();
       if (user && devList.length > 0) {
         const { data: overrides } = await supabase
           .from("user_devotional_overrides")
           .select("id, devotional_id, custom_points, available_from, available_until, is_unlocked")
           .eq("user_id", user.id)
           .in("devotional_id", devList.map((dev) => dev.id));
-        (overrides ?? []).forEach((item) => {
-          overrideMap.set(item.devotional_id, item as DevotionalOverride);
-        });
+        overrideMap = buildActiveDevotionalOverrideMap(
+          (overrides ?? []) as DevotionalOverride[],
+          new Date(),
+        );
       }
       setDevOverrideMap(overrideMap);
       const progList = prog ?? [];
@@ -377,7 +378,7 @@ export default function LessonChoiceView({
         devList.forEach((devotional) => recoveryStatuses.set(devotional.id, "recovery"));
         setDevStatuses(recoveryStatuses);
         setDevRecoverySet(new Set(devList.map((devotional) => devotional.id)));
-      } else if (isLeaderOrAdmin) {
+      } else if (isLeaderOrAdmin || unrestrictedAccess) {
         const allAvailable = new Map<string, DevotionalStatus>();
         devList.forEach(d => allAvailable.set(d.id, completedMap.has(d.id) ? "completed" : "available"));
         setDevStatuses(allAvailable);
@@ -401,7 +402,7 @@ export default function LessonChoiceView({
       setLoading(false);
     }
     load();
-  }, [lesson.id, scheduledDevotionalDates, releasedDayNumbers, devotionalMode, isLateAccess, isStudyCompleted, isLeaderOrAdmin, recoveryMode]);
+  }, [lesson.id, scheduledDevotionalDates, releasedDayNumbers, devotionalMode, isLateAccess, isStudyCompleted, isLeaderOrAdmin, recoveryMode, unrestrictedAccess]);
 
   useEffect(() => {
     if (!autoOpenAvailableDevotional || loading || devotionals.length === 0) return;
@@ -438,7 +439,7 @@ export default function LessonChoiceView({
     setCompletedDates(newCompletedMap);
     setCompletedIds(prev => new Set([...prev, devotionalId]));
     setCompletedRecoveryIds(newRecoveryIds);
-    if (isLeaderOrAdmin) {
+    if (isLeaderOrAdmin || unrestrictedAccess) {
       const allAvailable = new Map<string, DevotionalStatus>();
       devotionals.forEach(d => allAvailable.set(d.id, newCompletedMap.has(d.id) ? "completed" : "available"));
       setDevStatuses(allAvailable);
@@ -515,7 +516,10 @@ export default function LessonChoiceView({
   if (viewingDevotional) {
     const isCompleted = completedIds.has(viewingDevotional.id);
     const isViewingRecovery = devRecoverySet.has(viewingDevotional.id);
-    const activeOverride = devOverrideMap.get(viewingDevotional.id);
+    const storedOverride = devOverrideMap.get(viewingDevotional.id);
+    const activeOverride = isDevotionalOverrideActive(storedOverride, new Date())
+      ? storedOverride
+      : undefined;
     const pts = isLateAccess ? 0 : activeOverride?.custom_points ?? (isViewingRecovery ? devRecoveryPts : devPts);
     return (
       <DevotionalView
@@ -553,6 +557,15 @@ export default function LessonChoiceView({
         <button onClick={() => setShowDevotionals(false)} className="flex items-center gap-1.5 text-muted-foreground font-inter text-sm hover:text-foreground transition-colors">
           <ChevronLeft className="w-4 h-4" /> Voltar
         </button>
+
+        {unrestrictedAccess && (
+          <div className="rounded-2xl border border-brand-green/25 bg-brand-green/5 p-4">
+            <p className="font-montserrat text-sm font-black text-brand-green">Curso com acesso livre</p>
+            <p className="mt-1 font-inter text-xs leading-5 text-muted-foreground">
+              Todos os devocionais estão disponíveis a qualquer momento e valem a pontuação completa.
+            </p>
+          </div>
+        )}
 
         <div className="rounded-2xl p-4" style={{ background: "var(--gradient-hero)" }}>
           <p className="text-primary-foreground/60 font-inter text-xs mb-1">📖 Devocionais da semana · Lição {lesson.order_num}</p>

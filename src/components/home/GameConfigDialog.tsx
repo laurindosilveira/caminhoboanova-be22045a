@@ -71,8 +71,8 @@ export default function GameConfigDialog({ onSaved }: GameConfigDialogProps) {
   useEffect(() => {
     if (!open) return;
     async function load() {
-      const { data } = await supabase.rpc("get_game_config" as any);
-      const map = new Map<string, number>((data ?? []).map((r: any) => [r.key, Number(r.value)]));
+      const { data } = await supabase.rpc("get_game_config");
+      const map = new Map<string, number>((data ?? []).map(r => [r.key, Number(r.value)]));
       setItems(CONFIG_FIELDS.map(f => ({
         ...f,
         value: map.has(f.key) ? (map.get(f.key) as number) : DEFAULTS[f.key],
@@ -89,7 +89,7 @@ export default function GameConfigDialog({ onSaved }: GameConfigDialogProps) {
   async function handleSave() {
     setSaving(true);
     for (const item of items) {
-      const { error } = await supabase.rpc("upsert_game_config_item" as any, {
+      const { error } = await supabase.rpc("upsert_game_config_item", {
         _key: item.key,
         _value: item.value,
       });
@@ -134,7 +134,7 @@ export default function GameConfigDialog({ onSaved }: GameConfigDialogProps) {
             <div key={item.key} className="bg-muted/40 rounded-xl px-3 py-2.5 flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <p className="font-inter font-semibold text-foreground text-sm leading-tight">{item.label}</p>
-                <p className="text-muted-foreground text-[10px] font-inter mt-0.5">{item.description}</p>
+                <p className="text-muted-foreground text-xs font-inter mt-0.5">{item.description}</p>
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
                 <input
@@ -152,7 +152,7 @@ export default function GameConfigDialog({ onSaved }: GameConfigDialogProps) {
         </div>
 
         <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-          <p className="text-amber-700 dark:text-amber-400 font-inter text-[10px] leading-relaxed">
+          <p className="text-amber-700 dark:text-amber-400 font-inter text-xs leading-relaxed">
             ⚠️ Como a pontuação é calculada dinamicamente, qualquer alteração afeta o histórico inteiro de todos os participantes imediatamente.
           </p>
         </div>

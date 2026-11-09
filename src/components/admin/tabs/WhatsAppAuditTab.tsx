@@ -6,27 +6,49 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
+import type { Database, Json } from "@/integrations/supabase/types";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
-type LogRow = {
-  id: string;
-  user_id: string;
+const ALL_STATUSES = ["sent", "failed", "blocked", "skipped", "pending"] as const;
+type LogStatus = (typeof ALL_STATUSES)[number];
+type ReminderLog = Database["public"]["Tables"]["whatsapp_reminder_log"]["Row"];
+
+type LogRow = Pick<
+  ReminderLog,
+  "id" | "user_id" | "phone" | "message" | "reminder_type" | "error_detail" |
+  "blocked_reason_code" | "is_resent" | "sent_at" | "reference_id"
+> & {
   full_name: string;
   community: string;
-  phone: string;
-  message: string;
-  reminder_type: string;
-  status: "sent" | "failed" | "blocked" | "skipped" | "pending";
-  error_detail: string | null;
-  blocked_reason_code: string | null;
-  is_resent: boolean;
-  sent_at: string;
-  reference_id: string | null;
-  // Campos opcionais de whatsapp_number/validation do perfil
+  status: LogStatus;
   whatsapp_number: string | null;
   whatsapp_validation_status: string | null;
 };
+
+type ResendPreparation =
+  | { can_send: false; reason_code: string; reason_text: string }
+  | { can_send: true; e164: string; log_id: string };
+
+function isLogStatus(status: string): status is LogStatus {
+  return (ALL_STATUSES as readonly string[]).includes(status);
+}
+
+function parseResendPreparation(value: Json): ResendPreparation | null {
+  if (!value || Array.isArray(value) || typeof value !== "object" || typeof value.can_send !== "boolean") {
+    return null;
+  }
+
+  if (!value.can_send) {
+    return typeof value.reason_code === "string" && typeof value.reason_text === "string"
+      ? { can_send: false, reason_code: value.reason_code, reason_text: value.reason_text }
+      : null;
+  }
+
+  return typeof value.e164 === "string" && typeof value.log_id === "string"
+    ? { can_send: true, e164: value.e164, log_id: value.log_id }
+    : null;
+}
 
 // ─── Constantes de UI ─────────────────────────────────────────────────────────
 
@@ -55,7 +77,6 @@ const REMINDER_LABELS: Record<string, string> = {
   checkin_late:    "📋 Check-in",
 };
 
-const ALL_STATUSES = ["sent", "failed", "blocked", "skipped", "pending"] as const;
 const ALL_CODES    = Object.keys(REASON_LABELS);
 
 // ─── Componente ───────────────────────────────────────────────────────────────
@@ -93,30 +114,31 @@ export default function WhatsAppAuditTab() {
     }
 
     // Buscar perfis para nome/comunidade
-    const userIds = [...new Set((data ?? []).map((r: any) => r.user_id))];
+    const userIds = [...new Set((data ?? []).map((row) => row.user_id))];
     const { data: profiles } = await supabase
       .from("profiles")
       .select("user_id, full_name, community, whatsapp_number, whatsapp_validation_status")
       .in("user_id", userIds);
 
-    const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
-    const comms = [...new Set((profiles ?? []).map((p: any) => p.community))].sort();
+    const profileMap = new Map((profiles ?? []).map((profile) => [profile.user_id, profile]));
+    const comms = [...new Set((profiles ?? []).map((profile) => profile.community))].sort();
     setCommunities(comms);
 
-    const merged: LogRow[] = (data ?? []).map((r: any) => {
-      const p = profileMap.get(r.user_id) ?? {};
+    const merged: LogRow[] = (data ?? []).map((row) => {
+      const profile = profileMap.get(row.user_id);
       return {
-        ...r,
-        full_name: p.full_name ?? "(usuário removido)",
-        community: p.community ?? "",
-        whatsapp_number: p.whatsapp_number ?? null,
-        whatsapp_validation_status: p.whatsapp_validation_status ?? null,
+        ...row,
+        status: isLogStatus(row.status) ? row.status : "pending",
+        full_name: profile?.full_name ?? "(usuário removido)",
+        community: profile?.community ?? "",
+        whatsapp_number: profile?.whatsapp_number ?? null,
+        whatsapp_validation_status: profile?.whatsapp_validation_status ?? null,
       };
     });
 
     setRows(merged);
     setLoading(false);
-  }, []);
+  }, [toast]);
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
@@ -141,7 +163,7 @@ export default function WhatsAppAuditTab() {
     setSending(row.id);
 
     // 1. Prepara (valida número no banco e cria log pendente)
-    const { data, error } = await (supabase.rpc as any)("prepare_whatsapp_resend", {
+    const { data, error } = await supabase.rpc("prepare_whatsapp_resend", {
       _target_user_id: row.user_id,
       _reminder_type:  row.reminder_type,
       _reference_id:   row.reference_id ?? null,
@@ -153,36 +175,47 @@ export default function WhatsAppAuditTab() {
       return;
     }
 
-    if (!(data as any).can_send) {
+    const preparation = parseResendPreparation(data);
+    if (!preparation) {
+      toast({
+        title: "Resposta inválida ao preparar reenvio",
+        description: "Tente novamente. Se o erro persistir, verifique os logs da função.",
+        variant: "destructive",
+      });
+      setSending(null);
+      return;
+    }
+
+    if (preparation.can_send === false) {
       toast({
         title: "Número ainda inválido",
-        description: `${(data as any).reason_code}: ${(data as any).reason_text}`,
+        description: `${preparation.reason_code}: ${preparation.reason_text}`,
         variant: "destructive",
       });
       setSending(null);
       // Atualiza linha localmente
       setRows(prev => prev.map(r => r.id === row.id
-        ? { ...r, blocked_reason_code: (data as any).reason_code }
+        ? { ...r, blocked_reason_code: preparation.reason_code }
         : r
       ));
       return;
     }
 
     // 2. Tenta enviar via Supabase Edge Function (webhook genérico para reenvio manual)
-    const { data: resendResult, error: fnErr } = await supabase.functions.invoke("send-whatsapp-reminders", {
+    const { data: resendResult, error: fnErr } = await supabase.functions.invoke<{ ok?: boolean; error?: string }>("send-whatsapp-reminders", {
       body: {
         single_resend: true,
         user_id:       row.user_id,
-        phone:         (data as any).e164,
+        phone:         preparation.e164,
         message:       row.message,
-        log_id:        (data as any).log_id,
+        log_id:        preparation.log_id,
       },
     });
     const resendOk = !fnErr && resendResult?.ok !== false;
 
     // 3. Confirma o resultado no log
-    await (supabase.rpc as any)("confirm_whatsapp_resend", {
-      _log_id:  (data as any).log_id,
+    await supabase.rpc("confirm_whatsapp_resend", {
+      _log_id:  preparation.log_id,
       _success: resendOk,
       _error:   fnErr?.message ?? resendResult?.error ?? null,
     });
@@ -190,7 +223,7 @@ export default function WhatsAppAuditTab() {
     if (!resendOk) {
       toast({ title: "Reenvio falhou", description: fnErr?.message ?? resendResult?.error, variant: "destructive" });
     } else {
-      toast({ title: "✅ Reenviado", description: `Mensagem enviada para ${(data as any).e164}` });
+      toast({ title: "✅ Reenviado", description: `Mensagem enviada para ${preparation.e164}` });
     }
 
     setSending(null);
@@ -198,8 +231,8 @@ export default function WhatsAppAuditTab() {
   }
 
   // ── Contadores de resumo ────────────────────────────────────────────────────
-  const counts = { sent: 0, failed: 0, blocked: 0, skipped: 0, pending: 0 };
-  rows.forEach((r) => { if (r.status in counts) (counts as any)[r.status]++; });
+  const counts: Record<LogStatus, number> = { sent: 0, failed: 0, blocked: 0, skipped: 0, pending: 0 };
+  rows.forEach((row) => { counts[row.status] += 1; });
 
   return (
     <div className="space-y-4">
@@ -214,12 +247,12 @@ export default function WhatsAppAuditTab() {
           <button
             key={key}
             onClick={() => setFilterStatus(filterStatus === key ? "" : key)}
-            className={`rounded-xl border p-2.5 text-center transition-all ${
+            className={`rounded-lg border p-2.5 text-center transition-all ${
               filterStatus === key ? "bg-muted border-primary" : "bg-card border-border hover:bg-muted/50"
             }`}
           >
             <p className={`font-montserrat font-black text-xl ${color}`}>{counts[key]}</p>
-            <p className="text-[10px] font-inter text-muted-foreground">{label}</p>
+            <p className="text-xs font-inter text-muted-foreground">{label}</p>
           </button>
         ))}
       </div>
@@ -232,7 +265,7 @@ export default function WhatsAppAuditTab() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nome, telefone ou comunidade..."
-            className="pl-9 rounded-xl text-sm"
+            className="pl-9 rounded-lg text-sm"
           />
           {search && (
             <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -246,7 +279,7 @@ export default function WhatsAppAuditTab() {
           <select
             value={filterCommunity}
             onChange={(e) => setFilterCommunity(e.target.value)}
-            className="flex-1 min-w-[140px] px-3 py-2 rounded-xl border border-border bg-background text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+            className="flex-1 min-w-[140px] px-3 py-2 rounded-lg border border-border bg-background text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
           >
             <option value="">Todas as comunidades</option>
             {communities.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -256,7 +289,7 @@ export default function WhatsAppAuditTab() {
           <select
             value={filterCode}
             onChange={(e) => setFilterCode(e.target.value)}
-            className="flex-1 min-w-[140px] px-3 py-2 rounded-xl border border-border bg-background text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+            className="flex-1 min-w-[140px] px-3 py-2 rounded-lg border border-border bg-background text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
           >
             <option value="">Todos os motivos</option>
             {ALL_CODES.map((c) => (
@@ -267,7 +300,7 @@ export default function WhatsAppAuditTab() {
           <button
             onClick={fetchLogs}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-card text-sm font-inter text-muted-foreground hover:bg-muted transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card text-sm font-inter text-muted-foreground hover:bg-muted transition-colors"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
             Atualizar
@@ -286,7 +319,7 @@ export default function WhatsAppAuditTab() {
           Nenhum registro encontrado com os filtros aplicados.
         </div>
       ) : (
-        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        <div className="rounded-lg border border-border bg-card overflow-hidden">
           {filtered.map((row, idx) => {
             const cfg     = STATUS_CFG[row.status] ?? STATUS_CFG.skipped;
             const reason  = REASON_LABELS[row.blocked_reason_code ?? ""] ?? null;
@@ -304,7 +337,7 @@ export default function WhatsAppAuditTab() {
                   className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors text-left"
                 >
                   {/* Status badge */}
-                  <span className={`flex-shrink-0 flex items-center gap-1 text-[10px] font-inter font-bold px-2 py-0.5 rounded-full border ${cfg.color}`}>
+                  <span className={`flex-shrink-0 flex items-center gap-1 text-xs font-inter font-bold px-2 py-0.5 rounded-full border ${cfg.color}`}>
                     <cfg.Icon className="w-3 h-3" />
                     {cfg.label}
                   </span>
@@ -319,7 +352,7 @@ export default function WhatsAppAuditTab() {
 
                   {/* Data + chevron */}
                   <div className="flex-shrink-0 flex items-center gap-1.5">
-                    <span className="text-[10px] font-inter text-muted-foreground">
+                    <span className="text-xs font-inter text-muted-foreground">
                       {new Date(row.sent_at).toLocaleDateString("pt-BR", {
                         day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
                       })}
@@ -347,7 +380,7 @@ export default function WhatsAppAuditTab() {
 
                     {/* Motivo do bloqueio */}
                     {row.blocked_reason_code && (
-                      <div className="rounded-xl border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700 p-3 space-y-1">
+                      <div className="rounded-lg border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700 p-3 space-y-1">
                         <p className="text-xs font-inter font-bold text-yellow-700 dark:text-yellow-400 flex items-center gap-1.5">
                           <AlertCircle className="w-3.5 h-3.5" />
                           {reason?.label ?? row.blocked_reason_code}
@@ -367,7 +400,7 @@ export default function WhatsAppAuditTab() {
 
                     {/* Erro de API */}
                     {row.status === "failed" && row.error_detail && !row.blocked_reason_code && (
-                      <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3">
+                      <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3">
                         <p className="text-[11px] font-inter text-destructive font-mono break-all">{row.error_detail}</p>
                       </div>
                     )}
@@ -377,7 +410,7 @@ export default function WhatsAppAuditTab() {
                       <button
                         onClick={() => handleResend(row)}
                         disabled={isSending}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-montserrat font-bold border border-[#25D366]/40 text-[#25D366] hover:bg-[#25D366]/10 transition-all disabled:opacity-40"
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-montserrat font-bold border border-[#25D366]/40 text-[#25D366] hover:bg-[#25D366]/10 transition-all disabled:opacity-40"
                       >
                         {isSending ? (
                           <><RefreshCw className="w-4 h-4 animate-spin" /> Reenviando...</>
@@ -388,7 +421,7 @@ export default function WhatsAppAuditTab() {
                     )}
 
                     {row.is_resent && (
-                      <p className="text-[10px] font-inter text-muted-foreground text-center">
+                      <p className="text-xs font-inter text-muted-foreground text-center">
                         ↩ Reenvio manual
                       </p>
                     )}
