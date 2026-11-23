@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ChevronLeft, Save, Plus, Trash2, BookOpen, Heart,
@@ -43,9 +43,7 @@ export default function LeaderGuideEditor({ lesson, onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [isPublished, setIsPublished] = useState(false);
 
-  useEffect(() => { loadContent(); }, [lesson.id]);
-
-  async function loadContent() {
+  const loadContent = useCallback(async () => {
     setLoading(true);
     const { data } = await supabase
       .from("leader_guide")
@@ -65,7 +63,9 @@ export default function LeaderGuideEditor({ lesson, onBack }: Props) {
       });
     }
     setLoading(false);
-  }
+  }, [lesson.id]);
+
+  useEffect(() => { void loadContent(); }, [loadContent]);
 
   async function handleSave() {
     setSaving(true);
@@ -109,7 +109,7 @@ export default function LeaderGuideEditor({ lesson, onBack }: Props) {
         onChange={e => onChange(e.target.value)}
         rows={rows}
         placeholder={placeholder}
-        className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+        className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
       />
     </div>
   );
@@ -117,7 +117,7 @@ export default function LeaderGuideEditor({ lesson, onBack }: Props) {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
+        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
           <BookOpen className="w-5 h-5 text-primary" />
         </div>
         <p className="text-muted-foreground font-inter text-sm">Carregando roteiro...</p>
@@ -133,23 +133,23 @@ export default function LeaderGuideEditor({ lesson, onBack }: Props) {
         </button>
       </div>
 
-      <div className="rounded-2xl p-4 bg-amber-600">
+      <div className="rounded-lg p-4 bg-amber-600">
         <div className="flex items-center justify-between mb-1">
           <p className="text-white/60 font-inter text-xs">📋 Roteiro do Líder · Lição {lesson.order_num}</p>
           {isPublished ? (
-            <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-inter font-bold">✅ Publicado</span>
+            <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-inter font-bold">✅ Publicado</span>
           ) : (
-            <span className="px-2 py-0.5 rounded-full bg-white/10 text-white/60 text-[10px] font-inter font-bold">📝 Rascunho</span>
+            <span className="px-2 py-0.5 rounded-full bg-white/10 text-white/60 text-xs font-inter font-bold">📝 Rascunho</span>
           )}
         </div>
         <h2 className="font-montserrat font-black text-white text-lg leading-tight">{lesson.title}</h2>
-        <p className="text-white/50 font-inter text-[10px] mt-2 italic">
+        <p className="text-white/50 font-inter text-xs mt-2 italic">
           ⚠️ Este conteúdo é exclusivo para líderes e não afeta o conteúdo do estudo dos alunos.
         </p>
       </div>
 
       {/* 1. Objetivos e Foco Pedagógico */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
           <Play className="w-4 h-4 text-secondary" />
           <p className="font-montserrat font-bold text-foreground text-sm">🎯 Objetivos e Foco Pedagógico</p>
@@ -160,7 +160,7 @@ export default function LeaderGuideEditor({ lesson, onBack }: Props) {
       </div>
 
       {/* 2. Sugestão de Tempo */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
           <MessageCircle className="w-4 h-4 text-secondary" />
           <p className="font-montserrat font-bold text-foreground text-sm">⏱️ Sugestão de Tempo</p>
@@ -171,7 +171,7 @@ export default function LeaderGuideEditor({ lesson, onBack }: Props) {
       </div>
 
       {/* 3. Pontos Teológicos */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
           <BookOpen className="w-4 h-4 text-secondary" />
           <p className="font-montserrat font-bold text-foreground text-sm">📖 Pontos Teológicos Essenciais</p>
@@ -182,7 +182,7 @@ export default function LeaderGuideEditor({ lesson, onBack }: Props) {
       </div>
 
       {/* 4. Textos Bíblicos */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
           <span className="text-sm">✝️</span>
           <p className="font-montserrat font-bold text-foreground text-sm">📜 Textos Bíblicos de Apoio</p>
@@ -191,9 +191,9 @@ export default function LeaderGuideEditor({ lesson, onBack }: Props) {
           {content.bible_texts.map((text, i) => (
             <div key={i} className="flex gap-2">
               <input type="text" value={text} onChange={e => updateArr("bible_texts", i, e.target.value)} placeholder="Ex: Gênesis 3.1-7"
-                className="flex-1 px-3 py-2 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
               {content.bible_texts.length > 1 && (
-                <button onClick={() => removeArr("bible_texts", i)} className="p-2 text-destructive hover:bg-destructive/10 rounded-xl transition-colors">
+                <button onClick={() => removeArr("bible_texts", i)} className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors">
                   <Trash2 className="w-4 h-4" />
                 </button>
               )}
@@ -206,7 +206,7 @@ export default function LeaderGuideEditor({ lesson, onBack }: Props) {
       </div>
 
       {/* 5. Orientações de Diálogo */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
           <Pen className="w-4 h-4 text-primary" />
           <p className="font-montserrat font-bold text-foreground text-sm">💬 Orientações para o Diálogo</p>
@@ -215,7 +215,7 @@ export default function LeaderGuideEditor({ lesson, onBack }: Props) {
           {content.questions.map((q, i) => (
             <div key={i}>
               <div className="flex items-center gap-2 mb-1.5">
-                <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center font-montserrat font-bold text-primary text-[10px] flex-shrink-0">{i + 1}</span>
+                <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center font-montserrat font-bold text-primary text-xs flex-shrink-0">{i + 1}</span>
                 <p className="font-inter text-xs font-semibold text-muted-foreground">Orientação {i + 1}</p>
                 {content.questions.length > 1 && (
                   <button onClick={() => removeArr("questions", i)} className="ml-auto p-1 text-destructive hover:bg-destructive/10 rounded-lg transition-colors">
@@ -224,7 +224,7 @@ export default function LeaderGuideEditor({ lesson, onBack }: Props) {
                 )}
               </div>
               <textarea value={q} onChange={e => updateArr("questions", i, e.target.value)} rows={2} placeholder="Orientação para conduzir o diálogo..."
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
+                className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
             </div>
           ))}
           <button onClick={() => addArr("questions")} className="flex items-center gap-2 text-primary font-inter text-xs font-medium py-1.5 hover:opacity-70 transition-opacity">
@@ -234,7 +234,7 @@ export default function LeaderGuideEditor({ lesson, onBack }: Props) {
       </div>
 
       {/* 6. Dúvidas Frequentes + Conexão 3M */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
           <Target className="w-4 h-4 text-brand-green" />
           <p className="font-montserrat font-bold text-foreground text-sm">❓ Dúvidas Frequentes + Conexão 3M</p>
@@ -245,7 +245,7 @@ export default function LeaderGuideEditor({ lesson, onBack }: Props) {
       </div>
 
       {/* 7. Postura Espiritual */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
           <Heart className="w-4 h-4 text-primary" />
           <p className="font-montserrat font-bold text-foreground text-sm">🙏 Postura Espiritual do Líder</p>
@@ -257,7 +257,7 @@ export default function LeaderGuideEditor({ lesson, onBack }: Props) {
 
       {/* Save */}
       <button onClick={handleSave} disabled={saving}
-        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-inter text-sm font-medium text-white disabled:opacity-70 transition-opacity bg-amber-600 hover:bg-amber-700">
+        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-lg font-inter text-sm font-medium text-white disabled:opacity-70 transition-opacity bg-amber-600 hover:bg-amber-700">
         <Save className="w-4 h-4" />
         {saving ? "Salvando..." : saved ? "✅ Roteiro salvo!" : "Salvar Roteiro do Líder"}
       </button>

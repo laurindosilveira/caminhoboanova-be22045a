@@ -120,17 +120,17 @@ export default function AssessmentSection({
                       className="w-full rounded-t-lg transition-all min-h-[8px]"
                       style={{ height: `${pctH}%`, background: color }}
                     />
-                    <span className="text-[9px] font-inter text-muted-foreground leading-none">
+                    <span className="text-xs font-inter text-muted-foreground leading-none">
                       {MONTH_SHORT[a.month - 1]}
                     </span>
-                    <span className="text-[9px] font-montserrat font-bold text-foreground leading-none">
+                    <span className="text-xs font-montserrat font-bold text-foreground leading-none">
                       {avg.toFixed(1)}
                     </span>
                   </div>
                 );
               })}
             </div>
-            <p className="text-center text-muted-foreground font-inter text-[10px]">
+            <p className="text-center text-muted-foreground font-inter text-xs">
               Média geral dos últimos {Math.min(allAssessments.length, 6)} meses (1–5)
             </p>
 
@@ -148,7 +148,7 @@ export default function AssessmentSection({
                       <span title="Tentações" className="text-sm">{EMOJIS[(a.struggle_score ?? 3) - 1]}</span>
                       <span title="Dúvidas" className="text-sm">{EMOJIS[(a.doubt_score ?? 3) - 1]}</span>
                     </div>
-                    <span className={`text-[10px] font-inter font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                    <span className={`text-xs font-inter font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
                       health === "saudavel" ? "text-brand-green bg-brand-green/10" :
                       health === "critico" ? "text-destructive bg-destructive/10" :
                       "text-accent-foreground bg-accent/20"

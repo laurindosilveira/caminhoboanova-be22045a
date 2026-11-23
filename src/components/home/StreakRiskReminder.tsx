@@ -71,7 +71,7 @@ export default function StreakRiskReminder({ onNavigateToJornada }: Props) {
           <p className="font-montserrat font-bold text-foreground text-sm">
             {daysInactive >= 99 ? "Comece sua jornada!" : `${daysInactive} dias sem atividade`}
           </p>
-          <p className="text-muted-foreground font-inter text-[10px] mt-0.5 italic">
+          <p className="text-muted-foreground font-inter text-xs mt-0.5 italic">
             {isLongAbsence
               ? "Sua chama esta se apagando. Volte e reacenda seu coracao!"
               : "Nao perca sua sequencia. Um devocional por dia faz toda a diferenca."}

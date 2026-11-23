@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowDown,
@@ -11,6 +11,7 @@ import {
   CircleAlert,
   Clock3,
   HeartHandshake,
+  Info,
   MessageCircle,
   NotebookPen,
   BookOpenCheck,
@@ -27,7 +28,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import PlayerDetailSheet from "@/components/home/PlayerDetailSheet";
+
+const PlayerDetailSheet = lazy(() => import("@/components/home/PlayerDetailSheet"));
 
 type CareMember = {
   assigned_to: string | null;
@@ -71,18 +73,8 @@ type Props = {
   onNavigate: (tab: "agenda" | "courses") => void;
 };
 
-type AgendaEvent = {
-  id: string;
-  title: string;
-  event_date: string;
-  location: string | null;
-  linked_lesson_id: string | null;
-  area: string | null;
-  turma_id: string | null;
-  target_user_id: string | null;
-};
-type NextEvent = Pick<AgendaEvent, "id" | "title" | "event_date" | "location" | "linked_lesson_id">;
-type NextLesson = { id: string; title: string; order_num: number; courseTitle: string; eventDate: string };
+type NextEvent = { id: string; title: string; event_date: string; location: string | null; linked_lesson_id: string | null };
+type NextLesson = { id: string; title: string; order_num: number; courseTitle: string };
 type LeaderRpcResult<T> = { data: T | null; error: { message: string } | null };
 
 const callLeaderRpc = supabase.rpc.bind(supabase) as unknown as <T = unknown>(
@@ -96,17 +88,17 @@ type SortKey = "priority" | "name" | "activity" | "progress" | "due";
 
 const STATUS = {
   critical: {
-    label: "Critico",
+    label: "Crítico",
     className: "border-red-200 bg-red-50 text-red-700",
     dotClassName: "bg-red-500",
   },
   attention: {
-    label: "Atencao",
+    label: "Atenção",
     className: "border-amber-200 bg-amber-50 text-amber-800",
     dotClassName: "bg-amber-500",
   },
   healthy: {
-    label: "Saudavel",
+    label: "Saudável",
     className: "border-emerald-200 bg-emerald-50 text-emerald-700",
     dotClassName: "bg-emerald-500",
   },
@@ -115,9 +107,9 @@ const STATUS = {
 const SOURCE_LABELS: Record<string, string> = {
   access: "acesso",
   activity: "atividade",
-  attendance: "presenca",
+  attendance: "presença",
   devotional: "devocional",
-  lesson: "licao",
+  lesson: "lição",
   worship: "culto",
 };
 
@@ -136,7 +128,7 @@ function initials(name: string) {
 }
 
 function relativeDate(value: string | null) {
-  if (!value) return "Nunca";
+  if (!value) return "Sem atividade registrada";
   return formatDistanceToNow(new Date(value), { addSuffix: true, locale: ptBR });
 }
 
@@ -166,13 +158,14 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [sort, setSort] = useState<SortKey>("priority");
   const [selected, setSelected] = useState<CareMember | null>(null);
+  const [activitySummaryMember, setActivitySummaryMember] = useState<CareMember | null>(null);
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const [notes, setNotes] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [nextEvent, setNextEvent] = useState<NextEvent | null>(null);
   const [nextLesson, setNextLesson] = useState<NextLesson | null>(null);
-  const [activityReportMember, setActivityReportMember] = useState<CareMember | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
   const fetchMembers = useCallback(async () => {
     if (!churchId) {
@@ -200,6 +193,7 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
       setMembers([]);
     } else {
       setMembers(data ?? []);
+      setLastUpdatedAt(new Date());
     }
     setLoading(false);
   }, [area, churchId, toast, turmaId]);
@@ -212,22 +206,13 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
     async function fetchNextSteps() {
       if (!churchId) return;
       const now = new Date().toISOString();
-      const [eventsResult, coursesResult, lessonsResult, userResult] = await Promise.all([
-        supabase.from("events").select("id, title, event_date, location, linked_lesson_id, area, turma_id, target_user_id").gte("event_date", now).order("event_date").limit(50),
+      const [eventsResult, coursesResult, lessonsResult] = await Promise.all([
+        supabase.from("events").select("id, title, event_date, location, linked_lesson_id, area, turma_id").eq("church_id", churchId).gte("event_date", now).order("event_date").limit(20),
         supabase.from("courses").select("id, title, order_num, church_id").or(`church_id.is.null,church_id.eq.${churchId}`).order("order_num"),
         supabase.from("lessons").select("id, title, order_num, course_id, church_id").or(`church_id.is.null,church_id.eq.${churchId}`).order("order_num"),
-        supabase.auth.getUser(),
       ]);
-      const currentUserId = userResult.data.user?.id ?? null;
-      // Keep this visibility rule aligned with UserAgendaTab: managers see
-      // global events and events from their current area, including legacy
-      // records without church_id or turma_id.
-      const visibleEvents = ((eventsResult.data ?? []) as AgendaEvent[]).filter((event) => {
-        if (event.target_user_id && event.target_user_id !== currentUserId) return false;
-        if (event.area && event.area !== area) return false;
-        return true;
-      });
-      const upcoming = visibleEvents[0] ?? null;
+      const scopedEvents = (eventsResult.data ?? []).filter((event) => turmaId ? event.turma_id === turmaId : !event.turma_id && event.area === area);
+      const upcoming = scopedEvents[0] ?? null;
       setNextEvent(upcoming);
 
       const courses = coursesResult.data ?? [];
@@ -235,14 +220,12 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
       const orderedLessons = courses.flatMap((course) => lessons
         .filter((lesson) => lesson.course_id === course.id)
         .map((lesson) => ({ id: lesson.id, title: lesson.title, order_num: lesson.order_num, courseTitle: course.title })));
-      const lessonEvent = visibleEvents.find((event) => Boolean(event.linked_lesson_id));
-      const linked = lessonEvent?.linked_lesson_id
-        ? orderedLessons.find((lesson) => lesson.id === lessonEvent.linked_lesson_id)
-        : null;
-      setNextLesson(linked && lessonEvent ? { ...linked, eventDate: lessonEvent.event_date } : null);
+      const linked = upcoming?.linked_lesson_id ? orderedLessons.find((lesson) => lesson.id === upcoming.linked_lesson_id) : null;
+      const averageCompleted = members.length ? Math.floor(members.reduce((sum, member) => sum + member.lessons_completed, 0) / members.length) : 0;
+      setNextLesson(linked ?? orderedLessons[Math.min(averageCompleted, Math.max(orderedLessons.length - 1, 0))] ?? null);
     }
     void fetchNextSteps();
-  }, [area, churchId]);
+  }, [area, churchId, members, turmaId]);
 
   const birthdaysThisWeek = useMemo(() => {
     const today = new Date();
@@ -263,6 +246,10 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
     attention: members.filter((member) => member.care_status === "attention").length,
     healthy: members.filter((member) => member.care_status === "healthy").length,
     overdue: members.filter((member) => isOverdue(member.next_action_due_at)).length,
+    active7: members.filter((member) => (
+      member.last_activity_at
+      && new Date(member.last_activity_at).getTime() >= Date.now() - 7 * 86_400_000
+    )).length,
   }), [members]);
 
   const actionQueue = useMemo(
@@ -417,10 +404,10 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
 
         <div className="mt-5 grid grid-cols-2 border-y border-border md:grid-cols-4">
           {[
-            { label: "Criticos", value: counts.critical, icon: CircleAlert, color: "text-red-600" },
-            { label: "Em atencao", value: counts.attention, icon: AlertCircle, color: "text-amber-600" },
-            { label: "Saudaveis", value: counts.healthy, icon: ShieldCheck, color: "text-emerald-600" },
-            { label: "Atrasados", value: counts.overdue, icon: Clock3, color: "text-slate-600" },
+            { label: "Total no grupo", value: members.length, icon: UserRoundCheck, color: "text-slate-700" },
+            { label: "Ativos em 7 dias", value: counts.active7, icon: BookOpenCheck, color: "text-cyan-700" },
+            { label: "Precisam de atenção", value: counts.critical + counts.attention, icon: AlertCircle, color: "text-amber-600" },
+            { label: "Acompanhamentos atrasados", value: counts.overdue, icon: Clock3, color: "text-red-600" },
           ].map(({ label, value, icon: Icon, color }) => (
             <div key={label} className="flex min-h-20 items-center gap-3 border-border px-3 py-4 odd:border-r md:border-r md:last:border-r-0">
               <Icon className={`h-5 w-5 ${color}`} />
@@ -431,12 +418,24 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
             </div>
           ))}
         </div>
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2.5 text-cyan-950">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-cyan-700" />
+          <p className="text-xs leading-5">
+            <strong>Ativo</strong> significa que houve acesso, lição, devocional, presença ou culto nos últimos 7 dias.
+            Evento sem chamada preenchida aparece como <strong>sem registro</strong> e não é contado como falta.
+            {lastUpdatedAt && (
+              <span className="block text-cyan-800">
+                Dados atualizados às {lastUpdatedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.
+              </span>
+            )}
+          </p>
+        </div>
       </section>
 
       <section aria-labelledby="attention-queue-title">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <h3 id="attention-queue-title" className="font-montserrat text-base font-bold text-foreground">Quem precisa de atencao</h3>
+            <h3 id="attention-queue-title" className="font-montserrat text-base font-bold text-foreground">Quem precisa de atenção</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">Prioridades ordenadas por risco e prazo</p>
           </div>
           <span className="text-xs font-semibold text-muted-foreground">{actionQueue.length} na fila</span>
@@ -511,11 +510,7 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
             <span className="min-w-0 flex-1">
               <span className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Próxima lição da jornada</span>
               <span className="mt-1 block truncate text-sm font-bold text-foreground">{nextLesson?.title ?? "Nenhuma lição disponível"}</span>
-              <span className="mt-1 block text-xs text-muted-foreground">
-                {nextLesson
-                  ? `${nextLesson.courseTitle} · Lição ${nextLesson.order_num} · ${format(new Date(nextLesson.eventDate), "dd/MM 'às' HH:mm", { locale: ptBR })}`
-                  : "Nenhuma lição vinculada a um evento futuro na agenda"}
-              </span>
+              <span className="mt-1 block text-xs text-muted-foreground">{nextLesson ? `${nextLesson.courseTitle} · Lição ${nextLesson.order_num}` : "Abra a jornada para revisar o conteúdo"}</span>
             </span>
             <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
           </button>
@@ -549,7 +544,7 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
           </div>
         </div>
 
-        <div className="scroll-menu mt-3 gap-1 border-b border-border pb-3" aria-label="Status dos participantes">
+        <div className="mt-3 flex gap-1 overflow-x-auto border-b border-border pb-3">
           {([
             ["all", "Todos", members.length],
             ["critical", "Criticos", counts.critical],
@@ -632,8 +627,8 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
               member={selected}
               saving={saving}
               onResolvePastoral={resolvePastoralRequest}
-              onOpenActivityReport={(member) => {
-                setActivityReportMember(member);
+              onViewActivities={(member) => {
+                setActivitySummaryMember(member);
                 closeDialog();
               }}
             />
@@ -679,14 +674,26 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
         </DialogContent>
       </Dialog>
 
-      {activityReportMember && (
-        <PlayerDetailSheet
-          userId={activityReportMember.user_id}
-          fullName={activityReportMember.full_name}
-          currentArea={area ?? undefined}
-          onClose={() => setActivityReportMember(null)}
-          onPointsChanged={() => void fetchMembers()}
-        />
+      {activitySummaryMember && (
+        <Suspense
+          fallback={(
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="rounded-2xl bg-card px-6 py-5 text-sm font-semibold text-foreground shadow-2xl">
+                Carregando resumo de atividades...
+              </div>
+            </div>
+          )}
+        >
+          <PlayerDetailSheet
+            userId={activitySummaryMember.user_id}
+            fullName={activitySummaryMember.full_name}
+            currentArea={area ?? undefined}
+            onClose={() => setActivitySummaryMember(null)}
+            onPointsChanged={() => {
+              void fetchMembers();
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );
@@ -723,23 +730,10 @@ function QuickActions({ member, saving, onComplete, onContact, onSchedule, onWha
 }
 
 function MemberIdentity({ member }: { member: CareMember }) {
-  const [imageFailed, setImageFailed] = useState(false);
-
-  useEffect(() => {
-    setImageFailed(false);
-  }, [member.avatar_url]);
-
-  const showPhoto = Boolean(member.avatar_url) && !imageFailed;
-
   return (
     <div className="flex min-w-0 items-center gap-3">
-      {showPhoto ? (
-        <img
-          src={member.avatar_url ?? undefined}
-          alt={`Foto de ${member.full_name}`}
-          className="h-9 w-9 shrink-0 rounded-full object-cover"
-          onError={() => setImageFailed(true)}
-        />
+      {member.avatar_url ? (
+        <img src={member.avatar_url} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
       ) : (
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
           {initials(member.full_name)}
@@ -828,11 +822,16 @@ function MemberCard({ member, saving, onComplete, onContact, onDetails, onSchedu
   );
 }
 
-function MemberDetails({ member, saving, onResolvePastoral, onOpenActivityReport }: {
+function MemberDetails({
+  member,
+  saving,
+  onResolvePastoral,
+  onViewActivities,
+}: {
   member: CareMember;
   saving: boolean;
   onResolvePastoral: (member: CareMember) => void;
-  onOpenActivityReport: (member: CareMember) => void;
+  onViewActivities: (member: CareMember) => void;
 }) {
   return (
     <>
@@ -856,10 +855,11 @@ function MemberDetails({ member, saving, onResolvePastoral, onOpenActivityReport
         <Metric label="Prazo" value={shortDate(member.next_action_due_at)} />
         <Metric label="Responsavel" value={member.assigned_to_name ?? "Lider atual"} />
       </div>
-      <Button type="button" variant="outline" onClick={() => onOpenActivityReport(member)} className="w-full">
-        <BookOpenCheck className="mr-2 h-4 w-4" /> Ver relatório completo de atividades
-      </Button>
       {member.pastoral_request_note && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-900"><strong>Pedido pastoral:</strong> {member.pastoral_request_note}</div>}
+      <Button className="w-full" onClick={() => onViewActivities(member)}>
+        <BookOpenCheck className="mr-2 h-4 w-4" />
+        Ver resumo completo de atividades
+      </Button>
       {member.needs_pastor && (
         <Button variant="outline" disabled={saving} onClick={() => void onResolvePastoral(member)} className="border-emerald-300 text-emerald-800">
           <HeartHandshake className="mr-2 h-4 w-4" /> Marcar pedido pastoral como tratado

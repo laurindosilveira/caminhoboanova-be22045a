@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import type { Database } from "@/integrations/supabase/types";
 import {
   ChevronLeft, Save, Plus, Trash2, BookOpen, Heart,
   MessageCircle, Target, Pen, Play, Volume2, Link2, FileText, Globe, Pencil, RotateCcw
@@ -73,9 +74,7 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
   const [saved, setSaved] = useState(false);
   const [hasOverride, setHasOverride] = useState(false);
 
-  useEffect(() => { loadContent(); }, [lesson.id]);
-
-  async function loadContent() {
+  const loadContent = useCallback(async () => {
     setLoading(true);
 
     // Load global content
@@ -95,14 +94,14 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
       prayer_prompt: globalData.prayer_prompt ?? "",
       video_link: globalData.video_link ?? "",
       audio_link: globalData.audio_link ?? "",
-      pdf_link: (globalData as any).pdf_link ?? "",
+      pdf_link: globalData.pdf_link ?? "",
     } : emptyContent();
     setGlobalContent(global);
 
     // Load turma override if exists
     if (profile?.turma_id) {
       const { data: ov } = await supabase
-        .from("turma_lesson_content" as any)
+        .from("turma_lesson_content")
         .select("*")
         .eq("turma_id", profile.turma_id)
         .eq("lesson_id", lesson.id)
@@ -110,7 +109,7 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
 
       if (ov) {
         setHasOverride(true);
-        const data = ov as any;
+        const data = ov;
         // A field is overridden if it's non-null/non-empty in the override record
         const f: OverrideFlags = {
           greeting: !!data.greeting,
@@ -141,7 +140,9 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
     }
 
     setLoading(false);
-  }
+  }, [lesson.id, profile?.turma_id]);
+
+  useEffect(() => { loadContent(); }, [loadContent]);
 
   function toggleFlag(field: keyof OverrideFlags) {
     setFlags(prev => {
@@ -163,7 +164,7 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
     if (!profile?.turma_id) return;
     setSaving(true);
 
-    const payload: Record<string, any> = {
+    const payload: Database["public"]["Tables"]["turma_lesson_content"]["Insert"] = {
       turma_id: profile.turma_id,
       lesson_id: lesson.id,
       created_by: (await supabase.auth.getUser()).data.user?.id,
@@ -180,7 +181,7 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
       pdf_link: flags.pdf_link ? override.pdf_link : null,
     };
 
-    const { error } = await (supabase.from as any)("turma_lesson_content")
+    const { error } = await supabase.from("turma_lesson_content")
       .upsert(payload, { onConflict: "turma_id,lesson_id" });
 
     if (error) {
@@ -225,7 +226,7 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
     const isArray = fieldKey === "bible_texts" || fieldKey === "questions";
 
     return (
-      <div className={`bg-card rounded-2xl border shadow-sm overflow-hidden transition-all ${isOverriding ? "border-primary/40" : "border-border"}`}>
+      <div className={`bg-card rounded-lg border shadow-sm overflow-hidden transition-all ${isOverriding ? "border-primary/40" : "border-border"}`}>
         <div className={`px-4 py-3 border-b flex items-center justify-between ${isOverriding ? "border-primary/20 bg-primary/5" : "border-border bg-muted/30"}`}>
           <div className="flex items-center gap-2">
             {icon}
@@ -246,8 +247,8 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
         <div className="p-4 space-y-2">
           {/* Global reference */}
           {!isOverriding && (
-            <div className="rounded-xl bg-muted/40 px-3 py-2 space-y-1">
-              <p className="font-inter text-[10px] text-muted-foreground flex items-center gap-1">
+            <div className="rounded-lg bg-muted/40 px-3 py-2 space-y-1">
+              <p className="font-inter text-xs text-muted-foreground flex items-center gap-1">
                 <Globe className="w-3 h-3" /> Conteúdo global (todos os membros veem isso)
               </p>
               {isArray ? (
@@ -272,7 +273,7 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
                 value={override[fieldKey] as string}
                 onChange={e => setOverride(o => ({ ...o, [fieldKey]: e.target.value }))}
                 rows={rows}
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
               />
             ) : null
           )}
@@ -284,7 +285,7 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
+        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
           <BookOpen className="w-5 h-5 text-primary" />
         </div>
         <p className="text-muted-foreground font-inter text-sm">Carregando conteúdo...</p>
@@ -309,13 +310,13 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
       </button>
 
       {/* Header */}
-      <div className="rounded-2xl p-4" style={{ background: "var(--gradient-hero)" }}>
+      <div className="rounded-lg p-4" style={{ background: "var(--gradient-hero)" }}>
         <div className="flex items-center justify-between mb-1">
           <p className="text-primary-foreground/60 font-inter text-xs">Personalização · Lição {lesson.order_num}</p>
           {hasOverride ? (
-            <span className="px-2 py-0.5 rounded-full bg-white/20 text-primary-foreground text-[10px] font-inter font-bold">✅ Personalizada</span>
+            <span className="px-2 py-0.5 rounded-full bg-white/20 text-primary-foreground text-xs font-inter font-bold">✅ Personalizada</span>
           ) : (
-            <span className="px-2 py-0.5 rounded-full bg-white/10 text-primary-foreground/60 text-[10px] font-inter font-bold">Usando conteúdo global</span>
+            <span className="px-2 py-0.5 rounded-full bg-white/10 text-primary-foreground/60 text-xs font-inter font-bold">Usando conteúdo global</span>
           )}
         </div>
         <h2 className="font-montserrat font-black text-primary-foreground text-lg leading-tight">{lesson.title}</h2>
@@ -325,7 +326,7 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
       </div>
 
       {/* Info banner */}
-      <div className="flex items-start gap-3 bg-primary/5 border border-primary/20 rounded-2xl px-4 py-3">
+      <div className="flex items-start gap-3 bg-primary/5 border border-primary/20 rounded-lg px-4 py-3">
         <Pencil className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
         <p className="font-inter text-xs text-primary leading-relaxed">
           Personalize apenas os campos necessários para a sua turma. Os campos não personalizados continuam usando o conteúdo global do pastor.
@@ -349,7 +350,7 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
             value={override.video_link}
             onChange={e => setOverride(o => ({ ...o, video_link: e.target.value }))}
             placeholder="https://youtube.com/..."
-            className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
         )}
       />
@@ -364,7 +365,7 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
             value={override.audio_link}
             onChange={e => setOverride(o => ({ ...o, audio_link: e.target.value }))}
             placeholder="https://..."
-            className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
         )}
       />
@@ -379,7 +380,7 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
             value={override.pdf_link}
             onChange={e => setOverride(o => ({ ...o, pdf_link: e.target.value }))}
             placeholder="https://drive.google.com/..."
-            className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
         )}
       />
@@ -401,12 +402,12 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
                   value={text}
                   onChange={e => updateBibleText(i, e.target.value)}
                   placeholder="Ex: João 3:16"
-                  className="flex-1 px-3 py-2 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
                 {override.bible_texts.length > 1 && (
                   <button
                     onClick={() => setOverride(o => ({ ...o, bible_texts: o.bible_texts.filter((_, idx) => idx !== i) }))}
-                    className="p-2 text-destructive hover:bg-destructive/10 rounded-xl transition-colors"
+                    className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -433,7 +434,7 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
             {override.questions.map((q, i) => (
               <div key={i}>
                 <div className="flex items-center gap-2 mb-1.5">
-                  <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center font-montserrat font-bold text-primary text-[10px] flex-shrink-0">{i + 1}</span>
+                  <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center font-montserrat font-bold text-primary text-xs flex-shrink-0">{i + 1}</span>
                   <p className="font-inter text-xs font-semibold text-muted-foreground">Pergunta {i + 1}</p>
                   {override.questions.length > 1 && (
                     <button
@@ -449,7 +450,7 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
                   onChange={e => updateQuestion(i, e.target.value)}
                   rows={2}
                   placeholder={`Pergunta ${i + 1}...`}
-                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                  className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
                 />
               </div>
             ))}
@@ -473,7 +474,7 @@ export default function LeaderLessonEditor({ lesson, onBack }: Props) {
       <button
         onClick={handleSave}
         disabled={saving}
-        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-inter text-sm font-medium text-primary-foreground disabled:opacity-70 transition-opacity"
+        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-lg font-inter text-sm font-medium text-primary-foreground disabled:opacity-70 transition-opacity"
         style={{ background: "var(--gradient-hero)" }}
       >
         <Save className="w-4 h-4" />

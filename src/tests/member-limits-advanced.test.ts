@@ -6,7 +6,7 @@ const simulateMemberLimitCheck = (totalUsers: number, limit: number | null) => {
   return totalUsers < limit;
 };
 
-const simulateTrigger = (churchId: string, profiles: any[], limit: number | null) => {
+const simulateTrigger = (churchId: string, profiles: Array<{ church_id: string }>, limit: number | null) => {
   const currentTotal = profiles.filter(p => p.church_id === churchId).length;
   if (!simulateMemberLimitCheck(currentTotal, limit)) {
     throw new Error('Limite de membros atingido');
@@ -65,7 +65,7 @@ describe('Advanced Member Limit Logic & Realtime Simulation', () => {
     };
 
     // Simulation of the useEffect listener
-    const onPayload = (payload: any) => {
+    const onPayload = (payload: { new: { subscription_status: string; church_id: string } }) => {
       currentStatus = payload.new.subscription_status;
     };
 
@@ -102,7 +102,7 @@ describe('Advanced Member Limit Logic & Realtime Simulation', () => {
   });
 
   it('should appear in historical profession records after completion', () => {
-    const records: any[] = [];
+    const records: Array<{ id: string; full_name: string; turma_name: string; professed_at: string }> = [];
     const student = { user_id: '1', full_name: 'John Doe', church_id: 'churchA', turma_id: 'turma1', turma_name: 'Turma A' };
     
     // Simulate record creation

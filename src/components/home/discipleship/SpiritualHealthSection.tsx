@@ -34,7 +34,7 @@ export default function SpiritualHealthSection({
                 <ProgressRing pct={p} color={color} size={60} />
                 <span className="absolute inset-0 flex items-center justify-center font-montserrat font-black text-foreground text-xs">{p}%</span>
               </div>
-              <p className="font-inter text-[10px] text-muted-foreground text-center">{label}</p>
+              <p className="font-inter text-xs text-muted-foreground text-center">{label}</p>
               <p className="font-montserrat font-bold text-foreground text-xs">{done}/{total}</p>
             </div>
           );

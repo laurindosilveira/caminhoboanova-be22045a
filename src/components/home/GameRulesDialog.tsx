@@ -70,7 +70,7 @@ export default function GameRulesDialog({ breakdown }: { breakdown: PointsBreakd
                   <span className="text-lg">{r.emoji}</span>
                   <div className="flex-1 min-w-0">
                     <p className="font-inter text-sm font-medium text-foreground">{r.label}</p>
-                    <p className="font-inter text-[10px] text-muted-foreground">{r.desc}</p>
+                    <p className="font-inter text-xs text-muted-foreground">{r.desc}</p>
                   </div>
                   <span className="font-montserrat font-bold text-secondary text-xs flex-shrink-0">{r.pts}</span>
                 </div>

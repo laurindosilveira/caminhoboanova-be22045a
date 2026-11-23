@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import type { Enums } from "@/integrations/supabase/types";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Clock, GraduationCap, Search, UserPlus, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -12,7 +13,7 @@ type WaitingUser = {
   phone: string;
   birth_date: string;
   turma_id: string | null;
-  enrollment_status: "pending" | "approved" | "rejected";
+  enrollment_status: string;
   church_id?: string | null;
 };
 
@@ -38,11 +39,7 @@ export default function LeaderWaitingRoom({ areaFilter, churchId, onAssigned }: 
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
 
-  useEffect(() => {
-    void fetchData();
-  }, [areaFilter, churchId]);
-
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     setLoading(true);
 
     const [
@@ -51,13 +48,13 @@ export default function LeaderWaitingRoom({ areaFilter, churchId, onAssigned }: 
       userResult,
     ] = await Promise.all([
       (churchId
-        ? (supabase.from as any)("profiles")
+        ? supabase.from("profiles")
           .select("user_id, full_name, community, area, phone, birth_date, turma_id, enrollment_status, church_id")
           .is("turma_id", null)
           .eq("enrollment_status", "pending")
           .or(`area.eq.${areaFilter},area.is.null,area.eq.""`)
           .eq("church_id", churchId)
-        : (supabase.from as any)("profiles")
+        : supabase.from("profiles")
           .select("user_id, full_name, community, area, phone, birth_date, turma_id, enrollment_status, church_id")
           .is("turma_id", null)
           .eq("enrollment_status", "pending")
@@ -94,10 +91,14 @@ export default function LeaderWaitingRoom({ areaFilter, churchId, onAssigned }: 
     }
 
     const myId = userResult.data.user?.id;
-    setUsers(((profiles as any) ?? []).filter((profile: any) => profile.user_id !== myId));
-    setTurmas((turmasData as any) ?? []);
+    setUsers((profiles ?? []).filter(profile => profile.user_id !== myId));
+    setTurmas(turmasData ?? []);
     setLoading(false);
-  }
+  }, [areaFilter, churchId, toast]);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
 
   async function assignTurma(userId: string, turmaId: string, userName: string) {
     const turma = turmas.find((item) => item.id === turmaId);
@@ -116,7 +117,7 @@ export default function LeaderWaitingRoom({ areaFilter, churchId, onAssigned }: 
       .update({ 
         turma_id: turmaId, 
         enrollment_status: "approved",
-        area: (turma.area || areaFilter) as any // Assign the area of the turma or the current leader's area
+        area: (turma.area || areaFilter) as Enums<"area_name">
       })
       .eq("user_id", userId);
 

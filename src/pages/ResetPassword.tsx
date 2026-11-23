@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Lock, Eye, EyeOff, CheckCircle } from "lucide-react";
 import { z } from "zod";
+import { strongPasswordSchema } from "@/lib/passwordPolicy";
 
 const resetSchema = z.object({
-  password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres").max(128),
+  password: strongPasswordSchema,
 });
 
 export default function ResetPassword() {
@@ -98,8 +99,9 @@ export default function ResetPassword() {
         await supabase.auth.signOut();
         navigate("/login", { replace: true });
       }, 2500);
-    } catch (err: any) {
-      setError("Ocorreu um erro inesperado: " + (err.message || "Tente novamente."));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Tente novamente.";
+      setError("Ocorreu um erro inesperado: " + message);
     } finally {
       setLoading(false);
     }
@@ -154,7 +156,7 @@ export default function ResetPassword() {
                       type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Mínimo 6 caracteres"
+                      placeholder="Mínimo 10 caracteres, com letra e número"
                       className="w-full pl-10 pr-11 py-3 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-secondary transition-all"
                       autoComplete="new-password"
                       required

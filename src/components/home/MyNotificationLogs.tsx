@@ -153,12 +153,12 @@ export default function MyNotificationLogs() {
                             {typeMeta.label}
                           </span>
                           {log.is_resent && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-inter font-bold">
+                            <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-inter font-bold">
                               REENVIO
                             </span>
                           )}
                         </div>
-                        <p className="font-mono text-[10px] text-muted-foreground truncate">
+                        <p className="font-mono text-xs text-muted-foreground truncate">
                           {log.phone}
                         </p>
                       </div>
@@ -167,9 +167,9 @@ export default function MyNotificationLogs() {
                       <div className="text-right flex-shrink-0">
                         <div className={`flex items-center gap-1 justify-end ${stCfg.color}`}>
                           <Icon className="w-3.5 h-3.5" />
-                          <span className="text-[10px] font-inter font-bold">{stCfg.label}</span>
+                          <span className="text-xs font-inter font-bold">{stCfg.label}</span>
                         </div>
-                        <p className="text-[10px] font-inter text-muted-foreground mt-0.5">
+                        <p className="text-xs font-inter text-muted-foreground mt-0.5">
                           {formatDate(log.sent_at)}
                         </p>
                       </div>
@@ -188,7 +188,7 @@ export default function MyNotificationLogs() {
                         <div className="ml-9 p-2.5 rounded-xl bg-muted/50 border border-border space-y-1.5">
                           {log.blocked_reason_code && (
                             <div>
-                              <p className="text-[10px] font-inter font-bold text-muted-foreground uppercase tracking-wide mb-0.5">
+                              <p className="text-xs font-inter font-bold text-muted-foreground uppercase tracking-wide mb-0.5">
                                 Motivo do bloqueio
                               </p>
                               <p className="text-[11px] font-inter text-amber-600 dark:text-amber-400">
@@ -198,7 +198,7 @@ export default function MyNotificationLogs() {
                           )}
                           {log.error_detail && (
                             <div>
-                              <p className="text-[10px] font-inter font-bold text-muted-foreground uppercase tracking-wide mb-0.5">
+                              <p className="text-xs font-inter font-bold text-muted-foreground uppercase tracking-wide mb-0.5">
                                 Detalhe do erro
                               </p>
                               <p className="text-[11px] font-inter text-destructive break-all">

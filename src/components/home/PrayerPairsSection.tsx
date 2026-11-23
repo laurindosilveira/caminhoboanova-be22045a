@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Heart, Check, Send, Users, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/utils";
+import type { Database } from "@/integrations/supabase/types";
 
 interface PrayerPair {
   id: string;
@@ -28,11 +30,7 @@ export default function PrayerPairsSection() {
 
   const isManager = role === "admin" || role === "lider";
 
-  useEffect(() => {
-    if (profile) fetchPair();
-  }, [profile]);
-
-  async function fetchPair() {
+  const fetchPair = useCallback(async () => {
     if (!user) return;
     setLoading(true);
 
@@ -52,14 +50,18 @@ export default function PrayerPairsSection() {
 
     setPair((data?.[0] as PrayerPair) ?? null);
     setLoading(false);
-  }
+  }, [user]);
+
+  useEffect(() => {
+    if (profile) fetchPair();
+  }, [fetchPair, profile]);
 
   async function confirmPrayer() {
     if (!pair || !user || !profile) return;
     setSubmitting(true);
 
     const isA = pair.user_a_id === user.id;
-    const updateData: any = isA
+    const updateData: Database["public"]["Tables"]["prayer_pairs"]["Update"] = isA
       ? { user_a_confirmed: true, user_a_testimony: testimony.trim() || null }
       : { user_b_confirmed: true, user_b_testimony: testimony.trim() || null };
 
@@ -79,6 +81,7 @@ export default function PrayerPairsSection() {
       const partnerId = isA ? pair.user_b_id : pair.user_a_id;
       supabase.functions.invoke("notify-prayer-confirm", {
         body: {
+          pair_id: pair.id,
           partner_user_id: partnerId,
           sender_name: profile.full_name,
         },
@@ -90,12 +93,14 @@ export default function PrayerPairsSection() {
   async function generatePairsNow() {
     setGenerating(true);
     try {
-      const { error } = await supabase.functions.invoke("prayer-pairs");
+      const { error } = await supabase.functions.invoke("prayer-pairs", {
+        body: { churchId: profile?.church_id ?? null },
+      });
       if (error) throw error;
       toast({ title: "✅ Duplas geradas!", description: "As duplas da semana foram criadas." });
       fetchPair();
-    } catch (err: any) {
-      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Erro", description: getErrorMessage(err), variant: "destructive" });
     }
     setGenerating(false);
   }
@@ -155,7 +160,7 @@ export default function PrayerPairsSection() {
             {partnerConfirmed && (
               <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-brand-green/10">
                 <Check className="w-3 h-3 text-brand-green" />
-                <span className="text-[10px] font-inter font-semibold text-brand-green">Orou por você</span>
+                <span className="text-xs font-inter font-semibold text-brand-green">Orou por você</span>
               </div>
             )}
           </div>
@@ -201,7 +206,7 @@ export default function PrayerPairsSection() {
           )}
 
           {/* Week info */}
-          <p className="text-[10px] text-muted-foreground font-inter text-center">
+          <p className="text-xs text-muted-foreground font-inter text-center">
             Semana de {new Date(pair.week_start + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
           </p>
         </div>

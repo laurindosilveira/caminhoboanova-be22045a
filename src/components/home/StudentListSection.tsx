@@ -71,9 +71,11 @@ export default function StudentListSection() {
   const [turmas, setTurmas] = useState<Turma[]>([]);
 
   const canView = role === "admin" || role === "lider";
+  const profileTurmaId = profile?.turma_id;
+  const profileUserId = profile?.user_id;
 
   useEffect(() => {
-    if (!canView || !profile?.turma_id || !expanded) return;
+    if (!canView || !profileTurmaId || !expanded) return;
     
     async function fetchStudents() {
       setLoading(true);
@@ -81,8 +83,8 @@ export default function StudentListSection() {
         supabase
           .from("profiles")
           .select("user_id, full_name, community, area, birth_date, phone, father_name, mother_name, father_phone, mother_phone, address, turma_id, confirmation_year")
-          .eq("turma_id", profile!.turma_id!)
-          .neq("user_id", profile!.user_id)
+          .eq("turma_id", profileTurmaId)
+          .neq("user_id", profileUserId ?? "")
           .order("full_name"),
         supabase.from("turmas").select("id, name, area").eq("is_active", true).order("name"),
       ]);
@@ -106,7 +108,7 @@ export default function StudentListSection() {
       setLoading(false);
     }
     fetchStudents();
-  }, [canView, profile?.turma_id, expanded]);
+  }, [canView, expanded, profileTurmaId, profileUserId]);
 
   async function loadStudentDetails(student: StudentProfile) {
     setSelectedStudent(student);
@@ -188,7 +190,7 @@ export default function StudentListSection() {
         mother_phone: editForm.mother_phone?.trim() ?? "",
         confirmation_year: editForm.confirmation_year ?? null,
         turma_id: newTurmaId,
-      } as any)
+      })
       .eq("user_id", selectedStudent.user_id);
 
     if (error) {
@@ -476,7 +478,7 @@ export default function StudentListSection() {
                       style={{ width: `${progressPct}%`, background: "var(--gradient-hero)" }}
                     />
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5 font-inter">
+                  <p className="text-xs text-muted-foreground mt-0.5 font-inter">
                     {studentStats.completedActivities} de {studentStats.totalActivities}
                   </p>
                 </div>
@@ -485,7 +487,7 @@ export default function StudentListSection() {
                   <div className="bg-card rounded-lg p-2.5 border border-border">
                     <div className="flex items-center gap-1.5 mb-1">
                       <CheckCircle2 className="w-3.5 h-3.5 text-brand-green" />
-                      <span className="text-[10px] text-muted-foreground font-inter">Presenças</span>
+                      <span className="text-xs text-muted-foreground font-inter">Presenças</span>
                     </div>
                     <p className="font-montserrat font-bold text-foreground text-sm">
                       {studentStats.attendancePresent}/{studentStats.attendanceTotal}
@@ -494,7 +496,7 @@ export default function StudentListSection() {
                   <div className="bg-card rounded-lg p-2.5 border border-border">
                     <div className="flex items-center gap-1.5 mb-1">
                       <BookOpen className="w-3.5 h-3.5 text-primary" />
-                      <span className="text-[10px] text-muted-foreground font-inter">Devocionais</span>
+                      <span className="text-xs text-muted-foreground font-inter">Devocionais</span>
                     </div>
                     <p className="font-montserrat font-bold text-foreground text-sm">
                       {studentStats.devotionalsCompleted}
@@ -503,7 +505,7 @@ export default function StudentListSection() {
                   <div className="bg-card rounded-lg p-2.5 border border-border">
                     <div className="flex items-center gap-1.5 mb-1">
                       <Heart className="w-3.5 h-3.5 text-primary" />
-                      <span className="text-[10px] text-muted-foreground font-inter">Cultos</span>
+                      <span className="text-xs text-muted-foreground font-inter">Cultos</span>
                     </div>
                     <p className="font-montserrat font-bold text-foreground text-sm">
                       {studentStats.worshipApproved}
@@ -512,7 +514,7 @@ export default function StudentListSection() {
                   <div className="bg-card rounded-lg p-2.5 border border-border">
                     <div className="flex items-center gap-1.5 mb-1">
                       <GraduationCap className="w-3.5 h-3.5 text-primary" />
-                      <span className="text-[10px] text-muted-foreground font-inter">Estudos</span>
+                      <span className="text-xs text-muted-foreground font-inter">Estudos</span>
                     </div>
                     <p className="font-montserrat font-bold text-foreground text-sm">
                       {studentStats.lessonResponses}

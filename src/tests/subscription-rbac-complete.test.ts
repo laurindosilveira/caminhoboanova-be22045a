@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getFeaturesForPlan } from '../lib/planFeatures';
+import { getFeaturesForPlan, type PlanFeatures } from '../lib/planFeatures';
 import { getPlanByProductId } from '../lib/stripePlans';
 
 // Simulation of the webhook logic for audit logs
-const PLAN_FEATURES: Record<string, any> = {
+const PLAN_FEATURES: Record<string, PlanFeatures> = {
   comunidade: {
     maxMembers: 50,
     advancedExport: false,
@@ -90,7 +90,7 @@ describe('Subscription Status & RBAC Simulation', () => {
     const subscription = { subscription_status: 'blocked' };
     const feature = 'advancedExport';
     const planKey = 'crescimento';
-    const features = getFeaturesForPlan(planKey as any);
+    const features = getFeaturesForPlan(planKey);
     
     const isBlocked = subscription?.subscription_status === 'blocked';
     const hasAccess = !isBlocked && features[feature as keyof typeof features] === true;

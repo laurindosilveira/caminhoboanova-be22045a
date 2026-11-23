@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCustomEventTypes } from "@/hooks/useCustomEventTypes";
@@ -142,10 +142,6 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
   const [phone, setPhone] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchActivities();
-  }, [userId, currentArea, customTypes]);
-
-  useEffect(() => {
     const selectedOption = bonusOptions.find((option) => option.value === bonusCategory);
     if (!selectedOption) return;
     if (bonusCategory === "conquista") {
@@ -155,8 +151,20 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
     setBonusPoints(String(selectedOption.points ?? 0));
   }, [bonusCategory, bonusOptions]);
 
-  async function fetchActivities() {
+  const fetchActivities = useCallback(async () => {
     setLoading(true);
+    const eventTypeMeta = {
+      encontro: { label: "Encontro", icon: <Calendar className="w-4 h-4 text-brand-green" /> },
+      confirmatorio: { label: "Ens. Confirmatorio", icon: <Calendar className="w-4 h-4 text-primary" /> },
+      culto: { label: "Culto", icon: <Church className="w-4 h-4 text-accent" /> },
+      jemiac: { label: "JEMIAC", icon: <Calendar className="w-4 h-4 text-secondary" /> },
+      retiro: { label: "Retiro", icon: <Calendar className="w-4 h-4 text-amber-500" /> },
+      evento: { label: "Evento", icon: <Calendar className="w-4 h-4 text-muted-foreground" /> },
+      ...Object.fromEntries(customTypes.map((type) => [
+        type.value,
+        { label: type.label, icon: <Calendar className="w-4 h-4 text-brand-green" /> },
+      ])),
+    };
 
     const { data: profile } = await supabase.from("profiles").select("church_id, community, area").eq("user_id", userId).maybeSingle();
     const churchId = profile?.church_id;
@@ -189,8 +197,8 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
       supabase.from("devotional_content").select("id, title, day_number, lesson_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
       supabase.from("events").select("id, title, event_date, type").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
       supabase.from("activities").select("id, title, points, type").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
-      supabase.rpc("get_game_config" as any),
-      supabase.from("achievement_definitions" as any).select("key, icon, title").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
+      supabase.rpc("get_game_config"),
+      supabase.from("achievement_definitions").select("key, icon, title").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
       supabase.from("custom_event_types").select("value, label, gives_points, points, area, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
       supabase.from("profiles").select("phone").eq("user_id", userId).maybeSingle(),
       supabase.from("courses").select("id, title, church_id").or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : 'church_id.is.null'),
@@ -198,7 +206,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
     ]);
 
     // Carrega pontuações dinâmicas do game_config
-    const cfgMap = new Map<string, number>((gameConfig ?? []).map((r: any) => [r.key, Number(r.value)]));
+    const cfgMap = new Map<string, number>((gameConfig ?? []).map((row) => [row.key, Number(row.value)]));
     const lessonPts    = cfgMap.get("lesson_points")             ?? 20;
     const devPts       = cfgMap.get("devotional_points")         ?? 5;
     const devWkPts     = cfgMap.get("devotional_weekend_points") ?? 2;
@@ -207,7 +215,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
     const courseBonusPts = cfgMap.get("course_completion_bonus")  ?? 100;
     const challengePts = cfgMap.get("challenge_points") ?? 15;
 
-    const customTypeRows = (customEventTypesData ?? []) as Array<any>;
+    const customTypeRows = customEventTypesData ?? [];
     const customTypeMap = new Map<string, { label: string; gives_points: boolean; points: number; area: string | null }>();
     customTypeRows
       .filter((type) => !type.area || type.area === profile?.area)
@@ -246,7 +254,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
     setPhone(profileData?.phone ?? null);
 
     const labelMap = new Map<string, AchievementLabel>(
-      (achDefs ?? []).map((d: any) => [d.key, { icon: d.icon, title: d.title }])
+      (achDefs ?? []).map((definition) => [definition.key, { icon: definition.icon, title: definition.title }])
     );
     setAchievementLabels(labelMap);
 
@@ -314,7 +322,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
         date: presence.created_at,
         deletable: true,
         tableId: presence.id,
-        eventType: (event as any)?.type ?? "encontro",
+        eventType: event?.type ?? "encontro",
       });
     });
 
@@ -336,7 +344,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
       const manualBonus = parseManualBonusKey(achievement.achievement_key);
       const isManualBonus = !!manualBonus;
       const label = labelMap.get(achievement.achievement_key);
-      const presentation = manualBonus ? getManualBonusPresentation(manualBonus.category, EVENT_TYPE_META) : null;
+      const presentation = manualBonus ? getManualBonusPresentation(manualBonus.category, eventTypeMeta) : null;
       allItems.push({
         id: `ach-${achievement.id}`,
         type: presentation?.type ?? "achievement",
@@ -423,7 +431,11 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
     setGaps({ missingLessons, missingDevotionals });
 
     setLoading(false);
-  }
+  }, [customTypes, userId]);
+
+  useEffect(() => {
+    void fetchActivities();
+  }, [fetchActivities]);
 
   function formatLessonQuestionLabel(
     key: string,
@@ -544,44 +556,37 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
     if (pts > 100 && !confirm(`Confirma conceder ${pts} pontos para ${fullName}?\n\nJustificativa: ${bonusJustification.trim()}`)) return;
 
     setGrantingBonus(true);
-    const { data: { user } } = await supabase.auth.getUser();
     try {
       const key = buildManualBonusKey(bonusCategory, bonusJustification.trim());
-      const { data, error } = await supabase.from("achievement_unlocks").insert({
-        user_id: userId,
-        achievement_key: key,
-        bonus_points: pts,
-      }).select("id, unlocked_at").single();
+      const { data, error } = await supabase.rpc("grant_manual_bonus", {
+        p_target_user_id: userId,
+        p_achievement_key: key,
+        p_points: pts,
+        p_justification: bonusJustification.trim(),
+      });
 
       if (error) throw error;
-
-      await (supabase.from as any)("bonus_grant_log").insert({
-        granted_by: user?.id ?? "",
-        target_user_id: userId,
-        achievement_id: data.id,
-        justification: bonusJustification.trim(),
-        points_granted: pts,
-      });
+      const result = data as { id: string; unlocked_at: string };
 
       const presentation = getManualBonusPresentation(bonusCategory, EVENT_TYPE_META);
       setItems(prev => [{
-        id: `ach-${data.id}`,
+        id: `ach-${result.id}`,
         type: presentation.type,
         source: "manual_bonus",
         title: presentation.title,
         subtitle: bonusJustification.trim(),
         points: pts,
-        date: data.unlocked_at,
+        date: result.unlocked_at,
         deletable: true,
-        tableId: data.id,
+        tableId: result.id,
         eventType: presentation.type === "attendance" ? bonusCategory : undefined,
       }, ...prev]);
       setTotalPoints(prev => prev + pts);
       resetBonusForm();
       toast.success(`+${pts} pontos concedidos a ${fullName}${selectedOption ? ` em ${selectedOption.label}` : ""}`);
       onPointsChanged?.();
-    } catch (err: any) {
-      toast.error("Erro ao conceder bônus: " + (err.message ?? ""));
+    } catch (err: unknown) {
+      toast.error("Erro ao conceder bônus: " + (err instanceof Error ? err.message : "Erro inesperado."));
     }
     setGrantingBonus(false);
   }
@@ -590,44 +595,57 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
     if (!confirm(`Remover "${item.title}" e descontar ${item.points} pontos?`)) return;
     setDeleting(item.id);
 
-    const { data: { user } } = await supabase.auth.getUser();
-
     try {
       if (item.source === "manual_bonus" && item.tableId) {
-        await supabase.from("achievement_unlocks").delete().eq("id", item.tableId);
+        const { error } = await supabase.rpc("remove_manual_bonus", {
+          p_achievement_id: item.tableId,
+          p_reason: "Removido via relatório de pontuação",
+        });
+        if (error) throw error;
       } else if (item.type === "lesson" && item.tableId) {
-        await Promise.all([
+        const results = await Promise.all([
           supabase.from("lesson_responses").delete().eq("user_id", userId).eq("lesson_id", item.tableId),
           supabase.from("lesson_progress").delete().eq("user_id", userId).eq("lesson_id", item.tableId),
         ]);
+        const failed = results.find((result) => result.error);
+        if (failed?.error) throw failed.error;
       } else if (item.type === "devotional" && item.tableId) {
-        await supabase.from("devotional_progress").delete().eq("id", item.tableId);
+        const { error } = await supabase.from("devotional_progress").delete().eq("id", item.tableId);
+        if (error) throw error;
       } else if (item.type === "attendance" && item.tableId) {
-        await supabase.from("attendance").delete().eq("id", item.tableId);
+        const { error } = await supabase.from("attendance").delete().eq("id", item.tableId);
+        if (error) throw error;
       } else if (item.type === "worship" && item.tableId) {
-        await supabase.from("worship_attendance").delete().eq("id", item.tableId);
+        const { error } = await supabase.from("worship_attendance").delete().eq("id", item.tableId);
+        if (error) throw error;
       } else if (item.type === "achievement" && item.tableId) {
-        await supabase.from("achievement_unlocks").delete().eq("id", item.tableId);
+        const { error } = await supabase.from("achievement_unlocks").delete().eq("id", item.tableId);
+        if (error) throw error;
       } else if (item.type === "activity" && item.tableId) {
-        await supabase.from("user_progress").delete().eq("id", item.tableId);
+        const { error } = await supabase.from("user_progress").delete().eq("id", item.tableId);
+        if (error) throw error;
       }
 
-      await supabase.from("activity_removal_log").insert({
-        removed_by: user?.id ?? "",
-        target_user_id: userId,
-        activity_type: item.source === "manual_bonus" ? "achievement" : item.type,
-        activity_id: item.tableId ?? item.id,
-        activity_title: item.title,
-        points_removed: item.points,
-        notes: "Removido via relatório de pontuação",
-      });
+      if (item.source !== "manual_bonus") {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { error: auditError } = await supabase.from("activity_removal_log").insert({
+          removed_by: user?.id ?? "",
+          target_user_id: userId,
+          activity_type: item.type,
+          activity_id: item.tableId ?? item.id,
+          activity_title: item.title,
+          points_removed: item.points,
+          notes: "Removido via relatório de pontuação",
+        });
+        if (auditError) throw auditError;
+      }
 
       setItems((prev) => prev.filter((current) => current.id !== item.id));
       setTotalPoints((prev) => prev - item.points);
       toast.success(`Removido: ${item.title} (-${item.points} pts)`);
       onPointsChanged?.();
-    } catch (err: any) {
-      toast.error("Erro ao remover: " + (err.message ?? ""));
+    } catch (err: unknown) {
+      toast.error("Erro ao remover: " + (err instanceof Error ? err.message : "Erro inesperado."));
     }
 
     setDeleting(null);
@@ -847,8 +865,8 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
               >
                 <div className="flex items-center justify-center mb-1">{typeIcon(type)}</div>
                 <p className="font-montserrat font-bold text-foreground text-xs">{count}</p>
-                <p className="text-muted-foreground text-[10px] font-inter">{typeLabel(type)}</p>
-                <p className="text-primary text-[10px] font-montserrat font-bold">+{points}</p>
+                <p className="text-muted-foreground text-xs font-inter">{typeLabel(type)}</p>
+                <p className="text-primary text-xs font-montserrat font-bold">+{points}</p>
               </button>
             ))}
           </div>
@@ -865,7 +883,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
                 <span className="font-montserrat font-bold text-amber-600 dark:text-amber-400 text-xs">
                   Lacunas
                 </span>
-                <span className="bg-amber-500/20 text-amber-700 dark:text-amber-300 font-montserrat font-bold text-[10px] px-1.5 py-0.5 rounded-full">
+                <span className="bg-amber-500/20 text-amber-700 dark:text-amber-300 font-montserrat font-bold text-xs px-1.5 py-0.5 rounded-full">
                   {gaps.missingLessons.length + gaps.missingDevotionals.length}
                 </span>
               </div>
@@ -876,7 +894,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
               <div className="px-4 pb-3 space-y-3">
                 {gaps.missingLessons.length > 0 && (
                   <div>
-                    <p className="font-inter font-semibold text-[10px] text-muted-foreground uppercase tracking-wide mb-1.5">
+                    <p className="font-inter font-semibold text-xs text-muted-foreground uppercase tracking-wide mb-1.5">
                       Lições não estudadas ({gaps.missingLessons.length})
                     </p>
                     <div className="space-y-1">
@@ -892,7 +910,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
 
                 {gaps.missingDevotionals.length > 0 && (
                   <div>
-                    <p className="font-inter font-semibold text-[10px] text-muted-foreground uppercase tracking-wide mb-1.5">
+                    <p className="font-inter font-semibold text-xs text-muted-foreground uppercase tracking-wide mb-1.5">
                       Devocionais não concluídos ({gaps.missingDevotionals.length})
                     </p>
                     <div className="space-y-1">
@@ -922,7 +940,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
         )}
         {!loading && items.length > 0 && (
           <div className="px-4 pb-4 pt-2 flex-shrink-0">
-            <p className="text-muted-foreground font-inter text-[10px] text-center">Toque em uma categoria acima para ver os detalhes</p>
+            <p className="text-muted-foreground font-inter text-xs text-center">Toque em uma categoria acima para ver os detalhes</p>
           </div>
         )}
       </div>
@@ -985,7 +1003,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
                       <p className="font-inter text-sm text-foreground font-semibold truncate">
                         {group.order < 9998 ? `Lição ${group.order}: ${group.title}` : group.title}
                       </p>
-                      <p className="text-muted-foreground text-[10px] font-inter">
+                      <p className="text-muted-foreground text-xs font-inter">
                         {group.items.length} {group.items.length === 1 ? "devocional lido" : "devocionais lidos"}
                         {group.lastDate ? ` - último em ${format(new Date(group.lastDate), "d/MM/yy")}` : ""}
                       </p>
@@ -1008,12 +1026,12 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
                       <div className="flex-shrink-0">{typeIcon(item.type)}</div>
                       <div className="flex-1 min-w-0">
                         <p className="font-inter text-sm text-foreground font-medium truncate">{item.title}</p>
-                        {item.subtitle && <p className="text-muted-foreground text-[10px] font-inter">{item.subtitle}</p>}
-                        <p className="text-muted-foreground text-[10px] font-inter">
+                        {item.subtitle && <p className="text-muted-foreground text-xs font-inter">{item.subtitle}</p>}
+                        <p className="text-muted-foreground text-xs font-inter">
                           {item.date ? format(new Date(item.date), "d/MM/yy HH:mm") : ""}
                         </p>
                         {canOpenDetails && (
-                          <p className="text-primary text-[10px] font-inter font-semibold mt-0.5">Toque para ver as respostas</p>
+                          <p className="text-primary text-xs font-inter font-semibold mt-0.5">Toque para ver as respostas</p>
                         )}
                       </div>
                       <span className="font-montserrat font-bold text-primary text-xs flex-shrink-0">+{item.points}</span>

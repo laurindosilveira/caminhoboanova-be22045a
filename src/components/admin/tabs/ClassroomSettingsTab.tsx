@@ -41,6 +41,7 @@ export default function ClassroomSettingsTab() {
       const { data } = await supabase
         .from("area_pastors")
         .select("pastor_name, phone")
+        .eq("church_id", profile?.church_id ?? "")
         .eq("area", selectedArea)
         .maybeSingle();
       setPastorSettings({
@@ -50,7 +51,7 @@ export default function ClassroomSettingsTab() {
       setPastorLoading(false);
     }
     fetchPastor();
-  }, [selectedArea]);
+  }, [profile?.church_id, selectedArea]);
 
   async function handleSavePastor() {
     setPastorSaving(true);
@@ -60,9 +61,10 @@ export default function ClassroomSettingsTab() {
         area: selectedArea,
         pastor_name: pastorSettings.pastor_name || "",
         phone: pastorSettings.phone || "",
+        church_id: profile?.church_id ?? null,
         updated_by: profile?.user_id,
         updated_at: new Date().toISOString(),
-      }, { onConflict: "area" });
+      }, { onConflict: "church_id,area" });
     setPastorSaving(false);
     if (error) {
       toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
@@ -113,7 +115,7 @@ export default function ClassroomSettingsTab() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
           <GraduationCap className="w-5 h-5 text-primary" />
         </div>
         <div>
@@ -132,7 +134,7 @@ export default function ClassroomSettingsTab() {
             <button
               key={c}
               onClick={() => setSelectedCommunity(c)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-montserrat font-bold transition-all border ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-montserrat font-bold transition-all border ${
                 selectedCommunity === c
                   ? "bg-primary text-primary-foreground border-primary"
                   : "bg-card text-muted-foreground border-border hover:border-primary/50"
@@ -146,12 +148,12 @@ export default function ClassroomSettingsTab() {
 
       {loading ? (
         <div className="space-y-3">
-          {[1, 2, 3].map(i => <div key={i} className="bg-muted rounded-2xl h-16 animate-pulse" />)}
+          {[1, 2, 3].map(i => <div key={i} className="bg-muted rounded-lg h-16 animate-pulse" />)}
         </div>
       ) : (
         <div className="space-y-4">
           {/* Link do WhatsApp */}
-          <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+          <div className="bg-card border border-border rounded-lg p-4 space-y-3">
             <div className="flex items-center gap-2">
               <Link className="w-4 h-4 text-primary" />
               <span className="font-montserrat font-bold text-foreground text-sm">Link do Grupo WhatsApp</span>
@@ -160,7 +162,7 @@ export default function ClassroomSettingsTab() {
               placeholder="https://chat.whatsapp.com/..."
               value={settings.whatsapp_link}
               onChange={(e) => setSettings({ ...settings, whatsapp_link: e.target.value })}
-              className="text-sm border-border rounded-xl"
+              className="text-sm border-border rounded-lg"
             />
             <p className="text-xs text-muted-foreground font-inter">
               Cole o link de convite do grupo WhatsApp da turma de {selectedCommunity}.
@@ -168,7 +170,7 @@ export default function ClassroomSettingsTab() {
           </div>
 
           {/* Versículo da semana */}
-          <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+          <div className="bg-card border border-border rounded-lg p-4 space-y-3">
             <div className="flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-primary" />
               <span className="font-montserrat font-bold text-foreground text-sm">Versículo da Semana</span>
@@ -177,21 +179,21 @@ export default function ClassroomSettingsTab() {
               placeholder="Ex: Porque Deus amou o mundo de tal maneira..."
               value={settings.verse_of_week}
               onChange={(e) => setSettings({ ...settings, verse_of_week: e.target.value })}
-              className="text-sm border-border rounded-xl resize-none min-h-[100px]"
+              className="text-sm border-border rounded-lg resize-none min-h-[100px]"
               maxLength={500}
             />
             <Input
               placeholder="Referência (ex: João 3:16)"
               value={settings.verse_reference}
               onChange={(e) => setSettings({ ...settings, verse_reference: e.target.value })}
-              className="text-sm border-border rounded-xl"
+              className="text-sm border-border rounded-lg"
             />
           </div>
 
           <Button
             onClick={handleSave}
             disabled={saving}
-            className="w-full rounded-2xl h-11 font-montserrat font-bold"
+            className="w-full rounded-lg h-11 font-montserrat font-bold"
           >
             <Save className="w-4 h-4 mr-2" />
             {saving ? "Salvando..." : "Salvar Configurações"}
@@ -202,7 +204,7 @@ export default function ClassroomSettingsTab() {
       {/* ===== PASTOR POR ÁREA ===== */}
       <div className="border-t border-border pt-6 mt-6">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-2xl bg-green-500/10 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
             <Phone className="w-5 h-5 text-green-600" />
           </div>
           <div>
@@ -220,7 +222,7 @@ export default function ClassroomSettingsTab() {
               <button
                 key={a}
                 onClick={() => setSelectedArea(a)}
-                className={`px-4 py-2 rounded-xl text-xs font-montserrat font-bold transition-all border ${
+                className={`px-4 py-2 rounded-lg text-xs font-montserrat font-bold transition-all border ${
                   selectedArea === a
                     ? "bg-primary text-primary-foreground border-primary"
                     : "bg-card text-muted-foreground border-border hover:border-primary/50"
@@ -233,9 +235,9 @@ export default function ClassroomSettingsTab() {
         </div>
 
         {pastorLoading ? (
-          <div className="bg-muted rounded-2xl h-24 animate-pulse" />
+          <div className="bg-muted rounded-lg h-24 animate-pulse" />
         ) : (
-          <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+          <div className="bg-card border border-border rounded-lg p-4 space-y-3">
             <div className="flex items-center gap-2">
               <User className="w-4 h-4 text-primary" />
               <span className="font-montserrat font-bold text-foreground text-sm">Nome do Pastor</span>
@@ -244,7 +246,7 @@ export default function ClassroomSettingsTab() {
               placeholder="Ex: Laurindo Silveira"
               value={pastorSettings.pastor_name}
               onChange={(e) => setPastorSettings({ ...pastorSettings, pastor_name: e.target.value })}
-              className="text-sm border-border rounded-xl"
+              className="text-sm border-border rounded-lg"
             />
             <div className="flex items-center gap-2 mt-2">
               <Phone className="w-4 h-4 text-primary" />
@@ -254,7 +256,7 @@ export default function ClassroomSettingsTab() {
               placeholder="Ex: 5598439-5290"
               value={pastorSettings.phone}
               onChange={(e) => setPastorSettings({ ...pastorSettings, phone: e.target.value })}
-              className="text-sm border-border rounded-xl"
+              className="text-sm border-border rounded-lg"
             />
             <p className="text-xs text-muted-foreground font-inter">
               Este número será usado no botão "Pedir ajuda ao Pastor" na área do líder.
@@ -262,7 +264,7 @@ export default function ClassroomSettingsTab() {
             <Button
               onClick={handleSavePastor}
               disabled={pastorSaving}
-              className="w-full rounded-2xl h-11 font-montserrat font-bold"
+              className="w-full rounded-lg h-11 font-montserrat font-bold"
             >
               <Save className="w-4 h-4 mr-2" />
               {pastorSaving ? "Salvando..." : "Salvar Pastor"}

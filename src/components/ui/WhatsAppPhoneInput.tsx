@@ -172,7 +172,7 @@ const WhatsAppPhoneInput = forwardRef<HTMLInputElement, Props>(
         {/* Sugestão de correção para erros específicos */}
         {showHint && validation.severity === "error" && display.length > 0 && (
           <div className="mx-1 px-2.5 py-1.5 rounded-lg bg-destructive/8 border border-destructive/20">
-            <p className="text-[10px] font-inter text-destructive/80 leading-relaxed">
+            <p className="text-xs font-inter text-destructive/80 leading-relaxed">
               {getCorrectionTip(display)}
             </p>
           </div>

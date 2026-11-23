@@ -35,7 +35,7 @@ export default function ThermometerSection({ dimensions }: Props) {
           </div>
         ))}
       </div>
-      <p className="text-muted-foreground font-inter text-[10px] mt-3 text-center">
+      <p className="text-muted-foreground font-inter text-xs mt-3 text-center">
         Baseado na sua autoavaliação, presença, estudos e atividades
       </p>
     </SectionCard>

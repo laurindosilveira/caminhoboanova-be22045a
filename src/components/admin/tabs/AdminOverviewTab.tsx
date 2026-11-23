@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { AREAS } from "@/config/areas";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -26,6 +26,14 @@ type AttRow = { user_id: string; status: string; created_at: string };
 type DevRow = { user_id: string; completed_at: string };
 type LessonRow = { user_id: string; lesson_id: string; created_at: string };
 type ProgressRow = { user_id: string; activity_id: string; created_at: string };
+type Participant = {
+  user_id: string;
+  area: string;
+  turma_id?: string | null;
+  completed_count: number;
+};
+type Activity = { id: string };
+type Turma = { id: string; name: string; area: string | null };
 
 const COLORS = [
   "hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))",
@@ -45,9 +53,9 @@ export default function AdminOverviewTab({
   turmas,
   churchId,
 }: {
-  participants: any[];
-  activities: any[];
-  turmas: any[];
+  participants: Participant[];
+  activities: Activity[];
+  turmas: Turma[];
   churchId?: string | null;
 }) {
   const { isSuper } = useAuth();
@@ -62,9 +70,7 @@ export default function AdminOverviewTab({
   const [period, setPeriod] = useState("6m");
   const [selectedTurmaId, setSelectedTurmaId] = useState<string>("all");
 
-  useEffect(() => { fetchData(); }, [churchId, participants.length]);
-
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     const userIds = participants.map(p => p.user_id).filter(Boolean);
     if (userIds.length === 0) {
@@ -75,21 +81,25 @@ export default function AdminOverviewTab({
       setLoading(false);
       return;
     }
-    const applyChurchScope = (query: any) => churchId
-      ? query.or(`church_id.is.null,church_id.eq.${churchId}`)
-      : query.is("church_id", null);
+    const attendanceQuery = supabase.from("attendance").select("user_id, status, created_at, church_id").in("user_id", userIds);
+    const devotionalQuery = supabase.from("devotional_progress").select("user_id, completed_at, church_id").in("user_id", userIds);
+    const lessonQuery = supabase.from("lesson_progress").select("user_id, lesson_id, created_at:completed_at, church_id").in("user_id", userIds).eq("is_completed", true);
+    const progressQuery = supabase.from("user_progress").select("user_id, activity_id, created_at:completed_at, church_id").in("user_id", userIds);
+    const churchFilter = `church_id.is.null,church_id.eq.${churchId}`;
     const [{ data: att }, { data: dev }, { data: les }, { data: prog }] = await Promise.all([
-      applyChurchScope(supabase.from("attendance").select("user_id, status, created_at, church_id").in("user_id", userIds)),
-      applyChurchScope(supabase.from("devotional_progress").select("user_id, completed_at, church_id").in("user_id", userIds)),
-      applyChurchScope(supabase.from("lesson_progress").select("user_id, lesson_id, created_at:completed_at, church_id").in("user_id", userIds).eq("is_completed", true)),
-      applyChurchScope(supabase.from("user_progress").select("user_id, activity_id, created_at, church_id").in("user_id", userIds)),
+      churchId ? attendanceQuery.or(churchFilter) : attendanceQuery.is("church_id", null),
+      churchId ? devotionalQuery.or(churchFilter) : devotionalQuery.is("church_id", null),
+      churchId ? lessonQuery.or(churchFilter) : lessonQuery.is("church_id", null),
+      churchId ? progressQuery.or(churchFilter) : progressQuery.is("church_id", null),
     ]);
     setAttRows(att ?? []);
     setDevRows(dev ?? []);
     setLessonRows(les ?? []);
     setProgressRows(prog ?? []);
     setLoading(false);
-  }
+  }, [churchId, participants]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   // Period cutoff
   const cutoff = useMemo(() => {
@@ -103,7 +113,7 @@ export default function AdminOverviewTab({
   // Filtered participants by turma
   const filteredParticipants = useMemo(() => {
     if (selectedTurmaId === "all") return participants;
-    return participants.filter(p => (p as any).turma_id === selectedTurmaId);
+    return participants.filter(p => p.turma_id === selectedTurmaId);
   }, [participants, selectedTurmaId]);
 
   const filteredUserIds = useMemo(() => new Set(filteredParticipants.map(p => p.user_id)), [filteredParticipants]);
@@ -142,7 +152,7 @@ export default function AdminOverviewTab({
   // === Turma comparison ===
   const turmaStats: TurmaStats[] = useMemo(() => {
     return turmas.map(t => {
-      const turmaUsers = participants.filter(p => (p as any).turma_id === t.id);
+      const turmaUsers = participants.filter(p => p.turma_id === t.id);
       const turmaIds = new Set(turmaUsers.map(u => u.user_id));
       const tAtt = attRows.filter(a => turmaIds.has(a.user_id) && a.status === "presente" && (!cutoff || a.created_at >= cutoff));
       const tDev = devRows.filter(d => turmaIds.has(d.user_id) && (!cutoff || d.completed_at >= cutoff));
@@ -169,7 +179,7 @@ export default function AdminOverviewTab({
         devotionalRate: total > 0 ? Math.round((devUsers / total) * 100) : 0,
       };
     });
-  }, [turmas, participants, attRows, devRows, lessonRows, activities, cutoff]);
+  }, [turmas, participants, attRows, devRows, lessonRows, progressRows, activities, cutoff]);
 
   // === Monthly trends ===
   const monthlyTrend = useMemo(() => {
@@ -215,7 +225,7 @@ export default function AdminOverviewTab({
   if (loading) {
     return (
       <div className="space-y-3">
-        {[1, 2, 3, 4].map(i => <div key={i} className="h-24 rounded-2xl bg-muted animate-pulse" />)}
+        {[1, 2, 3, 4].map(i => <div key={i} className="h-24 rounded-lg bg-muted animate-pulse" />)}
       </div>
     );
   }
@@ -226,12 +236,12 @@ export default function AdminOverviewTab({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <BarChart3 className="w-5 h-5 text-primary" />
-          <h2 className="font-montserrat font-black text-foreground text-lg">Dashboard Global</h2>
+          <h2 className="font-montserrat font-black text-foreground text-lg">Relatorios da turma</h2>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-card rounded-2xl border border-border p-3 shadow-sm space-y-3">
+      <div className="bg-card rounded-lg border border-border p-3 shadow-sm space-y-3">
         <div className="flex items-center gap-2 text-xs font-inter text-muted-foreground">
           <Filter className="w-3.5 h-3.5" /> Filtros
         </div>
@@ -251,7 +261,7 @@ export default function AdminOverviewTab({
         <select
           value={selectedTurmaId}
           onChange={e => setSelectedTurmaId(e.target.value)}
-          className="w-full px-3 py-2 rounded-xl border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground font-inter text-xs focus:outline-none focus:ring-2 focus:ring-primary"
         >
           <option value="all">Todas as turmas</option>
           {turmas.map(t => (
@@ -269,9 +279,9 @@ export default function AdminOverviewTab({
       </div>
 
       {/* Engagement breakdown */}
-      <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+      <div className="bg-card rounded-lg border border-border p-4 shadow-sm">
         <p className="font-montserrat font-bold text-foreground text-sm mb-1">📈 Detalhamento do Engajamento</p>
-        <p className="text-muted-foreground font-inter text-[10px] mb-3">Percentual de discípulos ativos em cada dimensão</p>
+        <p className="text-muted-foreground font-inter text-xs mb-3">Percentual de discípulos ativos em cada dimensão</p>
         <div className="space-y-2.5">
           <EngagementBar label="Presença em Encontros" value={totalParticipants > 0 ? Math.round((usersWithPresence / totalParticipants) * 100) : 0} color="hsl(var(--primary))" />
           <EngagementBar label="Devocionais Concluídos" value={totalParticipants > 0 ? Math.round((usersWithDev / totalParticipants) * 100) : 0} color="hsl(var(--chart-2))" />
@@ -281,9 +291,9 @@ export default function AdminOverviewTab({
 
       {/* Turma comparison */}
       {turmaStats.length > 0 && (
-        <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+        <div className="bg-card rounded-lg border border-border p-4 shadow-sm">
           <p className="font-montserrat font-bold text-foreground text-sm mb-1">📊 Comparativo entre Turmas</p>
-          <p className="text-muted-foreground font-inter text-[10px] mb-3">Taxa de engajamento e progresso por turma</p>
+          <p className="text-muted-foreground font-inter text-xs mb-3">Taxa de engajamento e progresso por turma</p>
           <ResponsiveContainer width="100%" height={Math.max(160, turmaStats.length * 40)}>
             <BarChart data={turmaStats} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
@@ -303,9 +313,9 @@ export default function AdminOverviewTab({
 
       {/* Radar chart for turma comparison */}
       {radarData.length >= 2 && (
-        <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+        <div className="bg-card rounded-lg border border-border p-4 shadow-sm">
           <p className="font-montserrat font-bold text-foreground text-sm mb-1">🎯 Perfil de Engajamento por Turma</p>
-          <p className="text-muted-foreground font-inter text-[10px] mb-3">Visão multidimensional do desempenho</p>
+          <p className="text-muted-foreground font-inter text-xs mb-3">Visão multidimensional do desempenho</p>
           <ResponsiveContainer width="100%" height={220}>
             <RadarChart data={radarData}>
               <PolarGrid stroke="hsl(var(--border))" />
@@ -323,9 +333,9 @@ export default function AdminOverviewTab({
 
       {/* Monthly trends */}
       {monthlyTrend.length > 0 && (
-        <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+        <div className="bg-card rounded-lg border border-border p-4 shadow-sm">
           <p className="font-montserrat font-bold text-foreground text-sm mb-1">📅 Tendências Mensais</p>
-          <p className="text-muted-foreground font-inter text-[10px] mb-3">Evolução do engajamento ao longo do tempo</p>
+          <p className="text-muted-foreground font-inter text-xs mb-3">Evolução do engajamento ao longo do tempo</p>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={monthlyTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -355,7 +365,7 @@ export default function AdminOverviewTab({
           </ResponsiveContainer>
           <div className="flex justify-center gap-3 mt-1">
             {areaData.map((d, i) => (
-              <span key={d.name} className="flex items-center gap-1 text-[9px] font-inter text-muted-foreground">
+              <span key={d.name} className="flex items-center gap-1 text-xs font-inter text-muted-foreground">
                 <span className="w-2 h-2 rounded-full" style={{ background: COLORS[i] }} />
                 {d.name} ({d.value})
               </span>
@@ -363,14 +373,14 @@ export default function AdminOverviewTab({
           </div>
         </div>
 
-        <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+        <div className="bg-card rounded-lg border border-border p-4 shadow-sm">
           <p className="font-montserrat font-bold text-foreground text-xs mb-2">Ranking de Turmas</p>
           <div className="space-y-1.5">
             {[...turmaStats].sort((a, b) => b.engagementRate - a.engagementRate).map((t, i) => (
               <div key={t.turma_id} className="flex items-center gap-1.5">
-                <span className="text-[10px] font-inter font-bold text-muted-foreground w-4">{i + 1}.</span>
-                <span className="text-[10px] font-inter text-foreground truncate flex-1">{t.turma_name}</span>
-                <span className={`text-[10px] font-inter font-bold ${
+                <span className="text-xs font-inter font-bold text-muted-foreground w-4">{i + 1}.</span>
+                <span className="text-xs font-inter text-foreground truncate flex-1">{t.turma_name}</span>
+                <span className={`text-xs font-inter font-bold ${
                   t.engagementRate >= 70 ? "text-chart-2" : t.engagementRate >= 40 ? "text-primary" : "text-destructive"
                 }`}>{t.engagementRate}%</span>
               </div>
@@ -386,12 +396,12 @@ function KPICard({ icon, label, value, bgClass, textClass }: {
   icon: React.ReactNode; label: string; value: string | number; bgClass: string; textClass: string;
 }) {
   return (
-    <div className="bg-card rounded-2xl border border-border p-3 shadow-sm">
-      <div className={`w-8 h-8 rounded-xl ${bgClass} flex items-center justify-center ${textClass} mb-2`}>
+    <div className="bg-card rounded-lg border border-border p-3 shadow-sm">
+      <div className={`w-8 h-8 rounded-lg ${bgClass} flex items-center justify-center ${textClass} mb-2`}>
         {icon}
       </div>
       <p className="font-montserrat font-black text-foreground text-lg">{value}</p>
-      <p className="text-muted-foreground font-inter text-[10px]">{label}</p>
+      <p className="text-muted-foreground font-inter text-xs">{label}</p>
     </div>
   );
 }

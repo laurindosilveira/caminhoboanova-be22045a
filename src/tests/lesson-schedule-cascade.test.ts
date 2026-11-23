@@ -69,4 +69,45 @@ describe("lesson schedule cascade", () => {
 
     expect(result).toEqual([]);
   });
+
+  it("includes legacy area meetings when the current meeting belongs to a turma", () => {
+    const turmaCurrent = {
+      ...current,
+      turma_id: "turma-area-2",
+    };
+    const result = getSubsequentLessonEvents([
+      turmaCurrent,
+      {
+        ...current,
+        id: "legacy-area-meeting",
+        event_date: "2026-09-05T20:00:00.000Z",
+      },
+      {
+        ...current,
+        id: "other-turma",
+        turma_id: "turma-area-2-b",
+        event_date: "2026-09-05T20:00:00.000Z",
+      },
+    ], turmaCurrent);
+
+    expect(result.map((event) => event.id)).toEqual(["legacy-area-meeting"]);
+  });
+
+  it("uses the active area as fallback for normalized turma events", () => {
+    const turmaCurrent = {
+      ...current,
+      area: null,
+      turma_id: "turma-area-2",
+    };
+    const result = getSubsequentLessonEvents([
+      turmaCurrent,
+      {
+        ...current,
+        id: "legacy-area-meeting",
+        event_date: "2026-09-05T20:00:00.000Z",
+      },
+    ], turmaCurrent, { legacyArea: current.area });
+
+    expect(result.map((event) => event.id)).toEqual(["legacy-area-meeting"]);
+  });
 });

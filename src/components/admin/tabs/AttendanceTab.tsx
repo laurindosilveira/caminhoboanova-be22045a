@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { EVENT_TYPES, getEventEmoji } from "@/config/eventTypes";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import {
   CalendarDays, Users, CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp,
   Star, BookOpen, FileText, Save, Church, Plus, MapPin, X as XIcon,
@@ -11,17 +12,34 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
+import type { Database } from "@/integrations/supabase/types";
+import AgendaCourseControlDialog from "@/components/admin/AgendaCourseControlDialog";
+import {
+  activateAgendaCourseControl,
+  isCourseOpenWithoutRestrictions,
+  type AgendaCourseScope,
+} from "@/lib/agendaCourseAccess";
+import { getSubsequentLessonEvents } from "@/lib/lessonScheduleCascade";
+
+type Tables = Database["public"]["Tables"];
+type EventPayload = Tables["events"]["Update"];
+type PromotionRequest = Tables["year_promotion_requests"]["Row"] & {
+  full_name?: string;
+  community?: string;
+};
 
 type Event = {
   id: string; title: string; event_date: string; type: string;
   location: string | null; community: string | null; area: string | null;
   description: string | null; linked_lesson_id: string | null;
   church_id?: string | null;
+  turma_id: string | null;
 };
 type Participant = {
   user_id: string; full_name: string; community: string; area: string;
   birth_date: string; phone: string; completed_count: number; completed_activity_ids: string[];
   confirmation_year?: number | null;
+  turma_id?: string | null;
 };
 type Activity = {
   id: string; title: string; type: string; order_num: number; points: number; subtitle: string | null;
@@ -33,6 +51,11 @@ type Evaluation = {
   understanding_score: number | null;
   engagement_score: number | null;
   notes: string;
+};
+type CourseControlPrompt = {
+  scope: AgendaCourseScope;
+  courseTitle: string;
+  onContinue: (activateControl: boolean) => Promise<void>;
 };
 
 const STATUS_CFG: Record<AttendanceStatus, { label: string; icon: React.ReactNode; btn: string; active: string }> = {
@@ -73,10 +96,13 @@ type AttendanceProps = {
   onClearInitial?: () => void;
   adminArea?: string | null;
   churchId?: string | null;
+  turmaId?: string | null;
+  turmaName?: string | null;
 };
 
-export default function AttendanceTab({ participants, activities, communities, initialParticipant, onClearInitial, adminArea, churchId }: AttendanceProps) {
-  const { profile } = useAuth();
+export default function AttendanceTab({ participants, activities, communities, initialParticipant, onClearInitial, adminArea, churchId, turmaId, turmaName }: AttendanceProps) {
+  const { profile, role } = useAuth();
+  const { effectiveTurmaId } = useAreaSwitch();
   const { toast } = useToast();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,10 +128,11 @@ export default function AttendanceTab({ participants, activities, communities, i
   const [savingAttendanceApproval, setSavingAttendanceApproval] = useState<string | null>(null);
 
   // Year promotion state
-  const [promotionRequests, setPromotionRequests] = useState<{ id: string; user_id: string; from_year: number; to_year: number; status: string; requested_at: string; full_name?: string; community?: string }[]>([]);
+  const [promotionRequests, setPromotionRequests] = useState<PromotionRequest[]>([]);
   const [generatingPromotions, setGeneratingPromotions] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resettingJourney, setResettingJourney] = useState(false);
+  const [resetConfirmation, setResetConfirmation] = useState("");
 
   // Event creation/editing
   const [showEventForm, setShowEventForm] = useState(false);
@@ -116,38 +143,63 @@ export default function AttendanceTab({ participants, activities, communities, i
   });
   const [reportEventId, setReportEventId] = useState<string | null>(null);
   const [showCascadeDialog, setShowCascadeDialog] = useState(false);
-  const [cascadePending, setCascadePending] = useState<{ eventId: string; oldLessonId: string | null; newLessonId: string; payload: any } | null>(null);
+  const [cascadePending, setCascadePending] = useState<{
+    eventId: string;
+    oldLessonId: string | null;
+    newLessonId: string;
+    payload: EventPayload;
+    referenceEvent: Event;
+    agendaControlScope: AgendaCourseScope | null;
+  } | null>(null);
+  const [courseControlPrompt, setCourseControlPrompt] = useState<CourseControlPrompt | null>(null);
 
   // Lesson options for linking to confirmatorio events
-  type LessonOption = { id: string; title: string; order_num: number; course_title: string; course_order: number };
+  type LessonOption = { id: string; title: string; order_num: number; course_title: string; course_order: number; course_id: string };
   const [lessonOptions, setLessonOptions] = useState<LessonOption[]>([]);
 
-  useEffect(() => { fetchEvents(); fetchWorshipRequests(); fetchLessonOptions(); fetchPromotionRequests(); fetchPendingAttendance(); }, [churchId, adminArea, participants.length]);
+  const fetchPromotionRequests = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("year_promotion_requests")
+      .select("*")
+      .or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null")
+      .order("requested_at", { ascending: false })
+      .limit(50);
+    if (error) {
+      toast({ title: "Erro ao carregar promocoes", description: error.message, variant: "destructive" });
+      setPromotionRequests([]);
+      return;
+    }
+    const enriched = (data ?? []).map((request) => {
+      const participant = participants.find((item) => item.user_id === request.user_id);
+      return { ...request, full_name: participant?.full_name, community: participant?.community };
+    });
+    setPromotionRequests(enriched);
+  }, [churchId, participants, toast]);
 
-  async function fetchLessonOptions() {
-    const applyChurchScope = (query: any) => churchId
-      ? query.or(`church_id.is.null,church_id.eq.${churchId}`)
-      : query.is("church_id", null);
+  const fetchLessonOptions = useCallback(async () => {
+    const coursesQuery = supabase.from("courses").select("id, title, order_num, church_id").order("order_num");
+    const lessonsQuery = supabase.from("lessons").select("id, title, order_num, course_id, church_id").order("order_num");
+    const churchFilter = `church_id.is.null,church_id.eq.${churchId}`;
     const [{ data: coursesData }, { data: lessonsData }] = await Promise.all([
-      applyChurchScope(supabase.from("courses").select("id, title, order_num, church_id").order("order_num")),
-      applyChurchScope(supabase.from("lessons").select("id, title, order_num, course_id, church_id").order("order_num")),
+      churchId ? coursesQuery.or(churchFilter) : coursesQuery.is("church_id", null),
+      churchId ? lessonsQuery.or(churchFilter) : lessonsQuery.is("church_id", null),
     ]);
     const courses = coursesData ?? [];
     const lessonsList = lessonsData ?? [];
     const options: LessonOption[] = [];
     courses.forEach(c => {
       lessonsList.filter(l => l.course_id === c.id).forEach(l => {
-        options.push({ id: l.id, title: l.title, order_num: l.order_num, course_title: c.title, course_order: c.order_num });
+        options.push({ id: l.id, title: l.title, order_num: l.order_num, course_title: c.title, course_order: c.order_num, course_id: c.id });
       });
     });
     setLessonOptions(options);
-  }
+  }, [churchId]);
 
-  async function fetchEvents() {
+  const fetchEvents = useCallback(async () => {
     setLoading(true);
     let query = supabase
       .from("events")
-      .select("id, title, event_date, type, location, community, area, description, linked_lesson_id, church_id")
+      .select("id, title, event_date, type, location, community, area, description, linked_lesson_id, church_id, turma_id")
       .order("event_date", { ascending: false })
       .limit(50);
     query = churchId ? query.eq("church_id", churchId) : query.is("church_id", null);
@@ -156,11 +208,18 @@ export default function AttendanceTab({ participants, activities, communities, i
       query = query.or(`area.is.null,area.eq.${adminArea}`);
     }
     const { data } = await query;
-    setEvents(data ?? []);
+    const churchEvents = (data ?? []) as Event[];
+    const scopedEvents = effectiveTurmaId
+      ? churchEvents.filter(event =>
+          event.turma_id === effectiveTurmaId ||
+          (!event.turma_id && (!event.area || event.area === adminArea))
+        )
+      : churchEvents;
+    setEvents(scopedEvents);
     setLoading(false);
-  }
+  }, [adminArea, churchId, effectiveTurmaId]);
 
-  async function fetchWorshipRequests() {
+  const fetchWorshipRequests = useCallback(async () => {
     const participantIds = participants.map(p => p.user_id);
     if (participantIds.length === 0) return;
     const { data } = await supabase
@@ -175,7 +234,7 @@ export default function AttendanceTab({ participants, activities, communities, i
       return { ...w, full_name: p?.full_name ?? "Desconhecido", community: p?.community ?? "" };
     });
     setWorshipRequests(enriched);
-  }
+  }, [churchId, participants]);
 
   async function handleWorshipAction(id: string, action: "aprovado" | "rejeitado") {
     setSavingWorship(id);
@@ -194,7 +253,7 @@ export default function AttendanceTab({ participants, activities, communities, i
     setSavingWorship(null);
   }
 
-  async function fetchPendingAttendance() {
+  const fetchPendingAttendance = useCallback(async () => {
     const participantIds = participants.map(p => p.user_id);
     if (participantIds.length === 0) return;
     const { data } = await supabase
@@ -214,7 +273,15 @@ export default function AttendanceTab({ participants, activities, communities, i
       return { ...a, full_name: p?.full_name ?? "Desconhecido", community: p?.community ?? "", event_title: ev?.title ?? "Evento", event_date: ev?.event_date ?? a.created_at };
     });
     setPendingAttendance(enriched);
-  }
+  }, [churchId, participants]);
+
+  useEffect(() => {
+    void fetchEvents();
+    void fetchWorshipRequests();
+    void fetchLessonOptions();
+    void fetchPromotionRequests();
+    void fetchPendingAttendance();
+  }, [fetchEvents, fetchLessonOptions, fetchPendingAttendance, fetchPromotionRequests, fetchWorshipRequests]);
 
   async function handleAttendanceApproval(id: string, action: "presente" | "justificou" | "rejeitado") {
     setSavingAttendanceApproval(id);
@@ -229,7 +296,7 @@ export default function AttendanceTab({ participants, activities, communities, i
         confirmation_source: "both",
         confirmed_by: user?.id ?? null,
         leader_confirmed_at: new Date().toISOString(),
-      } as any).eq("id", id);
+      }).eq("id", id);
       error = result.error;
     }
     if (error) {
@@ -258,7 +325,7 @@ export default function AttendanceTab({ participants, activities, communities, i
     }
 
     const attMap: Record<string, AttendanceStatus> = {};
-    (attData ?? []).forEach((r: any) => { attMap[r.user_id] = r.status as AttendanceStatus; });
+    (attData ?? []).forEach((record) => { attMap[record.user_id] = record.status as AttendanceStatus; });
     setAttendance(prev => ({ ...prev, [eventId]: attMap }));
 
     // For encontros, also load evaluations + progress
@@ -277,28 +344,87 @@ export default function AttendanceTab({ participants, activities, communities, i
       }
 
       const evalMap: Record<string, Evaluation> = {};
-      (evalData ?? []).forEach((e: any) => {
-        evalMap[e.user_id] = {
-          participation_score: e.participation_score,
-          understanding_score: e.understanding_score,
-          engagement_score: e.engagement_score,
-          notes: e.notes ?? "",
+      (evalData ?? []).forEach((evaluation) => {
+        evalMap[evaluation.user_id] = {
+          participation_score: evaluation.participation_score,
+          understanding_score: evaluation.understanding_score,
+          engagement_score: evaluation.engagement_score,
+          notes: evaluation.notes ?? "",
         };
       });
       setEvaluations(prev => ({ ...prev, [eventId]: evalMap }));
 
       const eventDateObj = new Date(eventDate);
       const prepMap: Record<string, string[]> = {};
-      (progressData ?? []).forEach((pr: any) => {
-        if (new Date(pr.completed_at) <= eventDateObj) {
-          if (!prepMap[pr.user_id]) prepMap[pr.user_id] = [];
-          prepMap[pr.user_id].push(pr.activity_id);
+      (progressData ?? []).forEach((progress) => {
+        if (new Date(progress.completed_at) <= eventDateObj) {
+          if (!prepMap[progress.user_id]) prepMap[progress.user_id] = [];
+          prepMap[progress.user_id].push(progress.activity_id);
         }
       });
       setPrepReport(prepMap);
     }
   }
-  async function handleSaveEvent() {
+  async function continueWithCourseControlChoice(
+    lessonId: string,
+    turmaId: string | null,
+    area: string | null,
+    onContinue: (activateControl: boolean, scope: AgendaCourseScope | null) => Promise<void>,
+  ) {
+    const lesson = lessonOptions.find(item => item.id === lessonId);
+    if (!lesson) {
+      await onContinue(false, null);
+      return;
+    }
+
+    const scope: AgendaCourseScope = {
+      courseId: lesson.course_id,
+      churchId: churchId ?? null,
+      turmaId,
+      area: area || adminArea || null,
+    };
+
+    try {
+      const isOpen = await isCourseOpenWithoutRestrictions(scope);
+      if (!isOpen) {
+        await onContinue(false, scope);
+        return;
+      }
+
+      setCourseControlPrompt({
+        scope,
+        courseTitle: lesson.course_title,
+        onContinue: activateControl => onContinue(activateControl, scope),
+      });
+      setSavingEvent(false);
+    } catch (error) {
+      toast({
+        title: "Não foi possível verificar a liberação do curso",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "destructive",
+      });
+      setSavingEvent(false);
+    }
+  }
+
+  async function activateControlAfterEventSave(scope: AgendaCourseScope | null) {
+    if (!scope) return;
+    try {
+      await activateAgendaCourseControl(scope);
+      toast({ title: "Controle pela Agenda ativado para este grupo." });
+    } catch (error) {
+      toast({
+        title: "Evento salvo, mas o controle pela Agenda não foi ativado",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleSaveEvent(courseControlChoice?: {
+    activateControl: boolean;
+    scope: AgendaCourseScope | null;
+  }) {
     if (!eventForm.title || !eventForm.event_date) return;
     setSavingEvent(true);
     const normalizedEventDate = eventForm.event_date ? new Date(eventForm.event_date) : null;
@@ -307,48 +433,79 @@ export default function AttendanceTab({ participants, activities, communities, i
       setSavingEvent(false);
       return;
     }
+    const currentEvent = editingEventId ? events.find(event => event.id === editingEventId) : null;
+    // Changing a lesson must not silently move an existing area event into
+    // the currently selected turma. New events still inherit the active turma.
+    const targetTurmaId = editingEventId
+      ? currentEvent?.turma_id ?? null
+      : effectiveTurmaId ?? turmaId ?? null;
     const payload = {
       title: eventForm.title,
       description: eventForm.description || null,
       event_date: normalizedEventDate.toISOString(),
       location: eventForm.location || null,
       type: eventForm.type,
-      area: adminArea || eventForm.area || null,
+      area: targetTurmaId ? null : adminArea || eventForm.area || null,
       community: eventForm.community || null,
       linked_lesson_id: eventForm.linked_lesson_id || null,
       church_id: churchId ?? null,
+      turma_id: targetTurmaId,
     };
+    const currentLessonId = currentEvent?.linked_lesson_id ?? null;
+    const nextLessonId = payload.linked_lesson_id;
+
+    if (
+      !courseControlChoice &&
+      nextLessonId &&
+      (!editingEventId || currentLessonId !== nextLessonId)
+    ) {
+      await continueWithCourseControlChoice(
+        nextLessonId,
+        targetTurmaId,
+        payload.area,
+        async (activateControl, scope) => {
+          await handleSaveEvent({ activateControl, scope });
+        },
+      );
+      return;
+    }
 
     if (editingEventId) {
       const oldEvent = events.find(e => e.id === editingEventId);
       const oldLessonId = oldEvent?.linked_lesson_id ?? null;
       const newLessonId = payload.linked_lesson_id;
 
-      console.log("[CASCADE CHECK]", { editingEventId, oldLessonId, newLessonId, changed: oldLessonId !== newLessonId });
-
       // Check if lesson changed and cascade is needed
       if (oldLessonId !== newLessonId && newLessonId && oldEvent) {
         // Fetch fresh events from DB to ensure accurate cascade check
         let freshEventsQuery = supabase
           .from("events")
-          .select("id, title, event_date, type, location, community, area, description, linked_lesson_id, church_id")
+          .select("id, title, event_date, type, location, community, area, description, linked_lesson_id, church_id, turma_id")
           .order("event_date", { ascending: true });
         freshEventsQuery = churchId ? freshEventsQuery.eq("church_id", churchId) : freshEventsQuery.is("church_id", null);
         const { data: freshEvents } = await freshEventsQuery;
 
-        const allEvents = freshEvents ?? events;
-        const subsequentWithLessons = allEvents.filter(
-          e =>
-            e.id !== editingEventId &&
-            new Date(e.event_date).getTime() > new Date(oldEvent.event_date).getTime() &&
-            e.linked_lesson_id
+        const allChurchEvents = (freshEvents ?? events) as Event[];
+        const cascadeReference: Event = { ...oldEvent, ...payload };
+        const subsequentEvents = getSubsequentLessonEvents(
+          allChurchEvents,
+          cascadeReference,
+          { legacyArea: adminArea || oldEvent.area || null },
         );
-        console.log("[CASCADE CHECK] subsequent events with lessons:", subsequentWithLessons.length);
 
-        if (subsequentWithLessons.length > 0) {
+        if (subsequentEvents.length > 0) {
           // Update local events state with fresh data for cascade execution
-          setEvents(allEvents);
-          setCascadePending({ eventId: editingEventId, oldLessonId, newLessonId, payload });
+          setEvents(allChurchEvents);
+          setCascadePending({
+            eventId: editingEventId,
+            oldLessonId,
+            newLessonId,
+            payload,
+            referenceEvent: cascadeReference,
+            agendaControlScope: courseControlChoice?.activateControl
+              ? courseControlChoice.scope
+              : null,
+          });
           setShowCascadeDialog(true);
           setShowEventForm(false);
           setSavingEvent(false);
@@ -371,6 +528,9 @@ export default function AttendanceTab({ participants, activities, communities, i
         return;
       }
     }
+    if (courseControlChoice?.activateControl) {
+      await activateControlAfterEventSave(courseControlChoice.scope);
+    }
     setEventForm({ title: "", description: "", event_date: "", location: "", type: "encontro", area: adminArea ?? "", community: "", linked_lesson_id: "" });
     setShowEventForm(false);
     setEditingEventId(null);
@@ -380,9 +540,7 @@ export default function AttendanceTab({ participants, activities, communities, i
 
   async function executeCascade(doCascade: boolean) {
     if (!cascadePending) return;
-    const { eventId, newLessonId, payload } = cascadePending;
-    const event = events.find(e => e.id === eventId);
-    if (!event) return;
+    const { eventId, newLessonId, payload, referenceEvent, agendaControlScope } = cascadePending;
 
     // Update the edited event with all fields
     const { error: eventUpdateError } = await supabase.from("events").update(payload).eq("id", eventId);
@@ -394,9 +552,9 @@ export default function AttendanceTab({ participants, activities, communities, i
     }
 
     if (doCascade) {
-      const subsequent = events
-        .filter(e => e.id !== eventId && new Date(e.event_date).getTime() > new Date(event.event_date).getTime() && e.linked_lesson_id)
-        .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
+      const subsequent = getSubsequentLessonEvents(events, referenceEvent, {
+        legacyArea: adminArea || referenceEvent.area || null,
+      });
 
       if (subsequent.length > 0) {
         const allLessonsOrdered = [...lessonOptions].sort((a, b) => {
@@ -427,6 +585,7 @@ export default function AttendanceTab({ participants, activities, communities, i
       toast({ title: "Evento atualizado (sem cascata)!" });
     }
 
+    await activateControlAfterEventSave(agendaControlScope);
     setShowCascadeDialog(false);
     setCascadePending(null);
     setEditingEventId(null);
@@ -516,7 +675,7 @@ export default function AttendanceTab({ participants, activities, communities, i
     setSavingAtt(null);
   }
 
-  function updateLocalEval(eventId: string, userId: string, field: keyof Evaluation, value: any) {
+  function updateLocalEval(eventId: string, userId: string, field: keyof Evaluation, value: Evaluation[keyof Evaluation]) {
     setEvaluations(prev => ({
       ...prev,
       [eventId]: {
@@ -551,6 +710,8 @@ export default function AttendanceTab({ participants, activities, communities, i
 
   function getParticipantsForEvent(event: Event) {
     return participants.filter(p => {
+      const targetTurmaId = event.turma_id ?? effectiveTurmaId;
+      if (targetTurmaId && p.turma_id !== targetTurmaId) return false;
       if (event.community && p.community !== event.community) return false;
       if (filterYear && p.confirmation_year !== filterYear) return false;
       return true;
@@ -587,7 +748,7 @@ export default function AttendanceTab({ participants, activities, communities, i
             </button>
           ))}
         </div>
-        {value && <p className="text-[10px] text-primary font-inter">{SCORE_LABELS[value]}</p>}
+        {value && <p className="text-xs text-primary font-inter">{SCORE_LABELS[value]}</p>}
       </div>
     );
   }
@@ -596,7 +757,7 @@ export default function AttendanceTab({ participants, activities, communities, i
     if (!showCascadeDialog || !cascadePending) return null;
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in" onClick={() => { setShowCascadeDialog(false); setCascadePending(null); }}>
-        <div className="w-full max-w-sm bg-card rounded-2xl p-5 mx-4 space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="w-full max-w-sm bg-card rounded-lg p-5 mx-4 space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
           <div className="text-center">
             <span className="text-3xl">📅</span>
             <h3 className="font-montserrat font-bold text-foreground text-base mt-2">Prorrogar estudos?</h3>
@@ -607,13 +768,13 @@ export default function AttendanceTab({ participants, activities, communities, i
           <div className="flex gap-2">
             <button
               onClick={() => executeCascade(false)}
-              className="flex-1 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm font-medium"
+              className="flex-1 py-2.5 rounded-lg bg-muted text-foreground font-inter text-sm font-medium"
             >
               Só este evento
             </button>
             <button
               onClick={() => executeCascade(true)}
-              className="flex-1 py-2.5 rounded-xl text-primary-foreground font-inter text-sm font-medium"
+              className="flex-1 py-2.5 rounded-lg text-primary-foreground font-inter text-sm font-medium"
               style={{ background: "var(--gradient-hero)" }}
             >
               Prorrogar todos
@@ -624,25 +785,48 @@ export default function AttendanceTab({ participants, activities, communities, i
     );
   }
 
+  async function handleCourseControlChoice(activateControl: boolean) {
+    const pending = courseControlPrompt;
+    if (!pending) return;
+    setCourseControlPrompt(null);
+    setSavingEvent(true);
+    await pending.onContinue(activateControl);
+  }
+
+  function renderCourseControlDialog() {
+    return (
+      <AgendaCourseControlDialog
+        open={Boolean(courseControlPrompt)}
+        courseTitle={courseControlPrompt?.courseTitle ?? ""}
+        onCancel={() => {
+          setCourseControlPrompt(null);
+          setSavingEvent(false);
+        }}
+        onKeepOpen={() => void handleCourseControlChoice(false)}
+        onActivateControl={() => void handleCourseControlChoice(true)}
+      />
+    );
+  }
+
   function renderEventForm() {
     const formContent = (
       <div className="space-y-3">
         <p className="font-montserrat font-bold text-foreground text-sm">{editingEventId ? "✏️ Editar evento" : "Novo evento"}</p>
         <input value={eventForm.title} onChange={e => setEventForm(f => ({ ...f, title: e.target.value }))}
           placeholder="Título do evento *"
-          className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+          className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
         <input value={eventForm.description} onChange={e => setEventForm(f => ({ ...f, description: e.target.value }))}
           placeholder="Descrição (opcional)"
-          className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+          className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
         <div className="grid grid-cols-2 gap-2">
           <input type="datetime-local" value={eventForm.event_date} onChange={e => setEventForm(f => ({ ...f, event_date: e.target.value }))}
-            className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+            className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
           <input value={eventForm.location} onChange={e => setEventForm(f => ({ ...f, location: e.target.value }))}
             placeholder="Local (opcional)"
-            className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+            className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
         </div>
         <select value={eventForm.type} onChange={e => setEventForm(f => ({ ...f, type: e.target.value, linked_lesson_id: "" }))}
-          className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+          className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
           {AGENDA_EVENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
         {eventForm.type === "confirmatorio" && (
@@ -651,7 +835,7 @@ export default function AttendanceTab({ participants, activities, communities, i
             <select
               value={eventForm.linked_lesson_id}
               onChange={e => setEventForm(f => ({ ...f, linked_lesson_id: e.target.value }))}
-              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+              className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
             >
               <option value="">Sem vínculo</option>
               {lessonOptions.map(l => (
@@ -663,12 +847,12 @@ export default function AttendanceTab({ participants, activities, communities, i
           </div>
         )}
         <div className="flex gap-2">
-          <button onClick={handleSaveEvent} disabled={savingEvent || !eventForm.title || !eventForm.event_date}
-            className="flex-1 py-2.5 rounded-xl text-sm font-inter font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
+          <button onClick={() => void handleSaveEvent()} disabled={savingEvent || !eventForm.title || !eventForm.event_date}
+            className="flex-1 py-2.5 rounded-lg text-sm font-inter font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
             style={{ background: "var(--gradient-hero)" }}>
             {savingEvent ? "Salvando..." : editingEventId ? "Salvar alterações" : "Salvar evento"}
           </button>
-          <button onClick={() => { setShowEventForm(false); setEditingEventId(null); }} className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm">
+          <button onClick={() => { setShowEventForm(false); setEditingEventId(null); }} className="px-4 py-2.5 rounded-lg bg-muted text-foreground font-inter text-sm">
             Cancelar
           </button>
         </div>
@@ -679,7 +863,7 @@ export default function AttendanceTab({ participants, activities, communities, i
     if (editingEventId) {
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in" onClick={() => { setShowEventForm(false); setEditingEventId(null); }}>
-          <div className="w-full max-w-md bg-card rounded-2xl border border-border p-5 mx-4 shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-md bg-card rounded-lg border border-border p-5 mx-4 shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             {formContent}
           </div>
         </div>
@@ -688,7 +872,7 @@ export default function AttendanceTab({ participants, activities, communities, i
 
     // New event: inline form
     return (
-      <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+      <div className="bg-card rounded-lg border border-border p-4 shadow-sm">
         {formContent}
       </div>
     );
@@ -697,8 +881,9 @@ export default function AttendanceTab({ participants, activities, communities, i
   if (loading) {
     return (
       <div className="space-y-3">
+        {renderCourseControlDialog()}
         {renderCascadeDialog()}
-        {[1, 2, 3].map(i => <div key={i} className="bg-muted rounded-2xl h-20 animate-pulse" />)}
+        {[1, 2, 3].map(i => <div key={i} className="bg-muted rounded-lg h-20 animate-pulse" />)}
       </div>
     );
   }
@@ -706,11 +891,12 @@ export default function AttendanceTab({ participants, activities, communities, i
   if (events.length === 0 && worshipRequests.length === 0) {
     return (
       <div className="space-y-4">
+        {renderCourseControlDialog()}
         {renderCascadeDialog()}
         <div className="flex items-center justify-between">
           <p className="font-montserrat font-bold text-foreground text-base">Encontros & Presença</p>
           <button onClick={() => { setEditingEventId(null); setEventForm({ title: "", description: "", event_date: "", location: "", type: "encontro", area: adminArea ?? "", community: "", linked_lesson_id: "" }); setShowEventForm(!showEventForm); }}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-inter font-medium text-primary-foreground"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-inter font-medium text-primary-foreground"
             style={{ background: "var(--gradient-hero)" }}>
             <Plus className="w-3.5 h-3.5" /> Novo evento
           </button>
@@ -738,10 +924,11 @@ export default function AttendanceTab({ participants, activities, communities, i
 
   return (
     <div className="space-y-4">
+      {renderCourseControlDialog()}
       {renderCascadeDialog()}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
             <Users className="w-5 h-5 text-primary" />
           </div>
           <div>
@@ -750,7 +937,7 @@ export default function AttendanceTab({ participants, activities, communities, i
           </div>
         </div>
         <button onClick={() => { setEditingEventId(null); setEventForm({ title: "", description: "", event_date: "", location: "", type: "encontro", area: adminArea ?? "", community: "", linked_lesson_id: "" }); setShowEventForm(!showEventForm); }}
-          className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-inter font-medium text-primary-foreground"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-inter font-medium text-primary-foreground"
           style={{ background: "var(--gradient-hero)" }}>
           <Plus className="w-3.5 h-3.5" /> Novo evento
         </button>
@@ -803,7 +990,7 @@ export default function AttendanceTab({ participants, activities, communities, i
             <CalendarDays className="w-4 h-4 text-primary" />
             <p className="font-montserrat font-bold text-foreground text-sm">
               Solicitações de Presença em Eventos
-              <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-inter font-bold bg-primary/10 text-primary">
+              <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-inter font-bold bg-primary/10 text-primary">
                 {pendingAttendance.length} pendente{pendingAttendance.length !== 1 ? "s" : ""}
               </span>
             </p>
@@ -812,16 +999,16 @@ export default function AttendanceTab({ participants, activities, communities, i
             const isSaving = savingAttendanceApproval === a.id;
             const isPresence = a.status === "pendente_presente";
             return (
-              <div key={a.id} className="bg-card rounded-2xl border border-primary/20 p-4 shadow-sm space-y-2">
+              <div key={a.id} className="bg-card rounded-lg border border-primary/20 p-4 shadow-sm space-y-2">
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isPresence ? "bg-brand-green/10" : "bg-accent/20"}`}>
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isPresence ? "bg-brand-green/10" : "bg-accent/20"}`}>
                     <span className="text-lg">{isPresence ? "✅" : "📝"}</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-montserrat font-bold text-foreground text-sm">{a.full_name}</p>
                     <p className="text-muted-foreground font-inter text-xs">{a.community}</p>
                   </div>
-                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-inter font-medium ${isPresence ? "bg-brand-green/10 text-brand-green" : "bg-accent/20 text-accent-foreground"}`}>
+                  <span className={`px-2 py-0.5 rounded-md text-xs font-inter font-medium ${isPresence ? "bg-brand-green/10 text-brand-green" : "bg-accent/20 text-accent-foreground"}`}>
                     {isPresence ? "Confirma presença" : "Justifica falta"}
                   </span>
                 </div>
@@ -838,14 +1025,14 @@ export default function AttendanceTab({ participants, activities, communities, i
                   <button
                     onClick={() => handleAttendanceApproval(a.id, isPresence ? "presente" : "justificou")}
                     disabled={isSaving}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-green/10 text-brand-green font-inter text-xs font-medium border border-brand-green/30 hover:bg-brand-green/20 transition-colors disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-brand-green/10 text-brand-green font-inter text-xs font-medium border border-brand-green/30 hover:bg-brand-green/20 transition-colors disabled:opacity-50"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" /> Aprovar
                   </button>
                   <button
                     onClick={() => handleAttendanceApproval(a.id, "rejeitado")}
                     disabled={isSaving}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-destructive/10 text-destructive font-inter text-xs font-medium border border-destructive/30 hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-destructive/10 text-destructive font-inter text-xs font-medium border border-destructive/30 hover:bg-destructive/20 transition-colors disabled:opacity-50"
                   >
                     <XCircle className="w-3.5 h-3.5" /> Rejeitar
                   </button>
@@ -871,16 +1058,16 @@ export default function AttendanceTab({ participants, activities, communities, i
           const emoji = getEventEmoji(w.event_type);
           const typeLabel = EVENT_TYPES.find(t => t.value === w.event_type)?.label ?? w.event_type;
           return (
-            <div key={w.id} className={`bg-card rounded-2xl border ${isPending ? "border-accent/50" : "border-border"} p-4 shadow-sm space-y-2`}>
+            <div key={w.id} className={`bg-card rounded-lg border ${isPending ? "border-accent/50" : "border-border"} p-4 shadow-sm space-y-2`}>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                   <span className="text-lg">{emoji}</span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-montserrat font-bold text-foreground text-sm">{w.full_name}</p>
                   <p className="text-muted-foreground font-inter text-xs">{w.community}</p>
                 </div>
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-inter font-medium bg-muted text-muted-foreground">
+                <span className="px-2 py-0.5 rounded-md text-xs font-inter font-medium bg-muted text-muted-foreground">
                   {typeLabel}
                 </span>
                 {!isPending && (
@@ -901,14 +1088,14 @@ export default function AttendanceTab({ participants, activities, communities, i
                   <button
                     onClick={() => handleWorshipAction(w.id, "aprovado")}
                     disabled={isSaving}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-green/10 text-brand-green font-inter text-xs font-medium border border-brand-green/30 hover:bg-brand-green/20 transition-colors disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-brand-green/10 text-brand-green font-inter text-xs font-medium border border-brand-green/30 hover:bg-brand-green/20 transition-colors disabled:opacity-50"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" /> Aprovar
                   </button>
                   <button
                     onClick={() => handleWorshipAction(w.id, "rejeitado")}
                     disabled={isSaving}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-destructive/10 text-destructive font-inter text-xs font-medium border border-destructive/30 hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-destructive/10 text-destructive font-inter text-xs font-medium border border-destructive/30 hover:bg-destructive/20 transition-colors disabled:opacity-50"
                   >
                     <XCircle className="w-3.5 h-3.5" /> Rejeitar
                   </button>
@@ -927,7 +1114,7 @@ export default function AttendanceTab({ participants, activities, communities, i
                   <Church className="w-4 h-4 text-primary" />
                   <p className="font-montserrat font-bold text-foreground text-sm">
                     Confirmações de Presença
-                    <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-inter font-bold bg-accent/20 text-accent-foreground">
+                    <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-inter font-bold bg-accent/20 text-accent-foreground">
                       {pendingItems.length} pendente{pendingItems.length !== 1 ? "s" : ""}
                     </span>
                   </p>
@@ -940,12 +1127,12 @@ export default function AttendanceTab({ participants, activities, communities, i
             {!filterType && archivedItems.length > 0 && (
               <details className="group">
                 <summary className="flex items-center gap-2 cursor-pointer list-none py-2">
-                  <div className="w-8 h-8 rounded-xl bg-muted flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
                     <FileText className="w-4 h-4 text-muted-foreground" />
                   </div>
                   <p className="font-montserrat font-bold text-muted-foreground text-sm flex-1">
                     Arquivo de Confirmações
-                    <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-inter font-medium bg-muted text-muted-foreground">
+                    <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-inter font-medium bg-muted text-muted-foreground">
                       {archivedItems.length}
                     </span>
                   </p>
@@ -971,13 +1158,13 @@ export default function AttendanceTab({ participants, activities, communities, i
           const evaluatedCount = isEncontro ? Object.keys(evalMap).filter(uid => evalMap[uid]?.participation_score).length : 0;
 
           return (
-            <div key={event.id} className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+            <div key={event.id} className="bg-card border border-border rounded-lg overflow-hidden shadow-sm">
               {/* Event header */}
               <button
                 onClick={() => toggleEvent(event.id)}
                 className="w-full flex items-center gap-3 p-4 text-left hover:bg-muted/30 transition-colors"
               >
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex flex-col items-center justify-center flex-shrink-0">
+                <div className="w-12 h-12 rounded-lg bg-primary/10 flex flex-col items-center justify-center flex-shrink-0">
                   <span className="text-lg leading-none">{getEventEmoji(event.type)}</span>
                   <span className="font-montserrat font-black text-primary text-xs">
                     {format(dateObj, "d", { locale: ptBR })}
@@ -987,7 +1174,7 @@ export default function AttendanceTab({ participants, activities, communities, i
                   <div className="flex items-center gap-2">
                     <p className="font-montserrat font-bold text-foreground text-sm">{event.title}</p>
                     {isEncontro && (
-                      <span className="text-[10px] font-inter font-medium text-primary bg-primary/10 rounded-full px-2 py-0.5">Encontro</span>
+                      <span className="text-xs font-inter font-medium text-primary bg-primary/10 rounded-full px-2 py-0.5">Encontro</span>
                     )}
                   </div>
                   <p className="text-muted-foreground font-inter text-xs">
@@ -1133,7 +1320,7 @@ export default function AttendanceTab({ participants, activities, communities, i
                                     <FileText className="w-4 h-4 text-primary" />
                                     <p className="font-montserrat font-bold text-foreground text-sm">Relatório de Preparação</p>
                                   </div>
-                                  <div className="bg-card rounded-xl border border-border p-3 space-y-1.5">
+                                  <div className="bg-card rounded-lg border border-border p-3 space-y-1.5">
                                     <p className="text-xs font-inter text-muted-foreground mb-2">
                                       Atividades concluídas antes do encontro ({userPrep.length}/{activities.length}):
                                     </p>
@@ -1190,7 +1377,7 @@ export default function AttendanceTab({ participants, activities, communities, i
                                   <button
                                     onClick={() => saveEvaluation(event.id, p.user_id)}
                                     disabled={savingEval}
-                                    className="flex items-center gap-2 bg-primary text-primary-foreground rounded-xl px-4 py-2.5 text-sm font-montserrat font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 w-full justify-center"
+                                    className="flex items-center gap-2 bg-primary text-primary-foreground rounded-lg px-4 py-2.5 text-sm font-montserrat font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 w-full justify-center"
                                   >
                                     <Save className="w-4 h-4" />
                                     {savingEval ? "Salvando..." : "Salvar Avaliação"}
@@ -1234,13 +1421,13 @@ export default function AttendanceTab({ participants, activities, communities, i
         return (
           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60" onClick={() => setReportEventId(null)}>
             <div
-              className="bg-background w-full max-w-lg max-h-[85vh] rounded-t-3xl sm:rounded-3xl overflow-y-auto shadow-2xl"
+              className="bg-background w-full max-w-lg max-h-[85vh] rounded-t-3xl sm:rounded-lg overflow-y-auto shadow-2xl"
               onClick={e => e.stopPropagation()}
             >
               {/* Header */}
               <div className="sticky top-0 z-10 bg-background border-b border-border px-5 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                     <ClipboardList className="w-5 h-5 text-primary" />
                   </div>
                   <div>
@@ -1257,21 +1444,21 @@ export default function AttendanceTab({ participants, activities, communities, i
 
               {/* Summary cards */}
               <div className="px-5 py-4 grid grid-cols-4 gap-2">
-                <div className="bg-brand-green/10 rounded-xl p-3 text-center">
+                <div className="bg-brand-green/10 rounded-lg p-3 text-center">
                   <p className="font-montserrat font-black text-brand-green text-lg">{presentes.length}</p>
-                  <p className="text-[10px] font-inter text-brand-green">Presentes</p>
+                  <p className="text-xs font-inter text-brand-green">Presentes</p>
                 </div>
-                <div className="bg-destructive/10 rounded-xl p-3 text-center">
+                <div className="bg-destructive/10 rounded-lg p-3 text-center">
                   <p className="font-montserrat font-black text-destructive text-lg">{faltaram.length}</p>
-                  <p className="text-[10px] font-inter text-destructive">Faltaram</p>
+                  <p className="text-xs font-inter text-destructive">Faltaram</p>
                 </div>
-                <div className="bg-accent/10 rounded-xl p-3 text-center">
+                <div className="bg-accent/10 rounded-lg p-3 text-center">
                   <p className="font-montserrat font-black text-accent-foreground text-lg">{justificaram.length}</p>
-                  <p className="text-[10px] font-inter text-accent-foreground">Justificaram</p>
+                  <p className="text-xs font-inter text-accent-foreground">Justificaram</p>
                 </div>
-                <div className="bg-muted rounded-xl p-3 text-center">
+                <div className="bg-muted rounded-lg p-3 text-center">
                   <p className="font-montserrat font-black text-muted-foreground text-lg">{semRegistro.length}</p>
-                  <p className="text-[10px] font-inter text-muted-foreground">Sem registro</p>
+                  <p className="text-xs font-inter text-muted-foreground">Sem registro</p>
                 </div>
               </div>
 
@@ -1287,7 +1474,7 @@ export default function AttendanceTab({ participants, activities, communities, i
                           const ev = evalMap[p.user_id];
                           const hasNotes = ev?.notes && ev.notes.trim().length > 0;
                           return (
-                            <div key={p.user_id} className={`${sec.bg} rounded-xl px-3 py-2.5`}>
+                            <div key={p.user_id} className={`${sec.bg} rounded-lg px-3 py-2.5`}>
                               <div className="flex items-center justify-between">
                                 <div>
                                   <p className="font-inter font-medium text-foreground text-sm">{p.full_name}</p>
@@ -1322,18 +1509,18 @@ export default function AttendanceTab({ participants, activities, communities, i
       <div className="mt-6 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
               <ArrowUpCircle className="w-5 h-5 text-primary" />
             </div>
             <div>
               <h3 className="font-montserrat font-bold text-foreground text-sm">Promoção de Ano</h3>
-              <p className="text-muted-foreground text-[10px] font-inter">Promover alunos do 1º para o 2º ano</p>
+              <p className="text-muted-foreground text-xs font-inter">Promover alunos do 1º para o 2º ano</p>
             </div>
           </div>
           <button
             onClick={handleGeneratePromotions}
             disabled={generatingPromotions}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-inter font-medium text-primary-foreground disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-inter font-medium text-primary-foreground disabled:opacity-50"
             style={{ background: "var(--gradient-hero)" }}
           >
             {generatingPromotions ? "Gerando..." : "Gerar promoções"}
@@ -1341,20 +1528,20 @@ export default function AttendanceTab({ participants, activities, communities, i
         </div>
 
         {promotionRequests.length === 0 ? (
-          <div className="text-center py-6 bg-muted/30 rounded-2xl">
+          <div className="text-center py-6 bg-muted/30 rounded-lg">
             <p className="text-muted-foreground font-inter text-xs">Nenhuma promoção pendente.</p>
-            <p className="text-muted-foreground font-inter text-[10px] mt-1">Clique em "Gerar promoções" para verificar alunos do 1º ano elegíveis.</p>
+            <p className="text-muted-foreground font-inter text-xs mt-1">Clique em "Gerar promoções" para verificar alunos do 1º ano elegíveis.</p>
           </div>
         ) : (
           <div className="space-y-2">
             {promotionRequests.map(req => (
-              <div key={req.id} className="bg-card border border-border rounded-xl p-3 flex items-center gap-3">
+              <div key={req.id} className="bg-card border border-border rounded-lg p-3 flex items-center gap-3">
                 <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                   <span className="text-sm font-bold">{req.from_year}→{req.to_year}</span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-montserrat font-bold text-foreground text-xs truncate">{req.full_name ?? "—"}</p>
-                  <p className="text-muted-foreground text-[10px] font-inter">{req.community ?? ""} · {new Date(req.requested_at).toLocaleDateString("pt-BR")}</p>
+                  <p className="text-muted-foreground text-xs font-inter">{req.community ?? ""} · {new Date(req.requested_at).toLocaleDateString("pt-BR")}</p>
                 </div>
                 {req.status === "pendente" ? (
                   <div className="flex gap-1.5 flex-shrink-0">
@@ -1372,7 +1559,7 @@ export default function AttendanceTab({ participants, activities, communities, i
                     </button>
                   </div>
                 ) : (
-                  <span className={`px-2.5 py-1 rounded-lg text-[10px] font-inter font-semibold ${
+                  <span className={`px-2.5 py-1 rounded-lg text-xs font-inter font-semibold ${
                     req.status === "aprovado" ? "bg-brand-green/10 text-brand-green" : "bg-destructive/10 text-destructive"
                   }`}>
                     {req.status === "aprovado" ? "✅ Aprovado" : "❌ Rejeitado"}
@@ -1384,27 +1571,28 @@ export default function AttendanceTab({ participants, activities, communities, i
         )}
       </div>
 
-      {/* ─── REINICIAR JORNADA ─── */}
+      {/* ─── REINICIAR JORNADA — somente administrador ─── */}
+      {role === "admin" && turmaId && (
       <div className="mt-6 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-destructive/10 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-destructive/10 flex items-center justify-center">
               <RefreshCw className="w-5 h-5 text-destructive" />
             </div>
             <div>
               <h3 className="font-montserrat font-bold text-foreground text-sm">Reiniciar Jornada</h3>
-              <p className="text-muted-foreground text-[10px] font-inter">Zerar progresso de toda a turma</p>
+              <p className="text-muted-foreground text-xs font-inter">Zerar progresso de toda a turma</p>
             </div>
           </div>
           <button
             onClick={() => setShowResetConfirm(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-inter font-medium border-2 border-destructive/30 text-destructive hover:bg-destructive/10 transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-inter font-medium border-2 border-destructive/30 text-destructive hover:bg-destructive/10 transition-all"
           >
             <RefreshCw className="w-3.5 h-3.5" /> Reiniciar
           </button>
         </div>
         {showResetConfirm && (
-          <div className="bg-destructive/5 border-2 border-destructive/20 rounded-2xl p-4 space-y-3">
+          <div className="bg-destructive/5 border-2 border-destructive/20 rounded-lg p-4 space-y-3">
             <p className="text-destructive font-inter text-xs font-medium">
               ⚠️ Ação irreversível! Todo o progresso de {participants.length} aluno(s) será apagado:
             </p>
@@ -1412,15 +1600,27 @@ export default function AttendanceTab({ participants, activities, communities, i
               <li>• Atividades, lições e devocionais</li>
               <li>• Conquistas e pontos da fé</li>
             </ul>
+            <label className="block space-y-1.5">
+              <span className="font-inter text-xs font-semibold text-foreground">
+                Para confirmar, digite o nome do grupo: <strong>{turmaName}</strong>
+              </span>
+              <input
+                type="text"
+                value={resetConfirmation}
+                onChange={(event) => setResetConfirmation(event.target.value)}
+                className="w-full rounded-lg border border-destructive/30 bg-background px-3 py-2 font-inter text-sm text-foreground outline-none focus:ring-2 focus:ring-destructive/30"
+                autoComplete="off"
+              />
+            </label>
             <div className="flex gap-2">
-              <button onClick={() => setShowResetConfirm(false)}
-                className="flex-1 py-2 rounded-xl text-xs font-montserrat font-bold bg-muted text-muted-foreground border border-border">
+              <button onClick={() => { setShowResetConfirm(false); setResetConfirmation(""); }}
+                className="flex-1 py-2 rounded-lg text-xs font-montserrat font-bold bg-muted text-muted-foreground border border-border">
                 Cancelar
               </button>
               <button
                 onClick={handleResetJourney}
-                disabled={resettingJourney}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-montserrat font-bold text-destructive-foreground bg-destructive hover:bg-destructive/90 disabled:opacity-50 transition-colors"
+                disabled={resettingJourney || resetConfirmation.trim() !== (turmaName ?? "").trim()}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-montserrat font-bold text-destructive-foreground bg-destructive hover:bg-destructive/90 disabled:opacity-50 transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 {resettingJourney ? "Reiniciando..." : "Confirmar reinício"}
@@ -1429,27 +1629,9 @@ export default function AttendanceTab({ participants, activities, communities, i
           </div>
         )}
       </div>
+      )}
     </div>
   );
-
-  async function fetchPromotionRequests() {
-    const { data, error } = await supabase
-      .from("year_promotion_requests")
-      .select("*")
-      .or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null")
-      .order("requested_at", { ascending: false })
-      .limit(50);
-    if (error) {
-      toast({ title: "Erro ao carregar promocoes", description: error.message, variant: "destructive" });
-      setPromotionRequests([]);
-      return;
-    }
-    const enriched = (data ?? []).map((r: any) => {
-      const p = participants.find(p => p.user_id === r.user_id);
-      return { ...r, full_name: p?.full_name, community: p?.community };
-    });
-    setPromotionRequests(enriched);
-  }
 
   async function handleGeneratePromotions() {
     setGeneratingPromotions(true);
@@ -1457,7 +1639,7 @@ export default function AttendanceTab({ participants, activities, communities, i
     const isEndOfYear = new Date().getMonth() >= 10; // November or December
     
     // Find all 1st year participants in this turma
-    const firstYearParticipants = participants.filter(p => (p as any).confirmation_year === 1);
+    const firstYearParticipants = participants.filter(p => p.confirmation_year === 1);
     
     if (firstYearParticipants.length === 0) {
       toast({ title: "Nenhum aluno elegivel", description: "Nao ha alunos do 1º ano nesta turma." });
@@ -1489,13 +1671,12 @@ export default function AttendanceTab({ participants, activities, communities, i
       user_id: p.user_id,
       from_year: 1,
       to_year: 2,
-      turma_id: (p as any).turma_id ?? null,
+      turma_id: p.turma_id ?? null,
       status: "pendente",
-      requested_by: userResult.user.id,
       church_id: churchId ?? null,
     }));
 
-    const { error } = await supabase.from("year_promotion_requests").insert(inserts as any);
+    const { error } = await supabase.from("year_promotion_requests").insert(inserts);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
@@ -1515,7 +1696,7 @@ export default function AttendanceTab({ participants, activities, communities, i
     if (action === "aprovado") {
       const { error: profileError } = await supabase
         .from("profiles")
-        .update({ confirmation_year: 2 } as any)
+        .update({ confirmation_year: 2 })
         .eq("user_id", userId);
       if (profileError) {
         toast({ title: "Erro", description: profileError.message, variant: "destructive" });
@@ -1527,13 +1708,13 @@ export default function AttendanceTab({ participants, activities, communities, i
       status: action,
       reviewed_by: authData.user.id,
       reviewed_at: new Date().toISOString(),
-    } as any).eq("id", requestId);
+    }).eq("id", requestId);
 
     if (error) {
       if (action === "aprovado") {
         await supabase
           .from("profiles")
-          .update({ confirmation_year: 1 } as any)
+          .update({ confirmation_year: 1 })
           .eq("user_id", userId);
       }
       toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -1552,31 +1733,27 @@ export default function AttendanceTab({ participants, activities, communities, i
   }
 
   async function handleResetJourney() {
-    setResettingJourney(true);
-    const userIds = participants.map(p => p.user_id);
-    
-    if (userIds.length === 0) {
-      toast({ title: "Nenhum membro", description: "Esta turma não possui membros.", variant: "destructive" });
-      setResettingJourney(false);
-      setShowResetConfirm(false);
+    if (role !== "admin" || !turmaId) {
+      toast({
+        title: "Ação não permitida",
+        description: "Somente o administrador da igreja pode reiniciar a jornada de um grupo.",
+        variant: "destructive",
+      });
       return;
     }
+    setResettingJourney(true);
+    const callRpc = supabase.rpc.bind(supabase) as unknown as (
+      functionName: string,
+      args: Record<string, unknown>,
+    ) => Promise<{ data: { member_count?: number } | null; error: { message: string } | null }>;
+    const { data, error } = await callRpc("reset_turma_journey", {
+      p_turma_id: turmaId,
+    });
 
-    const resetOperations = await Promise.all([
-      supabase.from("user_progress").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
-      supabase.from("lesson_responses").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
-      supabase.from("lesson_progress").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
-      supabase.from("devotional_progress").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
-      supabase.from("achievement_unlocks").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
-      supabase.from("attendance").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
-      supabase.from("worship_attendance").delete().in("user_id", userIds).or(churchId ? `church_id.is.null,church_id.eq.${churchId}` : "church_id.is.null"),
-    ]);
-
-    const resetError = resetOperations.find(result => result.error)?.error;
-    if (resetError) {
+    if (error) {
       toast({
         title: "Erro ao reiniciar jornada",
-        description: resetError.message,
+        description: error.message,
         variant: "destructive",
       });
       setResettingJourney(false);
@@ -1585,10 +1762,11 @@ export default function AttendanceTab({ participants, activities, communities, i
 
     toast({ 
       title: "🔄 Jornada reiniciada!", 
-      description: `Progresso de ${userIds.length} aluno(s) foi zerado com sucesso.` 
+      description: `Progresso de ${data?.member_count ?? participants.length} aluno(s) foi zerado com sucesso.`
     });
     
     setResettingJourney(false);
     setShowResetConfirm(false);
+    setResetConfirmation("");
   }
 }

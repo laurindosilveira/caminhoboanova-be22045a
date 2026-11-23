@@ -1,7 +1,10 @@
 import { createRoot } from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
 import App from "./App.tsx";
+import { initializeMonitoring } from "./lib/monitoring";
 import "./index.css";
+
+initializeMonitoring();
 
 // ─── Splash Screen ────────────────────────────────────
 function hideSplash() {
@@ -43,6 +46,10 @@ function showUpdateBanner(updateSWFn: () => void) {
   `;
   document.body.appendChild(banner);
   document.getElementById("pwa-update-btn")?.addEventListener("click", () => {
+    if (document.querySelector('[data-unsaved-work="true"]')) {
+      window.alert("Salve suas respostas antes de atualizar o aplicativo.");
+      return;
+    }
     banner.remove();
     updateSWFn();
   });
@@ -52,7 +59,11 @@ function showUpdateBanner(updateSWFn: () => void) {
 
 // Force reload when a new SW takes control — safety net for iOS/Android PWA
 if ("serviceWorker" in navigator) {
+  let reloadRequested = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloadRequested) return;
+    if (document.querySelector('[data-unsaved-work="true"]')) return;
+    reloadRequested = true;
     window.location.reload();
   });
 }
@@ -87,7 +98,7 @@ const updateSW = registerSW({
 
   // When a new version is ready, activate it immediately.
   onNeedRefresh() {
-    updateSW(true);
+    showUpdateBanner(() => updateSW(true));
   },
 
   onOfflineReady() {
@@ -103,7 +114,8 @@ const updateSW = registerSW({
 {
   const _s = new URLSearchParams(window.location.search);
   const _h = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-  const _isRecovery = _s.has("code") || _h.get("type") === "recovery";
+  const _isFirstAccess = window.location.pathname === "/primeiro-acesso";
+  const _isRecovery = (!_isFirstAccess && _s.has("code")) || _h.get("type") === "recovery";
   if (_isRecovery && window.location.pathname !== "/redefinir-senha") {
     window.history.replaceState(
       null,

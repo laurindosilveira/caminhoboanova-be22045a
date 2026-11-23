@@ -33,7 +33,7 @@ export default function LeaderGuideTab() {
             <button
               key={tab.id}
               onClick={() => setActiveSubTab(tab.id)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl font-inter text-xs font-medium whitespace-nowrap transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg font-inter text-xs font-medium whitespace-nowrap transition-all ${
                 isActive
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -59,12 +59,12 @@ export default function LeaderGuideTab() {
 function PlaceholderTab({ emoji, title, description }: { emoji: string; title: string; description: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
+      <div className="w-16 h-16 rounded-lg bg-muted/50 flex items-center justify-center mb-4">
         <span className="text-3xl">{emoji}</span>
       </div>
       <h3 className="font-montserrat font-bold text-foreground text-base mb-2">{title}</h3>
       <p className="text-muted-foreground font-inter text-sm max-w-xs">{description}</p>
-      <div className="mt-4 px-4 py-2 rounded-xl bg-primary/10 text-primary font-inter text-xs font-medium">
+      <div className="mt-4 px-4 py-2 rounded-lg bg-primary/10 text-primary font-inter text-xs font-medium">
         Em breve
       </div>
     </div>

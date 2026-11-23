@@ -11,6 +11,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { AuthCaptcha, isAuthCaptchaEnabled } from "@/components/auth/AuthCaptcha";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +26,7 @@ import {
   CheckCircle2, Sparkles, Star, Phone, Mail, MapPin, Hash,
   Target, Heart, Zap, CreditCard
 } from "lucide-react";
+import BrandLogo from "@/components/BrandLogo";
 
 // ─── Types ───────────────────────────────────────────────
 interface ChurchInfo {
@@ -106,8 +109,11 @@ export default function Onboarding() {
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState(1);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [pendingSubscriptionId, setPendingSubscriptionId] = useState<string | null>(null);
   const [pendingChurchId, setPendingChurchId] = useState<string | null>(localStorage.getItem("pending_onboarding_church_id"));
   const [onboardingStatus, setOnboardingStatus] = useState<'church' | 'payment' | 'completed' | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
   const [selectedPlanKey, setSelectedPlanKey] = useState<"comunidade" | "crescimento" | "pastoral" | null>(null);
   const [showPlanSummary, setShowPlanSummary] = useState(false);
 
@@ -168,7 +174,7 @@ export default function Onboarding() {
       case "church":
         return !!(church.name.trim() && church.email.trim());
       case "pastor":
-        return !!(pastor.fullName.trim() && pastor.phone.trim());
+        return !!(pastor.fullName.trim() && pastor.phone.trim() && pastor.email.trim());
       case "community":
         return !!(community.memberCount.trim());
       case "questionnaire":
@@ -201,67 +207,76 @@ export default function Onboarding() {
   const planDetail = PLAN_DETAILS[recommendedPlan];
 
   const handleConfirmPlan = (planKey: "comunidade" | "crescimento" | "pastoral") => {
+    if (planKey !== selectedPlanKey) setPendingSubscriptionId(null);
     setSelectedPlanKey(planKey);
+    setCaptchaToken(null);
+    setCaptchaResetKey((current) => current + 1);
     setShowPlanSummary(true);
   };
 
   const handleCheckout = useCallback(async () => {
     if (!selectedPlanKey) return;
     const selectedPlan = selectedPlanKey;
-    const planInfo = STRIPE_PLANS[selectedPlan];
-    const priceId = planInfo.price_id;
     setCheckoutLoading(true);
     try {
-      // Save church data to database before checkout
-      const trialEndsAt = new Date();
-      trialEndsAt.setDate(trialEndsAt.getDate() + 30);
-
-      const { data: subscriptionData, error: insertError } = await supabase.from("church_subscriptions").insert({
-        church_name: church.name,
-        church_address: church.address,
-        church_phone: church.phone,
-        church_email: church.email,
-        pastor_name: pastor.fullName,
-        pastor_role: pastor.role,
-        pastor_phone: pastor.phone,
-        pastor_email: pastor.email,
-        member_count: community.memberCount,
-        average_age: community.averageAge,
-        activities: community.activities,
-        objectives: questionnaire.objectives,
-        needs: questionnaire.needs,
-        preferences: questionnaire.preferences,
-        recommended_plan: selectedPlan,
-        subscription_status: "pending_checkout",
-        trial_ends_at: trialEndsAt.toISOString(),
-      }).select().single();
-
-      if (subscriptionData) {
-        localStorage.setItem("pending_onboarding_church_id", (subscriptionData as any).id);
-        setPendingChurchId((subscriptionData as any).id);
-        setOnboardingStatus('payment');
-      }
-
-      if (insertError) {
-        console.error("Erro ao salvar dados da igreja:", insertError);
-        throw insertError;
+      let subscriptionId = pendingSubscriptionId;
+      if (!subscriptionId) {
+        const { data: onboardingData, error: onboardingError } = await supabase.functions.invoke(
+          "create-onboarding",
+          {
+            body: {
+              church,
+              pastor,
+              community,
+              questionnaire,
+              plan: selectedPlan,
+              captchaToken,
+            },
+          },
+        );
+        if (onboardingError || typeof onboardingData?.id !== "string") {
+          throw onboardingError ?? new Error("Invalid onboarding response");
+        }
+        subscriptionId = onboardingData.id;
+        setPendingSubscriptionId(subscriptionId);
       }
 
       const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: { 
-          priceId,
-          subscriptionId: (subscriptionData as any)?.id,
-          email: pastor.email
-        },
+        body: { subscriptionId },
       });
       if (error) throw error;
       if (data?.url) window.location.href = data.url;
-    } catch {
-      toast({ title: "Erro", description: "Não foi possível iniciar o checkout. Tente novamente.", variant: "destructive" });
+    } catch (error) {
+      let description = "Não foi possível iniciar o checkout. Tente novamente.";
+
+      if (error instanceof FunctionsHttpError) {
+        const status = error.context.status;
+        const payload = await error.context.clone().json().catch(() => null) as { error?: string } | null;
+        const serverError = payload?.error;
+
+        if (serverError === "Security verification required" || serverError === "Security verification failed") {
+          description = isAuthCaptchaEnabled
+            ? "A verificação de segurança expirou ou falhou. Conclua-a novamente."
+            : "A verificação de segurança está indisponível. Entre em contato com o suporte.";
+        } else if (serverError === "Too many onboarding attempts" || serverError === "Checkout attempt limit reached" || status === 429) {
+          description = "Muitas tentativas foram feitas. Aguarde alguns minutos e tente novamente.";
+        } else if (serverError === "Pastor email already registered") {
+          description = "Este email já possui uma conta. Entre com a conta existente ou use outro email para a nova igreja.";
+        } else if (serverError === "Checkout request expired") {
+          description = "Esta solicitação expirou. Volte e escolha o plano novamente.";
+          setPendingSubscriptionId(null);
+        } else if (status === 503) {
+          description = "O checkout está temporariamente indisponível. Tente novamente em alguns minutos.";
+        }
+      }
+
+      setCaptchaToken(null);
+      setCaptchaResetKey((current) => current + 1);
+      toast({ title: "Erro", description, variant: "destructive" });
     } finally {
       setCheckoutLoading(false);
     }
-  }, [church, pastor, community, questionnaire, selectedPlanKey]);
+  }, [captchaToken, church, community, pastor, pendingSubscriptionId, questionnaire, selectedPlanKey]);
 
   // ─── Field helpers ─────────────────────────────────────
   const inputClass = "bg-card border-border focus:border-primary";
@@ -292,12 +307,12 @@ export default function Onboarding() {
                 <div className="space-y-2">
                   <h3 className="font-montserrat font-black text-xl">
                     {onboardingStatus === 'church' && "Salvando Igreja..."}
-                    {onboardingStatus === 'payment' && "Aguardando Pagamento..."}
+                    {onboardingStatus === 'payment' && "Ativando seu Teste..."}
                     {onboardingStatus === 'completed' && "Tudo Pronto!"}
                   </h3>
                   <p className="text-sm text-muted-foreground font-inter">
                     {onboardingStatus === 'church' && "Estamos registrando os dados da sua comunidade."}
-                    {onboardingStatus === 'payment' && "Detectamos que você está no checkout do Stripe. Assim que concluir, liberaremos seu acesso."}
+                    {onboardingStatus === 'payment' && "Conclua a confirmação na Stripe. Nenhum cartão será solicitado agora."}
                     {onboardingStatus === 'completed' && "Sua igreja foi criada. Redirecionando para o login..."}
                   </p>
                 </div>
@@ -322,13 +337,8 @@ export default function Onboarding() {
       {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
-            <Church className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <div>
-            <h1 className="font-montserrat font-bold text-lg text-foreground">Caminho</h1>
-            <p className="text-xs text-muted-foreground font-inter">Cadastro da sua igreja</p>
-          </div>
+          <BrandLogo markClassName="h-10 w-10" />
+          <p className="ml-auto text-xs text-muted-foreground font-inter">Cadastro da sua igreja</p>
         </div>
       </header>
 
@@ -391,7 +401,7 @@ export default function Onboarding() {
                 <FieldGroup label="Telefone *" icon={Phone}>
                   <Input className={inputClass} type="tel" placeholder="(51) 99999-9999" value={pastor.phone} onChange={e => setPastor({ ...pastor, phone: e.target.value })} />
                 </FieldGroup>
-                <FieldGroup label="E-mail" icon={Mail}>
+                <FieldGroup label="E-mail *" icon={Mail}>
                   <Input className={inputClass} type="email" placeholder="pastor@email.com" value={pastor.email} onChange={e => setPastor({ ...pastor, email: e.target.value })} />
                 </FieldGroup>
               </StepCard>
@@ -447,7 +457,7 @@ export default function Onboarding() {
                       <Card key={planKey} className={`relative border-2 transition-all hover:shadow-lg ${isRecommended ? 'border-primary' : 'border-border'}`}>
                         {isRecommended && (
                           <div className="absolute top-0 right-0 p-2">
-                            <Badge className="bg-primary text-primary-foreground text-[10px] font-bold">RECOMENDADO</Badge>
+                            <Badge className="bg-primary text-primary-foreground text-xs font-bold">RECOMENDADO</Badge>
                           </div>
                         )}
                         <div className={`h-1.5 bg-gradient-to-r ${details.color}`} />
@@ -462,7 +472,7 @@ export default function Onboarding() {
                             </div>
                             <div className="text-right">
                               <p className="font-montserrat font-black text-xl text-foreground">{plan.price}</p>
-                              <p className="text-[10px] text-muted-foreground">{plan.period}</p>
+                              <p className="text-xs text-muted-foreground">{plan.period}</p>
                             </div>
                           </div>
 
@@ -533,11 +543,11 @@ export default function Onboarding() {
             <div className="bg-muted/30 rounded-2xl p-6 border border-border space-y-4">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Plano</p>
+                  <p className="text-xs text-muted-foreground uppercase font-bold tracking-widest mb-1">Plano</p>
                   <h4 className="font-montserrat font-black text-xl text-primary">{STRIPE_PLANS[selectedPlanKey].name}</h4>
                 </div>
                 <div className="text-right">
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Valor Mensal</p>
+                  <p className="text-xs text-muted-foreground uppercase font-bold tracking-widest mb-1">Valor Mensal</p>
                   <p className="font-montserrat font-black text-xl">{STRIPE_PLANS[selectedPlanKey].price}</p>
                 </div>
               </div>
@@ -545,23 +555,25 @@ export default function Onboarding() {
               <div className="pt-4 border-t border-border/50">
                 <div className="flex items-center gap-2 text-brand-green bg-brand-green/10 px-3 py-2 rounded-lg">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span className="text-xs font-bold font-inter uppercase">30 Dias de Teste Grátis</span>
+                  <span className="text-xs font-bold font-inter uppercase">30 Dias Grátis · Sem Cartão</span>
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-2 px-1">
-                  Você não será cobrado hoje. O período de teste encerra em 30 dias. Cancele a qualquer momento.
+                <p className="text-xs text-muted-foreground mt-2 px-1">
+                  O acesso será liberado agora, sem solicitar cartão. Ao final dos 30 dias, você escolhe se deseja assinar para continuar.
                 </p>
               </div>
             </div>
           )}
 
+          <AuthCaptcha onTokenChange={setCaptchaToken} resetKey={captchaResetKey} />
+
           <DialogFooter className="flex-col sm:flex-col gap-2 mt-4">
             <Button 
               onClick={handleCheckout} 
-              disabled={checkoutLoading}
+              disabled={checkoutLoading || (isAuthCaptchaEnabled && !captchaToken)}
               className="w-full h-12 rounded-xl text-primary-foreground font-bold shadow-lg"
               style={{ background: "var(--gradient-hero)" }}
             >
-              {checkoutLoading ? "Iniciando..." : "Confirmar e Ir para Checkout"}
+              {checkoutLoading ? "Ativando..." : "Começar Teste Grátis"}
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
             <Button 

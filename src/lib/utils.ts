@@ -5,11 +5,15 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function getErrorMessage(error: unknown, fallback = "Erro inesperado.") {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export function isAppInstalled() {
   if (typeof window === 'undefined') return false;
   
   // 1. matchMedia (PWA standalone mode)
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
   if (isStandalone) return true;
 
   // 2. User Agent heuristics (specific app browsers)

@@ -232,13 +232,13 @@ export default function DevotionalsTab() {
         onChange={e => onChange(e.target.value)}
         rows={rows}
         placeholder={placeholder}
-        className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+        className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
       />
     </div>
   );
 
   if (loading) {
-    return <div className="space-y-3">{[1, 2, 3].map(i => <div key={i} className="bg-muted rounded-2xl h-16 animate-pulse" />)}</div>;
+    return <div className="space-y-3">{[1, 2, 3].map(i => <div key={i} className="bg-muted rounded-lg h-16 animate-pulse" />)}</div>;
   }
 
   // Content editor view
@@ -249,20 +249,20 @@ export default function DevotionalsTab() {
           <ChevronLeft className="w-4 h-4" /> Voltar
         </button>
 
-        <div className="rounded-2xl p-4" style={{ background: "var(--gradient-hero)" }}>
+        <div className="rounded-lg p-4" style={{ background: "var(--gradient-hero)" }}>
           <div className="flex items-center justify-between mb-1">
             <p className="text-primary-foreground/60 font-inter text-xs">Editando conteúdo · 📖 Devocional</p>
             {isPublished ? (
-              <span className="px-2 py-0.5 rounded-full bg-white/20 text-primary-foreground text-[10px] font-inter font-bold">✅ Publicado</span>
+              <span className="px-2 py-0.5 rounded-full bg-white/20 text-primary-foreground text-xs font-inter font-bold">✅ Publicado</span>
             ) : (
-              <span className="px-2 py-0.5 rounded-full bg-white/10 text-primary-foreground/60 text-[10px] font-inter font-bold">📝 Rascunho</span>
+              <span className="px-2 py-0.5 rounded-full bg-white/10 text-primary-foreground/60 text-xs font-inter font-bold">📝 Rascunho</span>
             )}
           </div>
           <h2 className="font-montserrat font-black text-primary-foreground text-lg">{editing.title}</h2>
         </div>
 
         {/* Bible reference */}
-        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+        <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <span className="text-sm">✝️</span>
             <p className="font-montserrat font-bold text-foreground text-sm">Texto Bíblico</p>
@@ -273,7 +273,7 @@ export default function DevotionalsTab() {
               <input type="text" value={content.bible_reference}
                 onChange={e => setContent(p => ({ ...p, bible_reference: e.target.value }))}
                 placeholder="Ex: Salmos 23:1-6"
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
             </div>
             <Field label="Texto bíblico completo" value={content.bible_text}
               onChange={v => setContent(p => ({ ...p, bible_text: v }))} rows={5}
@@ -282,7 +282,7 @@ export default function DevotionalsTab() {
         </div>
 
         {/* Reflection */}
-        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+        <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <BookOpen className="w-4 h-4 text-brand-green" />
             <p className="font-montserrat font-bold text-foreground text-sm">📖 Reflexão</p>
@@ -295,7 +295,7 @@ export default function DevotionalsTab() {
         </div>
 
         {/* Questions */}
-        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+        <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <Pen className="w-4 h-4 text-primary" />
             <p className="font-montserrat font-bold text-foreground text-sm">💬 Perguntas para Reflexão</p>
@@ -303,13 +303,13 @@ export default function DevotionalsTab() {
           <div className="p-4 space-y-3">
             {content.questions.map((q, i) => (
               <div key={i} className="flex gap-2">
-                <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center font-montserrat font-bold text-primary text-[10px] flex-shrink-0 mt-2">{i + 1}</span>
+                <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center font-montserrat font-bold text-primary text-xs flex-shrink-0 mt-2">{i + 1}</span>
                 <textarea value={q} onChange={e => updateQuestion(i, e.target.value)} rows={2}
                   placeholder={`Pergunta ${i + 1}...`}
-                  className="flex-1 px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
+                  className="flex-1 px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
                 {content.questions.length > 1 && (
                   <button onClick={() => setContent(p => ({ ...p, questions: p.questions.filter((_, idx) => idx !== i) }))}
-                    className="p-2 text-destructive hover:bg-destructive/10 rounded-xl transition-colors mt-1">
+                    className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors mt-1">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 )}
@@ -323,7 +323,7 @@ export default function DevotionalsTab() {
         </div>
 
         {/* Practice */}
-        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+        <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <span className="text-sm">🧭</span>
             <p className="font-montserrat font-bold text-foreground text-sm">Prática do Dia</p>
@@ -336,7 +336,7 @@ export default function DevotionalsTab() {
         </div>
 
         {/* Worship Music Integration */}
-        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+        <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <Music className="w-4 h-4 text-primary" />
             <p className="font-montserrat font-bold text-foreground text-sm">🎶 Sugestões de Louvor</p>
@@ -344,7 +344,7 @@ export default function DevotionalsTab() {
           <div className="p-4">
             <p className="font-inter text-xs font-semibold text-muted-foreground mb-1.5">Selecione as músicas sugeridas para este devocional</p>
             
-            <div className="max-h-48 overflow-y-auto space-y-2 pr-2 border border-border rounded-xl p-3 bg-muted/10">
+            <div className="max-h-48 overflow-y-auto space-y-2 pr-2 border border-border rounded-lg p-3 bg-muted/10">
               {worshipSongs.length === 0 ? (
                 <p className="text-xs text-muted-foreground italic text-center py-4">Nenhuma música cadastrada no catálogo.</p>
               ) : (
@@ -363,21 +363,21 @@ export default function DevotionalsTab() {
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{song.title}</p>
-                      <p className="text-[10px] text-muted-foreground truncate">{song.artist}</p>
+                      <p className="text-xs text-muted-foreground truncate">{song.artist}</p>
                     </div>
                   </label>
                 ))
               )}
             </div>
             
-            <p className="mt-2 text-[10px] text-muted-foreground italic">
+            <p className="mt-2 text-xs text-muted-foreground italic">
               Você pode gerenciar o catálogo completo na aba "Louvor".
             </p>
           </div>
         </div>
 
         {/* Prayer */}
-        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+        <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
             <Heart className="w-4 h-4 text-primary" />
             <p className="font-montserrat font-bold text-foreground text-sm">🙏 Oração</p>
@@ -390,7 +390,7 @@ export default function DevotionalsTab() {
         </div>
 
         <button onClick={handleSaveContent} disabled={saving}
-          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-inter text-sm font-medium text-primary-foreground disabled:opacity-70"
+          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-lg font-inter text-sm font-medium text-primary-foreground disabled:opacity-70"
           style={{ background: "var(--gradient-hero)" }}>
           <Save className="w-4 h-4" />
           {saving ? "Salvando..." : saved ? "✅ Salvo!" : "Salvar conteúdo do devocional"}
@@ -407,43 +407,43 @@ export default function DevotionalsTab() {
           <ChevronLeft className="w-4 h-4" /> Voltar
         </button>
 
-        <div className="rounded-2xl p-4" style={{ background: "var(--gradient-hero)" }}>
+        <div className="rounded-lg p-4" style={{ background: "var(--gradient-hero)" }}>
           <p className="text-primary-foreground/60 font-inter text-xs mb-1">Editando devocional</p>
           <h2 className="font-montserrat font-black text-primary-foreground text-lg">{editing.title}</h2>
         </div>
 
-        <div className="bg-card rounded-2xl border border-border p-4 space-y-3">
+        <div className="bg-card rounded-lg border border-border p-4 space-y-3">
           <div>
             <p className="font-inter text-xs font-semibold text-muted-foreground mb-1.5">Título</p>
             <input type="text" value={editTitle} onChange={e => setEditTitle(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+              className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
           </div>
           <div>
             <p className="font-inter text-xs font-semibold text-muted-foreground mb-1.5">Subtítulo (opcional)</p>
             <input type="text" value={editSubtitle} onChange={e => setEditSubtitle(e.target.value)}
               placeholder="Breve descrição..."
-              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+              className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
           </div>
           <div>
             <p className="font-inter text-xs font-semibold text-muted-foreground mb-1.5">Pontos</p>
             <input type="number" value={editPoints} onChange={e => setEditPoints(Number(e.target.value))}
-              className="w-24 px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+              className="w-24 px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
           <button onClick={handleSaveDetails} disabled={saving}
-            className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-primary-foreground font-inter text-sm font-medium">
+            className="flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-primary-foreground font-inter text-sm font-medium">
             <Save className="w-4 h-4" /> {saving ? "..." : saved ? "✅" : "Salvar"}
           </button>
           <button onClick={() => openContentEditor(editing)}
-            className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-brand-green text-primary-foreground font-inter text-sm font-medium">
+            className="flex items-center justify-center gap-2 py-3 rounded-lg bg-brand-green text-primary-foreground font-inter text-sm font-medium">
             <Edit2 className="w-4 h-4" /> Editar conteúdo
           </button>
         </div>
 
         <button onClick={() => handleDelete(editing.id)}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-destructive text-destructive font-inter text-sm font-medium hover:bg-destructive/10 transition-colors">
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border-2 border-destructive text-destructive font-inter text-sm font-medium hover:bg-destructive/10 transition-colors">
           <Trash2 className="w-4 h-4" /> Excluir devocional
         </button>
       </div>
@@ -454,7 +454,7 @@ export default function DevotionalsTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-2xl bg-brand-green/10 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-lg bg-brand-green/10 flex items-center justify-center">
           <BookOpen className="w-5 h-5 text-brand-green" />
         </div>
         <div className="flex-1">
@@ -462,22 +462,22 @@ export default function DevotionalsTab() {
           <p className="text-muted-foreground text-xs font-inter">{devotionals.length} devocional(is) cadastrado(s)</p>
         </div>
         <button onClick={() => setShowNew(!showNew)}
-          className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center text-primary-foreground">
+          className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">
           <Plus className="w-5 h-5" />
         </button>
       </div>
 
       {showNew && (
-        <div className="bg-card rounded-2xl border border-border p-4 space-y-3">
+        <div className="bg-card rounded-lg border border-border p-4 space-y-3">
           <p className="font-montserrat font-bold text-foreground text-sm">Novo Devocional</p>
           <input type="text" value={newTitle} onChange={e => setNewTitle(e.target.value)}
             placeholder="Título do devocional"
-            className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+            className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
           <input type="text" value={newSubtitle} onChange={e => setNewSubtitle(e.target.value)}
             placeholder="Subtítulo (opcional)"
-            className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+            className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
           <button onClick={handleCreateNew} disabled={savingNew || !newTitle.trim()}
-            className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-inter text-sm font-medium disabled:opacity-50">
+            className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-inter text-sm font-medium disabled:opacity-50">
             {savingNew ? "Criando..." : "Criar Devocional"}
           </button>
         </div>
@@ -485,16 +485,16 @@ export default function DevotionalsTab() {
 
       <div className="space-y-2">
         {devotionals.map((dev, i) => (
-          <div key={dev.id} className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+          <div key={dev.id} className="bg-card rounded-lg border border-border overflow-hidden shadow-sm">
             <button onClick={() => openEdit(dev)}
               className="w-full flex items-center gap-3 p-4 text-left hover:bg-muted/30 transition-colors">
-              <div className="w-10 h-10 rounded-xl bg-brand-green/10 flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 rounded-lg bg-brand-green/10 flex items-center justify-center flex-shrink-0">
                 <span className="text-lg">📖</span>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-montserrat font-bold text-foreground text-sm">{dev.title}</p>
                 {dev.subtitle && <p className="text-muted-foreground font-inter text-xs truncate">{dev.subtitle}</p>}
-                <p className="text-muted-foreground font-inter text-[10px]">Ordem: {dev.order_num} · {dev.points} pts</p>
+                <p className="text-muted-foreground font-inter text-xs">Ordem: {dev.order_num} · {dev.points} pts</p>
               </div>
               <Edit2 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
             </button>

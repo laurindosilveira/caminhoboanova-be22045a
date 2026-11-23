@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthEmailFlowErrorMessage } from "@/lib/authErrorMessages";
 import { Mail, ChevronLeft, CheckCircle } from "lucide-react";
 import { z } from "zod";
+import { AuthCaptcha, isAuthCaptchaEnabled } from "@/components/auth/AuthCaptcha";
 
 const forgotSchema = z.object({
   email: z.string().trim().email("Email inválido").max(255),
@@ -13,6 +15,8 @@ export default function ForgotPassword() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -24,24 +28,27 @@ export default function ForgotPassword() {
       return;
     }
 
+    if (isAuthCaptchaEnabled && !captchaToken) {
+      setError("Conclua a verificação de segurança.");
+      return;
+    }
+
     setLoading(true);
     try {
       const { error: authError } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
         redirectTo: `${window.location.origin}/redefinir-senha`,
+        captchaToken: captchaToken ?? undefined,
       });
 
       if (authError) {
-        const isFetchError = authError.message.toLowerCase().includes("failed to fetch") || authError.message.toLowerCase().includes("network");
-        setError(
-          isFetchError
-            ? "Não foi possível conectar ao servidor. Verifique sua internet e tente novamente."
-            : "Erro ao enviar email: " + authError.message
-        );
+        setCaptchaToken(null);
+        setCaptchaResetKey((current) => current + 1);
+        setError(getAuthEmailFlowErrorMessage(authError, "Erro ao enviar email"));
         return;
       }
 
       setSent(true);
-    } catch (err: any) {
+    } catch {
       setError("Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.");
     } finally {
       setLoading(false);
@@ -94,9 +101,11 @@ export default function ForgotPassword() {
                   </div>
                 )}
 
+                <AuthCaptcha onTokenChange={setCaptchaToken} resetKey={captchaResetKey} />
+
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || (isAuthCaptchaEnabled && !captchaToken)}
                   className="w-full py-3.5 rounded-xl font-montserrat font-bold text-primary-foreground text-base transition-all active:scale-95 disabled:opacity-60 shadow-md"
                   style={{ background: "var(--gradient-orange)" }}
                 >
