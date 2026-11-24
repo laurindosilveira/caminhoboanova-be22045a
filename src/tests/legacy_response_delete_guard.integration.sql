@@ -143,11 +143,11 @@ BEGIN
   v_next := jsonb_set(v_previous, ARRAY[v_key], to_jsonb('[ensaio-sintetico]'::text));
   v_result := public.sync_owned_learning(auth.uid(), 'complete_devotional', v_item, v_next,
     false, false, false, NULL, NULL, v_previous);
-  IF v_result->>'status' <> 'synced' THEN RAISE EXCEPTION 'Protected devotional failed'; END IF;
-  IF NOT EXISTS (SELECT 1 FROM public.devotional_responses
+  IF v_result->>'status' <> 'scope_review_required' THEN RAISE EXCEPTION 'Unscoped devotional completion was not held'; END IF;
+  IF EXISTS (SELECT 1 FROM public.devotional_responses
     WHERE user_id = auth.uid() AND devotional_id = v_item
       AND question_index::text = v_key AND response = '[ensaio-sintetico]') THEN
-    RAISE EXCEPTION 'Protected devotional was not persisted';
+    RAISE EXCEPTION 'Unscoped devotional completion was applied';
   END IF;
 END;
 $$;

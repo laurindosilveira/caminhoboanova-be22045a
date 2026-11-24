@@ -268,7 +268,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
   useEffect(() => {
     let cancelled = false;
     loadedScopeIdentity.current = scopeIdentity;
-    loadedLearningScope.current = scopedLearningEnabled && effectiveTurmaId === profile?.turma_id && effectiveArea === profile?.area
+    loadedLearningScope.current = effectiveTurmaId === profile?.turma_id && effectiveArea === profile?.area
       ? learningScope(profile?.church_id, effectiveTurmaId, effectiveArea) : undefined;
     setResponseLoadState("loading");
     hasLoadedResponses.current = false;

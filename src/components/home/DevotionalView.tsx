@@ -144,7 +144,7 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
   useEffect(() => {
     let cancelled = false;
     loadedScopeIdentity.current = scopeIdentity;
-    loadedLearningScope.current = scopedLearningEnabled && effectiveTurmaId === profile?.turma_id && effectiveArea === profile?.area
+    loadedLearningScope.current = effectiveTurmaId === profile?.turma_id && effectiveArea === profile?.area
       ? learningScope(profile?.church_id, effectiveTurmaId, effectiveArea) : undefined;
     setAnswersState("loading");
     async function loadAnswers() {

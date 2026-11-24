@@ -51,6 +51,7 @@ DROP TRIGGER aa_lock_learning_write ON public.devotional_responses;
 DROP TRIGGER aa_lock_learning_write ON public.devotional_progress;
 DROP TRIGGER aa_guard_own_final_attendance ON public.attendance;
 DROP TRIGGER aa_guard_own_worship_insert ON public.worship_attendance;
+DROP FUNCTION IF EXISTS public.sync_owned_completion(uuid,uuid,uuid,text,text,uuid,jsonb,boolean,boolean,boolean,integer,uuid,jsonb);
 DROP FUNCTION public.sync_owned_learning(uuid,text,uuid,jsonb,boolean,boolean,boolean,integer,uuid,jsonb);
 DROP FUNCTION public.sync_offline_learning(text,uuid,jsonb,boolean,boolean,boolean,integer,uuid,jsonb);
 DROP FUNCTION public.sync_owned_attendance(uuid,uuid,uuid,text,timestamptz,text,text,timestamptz,text);

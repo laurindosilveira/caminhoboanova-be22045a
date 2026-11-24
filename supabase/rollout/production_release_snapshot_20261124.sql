@@ -6,7 +6,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $$
  SELECT 'function'::text,n.nspname||'.'||p.proname||'('||pg_catalog.pg_get_function_identity_arguments(p.oid)||')',
    md5(pg_catalog.pg_get_functiondef(p.oid)||coalesce(p.proacl::text,''))
  FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
- WHERE (n.nspname='public' AND p.proname IN ('sync_owned_learning','sync_offline_learning','sync_owned_attendance','sync_owned_worship','reset_turma_journey','save_lesson_draft','complete_lesson','complete_devotional'))
+ WHERE (n.nspname='public' AND p.proname IN ('sync_owned_learning','sync_owned_completion','sync_offline_learning','sync_owned_attendance','sync_owned_worship','reset_turma_journey','save_lesson_draft','complete_lesson','complete_devotional'))
     OR (n.nspname='private' AND p.proname IN ('production_release_fingerprints_20261124','learning_item_lock_key','lock_learning_write','guard_own_final_attendance','guard_own_worship_insert','is_active_learning_owner'))
  UNION ALL
  SELECT 'trigger',n.nspname||'.'||c.relname||'.'||t.tgname,md5(pg_catalog.pg_get_triggerdef(t.oid)||t.tgenabled::text)

@@ -16,6 +16,7 @@ export default function StudentOfflineSync() {
   const [resolving, setResolving] = useState(false);
   const [reviewPending, setReviewPending] = useState(false);
   const [otherScopePending, setOtherScopePending] = useState(false);
+  const [legacyCompletionPending, setLegacyCompletionPending] = useState(false);
   const [attendanceReview, setAttendanceReview] = useState<AttendanceReview | null>(null);
 
   async function chooseVersion(choice: "server" | "offline") {
@@ -60,7 +61,7 @@ export default function StudentOfflineSync() {
       setSyncing(true);
       try {
         const result = await syncStudentOfflineQueue(user.id);
-        if (!cancelled) { setConflict(result.conflict ?? null); setReviewPending(!!result.reviewPending); setOtherScopePending(!!result.otherScopePending); setAttendanceReview(result.attendanceReview ?? null); }
+        if (!cancelled) { setConflict(result.conflict ?? null); setReviewPending(!!result.reviewPending); setOtherScopePending(!!result.otherScopePending); setAttendanceReview(result.attendanceReview ?? null); setLegacyCompletionPending(!!result.legacyCompletionPending); }
         if (!cancelled && result.synced > 0) {
           toast.success("Progresso offline sincronizado!");
         }
@@ -83,6 +84,7 @@ export default function StudentOfflineSync() {
     setReviewPending(false);
     setOtherScopePending(false);
     setAttendanceReview(null);
+    setLegacyCompletionPending(false);
     setResolving(false);
     void refreshCount();
     void syncNow();
@@ -113,7 +115,8 @@ export default function StudentOfflineSync() {
         <h2 id="offline-conflict-title" className="font-bold">Respostas diferentes encontradas</h2>
         <p className="text-sm">Este aparelho e o servidor têm respostas diferentes. Compare antes de escolher. Enquanto isso, o rascunho continua guardado neste aparelho.</p>
         {Object.entries(visibleConflict.action.payload.responses).map(([key, value]) => <div key={key} className="rounded-xl border p-3 text-sm space-y-2"><p className="font-semibold">{key}</p><p><strong>No servidor:</strong> {visibleConflict.current[key] ?? "(sem resposta)"}</p><p><strong>Neste aparelho:</strong> {value || "(sem resposta)"}</p></div>)}
-        <div className="flex flex-wrap gap-3"><button disabled={resolving} className="rounded-lg bg-primary px-3 py-2 text-primary-foreground" onClick={() => void chooseVersion("server")}>Manter servidor</button><button disabled={resolving} className="rounded-lg border px-3 py-2" onClick={() => void chooseVersion("offline")}>Usar este aparelho</button></div>
+        {visibleConflict.action.type !== "save_lesson_draft" && <p className="text-sm">A conclusão continua guardada neste aparelho. Para manter a resposta do servidor, ela precisará de revisão.</p>}
+        <div className="flex flex-wrap gap-3"><button disabled={resolving || visibleConflict.action.type !== "save_lesson_draft"} className="rounded-lg bg-primary px-3 py-2 text-primary-foreground disabled:opacity-50" onClick={() => void chooseVersion("server")}>Manter servidor</button><button disabled={resolving} className="rounded-lg border px-3 py-2" onClick={() => void chooseVersion("offline")}>Usar este aparelho</button></div>
       </div>
     </div>}
     <div
@@ -122,7 +125,7 @@ export default function StudentOfflineSync() {
       aria-live="polite"
     >
       {syncing ? <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" /> : <CloudOff className="h-3.5 w-3.5 text-primary" />}
-      <span>{visibleError ? "Não foi possível verificar as alterações deste aparelho. Não limpe os dados." : visibleAttendanceReview ? "Uma solicitação de presença precisa de revisão. Fale com a liderança; ela continua guardada neste aparelho." : reviewPending ? "Respostas aguardam revisão. Não limpe os dados deste aparelho." : otherScopePending ? "Registros de presença aguardam revisão. Não limpe os dados deste aparelho." : `${visibleCount} alteracao${visibleCount === 1 ? "" : "es"} para sincronizar`}</span>
+      <span>{visibleError ? "Não foi possível verificar as alterações deste aparelho. Não limpe os dados." : visibleAttendanceReview ? "Uma solicitação de presença precisa de revisão. Fale com a liderança; ela continua guardada neste aparelho." : legacyCompletionPending ? "Conclusão antiga aguardando revisão da turma. Não limpe os dados deste aparelho." : reviewPending ? "Respostas aguardam revisão. Não limpe os dados deste aparelho." : otherScopePending ? "Registros de presença aguardam revisão. Não limpe os dados deste aparelho." : `${visibleCount} alteracao${visibleCount === 1 ? "" : "es"} para sincronizar`}</span>
     </div>
     </>
   );
