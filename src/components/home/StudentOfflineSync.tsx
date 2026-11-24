@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { CloudOff, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { getQueuedStudentActions, syncStudentOfflineQueue, resolveOfflineConflict, type OfflineConflict } from "@/lib/studentOffline";
+import { getQueuedStudentActions, syncStudentOfflineQueue, resolveOfflineConflict, type OfflineConflict, type AttendanceReview } from "@/lib/studentOffline";
 
 export default function StudentOfflineSync() {
   const { user } = useAuth();
@@ -16,6 +16,7 @@ export default function StudentOfflineSync() {
   const [resolving, setResolving] = useState(false);
   const [reviewPending, setReviewPending] = useState(false);
   const [otherScopePending, setOtherScopePending] = useState(false);
+  const [attendanceReview, setAttendanceReview] = useState<AttendanceReview | null>(null);
 
   async function chooseVersion(choice: "server" | "offline") {
     if (!conflict || !user?.id || conflict.action.userId !== user.id) return;
@@ -59,7 +60,7 @@ export default function StudentOfflineSync() {
       setSyncing(true);
       try {
         const result = await syncStudentOfflineQueue(user.id);
-        if (!cancelled) { setConflict(result.conflict ?? null); setReviewPending(!!result.reviewPending); setOtherScopePending(!!result.otherScopePending); }
+        if (!cancelled) { setConflict(result.conflict ?? null); setReviewPending(!!result.reviewPending); setOtherScopePending(!!result.otherScopePending); setAttendanceReview(result.attendanceReview ?? null); }
         if (!cancelled && result.synced > 0) {
           toast.success("Progresso offline sincronizado!");
         }
@@ -81,6 +82,7 @@ export default function StudentOfflineSync() {
     setConflict(null);
     setReviewPending(false);
     setOtherScopePending(false);
+    setAttendanceReview(null);
     setResolving(false);
     void refreshCount();
     void syncNow();
@@ -101,6 +103,7 @@ export default function StudentOfflineSync() {
   const visibleCount = countUserId === user?.id ? pendingCount : 0;
   const visibleError = countUserId === user?.id && queueUnavailable;
   const visibleConflict = conflict?.action.userId === user?.id ? conflict : null;
+  const visibleAttendanceReview = attendanceReview?.action.userId === user?.id ? attendanceReview : null;
   if (!visibleCount && !visibleError) return null;
 
   return (
@@ -119,7 +122,7 @@ export default function StudentOfflineSync() {
       aria-live="polite"
     >
       {syncing ? <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" /> : <CloudOff className="h-3.5 w-3.5 text-primary" />}
-      <span>{visibleError ? "Não foi possível verificar as alterações deste aparelho. Não limpe os dados." : reviewPending ? "Respostas aguardam revisão. Não limpe os dados deste aparelho." : otherScopePending ? "Registros de presença aguardam revisão. Não limpe os dados deste aparelho." : `${visibleCount} alteracao${visibleCount === 1 ? "" : "es"} para sincronizar`}</span>
+      <span>{visibleError ? "Não foi possível verificar as alterações deste aparelho. Não limpe os dados." : visibleAttendanceReview ? "Uma solicitação de presença precisa de revisão. Fale com a liderança; ela continua guardada neste aparelho." : reviewPending ? "Respostas aguardam revisão. Não limpe os dados deste aparelho." : otherScopePending ? "Registros de presença aguardam revisão. Não limpe os dados deste aparelho." : `${visibleCount} alteracao${visibleCount === 1 ? "" : "es"} para sincronizar`}</span>
     </div>
     </>
   );

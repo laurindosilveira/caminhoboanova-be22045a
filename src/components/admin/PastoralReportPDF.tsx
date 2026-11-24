@@ -2,6 +2,7 @@ import type { Enums } from "@/integrations/supabase/types";
 import { useState } from "react";
 import { Download, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 type Participant = {
   user_id: string;
@@ -65,6 +66,8 @@ type DevotionalAnswerGroup = {
 };
 
 type LoadedReport = {
+  targetUserId: string;
+  viewerUserId: string;
   totalPoints: number;
   completedCount: number;
   categories: ReportCategory[];
@@ -116,13 +119,19 @@ function indexBy<T, K extends keyof T>(items: readonly T[], key: K) {
 }
 
 export default function PastoralReportPDF({ participant: p }: Props) {
+  const { user } = useAuth();
+  const canReadAnswers = !!user && user.id === p.user_id;
   const [reportMode, setReportMode] = useState<ReportMode>("summary");
   const [loadingData, setLoadingData] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [report, setReport] = useState<LoadedReport | null>(null);
+  const [loadedReport, setReport] = useState<LoadedReport | null>(null);
+  const report = loadedReport && loadedReport.targetUserId === p.user_id && loadedReport.viewerUserId === user?.id ? loadedReport : null;
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   async function loadData() {
+    if (!user) return;
     setLoadingData(true);
+    setLoadError(null);
     try {
       const { data: profile } = await supabase
         .from("profiles")
@@ -137,12 +146,12 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         { data: gameConfig },
         { data: lessons },
         { data: courses },
-        { data: lessonProgress },
-        { data: lessonResponses },
+        { data: lessonProgress, error: lessonProgressError },
+        { data: lessonResponses, error: lessonResponsesError },
         { data: lessonContents },
         { data: devotionals },
-        { data: devotionalProgress },
-        { data: devotionalResponses },
+        { data: devotionalProgress, error: devotionalProgressError },
+        { data: devotionalResponses, error: devotionalResponsesError },
         { data: attendance },
         { data: events },
         { data: worship },
@@ -158,11 +167,11 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         supabase.from("lessons").select("id, title, course_id, order_num").or(churchScope),
         supabase.from("courses").select("id, title, order_num").or(churchScope),
         supabase.from("lesson_progress").select("lesson_id, completed_at, awarded_points").eq("user_id", p.user_id).eq("is_completed", true).or(churchScope),
-        supabase.from("lesson_responses").select("lesson_id, question_key, response, created_at").eq("user_id", p.user_id).or(churchScope),
+        canReadAnswers ? supabase.from("lesson_responses").select("lesson_id, question_key, response, created_at").eq("user_id", p.user_id).or(churchScope) : Promise.resolve({ data: [] as { lesson_id: string; question_key: string; response: string; created_at: string }[], error: null }),
         supabase.from("lesson_content").select("lesson_id, icebreaker, practice, prayer_prompt, questions").or(churchScope),
         supabase.from("devotional_content").select("id, title, day_number, lesson_id, questions").or(churchScope),
         supabase.from("devotional_progress").select("id, devotional_id, completed_at, awarded_points, is_recovery").eq("user_id", p.user_id).or(churchScope),
-        supabase.from("devotional_responses").select("devotional_id, question_index, response, created_at").eq("user_id", p.user_id).or(churchScope),
+        canReadAnswers ? supabase.from("devotional_responses").select("devotional_id, question_index, response, created_at").eq("user_id", p.user_id).or(churchScope) : Promise.resolve({ data: [] as { devotional_id: string; question_index: number; response: string; created_at: string }[], error: null }),
         supabase.from("attendance").select("id, event_id, status, created_at").eq("user_id", p.user_id).or(churchScope),
         supabase.from("events").select("id, title, event_date, type").or(churchScope),
         supabase.from("worship_attendance").select("id, worship_date, preacher_name, status, created_at").eq("user_id", p.user_id).eq("status", "aprovado").or(churchScope),
@@ -173,6 +182,9 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         supabase.from("community_challenges").select("id, title, emoji"),
         supabase.from("custom_event_types").select("value, gives_points, points, area, church_id").or(churchScope),
       ]);
+      if (lessonResponsesError || devotionalResponsesError || lessonProgressError || devotionalProgressError) {
+        throw new Error("Não foi possível carregar o histórico. Tente novamente.");
+      }
 
       const cfg = new Map<string, number>((gameConfig ?? []).map((row) => [row.key, Number(row.value)]));
       const lessonDefault = cfg.get("lesson_points") ?? 20;
@@ -398,6 +410,8 @@ export default function PastoralReportPDF({ participant: p }: Props) {
       }).sort((a, b) => a.lessonOrder - b.lessonOrder || a.dayNumber - b.dayNumber);
 
       setReport({
+        targetUserId: p.user_id,
+        viewerUserId: user.id,
         totalPoints: Number(ranking?.faith_points ?? categories.reduce((sum, category) => sum + category.points, 0)),
         // A janela do Ranking mostra todos os itens detalhados, inclusive conquistas,
         // bônus e conclusão de curso. A RPC não inclui todos eles no completed_count.
@@ -406,6 +420,9 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         lessonGroups,
         devotionalGroups,
       });
+    } catch {
+      setReport(null);
+      setLoadError("Não foi possível carregar o relatório. Tente novamente.");
     } finally {
       setLoadingData(false);
     }
@@ -506,8 +523,9 @@ export default function PastoralReportPDF({ participant: p }: Props) {
       doc.rect(0, 0, width, 39, "F");
       text(reportMode === "complete" ? "RELATÓRIO COMPLETO" : "RELATÓRIO BÁSICO", margin, 15, 17, true, "#FFFFFF");
       text(p.full_name, margin, 25, 11, true, "#DBEAFE");
-      text(`${p.community} · ${p.area} · Gerado em ${new Date().toLocaleDateString("pt-BR")}`, margin, 33, 8.5, false, "#BFDBFE");
+      text(`${p.community} · Área atual: ${p.area} · Gerado em ${new Date().toLocaleDateString("pt-BR")}`, margin, 33, 8.5, false, "#BFDBFE");
       y = 48;
+      wrapped("Este histórico pertence ao aluno e pode incluir atividades de turmas anteriores.", margin, contentWidth, 8);
 
       section("DADOS GERAIS");
       const cardGap = 4;
@@ -557,7 +575,7 @@ export default function PastoralReportPDF({ participant: p }: Props) {
 
         section("RESPOSTAS DAS LIÇÕES", "#2563EB");
         if (report.lessonGroups.length === 0) {
-          text("Nenhuma resposta de lição registrada.", margin + 3, y, 9, false, "#94A3B8");
+          text(canReadAnswers ? "Nenhuma resposta de lição disponível." : "Respostas pessoais disponíveis somente ao aluno.", margin + 3, y, 9, false, "#94A3B8");
           y += 8;
         }
         let currentCourse = "";
@@ -575,7 +593,7 @@ export default function PastoralReportPDF({ participant: p }: Props) {
 
         section("RESPOSTAS DOS DEVOCIONAIS", "#7C3AED");
         if (report.devotionalGroups.length === 0) {
-          text("Nenhuma resposta de devocional registrada.", margin + 3, y, 9, false, "#94A3B8");
+          text(canReadAnswers ? "Nenhuma resposta de devocional disponível." : "Respostas pessoais disponíveis somente ao aluno.", margin + 3, y, 9, false, "#94A3B8");
           y += 8;
         }
         let currentLesson = "";
@@ -618,6 +636,7 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         <p className="font-montserrat text-sm font-bold text-foreground">Relatório por categorias</p>
       </div>
       <div className="space-y-4 p-4">
+        {loadError && <p role="alert" className="text-sm text-destructive">{loadError}</p>}
         {!report ? (
           <button
             onClick={loadData}
@@ -643,7 +662,7 @@ export default function PastoralReportPDF({ participant: p }: Props) {
                 className={`rounded-lg border-2 p-3 text-left ${reportMode === "complete" ? "border-primary bg-primary/5" : "border-border"}`}
               >
                 <span className="block font-inter text-sm font-semibold text-foreground">Relatório completo</span>
-                <span className="mt-1 block font-inter text-[11px] text-muted-foreground">Categorias, detalhes e todas as respostas</span>
+                <span className="mt-1 block font-inter text-[11px] text-muted-foreground">Categorias e detalhes{canReadAnswers ? " e respostas disponíveis" : " das atividades"}</span>
               </button>
             </div>
 
@@ -658,7 +677,7 @@ export default function PastoralReportPDF({ participant: p }: Props) {
 
             {reportMode === "complete" && (
               <p className="rounded-lg bg-primary/5 p-3 font-inter text-xs text-muted-foreground">
-                O PDF completo incluirá {report.lessonGroups.reduce((sum, group) => sum + group.answers.length, 0)} resposta(s) de lições e {report.devotionalGroups.reduce((sum, group) => sum + group.answers.length, 0)} resposta(s) de devocionais, agrupadas por curso e lição.
+                {canReadAnswers ? `O PDF incluirá ${report.lessonGroups.reduce((sum, group) => sum + group.answers.length, 0)} resposta(s) de lições e ${report.devotionalGroups.reduce((sum, group) => sum + group.answers.length, 0)} resposta(s) de devocionais disponíveis.` : "O relatório apresenta as conclusões. As respostas pessoais estão disponíveis somente ao aluno."}
               </p>
             )}
 

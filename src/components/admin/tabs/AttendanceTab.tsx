@@ -1753,7 +1753,9 @@ export default function AttendanceTab({ participants, activities, communities, i
     if (error) {
       toast({
         title: "Erro ao reiniciar jornada",
-        description: error.message,
+        description: error.message.includes("permission denied for function reset_turma_journey")
+          ? "O reinício está indisponível até que o histórico entre turmas seja protegido."
+          : error.message,
         variant: "destructive",
       });
       setResettingJourney(false);

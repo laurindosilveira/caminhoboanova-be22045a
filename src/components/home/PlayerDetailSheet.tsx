@@ -55,8 +55,8 @@ type DevotionalExpandedContent = {
 type AchievementLabel = { icon: string; title: string };
 
 type DetailModalState =
-  | { itemId: string; type: "lesson"; title: string; content: LessonExpandedContent | null }
-  | { itemId: string; type: "devotional"; title: string; content: DevotionalExpandedContent | null };
+  | { scope: string; itemId: string; type: "lesson"; title: string; content: LessonExpandedContent | null }
+  | { scope: string; itemId: string; type: "devotional"; title: string; content: DevotionalExpandedContent | null };
 
 type BonusCategory = "conquista" | "lesson" | "devotional" | "worship" | string;
 
@@ -120,7 +120,9 @@ function normalizeAttendanceStatus(status: string) {
 }
 
 export default function PlayerDetailSheet({ userId, fullName, currentArea, onClose, onPointsChanged }: Props) {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
+  const canReadAnswers = !!user && user.id === userId;
+  const detailScope = `${user?.id ?? ""}:${userId}`;
   const canDelete = role === "admin" || role === "lider";
   const { customTypes } = useCustomEventTypes(currentArea);
   const [items, setItems] = useState<ActivityItem[]>([]);
@@ -128,6 +130,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
   const [deleting, setDeleting] = useState<string | null>(null);
   const [detailModal, setDetailModal] = useState<DetailModalState | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailError, setDetailError] = useState(false);
   const [totalPoints, setTotalPoints] = useState(0);
   const [gaps, setGaps] = useState<{ missingLessons: { id: string; title: string }[]; missingDevotionals: { id: string; title: string; day_number: number | null }[] } | null>(null);
   const [showGaps, setShowGaps] = useState(false);
@@ -460,10 +463,16 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
     setPreviousCategoryModal(categoryModal);
     setCategoryModal(null);
     setLoadingDetail(true);
-    setDetailModal({ itemId: item.id, type: item.type as "lesson" | "devotional", title: item.title, content: null });
+    setDetailError(false);
+    setDetailModal({ scope: detailScope, itemId: item.id, type: item.type as "lesson" | "devotional", title: item.title, content: null });
+
+    if (!canReadAnswers) {
+      setLoadingDetail(false);
+      return;
+    }
 
     if (item.type === "lesson") {
-      const [{ data: lessonContent }, { data: responses }] = await Promise.all([
+      const [{ data: lessonContent, error: contentError }, { data: responses, error: responseError }] = await Promise.all([
         supabase
           .from("lesson_content")
           .select("icebreaker, practice, prayer_prompt, questions")
@@ -475,6 +484,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
           .eq("user_id", userId)
           .eq("lesson_id", item.tableId),
       ]);
+      if (contentError || responseError) setDetailError(true);
 
       const orderedAnswers = (responses ?? []).sort((a, b) => {
         const weight = (questionKey: string) => {
@@ -488,6 +498,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
       });
 
       setDetailModal({
+        scope: detailScope,
         itemId: item.id,
         type: "lesson",
         title: item.title,
@@ -497,21 +508,23 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
         },
       });
     } else {
-      const { data: progress } = await supabase
+      const { data: progress, error: progressError } = await supabase
         .from("devotional_progress")
         .select("devotional_id")
         .eq("id", item.tableId)
         .single();
 
       if (!progress?.devotional_id) {
+        if (progressError) setDetailError(true);
         setDetailModal({
+          scope: detailScope,
           itemId: item.id,
           type: "devotional",
           title: item.title,
           content: null,
         });
       } else {
-        const [{ data: devotional }, { data: responses }] = await Promise.all([
+        const [{ data: devotional, error: contentError }, { data: responses, error: responseError }] = await Promise.all([
           supabase
             .from("devotional_content")
             .select("title, bible_reference, bible_text, reflection, practice, prayer, questions")
@@ -524,8 +537,10 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
             .eq("devotional_id", progress.devotional_id)
             .order("question_index"),
         ]);
+        if (contentError || responseError) setDetailError(true);
 
         setDetailModal({
+          scope: detailScope,
           itemId: item.id,
           type: "devotional",
           title: item.title,
@@ -592,6 +607,10 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
   }
 
   async function handleDelete(item: ActivityItem) {
+    if (item.source !== "manual_bonus" && (item.type === "lesson" || item.type === "devotional")) {
+      toast.error("A remoção de estudos e devocionais está indisponível enquanto a proteção do histórico é revisada.");
+      return;
+    }
     if (!confirm(`Remover "${item.title}" e descontar ${item.points} pontos?`)) return;
     setDeleting(item.id);
 
@@ -1031,7 +1050,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
                           {item.date ? format(new Date(item.date), "d/MM/yy HH:mm") : ""}
                         </p>
                         {canOpenDetails && (
-                          <p className="text-primary text-xs font-inter font-semibold mt-0.5">Toque para ver as respostas</p>
+                          <p className="text-primary text-xs font-inter font-semibold mt-0.5">{canReadAnswers ? "Toque para ver as respostas" : "Toque para ver detalhes"}</p>
                         )}
                       </div>
                       <span className="font-montserrat font-bold text-primary text-xs flex-shrink-0">+{item.points}</span>
@@ -1056,7 +1075,7 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
       )}
 
       {/* Detail modal — inline overlay, no portal */}
-      {detailModal && (
+      {detailModal && detailModal.scope === detailScope && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
           onClick={(e) => e.stopPropagation()}
@@ -1097,6 +1116,10 @@ export default function PlayerDetailSheet({ userId, fullName, currentArea, onClo
                 <div className="h-16 rounded-2xl bg-muted animate-pulse" />
                 <div className="h-24 rounded-2xl bg-muted animate-pulse" />
               </div>
+            ) : detailError ? (
+              <p role="alert" className="text-sm font-inter text-destructive">Não foi possível carregar os detalhes. Feche e tente novamente.</p>
+            ) : !canReadAnswers ? (
+              <p className="text-sm font-inter text-muted-foreground">As respostas pessoais estão disponíveis somente ao aluno. A conclusão continua no histórico.</p>
             ) : detailModal?.type === "lesson" ? (
               detailModal.content && detailModal.content.answers.length > 0 ? (
                 <div className="space-y-3">

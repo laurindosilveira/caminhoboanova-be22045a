@@ -72,7 +72,7 @@ type RealLessonCompletion = {
   course_title: string;
   responses: { question: string; response: string }[];
   completed_at: string | null;
-  awarded_points: number;
+  awarded_points: number | null;
 };
 
 type RealDevotionalCompletion = {
@@ -278,7 +278,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       { data: eventsData, error: eventsDataError },
       { data: lessonProgress, error: lessonProgressError },
     ] = await Promise.all([
-      supabase.from("lesson_responses").select("lesson_id, question_key, response, created_at, awarded_points").eq("user_id", p.user_id).order("created_at"),
+      user?.id === p.user_id ? supabase.from("lesson_responses").select("lesson_id, question_key, response, created_at, awarded_points").eq("user_id", p.user_id).order("created_at") : Promise.resolve({ data: [] as { lesson_id: string; question_key: string; response: string; created_at: string; awarded_points: number | null }[], error: null }),
       supabase.from("devotional_progress").select("devotional_id, completed_at, awarded_points").eq("user_id", p.user_id).order("completed_at"),
       supabase.from("attendance").select("event_id, status, created_at").eq("user_id", p.user_id).order("created_at", { ascending: false }),
       supabase.from("worship_attendance").select("id, event_type, worship_date, status").eq("user_id", p.user_id).eq("status", "aprovado").order("worship_date"),
@@ -333,8 +333,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     (lessonsData ?? []).forEach(lesson => {
       const progress = lessonProgressMap.get(lesson.id);
       if (!progress) return;
-      const respMap = respsByLesson.get(lesson.id);
-      if (!respMap) return;
+      const respMap = respsByLesson.get(lesson.id) ?? new Map<string, { response: string; created_at: string; awarded_points: number | null }>();
       const questions = lessonContentMap.get(lesson.id) ?? [];
       const responses = questions.map((q, i) => ({
         question: q,
@@ -348,7 +347,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       });
       const awardedPoints = typeof progress.awarded_points === "number"
         ? progress.awarded_points
-        : Array.from(respMap.values()).find((value) => typeof value.awarded_points === "number")?.awarded_points ?? 20;
+        : Array.from(respMap.values()).find((value) => typeof value.awarded_points === "number")?.awarded_points ?? null;
       lCompletions.push({
         lesson_id: lesson.id,
         lesson_title: lesson.title,
@@ -402,7 +401,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     setWorshipRecords((worshipData ?? []) as RealWorshipRecord[]);
 
     setLoading(false);
-  }, [p.church_id, p.user_id, toast]);
+  }, [p.church_id, p.user_id, toast, user?.id]);
 
   const fetchExtendedProfile = useCallback(async () => {
     const [{ data: profileData, error: profileError }, { data: turmasData, error: turmasError }] = await Promise.all([
@@ -492,57 +491,14 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     if (error) throw error;
   }
 
-  async function handleDeleteLesson(lessonId: string) {
-    setDeletingType("estudo");
-    setDeletingId(lessonId);
-    const lesson = lessonCompletions.find(l => l.lesson_id === lessonId);
-    const pointsRemoved = lesson?.awarded_points ?? 20;
-    const [{ error }, { error: progressError }] = await Promise.all([
-      supabase.from("lesson_responses").delete().eq("user_id", p.user_id).eq("lesson_id", lessonId),
-      supabase.from("lesson_progress").delete().eq("user_id", p.user_id).eq("lesson_id", lessonId),
-    ]);
-    if (error || progressError) {
-      toast({ title: "Erro ao remover estudo", description: (error ?? progressError)?.message, variant: "destructive" });
-      setDeletingType(null);
-      setDeletingId(null);
-      return;
-    }
-    try {
-      await logRemoval("estudo", lessonId, lesson?.lesson_title ?? "", pointsRemoved);
-    } catch (logError: unknown) {
-      toast({ title: "Estudo removido com alerta", description: `As respostas foram removidas, mas o log falhou: ${getErrorMessage(logError)}`, variant: "destructive" });
-    }
-    setLessonCompletions(prev => prev.filter(l => l.lesson_id !== lessonId));
-    toast({ title: "Estudo removido", description: "Respostas e pontuacao foram removidas. Registro salvo no log." });
-    setDeletingType(null);
-    setDeletingId(null);
+  async function handleDeleteLesson(_lessonId: string) {
+    toast({ title: "Remoção temporariamente indisponível", description: "A proteção do histórico de estudos está em revisão.", variant: "destructive" });
     setConfirmDeleteKey(null);
-    setViewingLesson(null);
   }
 
-  async function handleDeleteDevotional(devotionalId: string) {
-    setDeletingType("devocional");
-    setDeletingId(devotionalId);
-    const dev = devotionalCompletions.find(d => d.devotional_id === devotionalId);
-    const pts = dev?.awarded_points ?? (dev?.is_weekend ? 2 : 5);
-    const { error } = await supabase.from("devotional_progress").delete().eq("user_id", p.user_id).eq("devotional_id", devotionalId);
-    if (error) {
-      toast({ title: "Erro ao remover devocional", description: error.message, variant: "destructive" });
-      setDeletingType(null);
-      setDeletingId(null);
-      return;
-    }
-    try {
-      await logRemoval("devocional", devotionalId, dev?.title ?? "", pts);
-    } catch (logError: unknown) {
-      toast({ title: "Devocional removido com alerta", description: `A conclusao foi removida, mas o log falhou: ${getErrorMessage(logError)}`, variant: "destructive" });
-    }
-    setDevotionalCompletions(prev => prev.filter(d => d.devotional_id !== devotionalId));
-    toast({ title: "Devocional removido", description: "Conclusao e pontuacao foram removidas. Registro salvo no log." });
-    setDeletingType(null);
-    setDeletingId(null);
+  async function handleDeleteDevotional(_devotionalId: string) {
+    toast({ title: "Remoção temporariamente indisponível", description: "A proteção do histórico de devocionais está em revisão.", variant: "destructive" });
     setConfirmDeleteKey(null);
-    setViewingDevotional(null);
   }
 
   async function handleDeleteAttendance(eventId: string) {
@@ -569,7 +525,8 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
   }
 
   // ── Points calculation (real data) ──
-  const lessonPts = lessonCompletions.reduce((sum, lesson) => sum + lesson.awarded_points, 0);
+  const lessonPts = lessonCompletions.reduce((sum, lesson) => sum + (lesson.awarded_points ?? 0), 0);
+  const unknownLessonPoints = lessonCompletions.some((lesson) => lesson.awarded_points === null);
   const devPts = devotionalCompletions.reduce((sum, devotional) => sum + devotional.awarded_points, 0);
   const attendancePts = attendanceRecords.filter(a => a.status === "presente").length * 10;
   const worshipPts = worshipRecords.length * 5;
@@ -595,7 +552,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
             <div className="flex-1">
               <h3 className="font-montserrat font-bold text-foreground text-sm">{viewingLesson.lesson_title}</h3>
               <p className="font-inter text-xs text-muted-foreground">
-                Estudo de licao - {viewingLesson.course_title} - +20 pts
+                Estudo de lição - {viewingLesson.course_title} - {viewingLesson.awarded_points === null ? "pontos não registrados" : `+${viewingLesson.awarded_points} pts`}
               </p>
             </div>
             <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-brand-green/10 text-brand-green">Concluida</span>
@@ -622,32 +579,14 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
           ) : (
             <div className="text-center py-6">
               <Eye className="w-8 h-8 text-muted-foreground mx-auto mb-2 opacity-40" />
-              <p className="font-inter text-sm text-muted-foreground">Nenhuma resposta encontrada para esta licao.</p>
+              <p className="font-inter text-sm text-muted-foreground">{user?.id === p.user_id ? "Nenhuma resposta disponível para esta lição." : "As respostas pessoais estão disponíveis somente ao aluno."}</p>
             </div>
           )}
         </div>
 
         {/* Delete */}
         <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-4">
-          {confirmDeleteKey === `lesson-${viewingLesson.lesson_id}` ? (
-            <div className="space-y-3">
-              <p className="font-inter text-sm text-destructive font-medium">Tem certeza que deseja remover este estudo?</p>
-              <p className="font-inter text-xs text-muted-foreground">Isso ira remover as respostas e -20pts de <strong>{p.full_name}</strong>.</p>
-              <div className="flex gap-2">
-                <button onClick={() => handleDeleteLesson(viewingLesson.lesson_id)}
-                  disabled={deletingId === viewingLesson.lesson_id}
-                  className="flex-1 py-2.5 rounded-lg bg-destructive text-destructive-foreground font-inter text-sm font-medium disabled:opacity-50">
-                  {deletingId === viewingLesson.lesson_id ? "Removendo..." : "Confirmar remocao"}
-                </button>
-                <button onClick={() => setConfirmDeleteKey(null)} className="px-4 py-2.5 rounded-lg bg-muted text-foreground font-inter text-sm">Cancelar</button>
-              </div>
-            </div>
-          ) : (
-            <button onClick={() => setConfirmDeleteKey(`lesson-${viewingLesson.lesson_id}`)}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-destructive/30 text-destructive font-inter text-sm font-medium hover:bg-destructive/10 transition-colors">
-              <Trash2 className="w-4 h-4" /> Remover estudo e pontuacao
-            </button>
-          )}
+          <p className="font-inter text-sm text-muted-foreground">A remoção de estudos está temporariamente indisponível para proteger o histórico.</p>
         </div>
       </div>
     );
@@ -694,7 +633,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
                   <div key={i} className="bg-muted/30 rounded-lg p-3 border border-border">
                     <p className="font-inter text-xs text-muted-foreground mb-1">Pergunta {i + 1}:</p>
                     <p className="font-inter text-sm text-foreground">{q}</p>
-                    <p className="font-inter text-xs text-muted-foreground mt-1 italic">Respostas de devocionais nao sao salvas no banco</p>
+                    <p className="font-inter text-xs text-muted-foreground mt-1 italic">As respostas pessoais estão disponíveis somente ao aluno.</p>
                   </div>
                 ))}
               </div>
@@ -704,25 +643,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
 
         {/* Delete */}
         <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-4">
-          {confirmDeleteKey === `dev-${viewingDevotional.devotional_id}` ? (
-            <div className="space-y-3">
-              <p className="font-inter text-sm text-destructive font-medium">Tem certeza que deseja remover este devocional?</p>
-              <p className="font-inter text-xs text-muted-foreground">Isso ira remover a conclusao e -{viewingDevotional.is_weekend ? 2 : 5}pts de <strong>{p.full_name}</strong>.</p>
-              <div className="flex gap-2">
-                <button onClick={() => handleDeleteDevotional(viewingDevotional.devotional_id)}
-                  disabled={deletingId === viewingDevotional.devotional_id}
-                  className="flex-1 py-2.5 rounded-lg bg-destructive text-destructive-foreground font-inter text-sm font-medium disabled:opacity-50">
-                  {deletingId === viewingDevotional.devotional_id ? "Removendo..." : "Confirmar remocao"}
-                </button>
-                <button onClick={() => setConfirmDeleteKey(null)} className="px-4 py-2.5 rounded-lg bg-muted text-foreground font-inter text-sm">Cancelar</button>
-              </div>
-            </div>
-          ) : (
-            <button onClick={() => setConfirmDeleteKey(`dev-${viewingDevotional.devotional_id}`)}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-destructive/30 text-destructive font-inter text-sm font-medium hover:bg-destructive/10 transition-colors">
-              <Trash2 className="w-4 h-4" /> Remover devocional e pontuação
-            </button>
-          )}
+          <p className="font-inter text-sm text-muted-foreground">A remoção de devocionais está temporariamente indisponível para proteger o histórico.</p>
         </div>
       </div>
     );
@@ -745,7 +666,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
     type: "estudo" | "devocional" | "presenca" | "culto";
     title: string;
     subtitle: string;
-    pts: number;
+    pts: number | null;
     date: string | null;
     onClick: () => void;
     onDelete: () => void;
@@ -761,7 +682,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       type: "estudo",
       title: l.lesson_title,
       subtitle: l.course_title,
-      pts: 20,
+      pts: l.awarded_points,
       date: l.completed_at,
       onClick: () => setViewingLesson(l),
       onDelete: () => { setConfirmDeleteKey(`lesson-${l.lesson_id}`); },
@@ -991,7 +912,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
               </div>
               <div className="flex items-center gap-2 text-accent font-montserrat font-bold">
                 <Star className="w-4 h-4 flex-shrink-0" />
-                <span>{totalPts} pontos</span>
+                <span>{totalPts} pontos calculados{unknownLessonPoints ? " (parcial)" : ""}</span>
               </div>
               {extProfile.address && (
                 <div className="flex items-center gap-2 text-muted-foreground font-inter col-span-2">
@@ -1027,6 +948,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
       </div>
 
       {/* Mini stats by real data */}
+      <p className="mb-3 text-xs text-muted-foreground">Este histórico acompanha o aluno e pode incluir atividades de turmas anteriores.</p>
       <div className="grid grid-cols-2 gap-2 mb-4">
         {[
           { label: "Devocionais", icon: "📖", done: devotionalCompletions.length },
@@ -1050,7 +972,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
         <div className="space-y-1.5">
           <div className="flex justify-between font-inter text-xs">
             <span className="text-muted-foreground">Estudos ({lessonCompletions.length} concluidos)</span>
-            <span className="text-brand-green font-bold">+{lessonPts}</span>
+            <span className="text-brand-green font-bold">+{lessonPts}{unknownLessonPoints ? " (parcial)" : ""}</span>
           </div>
           <div className="flex justify-between font-inter text-xs">
             <span className="text-muted-foreground">Devocionais ({devotionalCompletions.length} concluidos)</span>
@@ -1065,8 +987,8 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
             <span className="text-brand-green font-bold">+{worshipPts}</span>
           </div>
           <div className="border-t border-border pt-1.5 mt-1.5 flex justify-between">
-            <span className="font-montserrat font-bold text-foreground text-sm">Total verificado</span>
-            <span className="font-montserrat font-black text-brand-green text-sm">+{totalPts} pts</span>
+            <span className="font-montserrat font-bold text-foreground text-sm">Total calculado</span>
+            <span className="font-montserrat font-black text-brand-green text-sm">+{totalPts} pts{unknownLessonPoints ? " (parcial)" : ""}</span>
           </div>
         </div>
       </div>
@@ -1081,7 +1003,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
           </select>
         </div>
         <p className="font-inter text-xs text-muted-foreground mb-3">
-          Somente atividades com dados reais registrados · Clique para ver respostas
+          Atividades registradas · Respostas pessoais disponíveis somente ao aluno
         </p>
 
         {filteredItems.length === 0 ? (
@@ -1111,7 +1033,7 @@ function ParticipantDetail({ participant: pOriginal, activities, onBack }: Detai
                   </span>
                   <div className="flex items-center gap-1.5">
                     <span className={`text-xs font-inter font-bold ${item.isWeekend ? "text-accent-foreground" : "text-accent"}`}>
-                      +{item.pts}pts{item.isWeekend ? "⚠️" : ""}
+                      {item.pts === null ? "Pontos não registrados" : `+${item.pts}pts`}{item.isWeekend ? "⚠️" : ""}
                     </span>
                     {(item.type === "estudo" || item.type === "devocional") && (
                       <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />

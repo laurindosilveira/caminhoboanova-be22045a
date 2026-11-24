@@ -221,11 +221,10 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
         .filter((lesson) => lesson.course_id === course.id)
         .map((lesson) => ({ id: lesson.id, title: lesson.title, order_num: lesson.order_num, courseTitle: course.title })));
       const linked = upcoming?.linked_lesson_id ? orderedLessons.find((lesson) => lesson.id === upcoming.linked_lesson_id) : null;
-      const averageCompleted = members.length ? Math.floor(members.reduce((sum, member) => sum + member.lessons_completed, 0) / members.length) : 0;
-      setNextLesson(linked ?? orderedLessons[Math.min(averageCompleted, Math.max(orderedLessons.length - 1, 0))] ?? null);
+      setNextLesson(linked ?? null);
     }
     void fetchNextSteps();
-  }, [area, churchId, members, turmaId]);
+  }, [area, churchId, turmaId]);
 
   const birthdaysThisWeek = useMemo(() => {
     const today = new Date();
@@ -423,6 +422,7 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
           <p className="text-xs leading-5">
             <strong>Ativo</strong> significa que houve acesso, lição, devocional, presença ou culto nos últimos 7 dias.
             Evento sem chamada preenchida aparece como <strong>sem registro</strong> e não é contado como falta.
+            O histórico acompanha a pessoa e pode incluir atividades de turmas anteriores.
             {lastUpdatedAt && (
               <span className="block text-cyan-800">
                 Dados atualizados às {lastUpdatedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.
@@ -509,7 +509,7 @@ export default function LeaderCareDashboard({ area, churchId, turmaId, participa
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700"><BookOpenCheck className="h-5 w-5" /></span>
             <span className="min-w-0 flex-1">
               <span className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Próxima lição da jornada</span>
-              <span className="mt-1 block truncate text-sm font-bold text-foreground">{nextLesson?.title ?? "Nenhuma lição disponível"}</span>
+              <span className="mt-1 block truncate text-sm font-bold text-foreground">{nextLesson?.title ?? "Nenhuma lição programada"}</span>
               <span className="mt-1 block text-xs text-muted-foreground">{nextLesson ? `${nextLesson.courseTitle} · Lição ${nextLesson.order_num}` : "Abra a jornada para revisar o conteúdo"}</span>
             </span>
             <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />

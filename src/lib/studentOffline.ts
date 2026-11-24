@@ -115,6 +115,9 @@ export type StudentOfflineAction =
         confirmationSource: "user";
         requestedAt: string;
         justification?: string;
+        expectedStatus?: string | null;
+        expectedRequestedAt?: string | null;
+        expectedJustification?: string | null;
       };
     }
   | {
@@ -312,6 +315,27 @@ async function deleteQueuedAction(id: string) {
 
 type LearningAction = Extract<StudentOfflineAction, { type: "save_lesson_draft" | "complete_lesson" | "complete_devotional" }>;
 export type OfflineConflict = { action: LearningAction; current: Record<string, string> };
+type AttendanceAction = Extract<StudentOfflineAction, { type: "attendance_upsert" }>;
+type WorshipAction = Extract<StudentOfflineAction, { type: "worship_manual" }>;
+export type AttendanceReview = { action: AttendanceAction | WorshipAction; reason: "finalized" | "newer_request" | "scope_review_required"; currentStatus?: string };
+
+export async function syncAttendanceAction(action: AttendanceAction): Promise<AttendanceReview | null> {
+  const { data, error } = await supabase.rpc("sync_owned_attendance" as never, {
+    p_user_id: action.userId, p_church_id: action.churchId ?? null, p_event_id: action.payload.eventId,
+    p_status: action.payload.status, p_requested_at: action.payload.requestedAt,
+    p_justification: action.payload.justification ?? null,
+    p_expected_status: action.payload.expectedStatus ?? null,
+    p_expected_requested_at: action.payload.expectedRequestedAt ?? null,
+    p_expected_justification: action.payload.expectedJustification ?? null,
+  } as never);
+  if (error) throw error;
+  const result = data as { status?: string; current_status?: string } | null;
+  if (result?.status === "saved") return null;
+  if (result?.status === "finalized" || result?.status === "newer_request" || result?.status === "scope_review_required") {
+    return { action, reason: result.status, currentStatus: result.current_status };
+  }
+  throw new Error("ATTENDANCE_UNEXPECTED_RESPONSE");
+}
 
 function isLearningAction(action: StudentOfflineAction): action is LearningAction {
   return action.type === "save_lesson_draft" || action.type === "complete_lesson" || action.type === "complete_devotional";
@@ -347,46 +371,23 @@ export async function syncLearningAction(action: LearningAction, expected?: Reco
   return (await syncLearningActionWithCurrent(action, expected)).conflict;
 }
 
-async function syncAction(action: StudentOfflineAction): Promise<OfflineConflict | null | void> {
+async function syncAction(action: StudentOfflineAction): Promise<OfflineConflict | AttendanceReview | null | void> {
   if (isLearningAction(action)) return syncLearningAction(action);
 
   if (action.type === "attendance_upsert") {
-    const payload = {
-      user_id: action.userId,
-      church_id: action.churchId ?? null,
-      event_id: action.payload.eventId,
-      status: action.payload.status,
-      confirmation_source: action.payload.confirmationSource,
-      user_requested_at: action.payload.requestedAt,
-      justification: action.payload.justification ?? null,
-    };
-
-    const { data: existing, error: lookupError } = await supabase
-      .from("attendance")
-      .select("id")
-      .eq("event_id", action.payload.eventId)
-      .eq("user_id", action.userId)
-      .maybeSingle();
-    if (lookupError) throw lookupError;
-
-    const result = existing?.id
-      ? await supabase.from("attendance").update(payload).eq("id", existing.id)
-      : await supabase.from("attendance").insert(payload);
-    const { error } = result;
-    if (error) throw error;
-    return;
+    return syncAttendanceAction(action);
   }
 
   if (action.type === "worship_manual") {
-    const { error } = await supabase.from("worship_attendance").insert({
-      user_id: action.userId,
-      church_id: action.churchId ?? null,
-      worship_date: action.payload.worshipDate,
-      worship_time: action.payload.worshipTime,
-      preacher_name: action.payload.preacherName,
-      event_type: action.payload.eventType,
-    });
+    const { data, error } = await supabase.rpc("sync_owned_worship" as never, {
+      p_user_id:action.userId, p_church_id:action.churchId ?? null, p_action_id:action.id,
+      p_worship_date:action.payload.worshipDate, p_worship_time:action.payload.worshipTime,
+      p_preacher_name:action.payload.preacherName, p_event_type:action.payload.eventType,
+    } as never);
     if (error) throw error;
+    const status = (data as { status?:string } | null)?.status;
+    if (status === "scope_review_required") return { action, reason:"scope_review_required" };
+    if (status !== "saved") throw new Error("WORSHIP_UNEXPECTED_RESPONSE");
   }
 }
 
@@ -405,10 +406,12 @@ async function stageLearningReview(action: LearningAction): Promise<"review_pend
   return status;
 }
 
-export async function syncStudentOfflineQueue(userId?: string | null) {
+type StudentSyncResult = { synced:number; remaining:number; conflict?:OfflineConflict; attendanceReview?:AttendanceReview; reviewPending?:boolean; otherScopePending?:boolean };
+export async function syncStudentOfflineQueue(userId?: string | null): Promise<StudentSyncResult> {
   if (!userId || syncInFlight || isStudentOffline()) return { synced: 0, remaining: 0 };
   syncInFlight = true;
   let synced = 0;
+  let attendanceReview: AttendanceReview | undefined;
 
   try {
     const actions = await getQueuedStudentActions(userId, { strict: true });
@@ -418,7 +421,7 @@ export async function syncStudentOfflineQueue(userId?: string | null) {
       if (scopedLearningEnabled && !isLearningAction(action)) {
         return { synced, remaining: actions.length - synced, otherScopePending: true };
       }
-      let conflict: OfflineConflict | null | void;
+      let conflict: OfflineConflict | AttendanceReview | null | void;
       if (scopedLearningEnabled && isLearningAction(action)) {
         try {
           if (!action.scope) throw new Error("LEARNING_SCOPE_REVIEW_REQUIRED");
@@ -437,6 +440,7 @@ export async function syncStudentOfflineQueue(userId?: string | null) {
       } else {
         conflict = await syncAction(action);
       }
+      if (conflict && "reason" in conflict) { attendanceReview ??= conflict; continue; }
       if (scopedLearningEnabled && conflict && isLearningAction(action)) {
         // Review through the server-side scoped flow, which rechecks both the
         // destination and every displayed current answer under lock.
@@ -449,7 +453,7 @@ export async function syncStudentOfflineQueue(userId?: string | null) {
         synced += 1;
         continue;
       }
-      if (conflict) {
+      if (conflict && "current" in conflict) {
         const remaining = actions.length - synced;
         if (synced > 0) {
           window.dispatchEvent(new CustomEvent("student-offline-queue-synced", { detail: { synced, remaining } }));
@@ -465,7 +469,7 @@ export async function syncStudentOfflineQueue(userId?: string | null) {
       window.dispatchEvent(new CustomEvent("student-offline-queue-synced", { detail: { synced, remaining } }));
       window.dispatchEvent(new CustomEvent("student-offline-queue-changed"));
     }
-    return { synced, remaining };
+    return { synced, remaining, attendanceReview };
   } finally {
     syncInFlight = false;
   }
@@ -546,6 +550,7 @@ export async function getPendingStudentOverlay(userId: string, options: { strict
         confirmation_source: action.payload.confirmationSource,
         user_requested_at: action.payload.requestedAt,
         leader_confirmed_at: null,
+        justification: action.payload.justification ?? null,
         pending_sync: true,
       })),
     worshipAttendance: actions

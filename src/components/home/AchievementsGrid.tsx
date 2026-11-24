@@ -560,30 +560,7 @@ export default function AchievementsGrid({ faithPoints, streakDays, completedCou
   }
 
   async function handleResetGame() {
-    setResettingGame(true);
-    const userIds = members.map(m => m.user_id);
-    if (userIds.length === 0) {
-      toast.error("Nenhum membro encontrado.");
-      setResettingGame(false);
-      setShowResetConfirm(false);
-      return;
-    }
-    try {
-      await Promise.all([
-        supabase.from("user_progress").delete().in("user_id", userIds),
-        supabase.from("lesson_responses").delete().in("user_id", userIds),
-        supabase.from("lesson_progress").delete().in("user_id", userIds),
-        supabase.from("devotional_progress").delete().in("user_id", userIds),
-        supabase.from("achievement_unlocks").delete().in("user_id", userIds),
-        supabase.from("attendance").delete().in("user_id", userIds),
-        supabase.from("worship_attendance").delete().in("user_id", userIds),
-      ]);
-      toast.success(`✅ Pontuações resetadas para ${userIds.length} participantes!`);
-      await fetchAreaRanking();
-    } catch (err: unknown) {
-      toast.error("Erro ao resetar: " + getErrorMessage(err));
-    }
-    setResettingGame(false);
+    toast.error("O reinício do ranking está indisponível até a proteção do histórico ser concluída.");
     setShowResetConfirm(false);
   }
 

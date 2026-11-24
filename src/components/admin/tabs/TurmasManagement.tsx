@@ -194,44 +194,7 @@ export default function TurmasManagement({ onSelectTurma }: Props) {
   }
 
   async function handleResetJourney(turma: Turma) {
-    setResetting(true);
-    
-    // Get all user IDs in this turma
-    const { data: turmaProfiles } = await supabase
-      .from("profiles")
-      .select("user_id")
-      .eq("turma_id", turma.id);
-    
-    const userIds = (turmaProfiles ?? []).map(p => p.user_id);
-    
-    if (userIds.length === 0) {
-      toast({ title: "Nenhum membro", description: "Esta turma não possui membros.", variant: "destructive" });
-      setResetting(false);
-      setConfirmReset(null);
-      return;
-    }
-
-    // Delete all progress, lesson responses, devotional progress, achievement unlocks for these users
-    await Promise.all([
-      supabase.from("user_progress").delete().in("user_id", userIds),
-      supabase.from("lesson_responses").delete().in("user_id", userIds),
-      supabase.from("lesson_progress").delete().in("user_id", userIds),
-      supabase.from("devotional_progress").delete().in("user_id", userIds),
-      supabase.from("achievement_unlocks").delete().in("user_id", userIds),
-      supabase.from("attendance").delete().in("user_id", userIds),
-      supabase.from("worship_attendance").delete().in("user_id", userIds),
-    ]);
-
-    // Close ranking seasons for the communities involved
-    const { data: profiles } = await supabase.from("profiles").select("community").in("user_id", userIds);
-    const communities = [...new Set((profiles ?? []).map(p => p.community))];
-    
-    toast({ 
-      title: "🔄 Jornada reiniciada!", 
-      description: `Progresso de ${userIds.length} aluno(s) da turma "${turma.name}" foi zerado.` 
-    });
-    
-    setResetting(false);
+    toast({ title: "Reinício indisponível", description: `O histórico de ${turma.name} precisa de proteção antes do reinício.`, variant: "destructive" });
     setConfirmReset(null);
   }
 

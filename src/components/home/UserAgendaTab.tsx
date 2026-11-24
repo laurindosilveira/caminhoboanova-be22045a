@@ -33,6 +33,7 @@ import {
   invalidateCachedStudentQueries,
   isStudentOffline,
   mergeByKey,
+  syncAttendanceAction,
 } from "@/lib/studentOffline";
 import { isEventVisibleInGroupScope } from "@/lib/eventScope";
 import type { Database } from "@/integrations/supabase/types";
@@ -53,7 +54,7 @@ type LessonContentInfo = { lesson_id: string; summary: string; bible_texts: stri
 type AttendanceRecord = Pick<
   AttendanceRow,
   "event_id" | "status" | "confirmation_source" | "user_requested_at" | "leader_confirmed_at"
->;
+> & { justification?: string | null };
 type LessonInfo = { id: string; title: string; order_num: number; course_title: string; course_order: number };
 type EventParticipant = {
   user_id: string;
@@ -259,7 +260,7 @@ export default function UserAgendaTab() {
           return query;
         }, [] as Event[]),
         user
-          ? cachedStudentQuery<AttendanceRecord[]>(`${dataScope}:attendance`, () => supabase.from("attendance").select("event_id, status, confirmation_source, user_requested_at, leader_confirmed_at").eq("user_id", user.id), [])
+          ? cachedStudentQuery<AttendanceRecord[]>(`${dataScope}:attendance`, () => supabase.from("attendance").select("event_id, status, confirmation_source, user_requested_at, leader_confirmed_at, justification").eq("user_id", user.id), [])
           : Promise.resolve({ data: [] as AttendanceRecord[] }),
         cachedStudentQuery<CourseRow[]>(`${dataScope}:courses`, () => supabase.from("courses").select("id, title, order_num").order("order_num"), []),
         cachedStudentQuery<LessonRow[]>(`${dataScope}:lessons`, () => supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"), []),
@@ -412,7 +413,7 @@ export default function UserAgendaTab() {
     .sort((a, b) => new Date(b.event_date).getTime() - new Date(a.event_date).getTime());
 
   async function handleCheckIn(eventId: string, status: "pendente_presente" | "pendente_falta", justification?: string) {
-    if (!user) return;
+    if (!user) return false;
     const existing = attendanceRecords.find(a => a.event_id === eventId);
     const finalStatuses = new Set(["presente", "faltou", "justificou"]);
 
@@ -422,61 +423,45 @@ export default function UserAgendaTab() {
           ? "Sua presença já foi confirmada para este evento."
           : "Este evento já possui um registro final de presença."
       );
-      return;
+      return true;
     }
 
     const requestedAt = new Date().toISOString();
-    const payload: AttendanceUpdate = {
-      status,
-      confirmation_source: "user",
-      user_requested_at: requestedAt,
-    };
-    if (justification) payload.justification = justification;
+    const action = { type:"attendance_upsert" as const, userId:user.id, churchId:profile?.church_id ?? null,
+      payload:{ eventId, status, confirmationSource:"user" as const, requestedAt, justification,
+        expectedStatus:existing?.status ?? null, expectedRequestedAt:existing?.user_requested_at ?? null,
+        expectedJustification:existing?.justification ?? null } };
     if (isStudentOffline()) {
-      await enqueueStudentAction({
-        type: "attendance_upsert",
-        userId: user.id,
-        churchId: profile?.church_id ?? null,
-        payload: {
-          eventId,
-          status,
-          confirmationSource: "user",
-          requestedAt,
-          justification,
-        },
-      });
+      try { await enqueueStudentAction(action); }
+      catch { toast.error("Não foi possível guardar a solicitação neste aparelho. Tente novamente."); return false; }
       setAttendanceRecords(prev => {
         const filtered = prev.filter(a => a.event_id !== eventId);
-        return [...filtered, { event_id: eventId, status, confirmation_source: "user", user_requested_at: requestedAt, leader_confirmed_at: null }];
+        return [...filtered, { event_id: eventId, status, confirmation_source: "user", user_requested_at: requestedAt, leader_confirmed_at: null, justification:justification ?? null }];
       });
       toast.success(status === "pendente_presente" ? "Presenca salva offline para sincronizar!" : "Justificativa salva offline para sincronizar!");
-      return;
+      return true;
     }
 
-    let error = null;
-    if (existing) {
-      const result = await supabase
-        .from("attendance")
-        .update(payload)
-        .eq("event_id", eventId)
-        .eq("user_id", user.id);
-      error = result.error;
-    } else {
-      const result = await supabase
-        .from("attendance")
-        .insert({ event_id: eventId, user_id: user.id, church_id: profile?.church_id ?? null, ...payload } satisfies AttendanceInsert);
-      error = result.error;
-    }
-    if (error) {
-      toast.error("Não foi possível enviar sua solicitação.");
-      console.error(error);
-      return;
+    try {
+      const review = await syncAttendanceAction({ ...action, id:"live", createdAt:requestedAt });
+      if (review) {
+        await enqueueStudentAction(action);
+        toast.error("A solicitação precisa de revisão. Ela permanece guardada neste aparelho; fale com a liderança.");
+        return true;
+      }
+    } catch {
+      try {
+        await enqueueStudentAction(action);
+        toast.error("O envio não foi confirmado. A solicitação foi guardada neste aparelho para sincronizar.");
+        return true;
+      } catch { toast.error("Não foi possível guardar a solicitação. Tente novamente."); return false; }
     }
     setAttendanceRecords(prev => {
       const filtered = prev.filter(a => a.event_id !== eventId);
-      return [...filtered, { event_id: eventId, status, confirmation_source: "user", user_requested_at: requestedAt, leader_confirmed_at: null }];
+      return [...filtered, { event_id: eventId, status, confirmation_source: "user", user_requested_at: requestedAt, leader_confirmed_at: null, justification:justification ?? null }];
     });
     toast.success(status === "pendente_presente" ? "Presença enviada para aprovação!" : "Justificativa enviada para aprovação!");
+    return true;
   }
 
   function openCreateForm() {

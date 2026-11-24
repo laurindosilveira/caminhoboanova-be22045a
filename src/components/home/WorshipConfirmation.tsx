@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { EVENT_TYPES, getEventEmoji, getEventLabel } from "@/config/eventTypes";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { enqueueStudentAction, isStudentOffline } from "@/lib/studentOffline";
+import { enqueueStudentAction } from "@/lib/studentOffline";
 
 type EventItem = {
   id: string;
@@ -35,7 +35,7 @@ type WorshipRecord = {
 type Props = {
   events: EventItem[];
   attendanceRecords: AttendanceRecord[];
-  onCheckIn: (eventId: string, status: "pendente_presente" | "pendente_falta", justification?: string) => void;
+  onCheckIn: (eventId: string, status: "pendente_presente" | "pendente_falta", justification?: string) => Promise<boolean>;
 };
 
 const TIME_OPTIONS = [
@@ -59,8 +59,9 @@ const ATT_STATUS_CFG: Record<string, { icon: string; label: string; cls: string 
 
 export default function WorshipConfirmation({ events, attendanceRecords, onCheckIn }: Props) {
   const { toast } = useToast();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [open, setOpen] = useState(false);
+  const [submittingAttendance, setSubmittingAttendance] = useState(false);
 
   // Selected agenda event
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -116,18 +117,18 @@ export default function WorshipConfirmation({ events, attendanceRecords, onCheck
     setShowManual(false);
   }
 
-  function handleConfirm() {
-    if (!selectedEventId) return;
-    onCheckIn(selectedEventId, "pendente_presente");
-    setOpen(false);
-    reset();
+  async function handleConfirm() {
+    if (!selectedEventId || submittingAttendance) return;
+    setSubmittingAttendance(true);
+    try { if (await onCheckIn(selectedEventId, "pendente_presente")) { setOpen(false); reset(); } }
+    finally { setSubmittingAttendance(false); }
   }
 
-  function handleJustify() {
-    if (!selectedEventId) return;
-    onCheckIn(selectedEventId, "pendente_falta", justificationText || undefined);
-    setOpen(false);
-    reset();
+  async function handleJustify() {
+    if (!selectedEventId || submittingAttendance) return;
+    setSubmittingAttendance(true);
+    try { if (await onCheckIn(selectedEventId, "pendente_falta", justificationText || undefined)) { setOpen(false); reset(); } }
+    finally { setSubmittingAttendance(false); }
   }
 
   async function handleManualSubmit() {
@@ -136,45 +137,24 @@ export default function WorshipConfirmation({ events, attendanceRecords, onCheck
       return;
     }
     setSubmittingManual(true);
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSubmittingManual(false); return; }
 
-    if (isStudentOffline()) {
+    try {
       await enqueueStudentAction({
-        type: "worship_manual",
-        userId: user.id,
-        churchId: profile?.church_id ?? null,
-        payload: {
-          worshipDate: format(manualDate, "yyyy-MM-dd"),
-          worshipTime: manualTime,
-          preacherName: getEventLabel(manualType),
-          eventType: manualType,
-        },
+        type:"worship_manual", userId:user.id, churchId:profile?.church_id ?? null,
+        payload:{ worshipDate:format(manualDate,"yyyy-MM-dd"), worshipTime:manualTime,
+          preacherName:getEventLabel(manualType), eventType:manualType },
       });
-      toast({ title: "Presenca salva offline!", description: "Ela sera enviada quando a internet voltar." });
-      setOpen(false);
-      reset();
+    } catch {
+      toast({ title:"Não foi possível guardar a presença no aparelho", description:"Mantenha esta tela aberta e tente novamente.", variant:"destructive" });
       setSubmittingManual(false);
       return;
     }
-
-    const { error } = await supabase.from("worship_attendance").insert({
-      user_id: user.id,
-      worship_date: format(manualDate, "yyyy-MM-dd"),
-      worship_time: manualTime,
-      preacher_name: getEventLabel(manualType),
-      event_type: manualType,
-      church_id: profile?.church_id ?? null,
-    });
-
-    if (error) {
-      toast({ title: "Erro ao enviar", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Presença enviada!", description: "Aguarde a confirmação do líder da turma." });
-      setOpen(false);
-      reset();
-      setLoadedRecords(false); // refresh on next open
-    }
+    toast({ title:"Presença guardada no aparelho", description:"Ela será enviada para aprovação quando a conexão estiver disponível." });
+    window.dispatchEvent(new Event("online"));
+    setOpen(false);
+    reset();
+    setLoadedRecords(false);
     setSubmittingManual(false);
   }
 
@@ -291,6 +271,7 @@ export default function WorshipConfirmation({ events, attendanceRecords, onCheck
                 <div className="flex gap-2">
                   <button
                     onClick={handleConfirm}
+                    disabled={submittingAttendance}
                     className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl bg-brand-green/10 text-brand-green hover:bg-brand-green/20 active:scale-95 transition-all font-inter text-sm font-semibold"
                   >
                     ✅ Confirmar Presença
@@ -318,7 +299,7 @@ export default function WorshipConfirmation({ events, attendanceRecords, onCheck
                     />
                     <button
                       onClick={handleJustify}
-                      disabled={!justificationText.trim()}
+                      disabled={!justificationText.trim() || submittingAttendance}
                       className="w-full py-3 rounded-2xl bg-accent/15 text-accent-foreground hover:bg-accent/25 transition-colors font-inter text-sm font-semibold disabled:opacity-50"
                     >
                       Enviar justificativa

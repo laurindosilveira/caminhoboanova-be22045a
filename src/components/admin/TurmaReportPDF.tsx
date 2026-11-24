@@ -265,6 +265,13 @@ export default function TurmaReportPDF({ participants, activities, turmaName, tu
 
       y = 70;
 
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(71, 85, 105);
+      const historyNotice = doc.splitTextToSize("A turma indicada é a atual. Os históricos individuais podem incluir atividades de turmas anteriores.", W - margin * 2);
+      doc.text(historyNotice, margin, y);
+      y += historyNotice.length * 4 + 5;
+
       // ===== Summary table =====
       addSection("RESUMO GERAL");
       

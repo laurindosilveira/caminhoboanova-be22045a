@@ -1,6 +1,8 @@
 param(
   [Parameter(Mandatory = $true)][string] $BackupDirectory,
-  [Parameter(Mandatory = $true)][string] $SeedVolume
+  [Parameter(Mandatory = $true)][string] $SeedVolume,
+  [switch] $AttendanceProbe,
+  [switch] $StagingProbe
 )
 # Disposable local integration only. Restored records never leave an internal
 # Docker network or a temporary filesystem. Do not use this against a server.
@@ -18,7 +20,11 @@ function Apply-File([string] $path) {
   & docker cp $path "${db}:/tmp/unified-test.sql" | Out-Null
   Require-Success 'copy test file'
   # Restored fixtures may contain private data. Never print SQL diagnostics.
-  & docker exec $db psql -h /tmp -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f /tmp/unified-test.sql *> $null
+  if ((Split-Path -Leaf $path) -in @('attendance_scope_candidate.sql','attendance-guard.integration.sql','historical_response_read_candidate.sql','historical-response-read.integration.sql','staging_coordinated_candidate_20261124.sql','staging_leader_summary_20261124.sql','staging_care_dashboard_20261124.sql','staging_rollback_20261124.sql','staging-rollback-check.sql')) {
+    & docker exec $db psql -h /tmp -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f /tmp/unified-test.sql
+  } else {
+    & docker exec $db psql -h /tmp -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f /tmp/unified-test.sql *> $null
+  }
   Require-Success "apply $(Split-Path -Leaf $path)"
 }
 try {
@@ -40,13 +46,37 @@ try {
   if (-not $ready) { throw 'Database did not start' }
   foreach ($name in @('roles.sql','schema.sql','managed-customizations.sql','data-restauravel.sql')) { Apply-File (Join-Path $backup $name) }
   Apply-File $acl
-  $candidate = Join-Path $repo 'supabase/rollout/20261123_coordinated_learning_candidate.sql'
+  if ($StagingProbe) {
+    Apply-File (Join-Path $repo 'src/tests/staging-legacy-sync-fixture.sql')
+    & docker exec $db psql -h /tmp -U supabase_admin -d postgres -At -c "select md5(pg_get_functiondef(to_regprocedure('public.sync_offline_learning(text,uuid,jsonb,boolean,boolean,boolean,integer,uuid,jsonb)')))"
+    Require-Success 'check legacy function fingerprint'
+    & docker exec $db psql -h /tmp -U supabase_admin -d postgres -At -c "select proacl from pg_proc where oid=to_regprocedure('public.sync_offline_learning(text,uuid,jsonb,boolean,boolean,boolean,integer,uuid,jsonb)')"
+    $candidate = Join-Path $repo 'supabase/rollout/staging_coordinated_candidate_20261124.sql'
+  } else {
+    $candidate = Join-Path $repo 'supabase/rollout/20261123_coordinated_learning_candidate.sql'
+  }
   Apply-File $candidate
+  if ($StagingProbe) {
+    & docker exec $db psql -h /tmp -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -c 'DROP FUNCTION public.get_leader_participant_summaries(uuid,text,uuid)' *> $null
+    Require-Success 'simulate missing staging summary'
+    Apply-File (Join-Path $repo 'supabase/rollout/staging_leader_summary_20261124.sql')
+    & docker exec $db psql -h /tmp -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -c 'DROP FUNCTION private.get_leader_care_dashboard(uuid,text,uuid)' *> $null
+    Require-Success 'simulate older staging dashboard'
+    Apply-File (Join-Path $repo 'src/tests/staging-legacy-care-fixture.sql')
+    Apply-File (Join-Path $repo 'supabase/rollout/staging_care_dashboard_20261124.sql')
+    # Restore the candidate file for the repeat-application test below.
+    & docker cp $candidate "${db}:/tmp/unified-test.sql" | Out-Null
+    Require-Success 'copy staging candidate'
+  }
   # A repeat must be rejected by preconditions; the first application stays intact.
   & docker exec $db psql -h /tmp -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f /tmp/unified-test.sql *> $null
   if ($LASTEXITCODE -eq 0) { throw 'Candidate unexpectedly accepted a second application' }
   foreach ($name in @('legacy-rpc-block-no-receiver.integration.sql','legacy_response_delete_guard.integration.sql','unified-rollout-fixture.sql','owned-learning-sync.integration.sql')) {
     Apply-File (Join-Path $repo "src/tests/$name")
+  }
+  if ($AttendanceProbe) {
+    Apply-File (Join-Path $repo 'src/tests/attendance-guard.integration.sql')
+    Apply-File (Join-Path $repo 'src/tests/historical-response-read.integration.sql')
   }
   & docker exec $db psql -h /tmp -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE authenticator WITH LOGIN PASSWORD 'synthetic-recovery-http-password-2026';" *> $null
   Require-Success 'configure synthetic auth'
@@ -70,6 +100,11 @@ try {
     finally { Remove-Item Env:RUN_UNIFIED_LOCAL_E2E -ErrorAction SilentlyContinue }
   }
   finally { Pop-Location }
+  if ($StagingProbe) {
+    Apply-File (Join-Path $repo 'supabase/rollout/staging_rollback_20261124.sql')
+    Apply-File (Join-Path $repo 'src/tests/staging-rollback-check.sql')
+    Write-Output 'Staging-specific upgrade and rollback verified.'
+  }
   Write-Output 'Unified candidate: atomic preconditions, old clients, identity, conflicts and HTTP passed.'
 } finally {
   if ($startedApi) { & docker stop $api *> $null }

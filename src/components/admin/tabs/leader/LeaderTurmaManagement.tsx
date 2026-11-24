@@ -253,7 +253,9 @@ export default function LeaderTurmaManagement({
       await fetchTurma();
       if (onTurmaUpdated) onTurmaUpdated();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Não foi possível reiniciar a jornada.";
+      const message = err instanceof Error && err.message.includes("permission denied for function reset_turma_journey")
+        ? "O reinício está indisponível até que o histórico entre turmas seja protegido."
+        : err instanceof Error ? err.message : "Não foi possível reiniciar a jornada.";
       toast({ title: "Erro ao reiniciar", description: message, variant: "destructive" });
     } finally {
       setResetting(false);
