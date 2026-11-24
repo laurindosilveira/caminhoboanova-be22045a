@@ -290,6 +290,11 @@ BEGIN
             OR NEW.leader_confirmed_at IS NOT NULL OR NEW.confirmed_by IS NOT NULL) THEN
       RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='ATTENDANCE_REQUIRES_LEADER_CONFIRMATION';
     END IF;
+    IF pg_catalog.current_setting('role',true)='authenticated' AND auth.uid()=NEW.user_id
+       AND NOT EXISTS(SELECT 1 FROM private.attendance_write_guard g WHERE g.transaction_id=pg_catalog.txid_current()
+         AND g.user_id=NEW.user_id AND g.event_id=NEW.event_id) THEN
+      RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='ATTENDANCE_UPDATE_REQUIRES_REVIEW';
+    END IF;
     RETURN NEW;
   END IF;
   IF pg_catalog.current_setting('role',true)='authenticated' AND auth.uid()=OLD.user_id
@@ -387,6 +392,25 @@ CREATE TABLE private.offline_worship_receipts (
 );
 ALTER TABLE private.offline_worship_receipts ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON private.offline_worship_receipts FROM PUBLIC,anon,authenticated;
+CREATE TABLE private.worship_write_guard (
+  transaction_id bigint NOT NULL, user_id uuid NOT NULL,
+  PRIMARY KEY(transaction_id,user_id)
+);
+ALTER TABLE private.worship_write_guard ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON private.worship_write_guard FROM PUBLIC,anon,authenticated;
+CREATE FUNCTION private.guard_own_worship_insert()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+  IF pg_catalog.current_setting('role',true)='authenticated' AND auth.uid()=NEW.user_id
+     AND NOT EXISTS(SELECT 1 FROM private.worship_write_guard g
+       WHERE g.transaction_id=pg_catalog.txid_current() AND g.user_id=NEW.user_id) THEN
+    RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='ATTENDANCE_UPDATE_REQUIRES_REVIEW';
+  END IF;
+  RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION private.guard_own_worship_insert() FROM PUBLIC,anon,authenticated;
+CREATE TRIGGER aa_guard_own_worship_insert BEFORE INSERT ON public.worship_attendance
+  FOR EACH ROW EXECUTE FUNCTION private.guard_own_worship_insert();
 CREATE FUNCTION public.sync_owned_worship(p_user_id uuid,p_church_id uuid,p_action_id text,p_worship_date date,p_worship_time text,p_preacher_name text,p_event_type text)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE church uuid; fingerprint text; receipt private.offline_worship_receipts%ROWTYPE; item uuid;
@@ -408,8 +432,10 @@ BEGIN
    IF receipt.fingerprint IS DISTINCT FROM fingerprint THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='WORSHIP_ACTION_CHANGED'; END IF;
    RETURN jsonb_build_object('status',CASE WHEN receipt.worship_id IS NULL THEN 'scope_review_required' ELSE 'saved' END);
  END IF;
+ INSERT INTO private.worship_write_guard(transaction_id,user_id) VALUES(pg_catalog.txid_current(),p_user_id) ON CONFLICT DO NOTHING;
  INSERT INTO public.worship_attendance(user_id,church_id,worship_date,worship_time,preacher_name,event_type,status)
    VALUES(p_user_id,church,p_worship_date,p_worship_time,p_preacher_name,p_event_type,'pendente') RETURNING id INTO item;
+ DELETE FROM private.worship_write_guard WHERE transaction_id=pg_catalog.txid_current() AND user_id=p_user_id;
  INSERT INTO private.offline_worship_receipts(user_id,action_id,fingerprint,worship_id) VALUES(p_user_id,p_action_id,fingerprint,item);
  RETURN jsonb_build_object('status','saved');
 END $$;

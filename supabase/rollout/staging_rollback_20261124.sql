@@ -13,6 +13,9 @@ DO $$ BEGIN
   IF EXISTS(SELECT 1 FROM private.learning_write_guard) OR EXISTS(SELECT 1 FROM private.attendance_write_guard) THEN
     RAISE EXCEPTION 'STAGING_WRITES_STILL_ACTIVE';
   END IF;
+  IF to_regclass('private.worship_write_guard') IS NOT NULL THEN
+    IF EXISTS(SELECT 1 FROM private.worship_write_guard) THEN RAISE EXCEPTION 'STAGING_WRITES_STILL_ACTIVE'; END IF;
+  END IF;
   IF to_regclass('private.staging_preserved_worship_receipts_20261124') IS NOT NULL THEN
     RAISE EXCEPTION 'STAGING_RECEIPT_ARCHIVE_COLLISION';
   END IF;
@@ -37,12 +40,14 @@ DROP TRIGGER aa_lock_learning_write ON public.lesson_progress;
 DROP TRIGGER aa_lock_learning_write ON public.devotional_responses;
 DROP TRIGGER aa_lock_learning_write ON public.devotional_progress;
 DROP TRIGGER aa_guard_own_final_attendance ON public.attendance;
+DROP TRIGGER IF EXISTS aa_guard_own_worship_insert ON public.worship_attendance;
 
 DROP FUNCTION public.sync_owned_learning(uuid,text,uuid,jsonb,boolean,boolean,boolean,integer,uuid,jsonb);
 DROP FUNCTION public.sync_offline_learning(text,uuid,jsonb,boolean,boolean,boolean,integer,uuid,jsonb);
 DROP FUNCTION public.sync_owned_attendance(uuid,uuid,uuid,text,timestamptz,text,text,timestamptz,text);
 DROP FUNCTION public.sync_owned_worship(uuid,uuid,text,date,text,text,text);
 DROP FUNCTION private.guard_own_final_attendance();
+DROP FUNCTION IF EXISTS private.guard_own_worship_insert();
 DROP FUNCTION private.lock_learning_write();
 DROP FUNCTION private.learning_item_lock_key(uuid,text,uuid);
 
@@ -71,6 +76,7 @@ END $$;
 DROP FUNCTION private.is_active_learning_owner(uuid,uuid);
 DROP TABLE private.learning_write_guard;
 DROP TABLE private.attendance_write_guard;
+DROP TABLE IF EXISTS private.worship_write_guard;
 ALTER TABLE private.offline_worship_receipts RENAME TO staging_preserved_worship_receipts_20261124;
 GRANT EXECUTE ON FUNCTION public.reset_turma_journey(uuid) TO authenticated;
 ALTER FUNCTION private.staging_original_sync_20261124(text,uuid,jsonb,boolean,boolean,boolean,integer,uuid,jsonb) RENAME TO sync_offline_learning;

@@ -16,6 +16,7 @@ BEGIN
      OR to_regclass('private.staging_policy_backup_20261124') IS NOT NULL
      OR to_regclass('private.learning_write_guard') IS NOT NULL
      OR to_regclass('private.attendance_write_guard') IS NOT NULL
+     OR to_regclass('private.worship_write_guard') IS NOT NULL
      OR to_regclass('private.offline_worship_receipts') IS NOT NULL THEN
     RAISE EXCEPTION 'STAGING_OBJECT_COLLISION';
   END IF;

@@ -2,7 +2,9 @@ param(
   [Parameter(Mandatory = $true)][string] $BackupDirectory,
   [Parameter(Mandatory = $true)][string] $SeedVolume,
   [switch] $AttendanceProbe,
-  [switch] $StagingProbe
+  [switch] $StagingProbe,
+  [switch] $StagingIncrementalProbe,
+  [switch] $ProductionProbe
 )
 # Disposable local integration only. Restored records never leave an internal
 # Docker network or a temporary filesystem. Do not use this against a server.
@@ -20,7 +22,7 @@ function Apply-File([string] $path) {
   & docker cp $path "${db}:/tmp/unified-test.sql" | Out-Null
   Require-Success 'copy test file'
   # Restored fixtures may contain private data. Never print SQL diagnostics.
-  if ((Split-Path -Leaf $path) -in @('attendance_scope_candidate.sql','attendance-guard.integration.sql','historical_response_read_candidate.sql','historical-response-read.integration.sql','staging_coordinated_candidate_20261124.sql','staging_leader_summary_20261124.sql','staging_care_dashboard_20261124.sql','staging_rollback_20261124.sql','staging-rollback-check.sql')) {
+  if ((Split-Path -Leaf $path) -in @('attendance_scope_candidate.sql','attendance-guard.integration.sql','historical_response_read_candidate.sql','historical-response-read.integration.sql','staging_coordinated_candidate_20261124.sql','staging_legacy_guard_20261124.sql','staging_leader_summary_20261124.sql','staging_care_dashboard_20261124.sql','staging_rollback_20261124.sql','staging-rollback-check.sql','production_coordinated_candidate_20261124.sql','production_rollback_20261124.sql','production-rollback-check.sql')) {
     & docker exec $db psql -h /tmp -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f /tmp/unified-test.sql
   } else {
     & docker exec $db psql -h /tmp -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f /tmp/unified-test.sql *> $null
@@ -46,12 +48,21 @@ try {
   if (-not $ready) { throw 'Database did not start' }
   foreach ($name in @('roles.sql','schema.sql','managed-customizations.sql','data-restauravel.sql')) { Apply-File (Join-Path $backup $name) }
   Apply-File $acl
+  if ($StagingProbe -and $ProductionProbe) { throw 'Choose one probe' }
+  if ($StagingIncrementalProbe -and -not $StagingProbe) { throw 'Incremental probe requires staging probe' }
   if ($StagingProbe) {
     Apply-File (Join-Path $repo 'src/tests/staging-legacy-sync-fixture.sql')
     & docker exec $db psql -h /tmp -U supabase_admin -d postgres -At -c "select md5(pg_get_functiondef(to_regprocedure('public.sync_offline_learning(text,uuid,jsonb,boolean,boolean,boolean,integer,uuid,jsonb)')))"
     Require-Success 'check legacy function fingerprint'
     & docker exec $db psql -h /tmp -U supabase_admin -d postgres -At -c "select proacl from pg_proc where oid=to_regprocedure('public.sync_offline_learning(text,uuid,jsonb,boolean,boolean,boolean,integer,uuid,jsonb)')"
-    $candidate = Join-Path $repo 'supabase/rollout/staging_coordinated_candidate_20261124.sql'
+    if ($StagingIncrementalProbe) {
+      $candidate=Join-Path $env:TEMP 'caminho-staging-baseline-4c41e56.sql'
+      $lines=& git -C $repo show '4c41e56:supabase/rollout/staging_coordinated_candidate_20261124.sql'
+      Require-Success 'read previously tested staging candidate'
+      [IO.File]::WriteAllText($candidate,(($lines -join "`n")+"`n"),[Text.UTF8Encoding]::new($false))
+    } else { $candidate = Join-Path $repo 'supabase/rollout/staging_coordinated_candidate_20261124.sql' }
+  } elseif ($ProductionProbe) {
+    $candidate = Join-Path $repo 'supabase/rollout/production_coordinated_candidate_20261124.sql'
   } else {
     $candidate = Join-Path $repo 'supabase/rollout/20261123_coordinated_learning_candidate.sql'
   }
@@ -64,6 +75,7 @@ try {
     Require-Success 'simulate older staging dashboard'
     Apply-File (Join-Path $repo 'src/tests/staging-legacy-care-fixture.sql')
     Apply-File (Join-Path $repo 'supabase/rollout/staging_care_dashboard_20261124.sql')
+    if ($StagingIncrementalProbe) { Apply-File (Join-Path $repo 'supabase/rollout/staging_legacy_guard_20261124.sql') }
     # Restore the candidate file for the repeat-application test below.
     & docker cp $candidate "${db}:/tmp/unified-test.sql" | Out-Null
     Require-Success 'copy staging candidate'
@@ -104,6 +116,27 @@ try {
     Apply-File (Join-Path $repo 'supabase/rollout/staging_rollback_20261124.sql')
     Apply-File (Join-Path $repo 'src/tests/staging-rollback-check.sql')
     Write-Output 'Staging-specific upgrade and rollback verified.'
+  }
+  if ($ProductionProbe) {
+    & docker exec $db psql -h /tmp -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -c "ALTER FUNCTION public.sync_owned_learning(uuid,text,uuid,jsonb,boolean,boolean,boolean,integer,uuid,jsonb) SET statement_timeout='5s'" *> $null
+    Require-Success 'simulate a changed release'
+    $rollback = Join-Path $repo 'supabase/rollout/production_rollback_20261124.sql'
+    & docker cp $rollback "${db}:/tmp/unified-test.sql" | Out-Null
+    Require-Success 'copy production rollback'
+    & docker exec $db psql -h /tmp -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f /tmp/unified-test.sql *> $null
+    if ($LASTEXITCODE -eq 0) { throw 'Rollback unexpectedly accepted a changed release' }
+    & docker exec $db psql -h /tmp -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -c "ALTER FUNCTION public.sync_owned_learning(uuid,text,uuid,jsonb,boolean,boolean,boolean,integer,uuid,jsonb) RESET statement_timeout" *> $null
+    Require-Success 'restore simulated release'
+    Apply-File (Join-Path $repo 'supabase/rollout/production_rollback_20261124.sql')
+    Apply-File (Join-Path $repo 'src/tests/production-rollback-check.sql')
+    Apply-File (Join-Path $repo 'src/tests/production-rollback-freeze.integration.sql')
+    Push-Location $repo
+    try {
+      $env:RUN_ROLLBACK_LOCAL_E2E='1'
+      try { & npx.cmd vitest run src/tests/production-rollback-queue-local.integration.test.ts; Require-Success 'test paused legacy queue after rollback' }
+      finally { Remove-Item Env:RUN_ROLLBACK_LOCAL_E2E -ErrorAction SilentlyContinue }
+    } finally { Pop-Location }
+    Write-Output 'Production-specific upgrade and rollback verified locally.'
   }
   Write-Output 'Unified candidate: atomic preconditions, old clients, identity, conflicts and HTTP passed.'
 } finally {

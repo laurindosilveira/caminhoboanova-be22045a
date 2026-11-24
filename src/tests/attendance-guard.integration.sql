@@ -26,6 +26,16 @@ BEGIN
    VALUES(a,church,event_id,'presente',now());
    RAISE EXCEPTION 'student created a confirmed attendance';
  EXCEPTION WHEN SQLSTATE '55000' THEN NULL; END;
+ BEGIN
+   INSERT INTO public.attendance(user_id,church_id,event_id,status)
+   VALUES(a,church,event_id,'pendente_presente');
+   RAISE EXCEPTION 'old client inserted an unscoped attendance';
+ EXCEPTION WHEN SQLSTATE '55000' THEN NULL; END;
+ BEGIN
+   INSERT INTO public.worship_attendance(user_id,church_id,worship_date,worship_time,preacher_name,event_type,status)
+   VALUES(a,church,'2026-01-01','10:00','[evento ficticio]','culto','pendente');
+   RAISE EXCEPTION 'old client inserted a non-idempotent worship record';
+ EXCEPTION WHEN SQLSTATE '55000' THEN NULL; END;
  result:=public.sync_owned_attendance(a,church,'00000000-0000-0000-0000-000000000502','pendente_presente','2026-01-01T10:00:00Z',NULL);
  IF result->>'status'<>'scope_review_required' THEN RAISE EXCEPTION 'another group accepted'; END IF;
  result:=public.sync_owned_attendance(a,church,event_id,'pendente_presente','2026-01-01T10:00:00Z',NULL);
