@@ -7,6 +7,7 @@ vi.mock("@/integrations/supabase/client", () => ({ supabase:{ auth:{ getUser:vi.
 vi.mock("@/lib/studentOffline", () => ({
   scopedLearningEnabled: false,
   learningScope: () => undefined,
+  getOwnedCompletionScope: async (_user: string, scope?: unknown) => scope,
   scopedLearningCacheKey: () => "",
   inspectLearningScope: async () => "ready",
   requestExistingLearningReview: vi.fn(),

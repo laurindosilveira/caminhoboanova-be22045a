@@ -2,7 +2,7 @@
 -- pending device queues. Reverting the guard reopens legacy overwrite risks.
 -- Never apply to an unverified project or if the installed release changed.
 BEGIN;
-LOCK TABLE public.lesson_responses,public.lesson_progress,public.devotional_responses,public.devotional_progress,public.attendance,public.worship_attendance IN ACCESS EXCLUSIVE MODE;
+LOCK TABLE public.lesson_responses,public.lesson_progress,public.devotional_responses,public.devotional_progress,public.attendance,public.worship_attendance,public.profiles IN ACCESS EXCLUSIVE MODE;
 DO $$ BEGIN
   IF to_regclass('private.production_policy_snapshot_20261124') IS NULL
      OR to_regclass('private.production_release_snapshot_20261124') IS NULL
@@ -51,7 +51,31 @@ DROP TRIGGER aa_lock_learning_write ON public.devotional_responses;
 DROP TRIGGER aa_lock_learning_write ON public.devotional_progress;
 DROP TRIGGER aa_guard_own_final_attendance ON public.attendance;
 DROP TRIGGER aa_guard_own_worship_insert ON public.worship_attendance;
-DROP FUNCTION IF EXISTS public.sync_owned_completion(uuid,uuid,uuid,text,text,uuid,jsonb,boolean,boolean,boolean,integer,uuid,jsonb);
+-- Preserve outstanding review metadata for later reconciliation.
+DROP FUNCTION IF EXISTS public.approve_completion_review(uuid,boolean);
+DROP FUNCTION IF EXISTS public.list_completion_reviews(uuid);
+DROP FUNCTION IF EXISTS public.request_completion_review(text,text,uuid);
+DROP FUNCTION IF EXISTS private.may_review_completion(uuid,uuid,uuid,text);
+DO $$ BEGIN
+ IF to_regclass('private.completion_review_events') IS NOT NULL THEN
+  IF to_regclass('private.completion_review_events_archive_20261125') IS NOT NULL THEN RAISE EXCEPTION 'COMPLETION_EVENTS_ARCHIVE_EXISTS'; END IF;
+  ALTER TABLE private.completion_review_events RENAME TO completion_review_events_archive_20261125;
+ END IF;
+ IF to_regclass('private.completion_review_requests') IS NOT NULL THEN
+  IF to_regclass('private.completion_review_archive_20261125') IS NOT NULL THEN RAISE EXCEPTION 'COMPLETION_REVIEW_ARCHIVE_EXISTS'; END IF;
+  ALTER TABLE private.completion_review_requests RENAME TO completion_review_archive_20261125;
+ END IF;
+END $$;
+DROP TRIGGER IF EXISTS aa_rotate_learning_membership ON public.profiles;
+DROP FUNCTION IF EXISTS public.get_owned_learning_scope(uuid);
+DROP FUNCTION IF EXISTS public.sync_owned_completion(uuid,uuid,uuid,text,uuid,text,uuid,jsonb,boolean,boolean,boolean,integer,uuid,jsonb);
+DROP FUNCTION IF EXISTS private.rotate_learning_membership_version();
+DO $$ BEGIN
+ IF to_regclass('private.learning_membership_version') IS NOT NULL THEN
+  IF to_regclass('private.learning_membership_version_archive_20261125') IS NOT NULL THEN RAISE EXCEPTION 'MEMBERSHIP_VERSION_ARCHIVE_EXISTS'; END IF;
+  ALTER TABLE private.learning_membership_version RENAME TO learning_membership_version_archive_20261125;
+ END IF;
+END $$;
 DROP FUNCTION public.sync_owned_learning(uuid,text,uuid,jsonb,boolean,boolean,boolean,integer,uuid,jsonb);
 DROP FUNCTION public.sync_offline_learning(text,uuid,jsonb,boolean,boolean,boolean,integer,uuid,jsonb);
 DROP FUNCTION public.sync_owned_attendance(uuid,uuid,uuid,text,timestamptz,text,text,timestamptz,text);

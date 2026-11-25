@@ -16,6 +16,7 @@ const ReportsTab = lazy(() => import("@/components/admin/tabs/ReportsTab"));
 const LeaderTurmaManagement = lazy(() => import("@/components/admin/tabs/leader/LeaderTurmaManagement"));
 const LeaderGuideContent = lazy(() => import("@/components/home/LeaderGuideContent"));
 import LeaderWaitingRoom from "@/components/home/LeaderWaitingRoom";
+import CompletionReviews from "@/components/home/CompletionReviews";
 import type { Database } from "@/integrations/supabase/types";
 
 type CommunityName = Database["public"]["Enums"]["community_name"];
@@ -349,6 +350,8 @@ export default function LeaderRoomSection({ asTab = false }: { asTab?: boolean }
           {expanded ? <ChevronUp className="w-5 h-5 text-muted-foreground" /> : <ChevronDown className="w-5 h-5 text-muted-foreground" />}
         </button>
       )}
+
+      {expanded && <CompletionReviews turmaId={managedTurmaId} />}
 
       {/* Waiting room alert banner */}
       {expanded && waitingCount > 0 && (

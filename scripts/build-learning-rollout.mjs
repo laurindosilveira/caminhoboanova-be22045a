@@ -5,6 +5,7 @@ const parts = [
   "supabase/rollout/20261106221735_learning_compatibility.sql",
   "supabase/rollout/20261106225947_per_item_learning_conflict_guard.sql",
   "supabase/rollout/20261123_owned_learning_guard.sql",
+  "supabase/rollout/completion_review_candidate.sql",
   "supabase/rollout/attendance_scope_candidate.sql",
   "supabase/rollout/historical_response_read_candidate.sql",
 ];

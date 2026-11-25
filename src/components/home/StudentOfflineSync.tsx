@@ -24,7 +24,7 @@ export default function StudentOfflineSync() {
     const requestedUserId = user.id;
     const prompt = choice === "offline"
       ? "Substituir no servidor pelas respostas deste aparelho?"
-      : "Descartar este rascunho e manter as respostas do servidor?";
+      : conflict.action.type === "save_lesson_draft" ? "Descartar este rascunho e manter as respostas do servidor?" : "Concluir usando as respostas atuais do servidor? A conclus\u00e3o s\u00f3 ser\u00e1 registrada se elas estiverem completas.";
     if (!window.confirm(prompt)) return;
     setResolving(true);
     try {
@@ -88,6 +88,12 @@ export default function StudentOfflineSync() {
     setResolving(false);
     void refreshCount();
     void syncNow();
+    const retryTimer = window.setInterval(() => {
+      if (!user?.id || !navigator.onLine) return;
+      void getQueuedStudentActions(user.id, { strict:true }).then(actions => {
+        if (!cancelled && actions.length) void syncNow();
+      }).catch(() => { if (!cancelled) setQueueUnavailable(true); });
+    }, 60_000);
     window.addEventListener("online", onOnline);
     window.addEventListener("student-offline-queue-changed", onQueueChanged);
     window.addEventListener("student-offline-queue-synced", onQueueChanged);
@@ -95,6 +101,7 @@ export default function StudentOfflineSync() {
 
     return () => {
       cancelled = true;
+      window.clearInterval(retryTimer);
       window.removeEventListener("online", onOnline);
       window.removeEventListener("student-offline-queue-changed", onQueueChanged);
       window.removeEventListener("student-offline-queue-synced", onQueueChanged);
@@ -114,9 +121,9 @@ export default function StudentOfflineSync() {
       <div className="max-h-[85vh] w-full max-w-xl overflow-auto rounded-2xl bg-card p-5 text-foreground shadow-xl space-y-4">
         <h2 id="offline-conflict-title" className="font-bold">Respostas diferentes encontradas</h2>
         <p className="text-sm">Este aparelho e o servidor têm respostas diferentes. Compare antes de escolher. Enquanto isso, o rascunho continua guardado neste aparelho.</p>
-        {Object.entries(visibleConflict.action.payload.responses).map(([key, value]) => <div key={key} className="rounded-xl border p-3 text-sm space-y-2"><p className="font-semibold">{key}</p><p><strong>No servidor:</strong> {visibleConflict.current[key] ?? "(sem resposta)"}</p><p><strong>Neste aparelho:</strong> {value || "(sem resposta)"}</p></div>)}
-        {visibleConflict.action.type !== "save_lesson_draft" && <p className="text-sm">A conclusão continua guardada neste aparelho. Para manter a resposta do servidor, ela precisará de revisão.</p>}
-        <div className="flex flex-wrap gap-3"><button disabled={resolving || visibleConflict.action.type !== "save_lesson_draft"} className="rounded-lg bg-primary px-3 py-2 text-primary-foreground disabled:opacity-50" onClick={() => void chooseVersion("server")}>Manter servidor</button><button disabled={resolving} className="rounded-lg border px-3 py-2" onClick={() => void chooseVersion("offline")}>Usar este aparelho</button></div>
+        {[...new Set([...Object.keys(visibleConflict.current), ...Object.keys(visibleConflict.action.payload.responses)])].map((key) => <div key={key} className="rounded-xl border p-3 text-sm space-y-2"><p className="font-semibold">{key}</p><p><strong>No servidor:</strong> {visibleConflict.current[key] ?? "(sem resposta)"}</p><p><strong>Neste aparelho:</strong> {visibleConflict.action.payload.responses[key] || "(sem resposta)"}</p></div>)}
+        {visibleConflict.action.type !== "save_lesson_draft" && <p className="text-sm">Para manter as respostas do servidor, elas precisam estar completas para concluir a atividade. Se não estiverem, a conclusão continua guardada neste aparelho.</p>}
+        <div className="flex flex-wrap gap-3"><button disabled={resolving} className="rounded-lg bg-primary px-3 py-2 text-primary-foreground disabled:opacity-50" onClick={() => void chooseVersion("server")}>Manter servidor</button><button disabled={resolving} className="rounded-lg border px-3 py-2" onClick={() => void chooseVersion("offline")}>Usar este aparelho</button></div>
       </div>
     </div>}
     <div
@@ -125,7 +132,7 @@ export default function StudentOfflineSync() {
       aria-live="polite"
     >
       {syncing ? <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" /> : <CloudOff className="h-3.5 w-3.5 text-primary" />}
-      <span>{visibleError ? "Não foi possível verificar as alterações deste aparelho. Não limpe os dados." : visibleAttendanceReview ? "Uma solicitação de presença precisa de revisão. Fale com a liderança; ela continua guardada neste aparelho." : legacyCompletionPending ? "Conclusão antiga aguardando revisão da turma. Não limpe os dados deste aparelho." : reviewPending ? "Respostas aguardam revisão. Não limpe os dados deste aparelho." : otherScopePending ? "Registros de presença aguardam revisão. Não limpe os dados deste aparelho." : `${visibleCount} alteracao${visibleCount === 1 ? "" : "es"} para sincronizar`}</span>
+      <span>{visibleError ? "Não foi possível verificar as alterações deste aparelho. Não limpe os dados." : visibleAttendanceReview ? "Uma solicitação de presença precisa de revisão. Fale com a liderança; ela continua guardada neste aparelho." : legacyCompletionPending ? "Conclusão precisa de revisão. Fale com a liderança e não limpe os dados deste aparelho." : reviewPending ? "Respostas aguardam revisão. Não limpe os dados deste aparelho." : otherScopePending ? "Registros de presença aguardam revisão. Não limpe os dados deste aparelho." : `${visibleCount} alteracao${visibleCount === 1 ? "" : "es"} para sincronizar`}</span>
     </div>
     </>
   );

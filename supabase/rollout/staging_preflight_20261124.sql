@@ -14,6 +14,14 @@ BEGIN
   END IF;
   IF to_regprocedure('private.staging_original_sync_20261124(text,uuid,jsonb,boolean,boolean,boolean,integer,uuid,jsonb)') IS NOT NULL
      OR to_regclass('private.staging_policy_backup_20261124') IS NOT NULL
+     OR to_regclass('private.completion_review_events') IS NOT NULL
+     OR to_regclass('private.completion_review_events_archive_20261125') IS NOT NULL
+     OR to_regclass('private.completion_review_archive_20261125') IS NOT NULL
+     OR to_regclass('private.completion_review_requests') IS NOT NULL
+     OR to_regclass('private.learning_membership_version_archive_20261125') IS NOT NULL
+     OR to_regclass('private.learning_membership_version') IS NOT NULL
+     OR to_regprocedure('public.get_owned_learning_scope(uuid)') IS NOT NULL
+     OR to_regprocedure('private.rotate_learning_membership_version()') IS NOT NULL
      OR to_regclass('private.learning_write_guard') IS NOT NULL
      OR to_regclass('private.attendance_write_guard') IS NOT NULL
      OR to_regclass('private.worship_write_guard') IS NOT NULL

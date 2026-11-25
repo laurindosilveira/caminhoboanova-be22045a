@@ -72,7 +72,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="space-y-2">
               <h1 className="text-2xl font-montserrat font-black text-foreground">Algo deu errado</h1>
               <p className="text-muted-foreground font-inter">
-                Ocorreu um erro inesperado. Já notificamos nossa equipe técnica para resolver o problema.
+                Não foi possível abrir esta tela. Confira sua conexão e tente novamente. Não limpe os dados do navegador.
               </p>
             </div>
             {import.meta.env.DEV && (

@@ -29,9 +29,26 @@ const liveQueryGenerations = new Map<string, symbol>();
 // The scoped review experiment is not part of this release candidate: its
 // attendance flow and hosted receiver have not been validated.
 export const scopedLearningEnabled = false;
-export type LearningScope = { churchId: string; turmaId: string; area: string };
+export type LearningScope = { churchId: string; turmaId: string; area: string; membershipVersion?: string };
 export function learningScope(churchId?: string | null, turmaId?: string | null, area?: string | null): LearningScope | undefined {
   return churchId && turmaId && area ? { churchId, turmaId, area } : undefined;
+}
+// A cached version is tied to this exact owner and group. If a device was
+// offline during a transfer, the server will reject it after reconnection.
+export async function getOwnedCompletionScope(userId: string, expected?: LearningScope): Promise<LearningScope | undefined> {
+  if (!expected) return undefined;
+  const key = `completion-scope:${userId}:${expected.churchId}:${expected.turmaId}:${expected.area}`;
+  const result = await cachedStudentQuery<LearningScope | null>(key, async () => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 4000);
+    try {
+      return await supabase.rpc("get_owned_learning_scope" as never, { p_user_id:userId } as never).abortSignal(controller.signal);
+    } finally { window.clearTimeout(timeout); }
+  }, null, { force:true });
+  const scope = result.data;
+  if (!scope || typeof scope.membershipVersion !== "string" || scope.churchId !== expected.churchId ||
+      scope.turmaId !== expected.turmaId || scope.area !== expected.area) return undefined;
+  return scope;
 }
 export function scopedLearningCacheKey(scope?: LearningScope): string {
   return scopedLearningEnabled ? `:${JSON.stringify(scope ?? null)}` : "";
@@ -345,11 +362,11 @@ export async function syncLearningActionWithCurrent(action: LearningAction, expe
   const devotional = action.type === "complete_devotional";
   const lesson = action.type === "save_lesson_draft" || action.type === "complete_lesson";
   const completion = action.type === "complete_lesson" || action.type === "complete_devotional";
-  if ((scopedLearningEnabled || completion) && !action.scope) throw new Error("LEARNING_SCOPE_REVIEW_REQUIRED");
+  if ((scopedLearningEnabled || completion) && (!action.scope || (completion && !action.scope.membershipVersion))) throw new Error("LEARNING_SCOPE_REVIEW_REQUIRED");
   const rpc = scopedLearningEnabled ? "sync_scoped_learning" : completion ? "sync_owned_completion" : "sync_owned_learning";
   const { data, error } = await supabase.rpc(rpc as never, {
     p_user_id: action.userId,
-    ...((scopedLearningEnabled || completion) ? { p_church_id: action.scope!.churchId, p_turma_id: action.scope!.turmaId, p_area: action.scope!.area } : {}),
+    ...((scopedLearningEnabled || completion) ? { p_church_id: action.scope!.churchId, p_turma_id: action.scope!.turmaId, p_area: action.scope!.area, ...(completion && !scopedLearningEnabled ? { p_membership_version: action.scope!.membershipVersion } : {}) } : {}),
     p_kind: action.type,
     p_item_id: devotional ? action.payload.devotionalId : action.payload.lessonId,
     p_responses: action.payload.responses,
@@ -392,6 +409,22 @@ async function syncAction(action: StudentOfflineAction): Promise<OfflineConflict
   }
 }
 
+type CompletionAction = Extract<StudentOfflineAction, { type: "complete_lesson" | "complete_devotional" }>;
+function isCompletionAction(action: StudentOfflineAction): action is CompletionAction {
+  return action.type === "complete_lesson" || action.type === "complete_devotional";
+}
+async function requestCompletionReview(action: CompletionAction): Promise<LearningScope | undefined> {
+  // No answer text leaves the device during the leadership review.
+  const { data, error } = await supabase.rpc("request_completion_review" as never, {
+    p_action_id: action.id, p_kind: action.type,
+    p_item_id: action.type === "complete_lesson" ? action.payload.lessonId : action.payload.devotionalId,
+  } as never);
+  if (error) throw error;
+  const result = data as { status?: string; scope?: LearningScope } | null;
+  const scope = result?.scope;
+  if (result?.status !== "approved" || !scope || !scope.churchId || !scope.turmaId || !scope.area || !scope.membershipVersion) return undefined;
+  return scope;
+}
 let syncInFlight = false;
 
 async function stageLearningReview(action: LearningAction): Promise<"review_pending" | "review_resolved" | "scope_review_required"> {
@@ -423,9 +456,13 @@ export async function syncStudentOfflineQueue(userId?: string | null): Promise<S
       if (scopedLearningEnabled && !isLearningAction(action)) {
         return { synced, remaining: actions.length - synced, otherScopePending: true };
       }
-      if (!scopedLearningEnabled && (action.type === "complete_lesson" || action.type === "complete_devotional") && !action.scope) {
-        legacyCompletionPending = true;
-        continue;
+      let effectiveAction: StudentOfflineAction = action;
+      if (!scopedLearningEnabled && isCompletionAction(action) && (!action.scope || !action.scope.membershipVersion)) {
+        try {
+          const scope = await requestCompletionReview(action);
+          if (!scope) { legacyCompletionPending = true; continue; }
+          effectiveAction = { ...action, scope };
+        } catch { legacyCompletionPending = true; continue; }
       }
       let conflict: OfflineConflict | AttendanceReview | null | void;
       if (scopedLearningEnabled && isLearningAction(action)) {
@@ -444,13 +481,19 @@ export async function syncStudentOfflineQueue(userId?: string | null): Promise<S
           continue;
         }
       } else {
-        try { conflict = await syncAction(action); }
+        try { conflict = await syncAction(effectiveAction); }
         catch (error) {
-          if (isLearningAction(action) && error instanceof Error && error.message === "LEARNING_SCOPE_REVIEW_REQUIRED") {
-            legacyCompletionPending = true;
-            continue;
-          }
-          throw error;
+          if (isCompletionAction(action) && error instanceof Error && error.message === "LEARNING_SCOPE_REVIEW_REQUIRED") {
+            // A transfer invalidates the earlier version. Ask leadership to
+            // review a destination; do not send the response text here.
+            try {
+              const scope = await requestCompletionReview(action);
+              if (scope) {
+                effectiveAction = { ...action, scope };
+                conflict = await syncAction(effectiveAction);
+              } else { legacyCompletionPending = true; continue; }
+            } catch { legacyCompletionPending = true; continue; }
+          } else throw error;
         }
       }
       if (conflict && "reason" in conflict) { attendanceReview ??= conflict; continue; }
@@ -495,10 +538,13 @@ export async function resolveOfflineConflict(conflict: OfflineConflict, choice: 
   if (!user || user.id !== conflict.action.userId) throw new Error("Sessao expirada");
   const queued = await getQueuedStudentActions(user.id, { strict: true });
   if (!queued.some(action => action.id === conflict.action.id)) throw new Error("Rascunho nao encontrado");
-  if (choice === "server" && (conflict.action.type === "complete_lesson" || conflict.action.type === "complete_devotional")) {
-    throw new Error("COMPLETION_REVIEW_REQUIRED");
-  }
-  if (choice === "offline") {
+  if (choice === "server" && isCompletionAction(conflict.action)) {
+    // Complete with the displayed server answers only if they are still the
+    // same; incomplete answers fail validation and the queue remains intact.
+    const action = { ...conflict.action, payload: { ...conflict.action.payload, responses: conflict.current } } as CompletionAction;
+    const nextConflict = await syncLearningAction(action, conflict.current);
+    if (nextConflict) return nextConflict;
+  } else if (choice === "offline") {
     const nextConflict = await syncLearningAction(conflict.action, conflict.current);
     if (nextConflict) return nextConflict;
   }
@@ -516,7 +562,8 @@ export async function getPendingStudentOverlay(userId: string, options: { strict
       action.scope.turmaId === options.scope.turmaId && action.scope.area === options.scope.area)) : queued.filter(action => {
         if (action.type !== "complete_lesson" && action.type !== "complete_devotional") return true;
         return !!action.scope && !!options.scope && action.scope.churchId === options.scope.churchId &&
-          action.scope.turmaId === options.scope.turmaId && action.scope.area === options.scope.area;
+          action.scope.turmaId === options.scope.turmaId && action.scope.area === options.scope.area &&
+          !!action.scope.membershipVersion && action.scope.membershipVersion === options.scope.membershipVersion;
       });
   return {
     actions,

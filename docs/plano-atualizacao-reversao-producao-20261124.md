@@ -33,12 +33,22 @@
 
 ## Atualização parcial — conclusões antigas
 
-A candidata agora conserva no aparelho as conclusões de lições e devocionais sem turma de origem, sem impedir que outras ações da fila prossigam. Ela também envia, nas novas conclusões, a igreja, a turma e a área observadas na tela; o servidor trava o perfil e a turma durante a verificação e recusa a gravação se o contexto não corresponder. A escolha de manter as respostas do servidor não remove uma conclusão pendente. O overlay local não projeta conclusões sem escopo na turma atual.
+A candidata conserva no aparelho conclusões sem turma verificável e permite que outras ações prossigam. Um identificador privado de matrícula muda a cada transferência, inclusive em uma sequência A → B → A. A liderança da turma atual recebe apenas aluno e atividade, sem textos, e pode autorizar explicitamente o destino atual sem afirmar a origem; a aprovação fica registrada e deixa de valer após nova transferência. A fila só é removida após conclusão confirmada no servidor ou escolha válida de respostas.
 
-Essas medidas **ainda não concluem o tratamento histórico**: não há procedimento validado para a liderança examinar e liberar a conclusão retida; a igualdade da turma atual não prova que não houve uma sequência de transferência e retorno à mesma turma. É necessário um identificador de versão de matrícula resistente a essas mudanças, adotado pelo servidor e capturado antes da fila, além de definir a atribuição e o histórico de progresso. Não ativar essa candidata em produção enquanto essas lacunas não estiverem resolvidas. A prévia usada no Android para presenças é a candidata anterior e não testa esta alteração de conclusões.
+O ensaio com fila, API, autorização da liderança e banco passou localmente; o banco hospedado foi testado com identidades fictícias, com as alterações revertidas ao fim do teste. A validação no Android está em andamento. A origem histórica permanece desconhecida: o registro de aprovação demonstra apenas a destinação escolhida, e o modelo de progresso antigo ainda não registra uma turma histórica em cada conclusão. Os relatórios não devem apresentar esse destino como prova de origem.
 
-A verificação local usou dados fictícios, incluindo conclusão autorizada, recusa após troca de turma, ação sem escopo, preservação de conflitos e reversão da atualização. A conferência de tipos e os testes de fila passaram; isso não substitui homologação hospedada nem teste físico da alteração nova.
+A validação local cobre conclusão autorizada, transferência e retorno, liderança fora da turma e desativada, conflitos, fila e reversão. A inicialização foi testada com service worker: a navegação online recebe a página atual e a navegação offline usa a página e os arquivos iniciais armazenados. O teste físico ainda é necessário.
 
 ## Android: filas antigas de presença e culto
 
 Em 24/11, na cópia de revisão da versão antiga e no mesmo navegador, foram guardadas offline uma presença em evento fictício e um culto fictício. Após instalar a versão nova no mesmo endereço, a tela de carregamento demorou a abrir e foi necessário fechar e reabrir a aba. A homologação recebeu a presença como pendente de aprovação e um único culto pendente; o Android deixou de mostrar itens a sincronizar e confirmou a situação da presença. O usuário também confirmou visualmente no Android o culto como pendente. Isto não comprova o tratamento de itens que perderam a igreja nem resolve a lentidão de inicialização.
+
+## Conferência prévia de produção (25/11/2026)
+
+Consulta somente de leitura: entre 41 perfis ativos aprovados com turma, um apresentou área de perfil diferente da turma. A nova verificação bloqueia a conclusão desse perfil até ajuste autorizado; não houve correção em produção. Confirmar novamente perto da janela e tratar o cadastro conforme a regra de turma/área antes da publicação.
+
+## Abertura e troca de versão
+
+No teste Android, o registro da conta fictícia mostrou falha ao carregar módulos JavaScript de versões anteriores depois da troca do destino do mesmo endereço de homologação. O service worker gerado respondia com a página armazenada antes da regra que tentava consultar a rede. A candidata usa navegação pela rede com fallback offline, armazena os módulos essenciais identificados automaticamente e oferece recuperação se o carregamento inicial ou um módulo falhar. O teste local em navegador verificou navegação online após mudança de versão e abertura do shell offline; isso não comprova disponibilidade de todas as telas sem rede.
+
+Uma aba de outra prévia, cujo endereço termina em 1c8uzl0pv, manteve oito itens de teste em fila própria. Eles não são compartilhados automaticamente com o endereço caminho-fila-antiga. A fila foi preservada e não deve ser limpa para concluir o novo ensaio.

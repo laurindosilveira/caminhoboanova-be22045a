@@ -5,10 +5,12 @@ import path from "path";
 import fs from "fs";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
+import { staticPwaGraph } from "./scripts/pwa-static-graph.mjs";
 
 const packageJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, "package.json"), "utf-8"));
 const appVersion = packageJson.version ?? "0.0.0";
 const appBuildDate = new Date().toISOString();
+let resolvedOutputDirectory = path.resolve(__dirname, "dist");
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -55,6 +57,7 @@ export default defineConfig(({ mode }) => {
     },
   },
   plugins: [
+    { name: "capture-pwa-output-directory", configResolved(config) { resolvedOutputDirectory = path.resolve(config.root, config.build.outDir); } },
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
@@ -63,8 +66,15 @@ export default defineConfig(({ mode }) => {
       workbox: {
         cacheId: "v3",
         sourcemap: false,
-        navigateFallbackDenylist: [/^\/~oauth/],
-        globPatterns: ["**/*.{css,html,ico,svg,woff2,webmanifest}"],
+        navigateFallback: null,
+        globPatterns: ["**/*.{css,html,ico,svg,woff2,webmanifest}", "assets/*.js"],
+        manifestTransforms: [async (entries) => {
+          const required = staticPwaGraph(resolvedOutputDirectory);
+          const present = new Set(entries.map(entry => entry.url));
+          const missing = [...required].filter(file => !present.has(file));
+          if (missing.length) throw new Error(`Offline shell misses static assets: ${missing.join(", ")}`);
+          return { manifest: entries.filter(entry => !entry.url.startsWith("assets/") || !entry.url.endsWith(".js") || required.has(entry.url)), warnings: [] };
+        }],
         globIgnores: ["migration-export/**", "**/*.zip", "**/*.sql"],
         importScripts: ["/push-sw.js"],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
@@ -75,14 +85,10 @@ export default defineConfig(({ mode }) => {
         navigationPreload: true,
         runtimeCaching: [
           {
-            // HTML navigation — network first so users always get latest routes
-            urlPattern: ({ request }) => request.mode === "navigate",
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "pages-cache",
-              networkTimeoutSeconds: 3,
-              cacheableResponse: { statuses: [0, 200] },
-            },
+            // Prefer deployed HTML; fall back to this worker's offline shell.
+            urlPattern: ({ request, url }) => request.mode === "navigate" && !url.pathname.startsWith("/~oauth/"),
+            handler: "NetworkOnly",
+            options: { precacheFallback: { fallbackURL: "/index.html" } },
           },
           {
             // Supabase storage (avatars, files)

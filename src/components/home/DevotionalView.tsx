@@ -16,6 +16,7 @@ import {
   scopedLearningEnabled,
   scopedLearningCacheKey,
   inspectLearningScope,
+  getOwnedCompletionScope,
   requestExistingLearningReview,
   type LearningScope,
   syncLearningActionWithCurrent,
@@ -75,9 +76,9 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
   const loadedLearningScope = useRef<LearningScope | undefined>();
   const loadedScopeIdentity = useRef("");
   const scopeIdentity = JSON.stringify([authUser?.id ?? null, profile?.church_id ?? null, profile?.turma_id ?? null, profile?.area ?? null, effectiveTurmaId, effectiveArea]);
-  const scopeChanged = scopedLearningEnabled && !!loadedScopeIdentity.current && loadedScopeIdentity.current !== scopeIdentity;
+  const scopeChanged = !!loadedScopeIdentity.current && loadedScopeIdentity.current !== scopeIdentity;
   const activeScope = useRef("");
-  activeScope.current = `${authUser?.id ?? ""}:${activity.id}${scopedLearningEnabled ? `:${scopeIdentity}` : ""}`;
+  activeScope.current = `${authUser?.id ?? ""}:${activity.id}:${scopeIdentity}`;
   const [content, setContent] = useState<DevotionalContent | null>(devotionalData ?? null);
   const [loading, setLoading] = useState(!devotionalData);
   const [completing, setCompleting] = useState(false);
@@ -150,6 +151,9 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
     async function loadAnswers() {
       const user = authUser;
       if (!user) { if (!cancelled) setAnswersState("error"); return; }
+      const verifiedScope = await getOwnedCompletionScope(user.id, loadedLearningScope.current);
+      if (cancelled) return;
+      loadedLearningScope.current = verifiedScope;
 
       const [{ data, error }, overlay, scopeStatus] = await Promise.all([
         cachedStudentQuery<DevotionalResponseRow[]>(
@@ -209,6 +213,14 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
     window.addEventListener("legacy-recovery-changed", refresh);
     return () => { window.removeEventListener("student-offline-queue-changed", refresh); window.removeEventListener("student-offline-queue-synced", refresh); window.removeEventListener("online", refresh); window.removeEventListener("legacy-recovery-changed", refresh); };
   }, [answersState]);
+
+  useEffect(() => {
+    if (scopeChanged && answersState === "ready" && !answersDirty && !loadedLearningScope.current
+      && profile?.church_id && profile?.turma_id && profile?.area
+      && effectiveTurmaId === profile.turma_id && effectiveArea === profile.area) {
+      setAnswerLoadAttempt(value => value + 1);
+    }
+  }, [scopeIdentity, scopeChanged, answersState, answersDirty]);
 
   useEffect(() => {
     if (scopedLearningEnabled && answersState === "scope_review" && !loadedLearningScope.current

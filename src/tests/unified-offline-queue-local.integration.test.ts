@@ -69,4 +69,33 @@ describe.skipIf(!enabled)("fila offline e atualização unificada", () => {
     expect(await q.resolveOfflineConflict(result.conflict!,"offline")).toBeNull();
     expect(await q.getQueuedStudentActions(owner,{strict:true})).toHaveLength(0);
   },45000);
+  it("reviews and completes a legacy item through the owner, leader and database", async () => {
+    const db="caminho-caixa-db-http-20261110", api="caminho-caixa-postgrest-20261110";
+    const docker=(...args:string[]) => execFileSync("docker",args,{encoding:"utf8",maxBuffer:1_000_000}).trim();
+    const owner="00000000-0000-0000-0000-000000000201", leader="00000000-0000-0000-0000-000000000203", group="00000000-0000-0000-0000-000000000321";
+    const row=JSON.parse(docker("exec",db,"psql","-h","/tmp","-U","supabase_admin","-d","postgres","-qAt","-v","ON_ERROR_STOP=1","-c",
+      `SELECT json_build_object('lesson',lesson_id,'key',question_key,'answer',response) FROM public.lesson_responses WHERE user_id='${owner}' LIMIT 1`));
+    const encode=(x:unknown) => Buffer.from(JSON.stringify(x)).toString("base64url");
+    const jwt=(id:string)=>{const claims=`${encode({alg:"HS256",typ:"JWT"})}.${encode({role:"authenticated",sub:id,exp:Math.floor(Date.now()/1000)+300})}`;return `${claims}.${createHmac("sha256","synthetic-jwt-secret-for-isolated-tests-only-20261110").update(claims).digest("base64url")}`;};
+    const rpc=async (id:string,name:string,args:unknown) => {
+      const raw=docker("exec",db,"curl","-sS","--max-time","15","-w","%{http_code}","-X","POST","-H",`Authorization: Bearer ${jwt(id)}`,
+        "-H","Content-Type: application/json","--data",JSON.stringify(args),`http://${api}:3000/rpc/${name}`);
+      const code=Number(raw.slice(-3)); return code===200 ? {data:JSON.parse(raw.slice(0,-3)),error:null} : {data:null,error:new Error(`RPC HTTP ${code}`)};
+    };
+    bridge.getUser.mockResolvedValue({data:{user:{id:owner}}}); bridge.rpc.mockImplementation((name,args)=>rpc(owner,name,args));
+    const old=await import("./fixtures/studentOffline-published"); const current=await import("@/lib/studentOffline");
+    const responses:Record<string,string>={ [row.key]:"[fila de conclusao ficticia]",icebreaker:"[ficticio]",practice:"[ficticio]",prayer:"[ficticio]" };
+    for(let i=0;i<=50;i++)responses[`q${i}`]="[ficticio]";
+    await old.enqueueStudentAction({type:"complete_lesson",userId:owner,payload:{lessonId:row.lesson,responses,videoWatched:true,audioListened:true}});
+    const first=await current.syncStudentOfflineQueue(owner);
+    expect(first).toMatchObject({synced:0,remaining:1,legacyCompletionPending:true});
+    const listed=await rpc(leader,"list_completion_reviews",{p_turma_id:group}); expect(listed.error).toBeNull(); expect(listed.data).toHaveLength(1);
+    const approved=await rpc(leader,"approve_completion_review",{p_id:listed.data[0].id,p_confirm:true}); expect(approved.data.status).toBe("approved");
+    const second=await current.syncStudentOfflineQueue(owner); expect(second.conflict).toBeTruthy();
+    expect(await current.resolveOfflineConflict(second.conflict!,"offline")).toBeNull();
+    expect(await current.getQueuedStudentActions(owner,{strict:true})).toHaveLength(0);
+    const result=JSON.parse(docker("exec",db,"psql","-h","/tmp","-U","supabase_admin","-d","postgres","-qAt","-v","ON_ERROR_STOP=1","-c",
+      `SELECT json_build_object('completed',coalesce((SELECT is_completed FROM public.lesson_progress WHERE user_id='${owner}' AND lesson_id='${row.lesson}'),false),'approved',EXISTS(SELECT 1 FROM private.completion_review_events WHERE event='approved' AND actor='${leader}'))`));
+    expect(result).toEqual({completed:true,approved:true});
+  },45000);
 });

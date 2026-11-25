@@ -86,6 +86,24 @@
         color: rgba(255,255,255,0.4);
         display: none;
       }
+      #splash-recovery {
+        display: none;
+        max-width: 20rem;
+        margin: 22px 24px 0;
+        text-align: center;
+        color: white;
+        font: 14px/1.5 Arial, sans-serif;
+      }
+      #splash-retry {
+        margin-top: 12px;
+        border: 1px solid rgba(255,255,255,.8);
+        border-radius: 8px;
+        background: transparent;
+        color: white;
+        padding: 10px 18px;
+        font: inherit;
+        cursor: pointer;
+      }
       @keyframes splash-spin {
         to { transform: rotate(360deg); }
       }
@@ -105,11 +123,25 @@
       <div id="splash-title">Caminho 3M</div>
       <div id="splash-subtitle">Amar a Deus · Amar ao próximo · Servir ao mundo</div>
       <div id="splash-loader"></div>
+      <div id="splash-recovery" role="status" aria-live="polite">
+        <p>A abertura est&#225; demorando. Confira sua conex&#227;o e tente novamente.</p>
+        <button id="splash-retry" type="button">Tentar novamente</button>
+      </div>
       <div id="splash-offline">Modo offline — usando dados salvos</div>
     </div>
 
     <div id="root"></div>
     <script>
+      // This must not depend on the application bundle: the bundle itself
+      // may be unavailable while a service-worker update is in progress.
+      var recoveryTimer = window.setTimeout(function () {
+        var recovery = document.getElementById('splash-recovery');
+        var splash = document.getElementById('splash-screen');
+        if (recovery && splash && !splash.classList.contains('hidden')) recovery.style.display = 'block';
+      }, 12000);
+      document.getElementById('splash-retry').addEventListener('click', function () {
+        window.location.reload();
+      });
       // Show offline indicator on splash if no connection
       if (!navigator.onLine) {
         var offlineEl = document.getElementById('splash-offline');

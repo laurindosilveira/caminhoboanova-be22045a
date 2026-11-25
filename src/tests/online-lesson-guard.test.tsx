@@ -8,6 +8,7 @@ vi.mock("@/integrations/supabase/client", () => ({ supabase: { from: vi.fn(), rp
 vi.mock("@/lib/studentOffline", () => ({
   get scopedLearningEnabled() { return mocks.scoped; },
   learningScope: (churchId?: string, turmaId?: string, area?: string) => churchId && turmaId && area ? {churchId,turmaId,area} : undefined,
+  getOwnedCompletionScope: async (_user: string, scope?: unknown) => scope,
   scopedLearningCacheKey: () => "",
   inspectLearningScope: mocks.inspect,
   requestExistingLearningReview: mocks.requestReview,

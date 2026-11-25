@@ -19,6 +19,7 @@ import {
   scopedLearningEnabled,
   scopedLearningCacheKey,
   inspectLearningScope,
+  getOwnedCompletionScope,
   requestExistingLearningReview,
   type LearningScope,
   syncLearningActionWithCurrent,
@@ -114,7 +115,7 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
   const loadedLearningScope = useRef<LearningScope | undefined>();
   const loadedScopeIdentity = useRef("");
   const scopeIdentity = JSON.stringify([authUser?.id ?? null, profile?.church_id ?? null, profile?.turma_id ?? null, profile?.area ?? null, effectiveTurmaId, effectiveArea]);
-  const scopeChanged = scopedLearningEnabled && !!loadedScopeIdentity.current && loadedScopeIdentity.current !== scopeIdentity;
+  const scopeChanged = !!loadedScopeIdentity.current && loadedScopeIdentity.current !== scopeIdentity;
   const [content, setContent] = useState<LessonContent>(getDefaultContent(lesson.order_num));
   const [responses, setResponses] = useState<Response>({});
   const [bibleRef, setBibleRef] = useState<string | null>(null);
@@ -276,6 +277,9 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     async function loadResponses() {
       const uid = targetUserId ?? authUser?.id;
       if (!uid) { if (!cancelled) setResponseLoadState("error"); return; }
+      const verifiedScope = await getOwnedCompletionScope(uid, loadedLearningScope.current);
+      if (cancelled) return;
+      loadedLearningScope.current = verifiedScope;
       const [{ data, error }, { data: progress, error: progressError }, overlay, scopeStatus] = await Promise.all([
         cachedStudentQuery<LessonResponseRow[]>(
           `lesson-responses:${uid}:${lesson.id}${scopedLearningCacheKey(loadedLearningScope.current)}`,
@@ -353,6 +357,16 @@ export default function JourneyLessonView({ lesson, onBack, isAdmin = false, tar
     window.addEventListener("legacy-recovery-changed", refresh);
     return () => { window.removeEventListener("student-offline-queue-changed", refresh); window.removeEventListener("student-offline-queue-synced", refresh); window.removeEventListener("online", refresh); window.removeEventListener("legacy-recovery-changed", refresh); };
   }, [responseLoadState]);
+
+  // A profile can arrive after the screen starts. Refresh only a pristine
+  // editor; an edited or queued response must remain visible for recovery.
+  useEffect(() => {
+    if (scopeChanged && responseLoadState === "ready" && !changedByUser.current && !loadedLearningScope.current
+      && profile?.church_id && profile?.turma_id && profile?.area
+      && effectiveTurmaId === profile.turma_id && effectiveArea === profile.area) {
+      setResponseLoadAttempt(value => value + 1);
+    }
+  }, [scopeIdentity, scopeChanged, responseLoadState]);
 
   useEffect(() => {
     if (scopedLearningEnabled && responseLoadState === "scope_review" && !loadedLearningScope.current

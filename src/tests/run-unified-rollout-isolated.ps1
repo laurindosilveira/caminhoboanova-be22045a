@@ -22,7 +22,7 @@ function Apply-File([string] $path) {
   & docker cp $path "${db}:/tmp/unified-test.sql" | Out-Null
   Require-Success 'copy test file'
   # Restored fixtures may contain private data. Never print SQL diagnostics.
-  if ((Split-Path -Leaf $path) -in @('attendance_scope_candidate.sql','attendance-guard.integration.sql','scoped-completion.integration.sql','historical_response_read_candidate.sql','historical-response-read.integration.sql','staging_coordinated_candidate_20261124.sql','staging_legacy_guard_20261124.sql','staging_leader_summary_20261124.sql','staging_care_dashboard_20261124.sql','staging_rollback_20261124.sql','staging-rollback-check.sql','production_coordinated_candidate_20261124.sql','production_rollback_20261124.sql','production-rollback-check.sql')) {
+  if ((Split-Path -Leaf $path) -in @('attendance_scope_candidate.sql','attendance-guard.integration.sql','scoped-completion.integration.sql','completion-review.integration.sql','historical_response_read_candidate.sql','historical-response-read.integration.sql','staging_coordinated_candidate_20261124.sql','staging_legacy_guard_20261124.sql','staging_membership_guard_20261125.sql','staging_completion_review_20261125.sql','staging_leader_summary_20261124.sql','staging_care_dashboard_20261124.sql','staging_rollback_20261124.sql','staging-rollback-check.sql','production_coordinated_candidate_20261124.sql','production_rollback_20261124.sql','production-rollback-check.sql')) {
     & docker exec $db psql -h /tmp -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f /tmp/unified-test.sql
   } else {
     & docker exec $db psql -h /tmp -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f /tmp/unified-test.sql *> $null
@@ -75,7 +75,11 @@ try {
     Require-Success 'simulate older staging dashboard'
     Apply-File (Join-Path $repo 'src/tests/staging-legacy-care-fixture.sql')
     Apply-File (Join-Path $repo 'supabase/rollout/staging_care_dashboard_20261124.sql')
-    if ($StagingIncrementalProbe) { Apply-File (Join-Path $repo 'supabase/rollout/staging_legacy_guard_20261124.sql') }
+    if ($StagingIncrementalProbe) {
+      Apply-File (Join-Path $repo 'supabase/rollout/staging_legacy_guard_20261124.sql')
+      Apply-File (Join-Path $repo 'supabase/rollout/staging_membership_guard_20261125.sql')
+      Apply-File (Join-Path $repo 'supabase/rollout/staging_completion_review_20261125.sql')
+    }
     # Restore the candidate file for the repeat-application test below.
     & docker cp $candidate "${db}:/tmp/unified-test.sql" | Out-Null
     Require-Success 'copy staging candidate'
@@ -83,13 +87,14 @@ try {
   # A repeat must be rejected by preconditions; the first application stays intact.
   & docker exec $db psql -h /tmp -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f /tmp/unified-test.sql *> $null
   if ($LASTEXITCODE -eq 0) { throw 'Candidate unexpectedly accepted a second application' }
-  foreach ($name in @('legacy-rpc-block-no-receiver.integration.sql','legacy_response_delete_guard.integration.sql','unified-rollout-fixture.sql','owned-learning-sync.integration.sql','scoped-completion.integration.sql')) {
+  foreach ($name in @('legacy-rpc-block-no-receiver.integration.sql','legacy_response_delete_guard.integration.sql','unified-rollout-fixture.sql','owned-learning-sync.integration.sql','scoped-completion.integration.sql','completion-review.integration.sql')) {
     Apply-File (Join-Path $repo "src/tests/$name")
   }
   if ($AttendanceProbe) {
     Apply-File (Join-Path $repo 'src/tests/attendance-guard.integration.sql')
     Apply-File (Join-Path $repo 'src/tests/historical-response-read.integration.sql')
   }
+  Apply-File (Join-Path $repo 'src/tests/completion-review-http-fixture.sql')
   & docker exec $db psql -h /tmp -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE authenticator WITH LOGIN PASSWORD 'synthetic-recovery-http-password-2026';" *> $null
   Require-Success 'configure synthetic auth'
   & docker run -d --rm --name $api --network $network `
