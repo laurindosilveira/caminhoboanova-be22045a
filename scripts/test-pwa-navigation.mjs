@@ -3,7 +3,7 @@ import {readFile,stat} from "node:fs/promises";
 import {resolve,extname} from "node:path";
 import {chromium} from "playwright";
 import assert from "node:assert/strict";
-const root=resolve("dist"); let version="v1";
+const root=resolve(process.argv[2] || "dist"); let version="v1";
 const types={".html":"text/html; charset=utf-8",".js":"text/javascript; charset=utf-8",".css":"text/css",".svg":"image/svg+xml",".png":"image/png",".ico":"image/x-icon",".webmanifest":"application/manifest+json"};
 const server=createServer(async(req,res)=>{
  try {

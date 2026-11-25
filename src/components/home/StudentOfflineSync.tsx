@@ -14,6 +14,7 @@ export default function StudentOfflineSync() {
   const [syncing, setSyncing] = useState(false);
   const [conflict, setConflict] = useState<OfflineConflict | null>(null);
   const [resolving, setResolving] = useState(false);
+  const resolvingRef = useRef(false);
   const [reviewPending, setReviewPending] = useState(false);
   const [otherScopePending, setOtherScopePending] = useState(false);
   const [legacyCompletionPending, setLegacyCompletionPending] = useState(false);
@@ -24,18 +25,26 @@ export default function StudentOfflineSync() {
     const requestedUserId = user.id;
     const prompt = choice === "offline"
       ? "Substituir no servidor pelas respostas deste aparelho?"
-      : conflict.action.type === "save_lesson_draft" ? "Descartar este rascunho e manter as respostas do servidor?" : "Concluir usando as respostas atuais do servidor? A conclus\u00e3o s\u00f3 ser\u00e1 registrada se elas estiverem completas.";
+      : conflict.action.type === "save_lesson_draft" ? conflict.draftBatch?.length ? "Descartar estes rascunhos e manter as respostas do servidor?" : "Descartar este rascunho e manter as respostas do servidor?" : "Concluir usando as respostas atuais do servidor? A conclus\u00e3o s\u00f3 ser\u00e1 registrada se elas estiverem completas.";
     if (!window.confirm(prompt)) return;
+    resolvingRef.current = true;
     setResolving(true);
+    let retryQueue = false;
     try {
       const next = await resolveOfflineConflict(conflict, choice);
       if (currentUserId.current !== requestedUserId) return;
       setConflict(next);
       if (next) toast.error("As respostas do servidor mudaram. Confira novamente.");
-      else { toast.success("Escolha salva."); window.dispatchEvent(new Event("online")); }
+      else { toast.success("Escolha salva."); retryQueue = true; }
     } catch {
       if (currentUserId.current === requestedUserId) toast.error("Não foi possível resolver o conflito. Tente novamente.");
-    } finally { if (currentUserId.current === requestedUserId) setResolving(false); }
+    } finally {
+      resolvingRef.current = false;
+      if (currentUserId.current === requestedUserId) {
+        setResolving(false);
+        if (retryQueue) window.dispatchEvent(new Event("online"));
+      } else if (currentUserId.current && navigator.onLine) window.dispatchEvent(new Event("online"));
+    }
   }
 
   useEffect(() => {
@@ -57,7 +66,7 @@ export default function StudentOfflineSync() {
     }
 
     async function syncNow() {
-      if (!user?.id || !navigator.onLine) return;
+      if (!user?.id || !navigator.onLine || resolvingRef.current) return;
       setSyncing(true);
       try {
         const result = await syncStudentOfflineQueue(user.id);
@@ -113,6 +122,10 @@ export default function StudentOfflineSync() {
   const visibleError = countUserId === user?.id && queueUnavailable;
   const visibleConflict = conflict?.action.userId === user?.id ? conflict : null;
   const visibleAttendanceReview = attendanceReview?.action.userId === user?.id ? attendanceReview : null;
+  const isChanged = (key: string) => !!visibleConflict && Object.prototype.hasOwnProperty.call(visibleConflict.action.payload.responses, key) &&
+    visibleConflict.current[key] !== visibleConflict.action.payload.responses[key];
+  const conflictKeys = visibleConflict ? [...new Set([...Object.keys(visibleConflict.current), ...Object.keys(visibleConflict.action.payload.responses)])]
+    .sort((a, b) => Number(isChanged(b)) - Number(isChanged(a))) : [];
   if (!visibleCount && !visibleError) return null;
 
   return (
@@ -121,7 +134,8 @@ export default function StudentOfflineSync() {
       <div className="max-h-[85vh] w-full max-w-xl overflow-auto rounded-2xl bg-card p-5 text-foreground shadow-xl space-y-4">
         <h2 id="offline-conflict-title" className="font-bold">Respostas diferentes encontradas</h2>
         <p className="text-sm">Este aparelho e o servidor têm respostas diferentes. Compare antes de escolher. Enquanto isso, o rascunho continua guardado neste aparelho.</p>
-        {[...new Set([...Object.keys(visibleConflict.current), ...Object.keys(visibleConflict.action.payload.responses)])].map((key) => <div key={key} className="rounded-xl border p-3 text-sm space-y-2"><p className="font-semibold">{key}</p><p><strong>No servidor:</strong> {visibleConflict.current[key] ?? "(sem resposta)"}</p><p><strong>Neste aparelho:</strong> {visibleConflict.action.payload.responses[key] || "(sem resposta)"}</p></div>)}
+        {!!visibleConflict.draftBatch?.length && <p className="text-sm">Há {visibleConflict.draftBatch.length} rascunhos consecutivos desta lição. A comparação mostra o mais recente; a escolha vale para os {visibleConflict.draftBatch.length}.</p>}
+        {conflictKeys.map((key) => <div key={key} className="rounded-xl border p-3 text-sm space-y-2"><p className="font-semibold">{key === "icebreaker" ? "Pergunta inicial" : key === "practice" ? "Prática" : key === "prayer" ? "Oração" : /^q\d+$/.test(key) ? `Pergunta ${Number(key.slice(1)) + 1}` : key}</p><p><strong>No servidor:</strong> {visibleConflict.current[key] ?? "(sem resposta)"}</p><p><strong>Neste aparelho:</strong> {Object.prototype.hasOwnProperty.call(visibleConflict.action.payload.responses, key) ? (visibleConflict.action.payload.responses[key] || "(sem resposta)") : "(não alterada neste aparelho)"}</p></div>)}
         {visibleConflict.action.type !== "save_lesson_draft" && <p className="text-sm">Para manter as respostas do servidor, elas precisam estar completas para concluir a atividade. Se não estiverem, a conclusão continua guardada neste aparelho.</p>}
         <div className="flex flex-wrap gap-3"><button disabled={resolving} className="rounded-lg bg-primary px-3 py-2 text-primary-foreground disabled:opacity-50" onClick={() => void chooseVersion("server")}>Manter servidor</button><button disabled={resolving} className="rounded-lg border px-3 py-2" onClick={() => void chooseVersion("offline")}>Usar este aparelho</button></div>
       </div>

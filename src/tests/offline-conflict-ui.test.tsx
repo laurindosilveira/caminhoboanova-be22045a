@@ -18,3 +18,14 @@ it("shows both versions and passes the reviewed version to resolution", async ()
   fireEvent.click(screen.getByRole("button", { name: "Usar este aparelho" }));
   await waitFor(() => expect(resolve).toHaveBeenCalledWith(conflict, "offline"));
 });
+
+it("shows the changed answer first and explains that the choice covers consecutive drafts", async () => {
+  const earlier = { id:"first", userId:"user-1", type:"save_lesson_draft", payload:{lessonId:"lesson",responses:{q0:"igual",icebreaker:"anterior"}} };
+  const action = { ...earlier, id:"last", payload:{...earlier.payload,responses:{q0:"igual",icebreaker:"mais recente"}} };
+  getQueued.mockResolvedValue([earlier,action]);
+  sync.mockResolvedValue({synced:0,remaining:2,conflict:{action,current:{q0:"igual",icebreaker:"servidor"},draftBatch:[earlier,action]}});
+  render(<StudentOfflineSync />);
+  expect(await screen.findByText(/há 2 rascunhos consecutivos/i)).toBeInTheDocument();
+  const dialog=screen.getByRole("dialog");
+  expect(dialog.textContent!.indexOf("Pergunta inicial")).toBeLessThan(dialog.textContent!.indexOf("Pergunta 1"));
+});

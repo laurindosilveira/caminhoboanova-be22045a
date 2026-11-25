@@ -331,7 +331,8 @@ async function deleteQueuedAction(id: string) {
 }
 
 type LearningAction = Extract<StudentOfflineAction, { type: "save_lesson_draft" | "complete_lesson" | "complete_devotional" }>;
-export type OfflineConflict = { action: LearningAction; current: Record<string, string> };
+type LessonDraft = Extract<StudentOfflineAction, { type: "save_lesson_draft" }>;
+export type OfflineConflict = { action: LearningAction; current: Record<string, string>; draftBatch?: LessonDraft[] };
 type AttendanceAction = Extract<StudentOfflineAction, { type: "attendance_upsert" }>;
 type WorshipAction = Extract<StudentOfflineAction, { type: "worship_manual" }>;
 export type AttendanceReview = { action: AttendanceAction | WorshipAction; reason: "finalized" | "newer_request" | "scope_review_required"; currentStatus?: string };
@@ -356,6 +357,58 @@ export async function syncAttendanceAction(action: AttendanceAction): Promise<At
 
 function isLearningAction(action: StudentOfflineAction): action is LearningAction {
   return action.type === "save_lesson_draft" || action.type === "complete_lesson" || action.type === "complete_devotional";
+}
+
+// Consecutive full snapshots from the same known enrollment can replace
+// earlier drafts. Without a known enrollment, group exact duplicates only.
+// A completion, another activity, a transfer, an ambiguous timestamp, missing
+// keys, or a media-flag regression ends the batch.
+function consecutiveDrafts(actions: StudentOfflineAction[], start: number): LessonDraft[] {
+  const first = actions[start];
+  if (scopedLearningEnabled || first?.type !== "save_lesson_draft" || !Number.isFinite(Date.parse(first.createdAt))) return [];
+  const knownMembership = !!(first.scope?.membershipVersion && first.scope.churchId && first.scope.turmaId && first.scope.area);
+  const batch: LessonDraft[] = [first];
+  for (let i = start + 1; i < actions.length; i++) {
+    const previous = batch[batch.length - 1];
+    const next = actions[i];
+    if (next.type !== "save_lesson_draft" || next.userId !== first.userId || next.churchId !== first.churchId ||
+        next.payload.lessonId !== first.payload.lessonId || JSON.stringify(next.scope ?? null) !== JSON.stringify(first.scope ?? null) ||
+        !Number.isFinite(Date.parse(next.createdAt)) || next.createdAt <= previous.createdAt ||
+        (previous.payload.videoWatched && !next.payload.videoWatched) ||
+        (previous.payload.audioListened && !next.payload.audioListened) ||
+        Object.keys(previous.payload.responses).some(key => !Object.prototype.hasOwnProperty.call(next.payload.responses, key))) break;
+    if (!knownMembership && (previous.payload.videoWatched !== next.payload.videoWatched ||
+        previous.payload.audioListened !== next.payload.audioListened ||
+        Object.keys(previous.payload.responses).length !== Object.keys(next.payload.responses).length ||
+        Object.entries(previous.payload.responses).some(([key,value]) => next.payload.responses[key] !== value))) break;
+    batch.push(next);
+  }
+  return batch;
+}
+
+// Check and remove a reviewed batch in one IndexedDB transaction. If another
+// tab changed or removed any entry while the dialog was open, remove none.
+async function deleteUnchangedDraftBatch(batch: LessonDraft[]): Promise<void> {
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(QUEUE_STORE, "readwrite");
+    const store = tx.objectStore(QUEUE_STORE);
+    let changed = false;
+    for (const draft of batch) {
+      const request = store.get(draft.id);
+      request.onsuccess = () => {
+        if (JSON.stringify(request.result) !== JSON.stringify(draft)) {
+          changed = true;
+          tx.abort();
+          return;
+        }
+        store.delete(draft.id);
+      };
+    }
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(changed ? new Error("A fila mudou durante a revisao") : tx.error ?? new Error("Nao foi possivel atualizar a fila"));
+    tx.onabort = () => reject(changed ? new Error("A fila mudou durante a revisao") : tx.error ?? new Error("A operacao na fila foi interrompida"));
+  });
 }
 
 export async function syncLearningActionWithCurrent(action: LearningAction, expected?: Record<string, string>): Promise<{ conflict: OfflineConflict | null; current: Record<string, string> }> {
@@ -450,7 +503,9 @@ export async function syncStudentOfflineQueue(userId?: string | null): Promise<S
 
   try {
     const actions = await getQueuedStudentActions(userId, { strict: true });
-    for (const action of actions) {
+    for (let index = 0; index < actions.length; index++) {
+      const draftBatch = consecutiveDrafts(actions, index);
+      const action = draftBatch.length > 1 ? draftBatch[draftBatch.length - 1] : actions[index];
       // Attendance and manual worship records still lack an audited historical
       // group flow. Keep them on the device rather than infer their scope.
       if (scopedLearningEnabled && !isLearningAction(action)) {
@@ -515,10 +570,16 @@ export async function syncStudentOfflineQueue(userId?: string | null): Promise<S
           window.dispatchEvent(new CustomEvent("student-offline-queue-synced", { detail: { synced, remaining } }));
           window.dispatchEvent(new CustomEvent("student-offline-queue-changed"));
         }
-        return { synced, remaining, conflict };
+        return { synced, remaining, conflict: draftBatch.length > 1 ? { ...conflict, draftBatch } : conflict };
       }
-      await deleteQueuedAction(action.id);
-      synced += 1;
+      if (draftBatch.length > 1) {
+        await deleteUnchangedDraftBatch(draftBatch);
+        synced += draftBatch.length;
+        index += draftBatch.length - 1;
+      } else {
+        await deleteQueuedAction(action.id);
+        synced += 1;
+      }
     }
     const remaining = (await getQueuedStudentActions(userId, { strict: true })).length;
     if (synced > 0) {
@@ -534,23 +595,38 @@ export async function syncStudentOfflineQueue(userId?: string | null): Promise<S
 
 // A deliberate choice only applies if the server still matches what was shown.
 export async function resolveOfflineConflict(conflict: OfflineConflict, choice: "server" | "offline"): Promise<OfflineConflict | null> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user || user.id !== conflict.action.userId) throw new Error("Sessao expirada");
-  const queued = await getQueuedStudentActions(user.id, { strict: true });
-  if (!queued.some(action => action.id === conflict.action.id)) throw new Error("Rascunho nao encontrado");
-  if (choice === "server" && isCompletionAction(conflict.action)) {
-    // Complete with the displayed server answers only if they are still the
-    // same; incomplete answers fail validation and the queue remains intact.
-    const action = { ...conflict.action, payload: { ...conflict.action.payload, responses: conflict.current } } as CompletionAction;
-    const nextConflict = await syncLearningAction(action, conflict.current);
-    if (nextConflict) return nextConflict;
-  } else if (choice === "offline") {
-    const nextConflict = await syncLearningAction(conflict.action, conflict.current);
-    if (nextConflict) return nextConflict;
+  if (syncInFlight) throw new Error("Sincronizacao em andamento");
+  syncInFlight = true;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || user.id !== conflict.action.userId) throw new Error("Sessao expirada");
+    const queued = await getQueuedStudentActions(user.id, { strict: true });
+    if (!queued.some(action => action.id === conflict.action.id)) throw new Error("Rascunho nao encontrado");
+    if (conflict.draftBatch) {
+      const start = queued.findIndex(action => action.id === conflict.draftBatch![0]?.id);
+      const valid = start >= 0 ? consecutiveDrafts(queued, start) : [];
+      if (conflict.action.type !== "save_lesson_draft" || conflict.draftBatch.length < 2 ||
+          conflict.draftBatch[conflict.draftBatch.length - 1]?.id !== conflict.action.id || valid.length < conflict.draftBatch.length ||
+          conflict.draftBatch.some((entry, index) => JSON.stringify(entry) !== JSON.stringify(valid[index])) ||
+          JSON.stringify(conflict.action) !== JSON.stringify(conflict.draftBatch[conflict.draftBatch.length - 1])) throw new Error("A fila mudou durante a revisao");
+    }
+    if (choice === "server" && isCompletionAction(conflict.action)) {
+      // Complete with the displayed server answers only if they are still the
+      // same; incomplete answers fail validation and the queue remains intact.
+      const action = { ...conflict.action, payload: { ...conflict.action.payload, responses: conflict.current } } as CompletionAction;
+      const nextConflict = await syncLearningAction(action, conflict.current);
+      if (nextConflict) return nextConflict;
+    } else if (choice === "offline") {
+      const nextConflict = await syncLearningAction(conflict.action, conflict.current);
+      if (nextConflict) return conflict.draftBatch ? { ...nextConflict, draftBatch: conflict.draftBatch } : nextConflict;
+    }
+    if (conflict.draftBatch) await deleteUnchangedDraftBatch(conflict.draftBatch);
+    else await deleteQueuedAction(conflict.action.id);
+    window.dispatchEvent(new CustomEvent("student-offline-queue-changed"));
+    return null;
+  } finally {
+    syncInFlight = false;
   }
-  await deleteQueuedAction(conflict.action.id);
-  window.dispatchEvent(new CustomEvent("student-offline-queue-changed"));
-  return null;
 }
 
 export async function getPendingStudentOverlay(userId: string, options: { strict?: boolean; scope?: LearningScope } = {}) {
