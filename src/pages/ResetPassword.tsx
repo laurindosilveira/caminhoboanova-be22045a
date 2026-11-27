@@ -81,7 +81,7 @@ export default function ResetPassword() {
 
     const parsed = resetSchema.safeParse({ password });
     if (!parsed.success) {
-      setError(parsed.error.errors[0].message);
+      setError(parsed.error.issues[0].message);
       return;
     }
 

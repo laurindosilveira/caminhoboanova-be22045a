@@ -208,7 +208,7 @@ export default function Register() {
       fatherPhone, motherPhone, email, password, churchId,
     });
     if (!parsed.success) {
-      setError(parsed.error.errors[0].message);
+      setError(parsed.error.issues[0].message);
       return;
     }
 

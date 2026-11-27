@@ -13,5 +13,5 @@ export const strongPasswordSchema = z
 
 export function getPasswordPolicyError(password: string): string | null {
   const result = strongPasswordSchema.safeParse(password);
-  return result.success ? null : result.error.errors[0]?.message ?? PASSWORD_POLICY_MESSAGE;
+  return result.success ? null : result.error.issues[0]?.message ?? PASSWORD_POLICY_MESSAGE;
 }
