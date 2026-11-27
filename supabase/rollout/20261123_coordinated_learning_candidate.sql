@@ -307,7 +307,10 @@ BEGIN
   SELECT jsonb_build_object('churchId',p.church_id,'turmaId',p.turma_id,'area',p.area::text,'membershipVersion',v.version)
     INTO result FROM public.profiles p JOIN public.turmas t ON t.id=p.turma_id
     JOIN private.learning_membership_version v ON v.user_id=p.user_id
-    WHERE p.user_id=p_user_id AND t.church_id=p.church_id AND t.area=p.area::text AND t.is_active
+    WHERE p.user_id=p_user_id AND t.church_id=p.church_id AND t.is_active
+      -- Churches without configured areas still have an authoritative group.
+      AND (t.area=p.area::text OR (t.area IS NULL AND p.area::text='Sem area'
+        AND NOT EXISTS (SELECT 1 FROM public.areas a WHERE a.church_id=p.church_id)))
       AND coalesce(p.is_active,true) AND p.enrollment_status IN ('approved','active') FOR SHARE OF p,t,v;
   RETURN result;
 END $$;
@@ -334,7 +337,9 @@ BEGIN
   PERFORM 1 FROM public.profiles p JOIN public.turmas t ON t.id=p.turma_id
     JOIN private.learning_membership_version v ON v.user_id=p.user_id
     WHERE v.version=p_membership_version AND p.user_id=p_user_id AND p.church_id=p_church_id AND p.turma_id=p_turma_id
-      AND p.area::text=p_area AND t.church_id=p.church_id AND t.area=p_area
+      AND p.area::text=p_area AND t.church_id=p.church_id
+      AND (t.area=p_area OR (t.area IS NULL AND p_area='Sem area'
+        AND NOT EXISTS (SELECT 1 FROM public.areas a WHERE a.church_id=p.church_id)))
       AND t.is_active AND coalesce(p.is_active,true) AND p.enrollment_status IN ('approved','active')
     FOR SHARE OF p,t,v;
   IF NOT FOUND THEN RETURN jsonb_build_object('status','scope_review_required'); END IF;
@@ -465,7 +470,9 @@ BEGIN
  SELECT jsonb_build_object('churchId',p.church_id,'turmaId',p.turma_id,'area',p.area::text,'membershipVersion',v.version)
  INTO scope FROM public.profiles p JOIN public.turmas t ON t.id=p.turma_id JOIN private.learning_membership_version v ON v.user_id=p.user_id
  WHERE p.user_id=hint.user_id AND p.church_id=hint.church_id AND p.turma_id=hint.turma_id AND p.area::text=hint.area
-  AND t.church_id=p.church_id AND t.area=p.area::text AND t.is_active AND coalesce(p.is_active,true)
+  AND t.church_id=p.church_id AND t.is_active AND coalesce(p.is_active,true)
+  AND (t.area=p.area::text OR (t.area IS NULL AND p.area::text='Sem area'
+    AND NOT EXISTS (SELECT 1 FROM public.areas a WHERE a.church_id=p.church_id)))
   AND p.enrollment_status IN ('approved','active') FOR SHARE OF p,t,v;
  IF scope IS NULL THEN RETURN jsonb_build_object('status','scope_changed'); END IF;
  SELECT * INTO entry FROM private.completion_review_requests WHERE id=p_id FOR UPDATE;

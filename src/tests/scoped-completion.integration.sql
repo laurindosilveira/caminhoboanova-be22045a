@@ -52,4 +52,45 @@ BEGIN
  'complete_lesson',item,'{}',false,false,false,NULL,NULL,'{}');
  IF r->>'status'<>'scope_review_required' THEN RAISE EXCEPTION 'completion accepted after transfer and return'; END IF;
 END $$;
+
+RESET ROLE;
+UPDATE public.turmas SET area=NULL WHERE id='00000000-0000-0000-0000-000000000311';
+SET LOCAL ROLE authenticated;
+DO $$
+DECLARE owner_id uuid:='00000000-0000-0000-0000-000000000201';
+BEGIN
+ PERFORM set_config('request.jwt.claim.sub',owner_id::text,true);
+ IF public.get_owned_learning_scope(owner_id) IS NOT NULL THEN
+   RAISE EXCEPTION 'an explicitly assigned area was inferred from an unassigned group';
+ END IF;
+END $$;
+
+RESET ROLE;
+DO $$
+DECLARE owner_id uuid:='00000000-0000-0000-0000-000000000201'; church uuid:=gen_random_uuid(); item uuid; question text;
+BEGIN
+ INSERT INTO public.churches(id,name,slug,is_active) VALUES(church,'Igreja ficticia sem areas','church-without-areas-probe',true);
+ INSERT INTO public.turmas(id,name,year,church_id,area,is_active)
+ VALUES('00000000-0000-0000-0000-000000000313','Turma ficticia sem area',2026,church,NULL,true);
+ SELECT lesson_id,question_key INTO STRICT item,question FROM public.lesson_responses WHERE user_id=owner_id LIMIT 1;
+ PERFORM set_config('test.noarea_item',item::text,true);
+ PERFORM set_config('test.noarea_question',question,true);
+ UPDATE public.profiles SET church_id=church,turma_id='00000000-0000-0000-0000-000000000313',area='Sem area' WHERE user_id=owner_id;
+END $$;
+SET LOCAL ROLE authenticated;
+DO $$
+DECLARE owner_id uuid:='00000000-0000-0000-0000-000000000201'; scope jsonb; result jsonb;
+        item uuid:=current_setting('test.noarea_item')::uuid; question text:=current_setting('test.noarea_question');
+BEGIN
+ PERFORM set_config('request.jwt.claim.sub',owner_id::text,true);
+ scope:=public.get_owned_learning_scope(owner_id);
+ IF scope->>'area' IS DISTINCT FROM 'Sem area' OR scope->>'turmaId' IS DISTINCT FROM '00000000-0000-0000-0000-000000000313' THEN
+   RAISE EXCEPTION 'a church without areas lost its valid group scope';
+ END IF;
+ result:=public.sync_owned_completion(owner_id,(scope->>'churchId')::uuid,(scope->>'turmaId')::uuid,scope->>'area',(scope->>'membershipVersion')::uuid,
+   'complete_lesson',item,jsonb_build_object(question,'[ficticio]'),false,false,false,NULL,NULL,jsonb_build_object(question,'[versao de teste anterior]'));
+ IF result->>'status' IS DISTINCT FROM 'conflict' THEN
+   RAISE EXCEPTION 'the unassigned scope did not reach normal conflict review';
+ END IF;
+END $$;
 ROLLBACK;
