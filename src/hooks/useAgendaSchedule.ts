@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
@@ -23,6 +24,198 @@ export type ScheduleEntry = {
   /** '5_days' = 5 devotionals with recovery week; '10_days' = 10 devotionals full window. */
   devotionalMode: "5_days" | "10_days";
 };
+
+type EventRow = {
+  id: string;
+  event_date: string;
+  linked_lesson_id: string | null;
+  title: string;
+  type: string;
+  area: string | null;
+  community?: string | null;
+  turma_id?: string | null;
+  target_user_id?: string | null;
+  released_devotional_days?: number[] | null;
+};
+
+type LessonRow = {
+  id: string;
+  title: string;
+  order_num: number;
+  course_id: string;
+  devotional_mode: "5_days" | "10_days";
+};
+
+type CourseRow = { id: string; title: string; order_num: number };
+type QueryError = { message: string };
+
+type ScheduleQueryParams = {
+  authUserId: string;
+  churchId: string | null;
+  community: string | null;
+  currentArea: string;
+  role: "user" | "admin" | "lider" | null;
+  turmaId: string | null;
+};
+
+type ScheduleSubscription = {
+  consumers: number;
+  channel: ReturnType<typeof supabase.channel>;
+};
+
+const scheduleSubscriptions = new Map<string, ScheduleSubscription>();
+
+async function fetchEvents(churchId: string | null) {
+  const eventSelectFallbacks = [
+    "id, event_date, linked_lesson_id, title, type, area, community, turma_id, target_user_id, released_devotional_days",
+    "id, event_date, linked_lesson_id, title, type, area, community, turma_id, released_devotional_days",
+    "id, event_date, linked_lesson_id, title, type, area, community, released_devotional_days",
+    "id, event_date, linked_lesson_id, title, type, area, released_devotional_days",
+    "id, event_date, linked_lesson_id, title, type, area, community, turma_id, target_user_id",
+    "id, event_date, linked_lesson_id, title, type, area, community, turma_id",
+    "id, event_date, linked_lesson_id, title, type, area, community",
+    "id, event_date, linked_lesson_id, title, type, area",
+  ];
+
+  let events: EventRow[] | null = null;
+  let error: QueryError | null = null;
+  for (const selectClause of eventSelectFallbacks) {
+    let query = supabase
+      .from("events")
+      .select(selectClause)
+      .not("linked_lesson_id", "is", null)
+      .order("event_date", { ascending: true });
+    if (churchId) query = query.eq("church_id", churchId);
+    const result = await query;
+    if (!result.error) {
+      events = (result.data ?? []) as unknown as EventRow[];
+      break;
+    }
+    error = result.error;
+  }
+
+  return {
+    events,
+    error: events
+      ? null
+      : error ?? { message: "useAgendaSchedule: failed to load events with all fallbacks" },
+  };
+}
+
+async function fetchLessons() {
+  const result = await supabase
+    .from("lessons")
+    .select("id, title, order_num, course_id, devotional_mode")
+    .order("order_num");
+
+  if (!result.error) {
+    return {
+      lessons: (result.data ?? []).map((lesson) => ({
+        ...lesson,
+        devotional_mode: lesson.devotional_mode === "5_days" ? "5_days" as const : "10_days" as const,
+      })),
+      error: null,
+    };
+  }
+
+  if (!/devotional_mode/i.test(result.error.message)) {
+    return { lessons: [] as LessonRow[], error: result.error };
+  }
+
+  const fallback = await supabase
+    .from("lessons")
+    .select("id, title, order_num, course_id")
+    .order("order_num");
+  return {
+    lessons: (fallback.data ?? []).map((lesson) => ({ ...lesson, devotional_mode: "10_days" as const })),
+    error: fallback.error,
+  };
+}
+
+async function fetchScheduleData({
+  authUserId,
+  churchId,
+  community,
+  currentArea,
+  role,
+  turmaId,
+}: ScheduleQueryParams): Promise<ScheduleEntry[]> {
+  const [eventsResult, lessonsResult, coursesResult] = await Promise.all([
+    fetchEvents(churchId),
+    fetchLessons(),
+    supabase.from("courses").select("id, title, order_num").order("order_num"),
+  ]);
+
+  if (eventsResult.error) throw new Error(eventsResult.error.message);
+  if (lessonsResult.error) throw new Error(lessonsResult.error.message);
+  if (coursesResult.error) throw coursesResult.error;
+
+  const lessonMap = new Map<string, LessonRow>(
+    lessonsResult.lessons.map((lesson) => [lesson.id, lesson]),
+  );
+  const courseMap = new Map<string, CourseRow>(
+    ((coursesResult.data ?? []) as CourseRow[]).map((course) => [course.id, course]),
+  );
+  const entries: ScheduleEntry[] = [];
+  const isManager = role === "admin" || role === "lider";
+
+  for (const event of eventsResult.events ?? []) {
+    if (!event.linked_lesson_id) continue;
+    if (event.target_user_id && event.target_user_id !== authUserId) continue;
+    if (turmaId) {
+      if (event.turma_id && event.turma_id !== turmaId) continue;
+      if (!event.turma_id && event.area && event.area !== currentArea) continue;
+    } else {
+      if (event.turma_id) continue;
+      if (event.area && event.area !== currentArea) continue;
+    }
+
+    const isConfirmatorio = event.type === "confirmatorio";
+    if (
+      !event.turma_id
+      && event.community
+      && !isManager
+      && !isConfirmatorio
+      && event.community !== community
+    ) continue;
+
+    const lesson = lessonMap.get(event.linked_lesson_id);
+    if (!lesson) continue;
+    const course = courseMap.get(lesson.course_id);
+    if (!course) continue;
+
+    const rawDate = event.event_date;
+    const eventDate = new Date(rawDate.includes("T") ? rawDate : `${rawDate}T12:00:00`);
+    const previousEntry = entries[entries.length - 1];
+    const autoLimited = previousEntry
+      ? Math.round((eventDate.getTime() - previousEntry.eventDate.getTime()) / 86400000) < 10
+      : false;
+    const devotionalDates = getEffectiveDevotionalDates(eventDate, autoLimited);
+    const rawReleased = event.released_devotional_days ?? null;
+    const releasedDayNumbers = autoLimited
+      ? rawReleased?.filter((day) => day <= 5) ?? [1, 2, 3, 4, 5]
+      : rawReleased;
+
+    entries.push({
+      eventId: event.id,
+      eventDate,
+      eventTitle: event.title,
+      lessonId: lesson.id,
+      lessonTitle: lesson.title,
+      lessonOrder: lesson.order_num,
+      courseId: course.id,
+      courseTitle: course.title,
+      courseOrder: course.order_num,
+      windowStart: devotionalDates[0],
+      devotionalDates,
+      releasedDayNumbers,
+      autoLimited,
+      devotionalMode: lesson.devotional_mode,
+    });
+  }
+
+  return entries.sort((a, b) => a.eventDate.getTime() - b.eventDate.getTime());
+}
 
 /**
  * Returns N business days before a given date, in chronological order.
@@ -69,166 +262,68 @@ export function getEffectiveDevotionalDates(
 
 export function useAgendaSchedule() {
   const { profile, role, user } = useAuth();
-  const { effectiveArea } = useAreaSwitch();
+  const { effectiveArea, effectiveTurmaId } = useAreaSwitch();
   const currentArea = effectiveArea || profile?.area || "";
-  const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const channelInstanceId = useRef(Math.random().toString(36).slice(2));
+  const profileUserId = profile?.user_id ?? null;
+  const churchId = profile?.church_id ?? null;
+  const turmaId = effectiveTurmaId ?? profile?.turma_id ?? null;
+  const community = profile?.community ?? null;
+  const authUserId = user?.id ?? null;
+  const queryClient = useQueryClient();
+  const enabled = Boolean(profileUserId && authUserId);
+  const scopeKey = [
+    authUserId,
+    profileUserId,
+    churchId ?? "global",
+    turmaId ?? "no-group",
+    currentArea || "all",
+    community ?? "all",
+    role ?? "user",
+  ].join(":");
+  const queryKey = ["agenda-schedule", scopeKey] as const;
+
+  const { data: schedule = [], isLoading: loading, refetch } = useQuery({
+    queryKey,
+    queryFn: () => fetchScheduleData({
+      authUserId: authUserId!,
+      churchId,
+      community,
+      currentArea,
+      role,
+      turmaId,
+    }),
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    retry: 1,
+  });
 
   useEffect(() => {
-    if (!profile) return;
+    if (!enabled) return;
 
-    fetchSchedule();
-
-    const channelName = `agenda-events-realtime:${currentArea}:${channelInstanceId.current}`;
-    const channel = supabase
-      .channel(channelName)
-      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, () => {
-        fetchSchedule();
-      })
-      .subscribe();
+    let subscription = scheduleSubscriptions.get(scopeKey);
+    if (!subscription) {
+      const channel = supabase
+        .channel(`agenda-events:${profileUserId}:${(turmaId ?? currentArea) || "all"}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "events" }, () => {
+          void queryClient.invalidateQueries({ queryKey: ["agenda-schedule", scopeKey] });
+        })
+        .subscribe();
+      subscription = { consumers: 0, channel };
+      scheduleSubscriptions.set(scopeKey, subscription);
+    }
+    subscription.consumers += 1;
 
     return () => {
-      supabase.removeChannel(channel);
+      const current = scheduleSubscriptions.get(scopeKey);
+      if (!current) return;
+      current.consumers -= 1;
+      if (current.consumers <= 0) {
+        scheduleSubscriptions.delete(scopeKey);
+        void supabase.removeChannel(current.channel);
+      }
     };
-  }, [currentArea, profile]);
-
-  async function fetchSchedule() {
-    setLoading(true);
-
-    const eventSelectFallbacks = [
-      "id, event_date, linked_lesson_id, title, type, area, community, turma_id, target_user_id, released_devotional_days",
-      "id, event_date, linked_lesson_id, title, type, area, community, turma_id, released_devotional_days",
-      "id, event_date, linked_lesson_id, title, type, area, community, released_devotional_days",
-      "id, event_date, linked_lesson_id, title, type, area, released_devotional_days",
-      "id, event_date, linked_lesson_id, title, type, area, community, turma_id, target_user_id",
-      "id, event_date, linked_lesson_id, title, type, area, community, turma_id",
-      "id, event_date, linked_lesson_id, title, type, area, community",
-      "id, event_date, linked_lesson_id, title, type, area",
-    ];
-
-    let eventsResult: any = null;
-    for (const selectClause of eventSelectFallbacks) {
-      const result = await (supabase.from as any)("events")
-        .select(selectClause)
-        .not("linked_lesson_id", "is", null)
-        .order("event_date", { ascending: true });
-
-      if (!result.error) {
-        eventsResult = result;
-        break;
-      }
-    }
-
-    if (!eventsResult) {
-      eventsResult = {
-        data: null,
-        error: { message: "useAgendaSchedule: failed to load events with all fallbacks" },
-      };
-    }
-
-    let lessonsResult = await (supabase.from as any)("lessons")
-      .select("id, title, order_num, course_id, devotional_mode")
-      .order("order_num");
-
-    if (lessonsResult.error && /devotional_mode/i.test(lessonsResult.error.message)) {
-      lessonsResult = await (supabase.from as any)("lessons")
-        .select("id, title, order_num, course_id")
-        .order("order_num");
-    }
-
-    const { data: courses } = await (supabase.from as any)("courses")
-      .select("id, title, order_num")
-      .order("order_num");
-
-    const events = eventsResult.data;
-    const eventsError = eventsResult.error;
-
-    const lessons = (lessonsResult.data as any[])?.map(l => ({
-      ...l,
-      devotional_mode: l.devotional_mode || "10_days"
-    }));
-
-    if (eventsError) {
-      console.error("useAgendaSchedule: failed to load events", eventsError.message);
-      setSchedule([]);
-      setLoading(false);
-      return;
-    }
-
-    if (lessonsResult.error) {
-      console.error("useAgendaSchedule: failed to load lessons", lessonsResult.error.message);
-      setSchedule([]);
-      setLoading(false);
-      return;
-    }
-
-    const lessonMap = new Map((lessons as any[] ?? []).map((l) => [l.id, l]));
-    const courseMap = new Map((courses as any[] ?? []).map((c) => [c.id, c]));
-
-    const entries: ScheduleEntry[] = [];
-    const isManager = role === "admin" || role === "lider";
-
-    for (const event of (events as any[]) ?? []) {
-      if (!event.linked_lesson_id) continue;
-      if ((event as any).target_user_id && (event as any).target_user_id !== user?.id) continue;
-      if (event.area && event.area !== currentArea) continue;
-      if ((event as any).turma_id && profile?.turma_id && (event as any).turma_id !== profile.turma_id) continue;
-      if ((event as any).turma_id && !profile?.turma_id) continue;
-      const isConfirmatorio = event.type === "confirmatorio";
-      if (event.community && !isManager && !isConfirmatorio && event.community !== profile?.community) continue;
-
-      const lesson: any = lessonMap.get(event.linked_lesson_id);
-      if (!lesson) continue;
-      const course: any = courseMap.get(lesson.course_id);
-      if (!course) continue;
-
-      const rawDate = event.event_date as string;
-      const eventDate = new Date(rawDate.includes("T") ? rawDate : `${rawDate}T12:00:00`);
-
-      const prevEntry = entries[entries.length - 1];
-      const autoLimited = prevEntry
-        ? Math.round((eventDate.getTime() - prevEntry.eventDate.getTime()) / 86400000) < 10
-        : false;
-      const devotionalDates = getEffectiveDevotionalDates(eventDate, autoLimited);
-      const windowStart = devotionalDates[0];
-
-      const rawReleased: number[] | null = (event as any).released_devotional_days ?? null;
-      let releasedDayNumbers: number[] | null;
-      if (autoLimited) {
-        const base = rawReleased ?? null;
-        releasedDayNumbers = base ? base.filter((d) => d <= 5) : [1, 2, 3, 4, 5];
-      } else {
-        releasedDayNumbers = rawReleased;
-      }
-
-      const devotionalMode: "5_days" | "10_days" =
-        (lesson as any).devotional_mode === "5_days" ? "5_days" : "10_days";
-
-      entries.push({
-        eventId: event.id,
-        eventDate,
-        eventTitle: event.title,
-        lessonId: lesson.id,
-        lessonTitle: lesson.title,
-        lessonOrder: lesson.order_num,
-        courseId: course.id,
-        courseTitle: course.title,
-        courseOrder: course.order_num,
-        windowStart,
-        devotionalDates,
-        releasedDayNumbers,
-        autoLimited,
-        devotionalMode,
-      });
-    }
-    
-    // Always sort chronologically (ASC) for consistent UI and logic
-    entries.sort((a, b) => a.eventDate.getTime() - b.eventDate.getTime());
-    
-    setSchedule(entries);
-    setLoading(false);
-  }
+  }, [currentArea, enabled, profileUserId, queryClient, scopeKey, turmaId]);
 
   const now = new Date();
   const today = new Date(now);
@@ -258,7 +353,7 @@ export function useAgendaSchedule() {
 
   return {
     schedule,
-    loading,
+    loading: enabled && loading,
     releasedLessonIds,
     studyOpenLessonIds,
     lateAccessLessonIds,
@@ -270,6 +365,6 @@ export function useAgendaSchedule() {
     nextScheduledEvent,
     currentEntry,
     hasScheduledEvents: schedule.length > 0,
-    refetch: fetchSchedule,
+    refetch,
   };
 }

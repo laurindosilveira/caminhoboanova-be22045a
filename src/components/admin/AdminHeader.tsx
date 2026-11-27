@@ -49,9 +49,10 @@ type Props = {
   participants?: ReportParticipant[];
   activities?: ReportActivity[];
   turmaLabel?: string;
+  turmaId?: string | null;
 };
 
-export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBackToUser, selectedCommunity, onChangeCommunity, participants, activities, turmaLabel }: Props) {
+export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBackToUser, selectedCommunity, onChangeCommunity, participants, activities, turmaLabel, turmaId }: Props) {
   const { user, role } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -110,7 +111,7 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
     }
   };
 
-  const handleCancelTrial = async () => {
+  const handleAddPayment = async () => {
     if (!churchId) return;
     try {
       const { data, error } = await supabase.functions.invoke("customer-portal");
@@ -159,9 +160,9 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
               size="sm" 
               variant="secondary" 
               className="h-8 rounded-md bg-white px-3 text-xs font-bold text-[#b45309] hover:bg-white/90"
-              onClick={handleCancelTrial}
+              onClick={handleAddPayment}
             >
-              Cancelar
+              Adicionar cartão
             </Button>
             <button 
               onClick={handleSnooze}
@@ -219,6 +220,7 @@ export default function AdminHeader({ areaName, subtitle, stats, onSignOut, onBa
                   participants={participants}
                   activities={activities}
                   turmaName={turmaLabel || areaName}
+                  turmaId={turmaId}
                 />
               )}
               {selectedCommunity && onChangeCommunity && (

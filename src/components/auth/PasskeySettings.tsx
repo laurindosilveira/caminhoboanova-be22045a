@@ -4,6 +4,7 @@ import { Fingerprint, Plus, Trash2, Edit2, Loader2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/utils";
 
 interface Passkey {
   id: string;
@@ -49,7 +50,7 @@ export default function PasskeySettings() {
       const { data, error } = await passkeyAuth.passkey.list();
       if (error) throw error;
       setPasskeys(data || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching passkeys:", err);
     } finally {
       setLoading(false);
@@ -69,9 +70,9 @@ export default function PasskeySettings() {
       
       toast.success("Biometria cadastrada com sucesso!");
       fetchPasskeys();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error registering passkey:", err);
-      const message = String(err?.message ?? "");
+      const message = getErrorMessage(err);
       toast.error(/passkeys are disabled|passkey_disabled/i.test(message)
         ? "A biometria ainda não foi ativada para este aplicativo."
         : "Erro ao cadastrar biometria: " + message);
@@ -89,8 +90,8 @@ export default function PasskeySettings() {
       
       toast.success("Biometria removida.");
       fetchPasskeys();
-    } catch (err: any) {
-      toast.error("Erro ao remover: " + err.message);
+    } catch (err: unknown) {
+      toast.error("Erro ao remover: " + getErrorMessage(err));
     }
   }
 
@@ -107,8 +108,8 @@ export default function PasskeySettings() {
       toast.success("Nome atualizado.");
       setEditingId(null);
       fetchPasskeys();
-    } catch (err: any) {
-      toast.error("Erro ao atualizar nome: " + err.message);
+    } catch (err: unknown) {
+      toast.error("Erro ao atualizar nome: " + getErrorMessage(err));
     }
   }
 
@@ -182,14 +183,14 @@ export default function PasskeySettings() {
                       <span className="font-inter text-sm font-semibold truncate text-foreground">
                         {pk.friendly_name || "Biometria"}
                       </span>
-                      <Badge variant="secondary" className="text-[9px] h-4 font-bold bg-primary/5 text-primary border-primary/10">PASSKEY</Badge>
+                      <Badge variant="secondary" className="text-xs h-4 font-bold bg-primary/5 text-primary border-primary/10">PASSKEY</Badge>
                     </div>
                     <div className="flex flex-col gap-0.5 mt-0.5">
-                      <p className="text-[10px] text-muted-foreground font-inter">
+                      <p className="text-xs text-muted-foreground font-inter">
                         Adicionado em {new Date(pk.created_at).toLocaleDateString()}
                       </p>
                       {pk.last_used_at && (
-                        <p className="text-[10px] text-brand-green font-inter font-medium">
+                        <p className="text-xs text-brand-green font-inter font-medium">
                           Último uso: {new Date(pk.last_used_at).toLocaleDateString()} às {new Date(pk.last_used_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </p>
                       )}

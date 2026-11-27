@@ -1,9 +1,41 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import BibleModal from "./BibleModal";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import { ChevronLeft, BookOpen, Heart, CheckCircle2, AlertCircle, Music } from "lucide-react";
 import { toast } from "sonner";
 import WorshipCard from "./WorshipCard";
+import {
+  cachedStudentQuery,
+  enqueueStudentAction,
+  getPendingStudentOverlay,
+  isStudentOffline,
+  mergeByKey,
+  learningScope,
+  scopedLearningEnabled,
+  scopedLearningCacheKey,
+  inspectLearningScope,
+  getOwnedCompletionScope,
+  requestExistingLearningReview,
+  type LearningScope,
+  syncLearningActionWithCurrent,
+} from "@/lib/studentOffline";
+import type { Database } from "@/integrations/supabase/types";
+
+type Tables = Database["public"]["Tables"];
+type DevotionalContentRow = Tables["devotional_content"]["Row"];
+type WorshipSongRow = Tables["worship_songs"]["Row"];
+type DevotionalResponseRow = Pick<Tables["devotional_responses"]["Row"], "question_index" | "response">;
+type WorshipSongLink = { worship_song: WorshipSongRow | null };
+
+function normalizePlatform(platform: string): WorshipSong["platform"] {
+  return platform === "youtube" || platform === "spotify" ? platform : "other";
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 type WorshipSong = {
   id: string;
@@ -39,32 +71,58 @@ type Props = {
 };
 
 export default function DevotionalView({ activity, onBack, onComplete, isCompleted, devotionalData, hideCompleteButton, isRecovery = false, awardedPoints, overrideId }: Props) {
+  const { profile, user: authUser } = useAuth();
+  const { effectiveArea, effectiveTurmaId } = useAreaSwitch();
+  const loadedLearningScope = useRef<LearningScope | undefined>();
+  const loadedScopeIdentity = useRef("");
+  const scopeIdentity = JSON.stringify([authUser?.id ?? null, profile?.church_id ?? null, profile?.turma_id ?? null, profile?.area ?? null, effectiveTurmaId, effectiveArea]);
+  const scopeChanged = !!loadedScopeIdentity.current && loadedScopeIdentity.current !== scopeIdentity;
+  const activeScope = useRef("");
+  activeScope.current = `${authUser?.id ?? ""}:${activity.id}:${scopeIdentity}`;
   const [content, setContent] = useState<DevotionalContent | null>(devotionalData ?? null);
   const [loading, setLoading] = useState(!devotionalData);
   const [completing, setCompleting] = useState(false);
   const [bibleModalRef, setBibleModalRef] = useState<string | null>(null);
+  const [answersState, setAnswersState] = useState<"loading" | "ready" | "error" | "pending" | "scope_review">("loading");
+  const [answersUserId, setAnswersUserId] = useState<string | undefined>();
+  const [answerLoadAttempt, setAnswerLoadAttempt] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [answersDirty, setAnswersDirty] = useState(false);
+  const serverAnswers = useRef<Record<string, string>>({});
   const [attempted, setAttempted] = useState(false);
   const [readConfirmed, setReadConfirmed] = useState(false);
+
+  useEffect(() => { setCompleting(false); }, [authUser?.id, activity.id]);
 
   useEffect(() => {
     if (devotionalData && devotionalData.worship_songs && devotionalData.worship_songs.length > 0) return;
 
     async function load() {
-      const { data: contentData } = await supabase
-        .from("devotional_content")
-        .select("*")
-        .eq("activity_id", activity.id)
-        .maybeSingle();
+      const { data: contentData } = await cachedStudentQuery<DevotionalContentRow | null>(
+        `devotional-content:${activity.id}`,
+        () => supabase
+          .from("devotional_content")
+          .select("*")
+          .eq("activity_id", activity.id)
+          .maybeSingle(),
+        null,
+      );
 
-      const { data: songsData } = await supabase
-        .from("devotional_worship_songs")
-        .select(`
-          worship_song:worship_songs(*)
-        `)
-        .eq("devotional_id", activity.id);
+      const { data: songsData } = await cachedStudentQuery<WorshipSongLink[]>(
+        `devotional-songs:${activity.id}`,
+        () => supabase
+          .from("devotional_worship_songs")
+          .select(`
+            worship_song:worship_songs(*)
+          `)
+          .eq("devotional_id", activity.id),
+        [],
+      );
 
-      const songs = songsData?.map(s => s.worship_song).filter(Boolean) as WorshipSong[] || [];
+      const songs: WorshipSong[] = songsData
+        .map((link) => link.worship_song)
+        .filter((song): song is WorshipSongRow => Boolean(song))
+        .map((song) => ({ ...song, platform: normalizePlatform(song.platform) }));
 
       if (contentData) {
         setContent({
@@ -85,34 +143,99 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
   }, [activity.id, devotionalData]);
 
   useEffect(() => {
+    let cancelled = false;
+    loadedScopeIdentity.current = scopeIdentity;
+    loadedLearningScope.current = effectiveTurmaId === profile?.turma_id && effectiveArea === profile?.area
+      ? learningScope(profile?.church_id, effectiveTurmaId, effectiveArea) : undefined;
+    setAnswersState("loading");
     async function loadAnswers() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const user = authUser;
+      if (!user) { if (!cancelled) setAnswersState("error"); return; }
+      const verifiedScope = await getOwnedCompletionScope(user.id, loadedLearningScope.current);
+      if (cancelled) return;
+      loadedLearningScope.current = verifiedScope;
 
-      const { data, error } = await supabase
-        .from("devotional_responses")
-        .select("question_index, response")
-        .eq("user_id", user.id)
-        .eq("devotional_id", activity.id)
-        .order("question_index");
+      const [{ data, error }, overlay, scopeStatus] = await Promise.all([
+        cachedStudentQuery<DevotionalResponseRow[]>(
+          `devotional-responses:${user.id}:${activity.id}${scopedLearningCacheKey(loadedLearningScope.current)}`,
+          () => supabase
+            .from("devotional_responses")
+            .select("question_index, response")
+            .eq("user_id", user.id)
+            .eq("devotional_id", activity.id)
+            .order("question_index"),
+          [],
+          { force: true },
+        ),
+        getPendingStudentOverlay(user.id, { strict: true, scope: loadedLearningScope.current }),
+        inspectLearningScope(user.id,"devotional",activity.id,loadedLearningScope.current),
+      ]);
+      if (cancelled) return;
+      setAnswersUserId(user.id);
+      if (scopeStatus !== "ready") { setAnswersState(scopeStatus === "scope_review_required" ? "scope_review" : "error"); return; }
+      if (!isStudentOffline() && overlay.actions.some(action => action.type === "complete_devotional" && action.payload.devotionalId === activity.id)) { setAnswersState("pending"); return; }
+      if (error && !isStudentOffline()) { setAnswersState("error"); return; }
+      const mergedResponses = mergeByKey(
+        data ?? [],
+        overlay.devotionalResponses.filter((item) => item.devotional_id === activity.id),
+        "question_index",
+      );
 
-      if (error) {
+      if (error && !isStudentOffline()) {
         toast.error("Não foi possível carregar as respostas do devocional.", {
-          description: error.message,
+          description: getErrorMessage(error),
         });
         return;
       }
-      if (!data) return;
+      if (!mergedResponses) return;
 
       const nextAnswers: Record<number, string> = {};
-      data.forEach((row) => {
+      mergedResponses.forEach((row) => {
         nextAnswers[row.question_index] = row.response ?? "";
       });
+      serverAnswers.current = Object.fromEntries((data ?? []).map(row => [String(row.question_index), row.response ?? ""]));
       setAnswers(nextAnswers);
+      setAnswersState("ready");
     }
 
-    loadAnswers();
-  }, [activity.id]);
+    void loadAnswers().catch(() => { if (!cancelled) { setAnswersUserId(authUser?.id); setAnswersState("error"); } });
+    return () => { cancelled = true; };
+  // Preserve the editing scope until the user returns to that group or leaves.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activity.id, answerLoadAttempt, authUser?.id]);
+
+  useEffect(() => {
+    if (answersState !== "pending" && answersState !== "scope_review") return;
+    const refresh = () => setAnswerLoadAttempt(value => value + 1);
+    window.addEventListener("student-offline-queue-changed", refresh);
+    window.addEventListener("student-offline-queue-synced", refresh);
+    window.addEventListener("online", refresh);
+    window.addEventListener("legacy-recovery-changed", refresh);
+    return () => { window.removeEventListener("student-offline-queue-changed", refresh); window.removeEventListener("student-offline-queue-synced", refresh); window.removeEventListener("online", refresh); window.removeEventListener("legacy-recovery-changed", refresh); };
+  }, [answersState]);
+
+  useEffect(() => {
+    if (scopeChanged && answersState === "ready" && !answersDirty && !loadedLearningScope.current
+      && profile?.church_id && profile?.turma_id && profile?.area
+      && effectiveTurmaId === profile.turma_id && effectiveArea === profile.area) {
+      setAnswerLoadAttempt(value => value + 1);
+    }
+  }, [scopeIdentity, scopeChanged, answersState, answersDirty]);
+
+  useEffect(() => {
+    if (scopedLearningEnabled && answersState === "scope_review" && !loadedLearningScope.current
+      && profile?.church_id && profile?.turma_id && profile?.area
+      && effectiveTurmaId === profile.turma_id && effectiveArea === profile.area) {
+      setAnswerLoadAttempt(value => value + 1);
+    }
+  }, [answersState, profile?.church_id, profile?.turma_id, profile?.area, effectiveTurmaId, effectiveArea]);
+
+  useEffect(() => {
+    if (!answersDirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [answersDirty]);
 
   const visibleQuestions = (content?.questions ?? [])
     .map((question, index) => ({ question, index }))
@@ -135,44 +258,93 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
     }
 
     setCompleting(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = authUser;
     if (!user) {
+      toast.error("Sua sessão não está disponível. Mantenha esta tela aberta e entre novamente.");
       setCompleting(false);
       return;
     }
+    const requestedScope = activeScope.current;
 
     const responsePayload = Object.fromEntries(
       visibleQuestions.map(({ index }) => [String(index), answers[index] ?? ""]),
     );
-    const { error } = await supabase.rpc("complete_devotional", {
-      p_devotional_id: activity.id,
-      p_responses: responsePayload,
-      p_is_recovery: isRecovery,
-      p_awarded_points: awardedPoints ?? activity.points,
-      p_override_release_id: overrideId ?? null,
-    });
+    if (isStudentOffline()) {
+      try {
+        await enqueueStudentAction({
+          type: "complete_devotional",
+          userId: user.id,
+          churchId: profile?.church_id ?? null,
+          scope: loadedLearningScope.current,
+          payload: {
+            devotionalId: activity.id,
+            responses: responsePayload,
+            isRecovery,
+            awardedPoints: awardedPoints ?? activity.points,
+            overrideId: overrideId ?? null,
+          },
+        });
+      } catch (error) {
+        if (activeScope.current !== requestedScope) return;
+        setCompleting(false);
+        toast.error("Nao foi possivel salvar offline. Mantenha esta tela aberta e tente novamente.", { description: getErrorMessage(error) });
+        return;
+      }
+      if (activeScope.current !== requestedScope) return;
+      setAnswersDirty(false);
+      setAnswersState("pending");
+      setCompleting(false);
+      toast.success("Respostas guardadas neste aparelho. A conclusão será confirmada após a sincronização.");
+      return;
+    }
 
-    if (error) {
-      toast.error("Não foi possível concluir o devocional.", {
-        description: error.message,
-      });
+    const action = { id: "live", type: "complete_devotional" as const, userId: user.id, scope: loadedLearningScope.current, createdAt: new Date().toISOString(), payload: { devotionalId: activity.id, responses: responsePayload, isRecovery, awardedPoints: awardedPoints ?? activity.points, overrideId: overrideId ?? null } };
+    try {
+      const result = await syncLearningActionWithCurrent(action, serverAnswers.current);
+      if (result.conflict) {
+        await enqueueStudentAction({ type: "complete_devotional", userId: user.id, churchId: profile?.church_id ?? null, scope: loadedLearningScope.current, payload: action.payload });
+        if (activeScope.current !== requestedScope) return;
+        setCompleting(false);
+        setAnswersState("pending");
+        window.dispatchEvent(new Event("online"));
+        return;
+      }
+      if (activeScope.current !== requestedScope) return;
+      serverAnswers.current = result.current;
+    } catch {
+      // The server may have rejected the request or committed before the
+      // connection failed. Keep a local copy and compare before retrying.
+      try {
+        await enqueueStudentAction({ type: "complete_devotional", userId: user.id, churchId: profile?.church_id ?? null, scope: loadedLearningScope.current, payload: action.payload });
+        if (activeScope.current !== requestedScope) return;
+        setAnswersDirty(false);
+        setAnswersState("pending");
+        toast.error("A conclusão ainda não foi confirmada. Suas respostas foram guardadas neste aparelho para sincronizar.");
+      } catch {
+        if (activeScope.current !== requestedScope) return;
+        toast.error("Não foi possível guardar suas respostas. Mantenha esta tela aberta e tente novamente.");
+      }
       setCompleting(false);
       return;
     }
-    
+
+    setAnswersDirty(false);
     // Dispatch celebration event
-    window.dispatchEvent(new CustomEvent("show-celebration", {
-      detail: {
-        type: "devotional",
-        points: awardedPoints ?? activity.points
-      }
-    }));
+    const points = awardedPoints ?? activity.points;
+    if (points > 0) {
+      window.dispatchEvent(new CustomEvent("show-celebration", {
+        detail: {
+          type: "devotional",
+          points
+        }
+      }));
+    }
 
     await onComplete(activity.id);
     setCompleting(false);
   }
 
-  if (loading) {
+  if (loading || answersState === "loading" || (authUser?.id && answersUserId !== authUser.id)) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <div className="w-10 h-10 rounded-2xl bg-brand-green/10 flex items-center justify-center mb-3 animate-pulse">
@@ -182,6 +354,12 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
       </div>
     );
   }
+
+  if (answersState === "pending") return <div className="px-5 py-12 text-center space-y-4"><p>Aguarde a sincronização ou resolva a diferença de respostas antes de editar.</p><button className="text-primary underline" onClick={() => { window.dispatchEvent(new Event("online")); setAnswerLoadAttempt(value => value + 1); }}>Tentar novamente</button><button className="block mx-auto text-primary underline" onClick={onBack}>Voltar</button></div>;
+
+  if (answersState === "scope_review") return <div className="px-5 py-12 text-center space-y-4"><p>Esta atividade precisa de revisão antes de ser associada à sua turma atual.</p><button className="text-primary underline" onClick={() => { if (authUser?.id) void requestExistingLearningReview(authUser.id,"devotional",activity.id,loadedLearningScope.current).catch(() => toast.error("Não foi possível abrir a revisão. Confira sua turma e a conexão.")); }}>Revisar respostas anteriores</button><button className="block mx-auto text-primary underline" onClick={onBack}>Voltar</button></div>;
+
+  if (answersState === "error") return <div className="px-5 py-12 text-center space-y-4"><p>Não foi possível carregar suas respostas. Verifique a conexão.</p><button className="text-primary underline" onClick={() => setAnswerLoadAttempt(value => value + 1)}>Tentar novamente</button><button className="block mx-auto text-primary underline" onClick={onBack}>Voltar</button></div>;
 
   if (!content || (!content.bible_text && !content.reflection)) {
     return (
@@ -215,8 +393,9 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
   }
 
   return (
-    <div className="px-5 pt-6 pb-24 space-y-4">
-      <button onClick={onBack} className="flex items-center gap-1.5 text-muted-foreground font-inter text-sm hover:text-foreground transition-colors">
+    <div className="px-5 pt-6 pb-24 space-y-4" data-unsaved-work={answersDirty ? "true" : undefined}>
+      {scopeChanged && <p role="alert">A turma selecionada mudou. Volte à turma anterior para continuar esta resposta.</p>}
+      <button disabled={completing} onClick={() => { if (!answersDirty || window.confirm("Suas respostas ainda não foram salvas. Deseja sair?")) onBack(); }} className="flex items-center gap-1.5 text-muted-foreground font-inter text-sm hover:text-foreground transition-colors">
         <ChevronLeft className="w-4 h-4" /> Voltar
       </button>
 
@@ -275,7 +454,7 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
             <span className="text-sm">💬</span>
             <p className="font-montserrat font-bold text-foreground text-sm">Para Pensar</p>
             {!isCompleted && (
-              <span className="ml-auto text-muted-foreground font-inter text-[10px]">
+              <span className="ml-auto text-muted-foreground font-inter text-xs">
                 {activeQuestions.filter((_, index) => (answers[index] ?? "").trim()).length}/{activeQuestions.length} respondidas
               </span>
             )}
@@ -297,12 +476,13 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
                   </div>
                   {isCompleted ? (
                     <div className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/30 text-foreground font-inter text-sm whitespace-pre-wrap min-h-16">
-                      {(answers[index] ?? "").trim() || "Sem resposta registrada."}
+                      {scopeChanged ? "Resposta protegida nesta turma." : (answers[index] ?? "").trim() || "Sem resposta registrada."}
                     </div>
                   ) : (
                     <textarea
-                      value={answers[index] ?? ""}
-                      onChange={(event) => setAnswers((prev) => ({ ...prev, [index]: event.target.value }))}
+                      value={scopeChanged ? "" : (answers[index] ?? "")}
+                      onChange={(event) => { setAnswersDirty(true); setAnswers((prev) => ({ ...prev, [index]: event.target.value })); }}
+                      readOnly={completing || scopeChanged}
                       placeholder="Escreva sua reflexão..."
                       rows={2}
                       className={`w-full px-3 py-2.5 rounded-xl border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 resize-none transition-colors ${
@@ -369,13 +549,13 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
           {(() => {
             const now = new Date();
             const isWeekend = now.getDay() === 0 || now.getDay() === 6;
-            const points = isWeekend ? 2 : activity.points;
+            const points = awardedPoints ?? (isWeekend ? 2 : activity.points);
 
             return (
               <>
                 <button
                   onClick={handleComplete}
-                  disabled={completing || !canComplete}
+                  disabled={completing || !canComplete || scopeChanged}
                   className={`w-full py-3.5 rounded-2xl font-montserrat text-sm font-black text-primary-foreground disabled:opacity-60 shadow-lg active:scale-95 transition-all ${
                     canComplete ? "shadow-secondary/30" : "opacity-70"
                   }`}
@@ -383,16 +563,16 @@ export default function DevotionalView({ activity, onBack, onComplete, isComplet
                 >
                   {completing ? "Marcando..." : `Concluir Devocional · +${points} pts →`}
                 </button>
-                {isWeekend && (
-                  <p className="text-center text-accent-foreground font-inter text-[10px]">
+                {isWeekend && points > 0 && (
+                  <p className="text-center text-accent-foreground font-inter text-xs">
                     ⚠️ Recuperação de fim de semana: 2 pts ao invés de {activity.points} pts
                   </p>
                 )}
               </>
             );
           })()}
-          <p className="text-center text-muted-foreground font-inter text-[10px]">
-            ⭐ Responda as perguntas para ganhar seus pontos de fé!
+          <p className="text-center text-muted-foreground font-inter text-xs">
+            {activity.points > 0 ? "⭐ Responda as perguntas para ganhar seus pontos de fé!" : "Prazo encerrado: suas respostas serão salvas sem pontuação."}
           </p>
         </div>
       )}

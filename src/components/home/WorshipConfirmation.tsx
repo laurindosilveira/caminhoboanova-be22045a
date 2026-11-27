@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { EVENT_TYPES, getEventEmoji, getEventLabel } from "@/config/eventTypes";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { enqueueStudentAction } from "@/lib/studentOffline";
 
 type EventItem = {
   id: string;
@@ -34,7 +35,7 @@ type WorshipRecord = {
 type Props = {
   events: EventItem[];
   attendanceRecords: AttendanceRecord[];
-  onCheckIn: (eventId: string, status: "pendente_presente" | "pendente_falta", justification?: string) => void;
+  onCheckIn: (eventId: string, status: "pendente_presente" | "pendente_falta", justification?: string) => Promise<boolean>;
 };
 
 const TIME_OPTIONS = [
@@ -58,8 +59,9 @@ const ATT_STATUS_CFG: Record<string, { icon: string; label: string; cls: string 
 
 export default function WorshipConfirmation({ events, attendanceRecords, onCheckIn }: Props) {
   const { toast } = useToast();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [open, setOpen] = useState(false);
+  const [submittingAttendance, setSubmittingAttendance] = useState(false);
 
   // Selected agenda event
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -115,18 +117,18 @@ export default function WorshipConfirmation({ events, attendanceRecords, onCheck
     setShowManual(false);
   }
 
-  function handleConfirm() {
-    if (!selectedEventId) return;
-    onCheckIn(selectedEventId, "pendente_presente");
-    setOpen(false);
-    reset();
+  async function handleConfirm() {
+    if (!selectedEventId || submittingAttendance) return;
+    setSubmittingAttendance(true);
+    try { if (await onCheckIn(selectedEventId, "pendente_presente")) { setOpen(false); reset(); } }
+    finally { setSubmittingAttendance(false); }
   }
 
-  function handleJustify() {
-    if (!selectedEventId) return;
-    onCheckIn(selectedEventId, "pendente_falta", justificationText || undefined);
-    setOpen(false);
-    reset();
+  async function handleJustify() {
+    if (!selectedEventId || submittingAttendance) return;
+    setSubmittingAttendance(true);
+    try { if (await onCheckIn(selectedEventId, "pendente_falta", justificationText || undefined)) { setOpen(false); reset(); } }
+    finally { setSubmittingAttendance(false); }
   }
 
   async function handleManualSubmit() {
@@ -135,26 +137,24 @@ export default function WorshipConfirmation({ events, attendanceRecords, onCheck
       return;
     }
     setSubmittingManual(true);
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSubmittingManual(false); return; }
 
-    const { error } = await supabase.from("worship_attendance").insert({
-      user_id: user.id,
-      worship_date: format(manualDate, "yyyy-MM-dd"),
-      worship_time: manualTime,
-      preacher_name: getEventLabel(manualType),
-      event_type: manualType,
-      church_id: profile?.church_id ?? null,
-    });
-
-    if (error) {
-      toast({ title: "Erro ao enviar", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Presença enviada!", description: "Aguarde a confirmação do líder da turma." });
-      setOpen(false);
-      reset();
-      setLoadedRecords(false); // refresh on next open
+    try {
+      await enqueueStudentAction({
+        type:"worship_manual", userId:user.id, churchId:profile?.church_id ?? null,
+        payload:{ worshipDate:format(manualDate,"yyyy-MM-dd"), worshipTime:manualTime,
+          preacherName:getEventLabel(manualType), eventType:manualType },
+      });
+    } catch {
+      toast({ title:"Não foi possível guardar a presença no aparelho", description:"Mantenha esta tela aberta e tente novamente.", variant:"destructive" });
+      setSubmittingManual(false);
+      return;
     }
+    toast({ title:"Presença guardada no aparelho", description:"Ela será enviada para aprovação quando a conexão estiver disponível." });
+    window.dispatchEvent(new Event("online"));
+    setOpen(false);
+    reset();
+    setLoadedRecords(false);
     setSubmittingManual(false);
   }
 
@@ -248,7 +248,7 @@ export default function WorshipConfirmation({ events, attendanceRecords, onCheck
                           {format(dateObj, "EEE, d 'de' MMM 'às' HH:mm", { locale: ptBR })}
                         </p>
                         {attRecord && (
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-inter font-semibold px-2 py-0.5 rounded-full mt-1 ${ATT_STATUS_CFG[attRecord.status]?.cls ?? ""}`}>
+                          <span className={`inline-flex items-center gap-1 text-xs font-inter font-semibold px-2 py-0.5 rounded-full mt-1 ${ATT_STATUS_CFG[attRecord.status]?.cls ?? ""}`}>
                             {ATT_STATUS_CFG[attRecord.status]?.icon} {ATT_STATUS_CFG[attRecord.status]?.label}
                           </span>
                         )}
@@ -271,6 +271,7 @@ export default function WorshipConfirmation({ events, attendanceRecords, onCheck
                 <div className="flex gap-2">
                   <button
                     onClick={handleConfirm}
+                    disabled={submittingAttendance}
                     className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl bg-brand-green/10 text-brand-green hover:bg-brand-green/20 active:scale-95 transition-all font-inter text-sm font-semibold"
                   >
                     ✅ Confirmar Presença
@@ -298,7 +299,7 @@ export default function WorshipConfirmation({ events, attendanceRecords, onCheck
                     />
                     <button
                       onClick={handleJustify}
-                      disabled={!justificationText.trim()}
+                      disabled={!justificationText.trim() || submittingAttendance}
                       className="w-full py-3 rounded-2xl bg-accent/15 text-accent-foreground hover:bg-accent/25 transition-colors font-inter text-sm font-semibold disabled:opacity-50"
                     >
                       Enviar justificativa
@@ -420,7 +421,7 @@ export default function WorshipConfirmation({ events, attendanceRecords, onCheck
                       <span className="text-lg">{getEventEmoji(r.event_type)}</span>
                       <div className="flex-1 min-w-0">
                         <p className="font-inter text-sm font-medium text-foreground truncate">{r.preacher_name}</p>
-                        <p className="font-inter text-[10px] text-muted-foreground">
+                        <p className="font-inter text-xs text-muted-foreground">
                           {new Date(r.worship_date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })} · {r.worship_time}
                         </p>
                       </div>

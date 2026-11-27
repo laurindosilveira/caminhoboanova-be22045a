@@ -309,18 +309,18 @@ export default function LeaderGuideContent() {
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="bg-primary/5 rounded-lg p-2">
             <p className="font-montserrat font-bold text-primary text-base">{readCount}</p>
-            <p className="text-muted-foreground font-inter text-[10px]">Concluídas</p>
+            <p className="text-muted-foreground font-inter text-xs">Concluídas</p>
           </div>
           <div className="bg-accent/10 rounded-lg p-2">
             <p className="font-montserrat font-bold text-accent-foreground text-base">{totalCount - readCount}</p>
-            <p className="text-muted-foreground font-inter text-[10px]">Pendentes</p>
+            <p className="text-muted-foreground font-inter text-xs">Pendentes</p>
           </div>
           <div className="bg-muted rounded-lg p-2">
             <div className="flex items-center justify-center gap-1">
               <Clock className="w-3 h-3 text-muted-foreground" />
               <p className="font-montserrat font-bold text-foreground text-base">{remainingTimeMin}</p>
             </div>
-            <p className="text-muted-foreground font-inter text-[10px]">min restantes</p>
+            <p className="text-muted-foreground font-inter text-xs">min restantes</p>
           </div>
         </div>
 
@@ -354,7 +354,7 @@ export default function LeaderGuideContent() {
                   <span className={`font-montserrat font-bold text-sm block ${isRead ? "text-primary" : "text-foreground"}`}>
                     {section.title}
                   </span>
-                  <span className="text-muted-foreground font-inter text-[10px] flex items-center gap-1">
+                  <span className="text-muted-foreground font-inter text-xs flex items-center gap-1">
                     <Clock className="w-2.5 h-2.5" />
                     {section.readTimeMin} min de leitura
                     {isRead && <span className="ml-1 text-primary">· ✓ Lida</span>}

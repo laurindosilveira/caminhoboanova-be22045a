@@ -11,6 +11,7 @@ import {
   ChevronUp,
   Clock,
   Flame,
+  Heart,
   HelpCircle,
   MessageSquare,
   RefreshCw,
@@ -26,7 +27,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { requestNotificationPermission, isNotificationEnabled, sendNotification } from "@/lib/notifications";
-import { subscribeToWebPush, isWebPushSubscribed } from "@/lib/webPush";
+import { getWebPushStatus, syncWebPushSubscription } from "@/lib/webPush";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import PushTroubleshootHelp from "@/components/home/PushTroubleshootHelp";
@@ -38,6 +39,10 @@ type NotifPrefs = {
   eventos: boolean;
   streak: boolean;
   mensagens: boolean;
+  birthday: boolean;
+  prayer: boolean;
+  attendance: boolean;
+  chat_replies: boolean;
 };
 
 type WhatsAppPrefs = {
@@ -52,6 +57,10 @@ const defaultPrefs: NotifPrefs = {
   eventos: true,
   streak: true,
   mensagens: true,
+  birthday: true,
+  prayer: true,
+  attendance: true,
+  chat_replies: true,
 };
 
 const defaultWhatsAppPrefs: WhatsAppPrefs = {
@@ -62,6 +71,10 @@ const defaultWhatsAppPrefs: WhatsAppPrefs = {
 };
 
 const HOUR_OPTIONS = Array.from({ length: 18 }, (_, i) => i + 5);
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Erro de rede";
+}
 
 const NOTIF_PREVIEWS: Record<string, { title: string; body: string; icon: string }> = {
   devocional: { title: "Devocional do dia", body: "Seu devocional de hoje esta disponivel!", icon: "📖" },
@@ -82,7 +95,7 @@ function NotificationPreview({ type, visible, onClose }: { type: string; visible
         </button>
         <div className="flex items-center gap-1 mb-2">
           <Smartphone className="w-3 h-3 text-muted-foreground" />
-          <span className="text-[9px] font-inter font-bold text-muted-foreground uppercase tracking-wider">Preview da notificacao</span>
+          <span className="text-xs font-inter font-bold text-muted-foreground uppercase tracking-wider">Preview da notificacao</span>
         </div>
         <div className="bg-muted rounded-xl p-3 border border-border/50">
           <div className="flex items-start gap-2.5">
@@ -92,7 +105,7 @@ function NotificationPreview({ type, visible, onClose }: { type: string; visible
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
                 <p className="font-montserrat font-bold text-foreground text-xs truncate">{preview.title}</p>
-                <span className="text-[9px] text-muted-foreground font-inter flex-shrink-0">agora</span>
+                <span className="text-xs text-muted-foreground font-inter flex-shrink-0">agora</span>
               </div>
               <p className="text-muted-foreground text-[11px] font-inter mt-0.5 leading-snug">{preview.body}</p>
             </div>
@@ -106,8 +119,12 @@ function NotificationPreview({ type, visible, onClose }: { type: string; visible
 export default function NotificationSettings() {
   const { user } = useAuth();
   const [masterOn, setMasterOn] = useState(false);
+  const [localOn, setLocalOn] = useState(true);
   const [prefs, setPrefs] = useState<NotifPrefs>(defaultPrefs);
   const [preferredHour, setPreferredHour] = useState(7);
+  const [quietHoursEnabled, setQuietHoursEnabled] = useState(false);
+  const [quietStart, setQuietStart] = useState(22);
+  const [quietEnd, setQuietEnd] = useState(7);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [permissionError, setPermissionError] = useState(false);
@@ -140,6 +157,10 @@ export default function NotificationSettings() {
     { key: "eventos" as const, label: "Eventos e encontros", desc: "Avisos de eventos próximos", icon: CalendarDays, color: "text-primary" },
     { key: "streak" as const, label: "Risco de perder sequência", desc: "Alerta quando sua sequência está em risco", icon: Flame, color: "text-secondary" },
     { key: "mensagens" as const, label: "Mensagens do pastor", desc: "Novas mensagens e comunicados", icon: MessageSquare, color: "text-accent-foreground" },
+    { key: "birthday" as const, label: "Aniversarios", desc: "Avisos de aniversariantes da area", icon: Sparkles, color: "text-secondary" },
+    { key: "prayer" as const, label: "Oracao", desc: "Duplas de oracao e confirmacoes", icon: Heart, color: "text-brand-green" },
+    { key: "attendance" as const, label: "Presenca", desc: "Lembretes para confirmar presenca", icon: CheckSquare, color: "text-primary" },
+    { key: "chat_replies" as const, label: "Respostas no chat", desc: "Avisos quando responderem sua mensagem", icon: MessageSquare, color: "text-accent-foreground" },
   ];
 
   const [showConfettiPref, setShowConfettiPref] = useState(true);
@@ -174,13 +195,21 @@ export default function NotificationSettings() {
           eventos: data.eventos,
           streak: data.streak,
           mensagens: data.mensagens,
+          birthday: data.birthday ?? true,
+          prayer: data.prayer ?? true,
+          attendance: data.attendance ?? true,
+          chat_replies: data.chat_replies ?? true,
         });
-        setPreferredHour((data as any).preferred_hour ?? 7);
+        setPreferredHour(data.preferred_hour ?? 7);
+        setLocalOn(data.local_enabled ?? true);
+        setQuietHoursEnabled(data.quiet_hours_enabled ?? false);
+        setQuietStart(data.quiet_hours_start ?? 22);
+        setQuietEnd(data.quiet_hours_end ?? 7);
         setWaPrefs({
-          whatsapp_enabled:    (data as any).whatsapp_enabled    ?? false,
-          whatsapp_devocional: (data as any).whatsapp_devocional ?? true,
-          whatsapp_desafio:    (data as any).whatsapp_desafio    ?? true,
-          whatsapp_checkin:    (data as any).whatsapp_checkin    ?? true,
+          whatsapp_enabled: data.whatsapp_enabled ?? false,
+          whatsapp_devocional: data.whatsapp_devocional ?? true,
+          whatsapp_desafio: data.whatsapp_desafio ?? true,
+          whatsapp_checkin: data.whatsapp_checkin ?? true,
         });
       } else {
         setMasterOn(isNotificationEnabled());
@@ -210,11 +239,21 @@ export default function NotificationSettings() {
       .upsert({
         user_id: user.id,
         master_enabled: master,
+        push_enabled: master,
+        local_enabled: localOn,
         devocional: nextPrefs.devocional,
         eventos: nextPrefs.eventos,
         streak: nextPrefs.streak,
         mensagens: nextPrefs.mensagens,
+        birthday: nextPrefs.birthday,
+        prayer: nextPrefs.prayer,
+        attendance: nextPrefs.attendance,
+        chat_replies: nextPrefs.chat_replies,
         preferred_hour: hour ?? preferredHour,
+        quiet_hours_enabled: quietHoursEnabled,
+        quiet_hours_start: quietStart,
+        quiet_hours_end: quietEnd,
+        allowed_weekdays: [0, 1, 2, 3, 4, 5, 6],
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo",
       }, { onConflict: "user_id" });
   }
@@ -261,9 +300,9 @@ export default function NotificationSettings() {
         setWaTestState("ok");
         setWaTestMsg(`Mensagem enviada para ${data.phone_e164 ?? "seu número"}`);
       }
-    } catch (e: any) {
+    } catch (error: unknown) {
       setWaTestState("error");
-      setWaTestMsg(e.message ?? "Erro de rede");
+      setWaTestMsg(getErrorMessage(error));
     }
   }
 
@@ -277,8 +316,8 @@ export default function NotificationSettings() {
       setPushTestResult(
         data ?? { subscriptions_found: 0, sent: 0, failed: 0, devices: [], error: error?.message ?? "Erro de rede" }
       );
-    } catch (e: any) {
-      setPushTestResult({ subscriptions_found: 0, sent: 0, failed: 0, devices: [], error: e.message });
+    } catch (error: unknown) {
+      setPushTestResult({ subscriptions_found: 0, sent: 0, failed: 0, devices: [], error: getErrorMessage(error) });
     }
     setPushTestState("done");
   }
@@ -290,8 +329,8 @@ export default function NotificationSettings() {
         return;
       }
 
-      const alreadySubscribed = await isWebPushSubscribed();
-      if (alreadySubscribed) return;
+      const currentStatus = await getWebPushStatus();
+      if (currentStatus.browserSubscribed && currentStatus.serverSubscribed) return;
 
       const { data, error: fnError } = await supabase.functions.invoke("get-vapid-key");
       if (fnError || !data?.publicKey) {
@@ -300,9 +339,9 @@ export default function NotificationSettings() {
         return;
       }
 
-      const success = await subscribeToWebPush(data.publicKey);
+      const success = await syncWebPushSubscription(data.publicKey);
       if (!success) {
-        console.warn("subscribeToWebPush returned false");
+        console.warn("syncWebPushSubscription returned false");
         setPermissionError(true);
       }
     } catch (err) {
@@ -365,6 +404,33 @@ export default function NotificationSettings() {
     await saveToDb(masterOn, prefs, newHour);
   }
 
+  async function handleToggleLocal() {
+    if (!user) return;
+    const next = !localOn;
+    setLocalOn(next);
+    await supabase
+      .from("notification_preferences")
+      .upsert({
+        user_id: user.id,
+        local_enabled: next,
+      }, { onConflict: "user_id" });
+  }
+
+  async function handleQuietHoursChange(nextEnabled = quietHoursEnabled, start = quietStart, end = quietEnd) {
+    setQuietHoursEnabled(nextEnabled);
+    setQuietStart(start);
+    setQuietEnd(end);
+    if (!user) return;
+    await supabase
+      .from("notification_preferences")
+      .upsert({
+        user_id: user.id,
+        quiet_hours_enabled: nextEnabled,
+        quiet_hours_start: start,
+        quiet_hours_end: end,
+      }, { onConflict: "user_id" });
+  }
+
   const waOptions: Array<{
     key: keyof Omit<WhatsAppPrefs, "whatsapp_enabled">;
     label: string;
@@ -395,12 +461,12 @@ export default function NotificationSettings() {
           </div>
           <div>
             {mfaEnabled ? (
-              <Badge className="bg-brand-green/10 text-brand-green border-brand-green/30 font-bold text-[10px]">ATIVO</Badge>
+              <Badge className="bg-brand-green/10 text-brand-green border-brand-green/30 font-bold text-xs">ATIVO</Badge>
             ) : (
               <Button 
                 size="sm" 
                 variant="outline" 
-                className="h-8 rounded-lg text-[10px] font-bold"
+                className="h-8 rounded-lg text-xs font-bold"
                 onClick={() => window.open('https://supabase.com/docs/guides/auth/auth-mfa', '_blank')}
               >
                 CONFIGURAR
@@ -434,7 +500,7 @@ export default function NotificationSettings() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`px-2 py-1 rounded-full text-[10px] font-inter font-bold ${waPrefs.whatsapp_enabled ? "bg-[#25D366]/15 text-[#25D366]" : "bg-muted text-muted-foreground"}`}>
+            <span className={`px-2 py-1 rounded-full text-xs font-inter font-bold ${waPrefs.whatsapp_enabled ? "bg-[#25D366]/15 text-[#25D366]" : "bg-muted text-muted-foreground"}`}>
               {waPrefs.whatsapp_enabled ? "ON" : "OFF"}
             </span>
             {waExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
@@ -497,7 +563,7 @@ export default function NotificationSettings() {
                     <Icon className={`w-4 h-4 flex-shrink-0 ${waPrefs[key] ? color : "text-muted-foreground"}`} />
                     <div className="text-left flex-1">
                       <p className={`font-inter text-sm font-semibold ${waPrefs[key] ? "text-foreground" : "text-muted-foreground"}`}>{label}</p>
-                      <p className="text-muted-foreground text-[10px] font-inter">{desc}</p>
+                      <p className="text-muted-foreground text-xs font-inter">{desc}</p>
                     </div>
                     <div className={`w-11 h-6 rounded-full relative transition-colors ${waPrefs[key] ? "bg-[#25D366]" : "bg-muted"}`}>
                       <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${waPrefs[key] ? "translate-x-[22px]" : "translate-x-0.5"}`} />
@@ -534,7 +600,7 @@ export default function NotificationSettings() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`px-2 py-1 rounded-full text-[10px] font-inter font-bold ${masterOn ? "bg-brand-green/15 text-brand-green" : "bg-muted text-muted-foreground"}`}>
+            <span className={`px-2 py-1 rounded-full text-xs font-inter font-bold ${masterOn ? "bg-brand-green/15 text-brand-green" : "bg-muted text-muted-foreground"}`}>
               {masterOn ? "ON" : "OFF"}
             </span>
             <button
@@ -583,7 +649,7 @@ export default function NotificationSettings() {
                 {/* Status de permissão do navegador */}
                 <div className="mx-4 mt-3 mb-1 flex items-center gap-2 flex-wrap">
                   <span className="text-[11px] font-inter text-muted-foreground">Permissão do navegador:</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-inter font-bold ${
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-inter font-bold ${
                     Notification.permission === "granted"
                       ? "bg-brand-green/15 text-brand-green"
                       : Notification.permission === "denied"
@@ -610,7 +676,7 @@ export default function NotificationSettings() {
                     <Icon className={`w-4 h-4 flex-shrink-0 ${prefs[key] ? color : "text-muted-foreground"}`} />
                     <div className="text-left flex-1">
                       <p className={`font-inter text-sm font-semibold ${prefs[key] ? "text-foreground" : "text-muted-foreground"}`}>{label}</p>
-                      <p className="text-muted-foreground text-[10px] font-inter">{desc}</p>
+                      <p className="text-muted-foreground text-xs font-inter">{desc}</p>
                     </div>
                     <div className={`w-11 h-6 rounded-full relative transition-colors ${prefs[key] ? "bg-brand-green" : "bg-muted"}`}>
                       <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${prefs[key] ? "translate-x-[22px]" : "translate-x-0.5"}`} />
@@ -623,7 +689,7 @@ export default function NotificationSettings() {
                     <Clock className="w-4 h-4 text-muted-foreground" />
                     <div className="flex-1">
                       <p className="font-inter text-sm font-semibold text-foreground">Horario do devocional</p>
-                      <p className="text-muted-foreground text-[10px] font-inter">Horario preferido para o lembrete</p>
+                      <p className="text-muted-foreground text-xs font-inter">Horario preferido para o lembrete</p>
                     </div>
                     <select
                       value={preferredHour}
@@ -635,6 +701,58 @@ export default function NotificationSettings() {
                       ))}
                     </select>
                   </div>
+                </div>
+
+                <button
+                  onClick={handleToggleLocal}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors border-t border-border"
+                >
+                  <Bell className={`w-4 h-4 flex-shrink-0 ${localOn ? "text-brand-green" : "text-muted-foreground"}`} />
+                  <div className="text-left flex-1">
+                    <p className={`font-inter text-sm font-semibold ${localOn ? "text-foreground" : "text-muted-foreground"}`}>Lembretes locais</p>
+                    <p className="text-muted-foreground text-xs font-inter">Apenas enquanto o app estiver aberto</p>
+                  </div>
+                  <div className={`w-11 h-6 rounded-full relative transition-colors ${localOn ? "bg-brand-green" : "bg-muted"}`}>
+                    <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${localOn ? "translate-x-[22px]" : "translate-x-0.5"}`} />
+                  </div>
+                </button>
+
+                <div className="border-t border-border px-4 py-3 space-y-3">
+                  <button
+                    onClick={() => handleQuietHoursChange(!quietHoursEnabled)}
+                    className="w-full flex items-center gap-3"
+                  >
+                    <ShieldCheck className={`w-4 h-4 flex-shrink-0 ${quietHoursEnabled ? "text-brand-green" : "text-muted-foreground"}`} />
+                    <div className="text-left flex-1">
+                      <p className={`font-inter text-sm font-semibold ${quietHoursEnabled ? "text-foreground" : "text-muted-foreground"}`}>Horario silencioso</p>
+                      <p className="text-muted-foreground text-xs font-inter">Evita push automatico neste intervalo</p>
+                    </div>
+                    <div className={`w-11 h-6 rounded-full relative transition-colors ${quietHoursEnabled ? "bg-brand-green" : "bg-muted"}`}>
+                      <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${quietHoursEnabled ? "translate-x-[22px]" : "translate-x-0.5"}`} />
+                    </div>
+                  </button>
+                  {quietHoursEnabled && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={quietStart}
+                        onChange={(event) => handleQuietHoursChange(true, Number(event.target.value), quietEnd)}
+                        className="h-8 rounded-lg border border-input bg-background px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        {Array.from({ length: 24 }, (_, hour) => (
+                          <option key={hour} value={hour}>Das {String(hour).padStart(2, "0")}:00</option>
+                        ))}
+                      </select>
+                      <select
+                        value={quietEnd}
+                        onChange={(event) => handleQuietHoursChange(true, quietStart, Number(event.target.value))}
+                        className="h-8 rounded-lg border border-input bg-background px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        {Array.from({ length: 24 }, (_, hour) => (
+                          <option key={hour} value={hour}>Ate {String(hour).padStart(2, "0")}:00</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 <button
@@ -685,11 +803,11 @@ export default function NotificationSettings() {
                               <span className={`text-xs flex-shrink-0 ${d.ok ? "text-brand-green" : "text-destructive"}`}>
                                 {d.ok ? "✓" : "✗"}
                               </span>
-                              <span className="font-mono text-[10px] text-muted-foreground flex-1 truncate">
+                              <span className="font-mono text-xs text-muted-foreground flex-1 truncate">
                                 ...{d.endpoint_short}
                               </span>
                               {!d.ok && d.error && (
-                                <span className="text-[10px] text-destructive truncate max-w-[130px]" title={d.error}>
+                                <span className="text-xs text-destructive truncate max-w-[130px]" title={d.error}>
                                   {d.error.slice(0, 40)}
                                 </span>
                               )}
@@ -707,7 +825,7 @@ export default function NotificationSettings() {
                     <Sparkles className="w-4 h-4 text-secondary" />
                     <div className="flex-1">
                       <p className="font-inter text-sm font-semibold text-foreground">Celebrações e Confetes</p>
-                      <p className="text-muted-foreground text-[10px] font-inter">Exibir animações de confete ao concluir metas</p>
+                      <p className="text-muted-foreground text-xs font-inter">Exibir animações de confete ao concluir metas</p>
                     </div>
                     <button
                       onClick={handleToggleConfetti}

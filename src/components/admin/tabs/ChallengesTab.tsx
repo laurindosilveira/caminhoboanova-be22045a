@@ -101,7 +101,7 @@ export default function ChallengesTab() {
         <p className="font-montserrat font-bold text-foreground text-base">🎯 Desafios Comunitários</p>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-inter font-medium text-primary-foreground"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-inter font-medium text-primary-foreground"
           style={{ background: "var(--gradient-hero)" }}
         >
           <Plus className="w-3.5 h-3.5" /> Novo desafio
@@ -109,20 +109,20 @@ export default function ChallengesTab() {
       </div>
 
       {showForm && (
-        <div className="bg-card rounded-2xl border border-border p-4 space-y-3 shadow-sm">
+        <div className="bg-card rounded-lg border border-border p-4 space-y-3 shadow-sm">
           <p className="font-montserrat font-bold text-foreground text-sm">Novo desafio</p>
           <input
             value={form.title}
             onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
             placeholder="Título do desafio *"
-            className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
           <textarea
             value={form.description}
             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
             placeholder="Descrição (opcional)"
             rows={2}
-            className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+            className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
           />
           <div>
             <p className="font-inter text-xs text-muted-foreground mb-1.5">Emoji</p>
@@ -147,7 +147,7 @@ export default function ChallengesTab() {
                 type="date"
                 value={form.start_date}
                 onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
             <div>
@@ -156,7 +156,7 @@ export default function ChallengesTab() {
                 type="date"
                 value={form.end_date}
                 onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
           </div>
           <div className="space-y-2">
@@ -185,12 +185,12 @@ export default function ChallengesTab() {
             <button
               onClick={handleSave}
               disabled={saving || !form.title || !form.start_date || !form.end_date}
-              className="flex-1 py-2.5 rounded-xl text-sm font-inter font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
+              className="flex-1 py-2.5 rounded-lg text-sm font-inter font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
               style={{ background: "var(--gradient-hero)" }}
             >
               {saving ? "Salvando..." : "Criar desafio"}
             </button>
-            <button onClick={() => setShowForm(false)} className="px-4 py-2.5 rounded-xl bg-muted text-foreground font-inter text-sm">
+            <button onClick={() => setShowForm(false)} className="px-4 py-2.5 rounded-lg bg-muted text-foreground font-inter text-sm">
               Cancelar
             </button>
           </div>
@@ -199,7 +199,7 @@ export default function ChallengesTab() {
 
       {loading ? (
         <div className="space-y-3">
-          {[1, 2].map(i => <div key={i} className="h-20 rounded-2xl bg-muted animate-pulse" />)}
+          {[1, 2].map(i => <div key={i} className="h-20 rounded-lg bg-muted animate-pulse" />)}
         </div>
       ) : challenges.length === 0 ? (
         <div className="text-center py-16">
@@ -213,11 +213,11 @@ export default function ChallengesTab() {
             const isActive = c.start_date <= now && c.end_date >= now;
             const isPast = c.end_date < now;
             return (
-              <div key={c.id} className={`bg-card rounded-2xl border p-4 shadow-sm ${
+              <div key={c.id} className={`bg-card rounded-lg border p-4 shadow-sm ${
                 isActive ? "border-brand-green/30" : "border-border"
               }`}>
                 <div className="flex items-start gap-3">
-                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                  <div className={`w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0 ${
                     isActive ? "bg-brand-green/10" : "bg-muted"
                   }`}>
                     <span className="text-xl">{c.emoji}</span>
@@ -225,7 +225,7 @@ export default function ChallengesTab() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <h3 className="font-montserrat font-bold text-foreground text-sm">{c.title}</h3>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-inter font-semibold ${
+                      <span className={`px-1.5 py-0.5 rounded-full text-xs font-inter font-semibold ${
                         isActive ? "bg-brand-green/15 text-brand-green" : isPast ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary"
                       }`}>
                         {isActive ? "Ativo" : isPast ? "Encerrado" : "Agendado"}
@@ -234,7 +234,7 @@ export default function ChallengesTab() {
                     {c.description && (
                       <p className="text-muted-foreground font-inter text-xs mt-0.5 line-clamp-2">{c.description}</p>
                     )}
-                    <p className="text-muted-foreground font-inter text-[10px] mt-1">
+                    <p className="text-muted-foreground font-inter text-xs mt-1">
                       {format(new Date(c.start_date + "T12:00:00"), "d MMM", { locale: ptBR })} — {format(new Date(c.end_date + "T12:00:00"), "d MMM yyyy", { locale: ptBR })}
                     </p>
                     <div className="flex items-center gap-3 mt-1.5 flex-wrap">
@@ -245,12 +245,12 @@ export default function ChallengesTab() {
                         <Trophy className="w-3 h-3" /> {c.completed_count} concluíra{c.completed_count !== 1 ? "m" : ""}
                       </span>
                       {c.requires_text && (
-                        <span className="flex items-center gap-1 text-[10px] font-inter text-primary">
+                        <span className="flex items-center gap-1 text-xs font-inter text-primary">
                           <MessageSquare className="w-2.5 h-2.5" /> Texto
                         </span>
                       )}
                       {c.requires_file && (
-                        <span className="flex items-center gap-1 text-[10px] font-inter text-primary">
+                        <span className="flex items-center gap-1 text-xs font-inter text-primary">
                           <FileText className="w-2.5 h-2.5" /> Arquivo
                         </span>
                       )}

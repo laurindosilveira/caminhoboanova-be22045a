@@ -1,6 +1,8 @@
+import type { Enums } from "@/integrations/supabase/types";
 import { useState } from "react";
 import { Download, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 type Participant = {
   user_id: string;
@@ -64,6 +66,8 @@ type DevotionalAnswerGroup = {
 };
 
 type LoadedReport = {
+  targetUserId: string;
+  viewerUserId: string;
   totalPoints: number;
   completedCount: number;
   categories: ReportCategory[];
@@ -110,14 +114,24 @@ function parseManualBonus(rawKey: string) {
   };
 }
 
+function indexBy<T, K extends keyof T>(items: readonly T[], key: K) {
+  return new Map(items.map((item) => [item[key], item] as const));
+}
+
 export default function PastoralReportPDF({ participant: p }: Props) {
+  const { user } = useAuth();
+  const canReadAnswers = !!user && user.id === p.user_id;
   const [reportMode, setReportMode] = useState<ReportMode>("summary");
   const [loadingData, setLoadingData] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [report, setReport] = useState<LoadedReport | null>(null);
+  const [loadedReport, setReport] = useState<LoadedReport | null>(null);
+  const report = loadedReport && loadedReport.targetUserId === p.user_id && loadedReport.viewerUserId === user?.id ? loadedReport : null;
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   async function loadData() {
+    if (!user) return;
     setLoadingData(true);
+    setLoadError(null);
     try {
       const { data: profile } = await supabase
         .from("profiles")
@@ -132,12 +146,12 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         { data: gameConfig },
         { data: lessons },
         { data: courses },
-        { data: lessonProgress },
-        { data: lessonResponses },
+        { data: lessonProgress, error: lessonProgressError },
+        { data: lessonResponses, error: lessonResponsesError },
         { data: lessonContents },
         { data: devotionals },
-        { data: devotionalProgress },
-        { data: devotionalResponses },
+        { data: devotionalProgress, error: devotionalProgressError },
+        { data: devotionalResponses, error: devotionalResponsesError },
         { data: attendance },
         { data: events },
         { data: worship },
@@ -148,16 +162,16 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         { data: challengeCatalog },
         { data: customEventTypes },
       ] = await Promise.all([
-        supabase.rpc("get_community_ranking" as any, { _community: profile?.community ?? p.community, _church_id: churchId }),
-        supabase.rpc("get_game_config" as any),
+        supabase.rpc("get_community_ranking", { _community: (profile?.community ?? p.community) as Enums<"community_name">, _church_id: churchId }),
+        supabase.rpc("get_game_config"),
         supabase.from("lessons").select("id, title, course_id, order_num").or(churchScope),
         supabase.from("courses").select("id, title, order_num").or(churchScope),
         supabase.from("lesson_progress").select("lesson_id, completed_at, awarded_points").eq("user_id", p.user_id).eq("is_completed", true).or(churchScope),
-        supabase.from("lesson_responses").select("lesson_id, question_key, response, created_at").eq("user_id", p.user_id).or(churchScope),
+        canReadAnswers ? supabase.from("lesson_responses").select("lesson_id, question_key, response, created_at").eq("user_id", p.user_id).or(churchScope) : Promise.resolve({ data: [] as { lesson_id: string; question_key: string; response: string; created_at: string }[], error: null }),
         supabase.from("lesson_content").select("lesson_id, icebreaker, practice, prayer_prompt, questions").or(churchScope),
         supabase.from("devotional_content").select("id, title, day_number, lesson_id, questions").or(churchScope),
         supabase.from("devotional_progress").select("id, devotional_id, completed_at, awarded_points, is_recovery").eq("user_id", p.user_id).or(churchScope),
-        supabase.from("devotional_responses").select("devotional_id, question_index, response, created_at").eq("user_id", p.user_id).or(churchScope),
+        canReadAnswers ? supabase.from("devotional_responses").select("devotional_id, question_index, response, created_at").eq("user_id", p.user_id).or(churchScope) : Promise.resolve({ data: [] as { devotional_id: string; question_index: number; response: string; created_at: string }[], error: null }),
         supabase.from("attendance").select("id, event_id, status, created_at").eq("user_id", p.user_id).or(churchScope),
         supabase.from("events").select("id, title, event_date, type").or(churchScope),
         supabase.from("worship_attendance").select("id, worship_date, preacher_name, status, created_at").eq("user_id", p.user_id).eq("status", "aprovado").or(churchScope),
@@ -168,8 +182,11 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         supabase.from("community_challenges").select("id, title, emoji"),
         supabase.from("custom_event_types").select("value, gives_points, points, area, church_id").or(churchScope),
       ]);
+      if (lessonResponsesError || devotionalResponsesError || lessonProgressError || devotionalProgressError) {
+        throw new Error("Não foi possível carregar o histórico. Tente novamente.");
+      }
 
-      const cfg = new Map<string, number>((gameConfig ?? []).map((row: any) => [row.key, Number(row.value)]));
+      const cfg = new Map<string, number>((gameConfig ?? []).map((row) => [row.key, Number(row.value)]));
       const lessonDefault = cfg.get("lesson_points") ?? 20;
       const devotionalDefault = cfg.get("devotional_points") ?? 5;
       const devotionalWeekend = cfg.get("devotional_weekend_points") ?? 2;
@@ -178,23 +195,23 @@ export default function PastoralReportPDF({ participant: p }: Props) {
       const worshipDefault = cfg.get("worship_points") ?? 5;
       const challengeDefault = cfg.get("challenge_points") ?? 15;
 
-      const lessonMap = new Map((lessons ?? []).map((item: any) => [item.id, item]));
-      const courseMap = new Map((courses ?? []).map((item: any) => [item.id, item]));
-      const lessonContentMap = new Map((lessonContents ?? []).map((item: any) => [item.lesson_id, item]));
-      const devotionalMap = new Map((devotionals ?? []).map((item: any) => [item.id, item]));
-      const eventMap = new Map((events ?? []).map((item: any) => [item.id, item]));
-      const activityMap = new Map((activityCatalog ?? []).map((item: any) => [item.id, item]));
-      const challengeMap = new Map((challengeCatalog ?? []).map((item: any) => [item.id, item]));
+      const lessonMap = indexBy(lessons ?? [], "id");
+      const courseMap = indexBy(courses ?? [], "id");
+      const lessonContentMap = indexBy(lessonContents ?? [], "lesson_id");
+      const devotionalMap = indexBy(devotionals ?? [], "id");
+      const eventMap = indexBy(events ?? [], "id");
+      const activityMap = indexBy(activityCatalog ?? [], "id");
+      const challengeMap = indexBy(challengeCatalog ?? [], "id");
 
       const eventTypeMap = new Map<string, { gives_points: boolean; points: number }>();
       (customEventTypes ?? [])
-        .filter((item: any) => !item.area || item.area === (profile?.area ?? p.area))
-        .sort((a: any, b: any) => Number(!!a.church_id) - Number(!!b.church_id) || Number(!!a.area) - Number(!!b.area))
-        .forEach((item: any) => eventTypeMap.set(item.value, { gives_points: !!item.gives_points, points: Number(item.points ?? 0) }));
+        .filter((item) => !item.area || item.area === (profile?.area ?? p.area))
+        .sort((a, b) => Number(!!a.church_id) - Number(!!b.church_id) || Number(!!a.area) - Number(!!b.area))
+        .forEach((item) => eventTypeMap.set(item.value, { gives_points: !!item.gives_points, points: Number(item.points ?? 0) }));
 
-      const lessonItems: CategoryItem[] = (lessonProgress ?? []).map((progress: any) => {
-        const lesson = lessonMap.get(progress.lesson_id) as any;
-        const course = lesson ? courseMap.get(lesson.course_id) as any : null;
+      const lessonItems: CategoryItem[] = (lessonProgress ?? []).map((progress) => {
+        const lesson = lessonMap.get(progress.lesson_id);
+        const course = lesson ? courseMap.get(lesson.course_id) : null;
         return {
           id: progress.lesson_id,
           title: lesson?.title ?? "Lição",
@@ -204,8 +221,8 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         };
       });
 
-      const devotionalItems: CategoryItem[] = (devotionalProgress ?? []).map((progress: any) => {
-        const devotional = devotionalMap.get(progress.devotional_id) as any;
+      const devotionalItems: CategoryItem[] = (devotionalProgress ?? []).map((progress) => {
+        const devotional = devotionalMap.get(progress.devotional_id);
         const completedDate = new Date(progress.completed_at);
         const weekend = [0, 6].includes(completedDate.getDay());
         const points = progress.awarded_points ?? (progress.is_recovery ? devotionalRecovery : weekend ? devotionalWeekend : devotionalDefault);
@@ -218,8 +235,9 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         };
       });
 
-      const buildAttendanceItem = (record: any): CategoryItem => {
-        const event = eventMap.get(record.event_id) as any;
+      type AttendanceRecord = NonNullable<typeof attendance>[number];
+      const buildAttendanceItem = (record: AttendanceRecord): CategoryItem => {
+        const event = eventMap.get(record.event_id);
         const custom = eventTypeMap.get(event?.type ?? "");
         const present = record.status === "presente";
         return {
@@ -234,15 +252,15 @@ export default function PastoralReportPDF({ participant: p }: Props) {
       // O relatório do Ranking separa cada tipo de presença. Mantemos o mesmo
       // agrupamento aqui para que as quantidades possam ser comparadas diretamente.
       const eventCategoryItems = new Map<string, CategoryItem[]>();
-      (attendance ?? []).forEach((record: any) => {
-        const event = eventMap.get(record.event_id) as any;
+      (attendance ?? []).forEach((record) => {
+        const event = eventMap.get(record.event_id);
         const category = event?.type || "encontro";
         const current = eventCategoryItems.get(category) ?? [];
         current.push(buildAttendanceItem(record));
         eventCategoryItems.set(category, current);
       });
 
-      const worshipItems: CategoryItem[] = [...(eventCategoryItems.get("culto") ?? []), ...(worship ?? []).map((record: any) => ({
+      const worshipItems: CategoryItem[] = [...(eventCategoryItems.get("culto") ?? []), ...(worship ?? []).map((record) => ({
         id: record.id,
         title: `Culto · ${record.preacher_name}`,
         subtitle: "Presença aprovada",
@@ -252,7 +270,7 @@ export default function PastoralReportPDF({ participant: p }: Props) {
       eventCategoryItems.delete("culto");
 
       const achievementItems: CategoryItem[] = [];
-      (achievements ?? []).forEach((record: any) => {
+      (achievements ?? []).forEach((record) => {
         const manual = parseManualBonus(record.achievement_key);
         const item: CategoryItem = {
           id: record.id,
@@ -274,8 +292,8 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         }
       });
 
-      const extraItems: CategoryItem[] = (userProgress ?? []).map((record: any) => {
-        const activity = activityMap.get(record.activity_id) as any;
+      const extraItems: CategoryItem[] = (userProgress ?? []).map((record) => {
+        const activity = activityMap.get(record.activity_id);
         return {
           id: record.id,
           title: activity?.title ?? "Atividade extra",
@@ -285,8 +303,8 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         };
       });
 
-      const challengeItems: CategoryItem[] = (challenges ?? []).map((record: any) => {
-        const challenge = challengeMap.get(record.challenge_id) as any;
+      const challengeItems: CategoryItem[] = (challenges ?? []).map((record) => {
+        const challenge = challengeMap.get(record.challenge_id);
         return {
           id: record.id,
           title: `${challenge?.emoji ?? ""} ${challenge?.title ?? "Desafio"}`.trim(),
@@ -296,7 +314,7 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         };
       });
 
-      const ranking = (rankingRows ?? []).find((row: any) => row.user_id === p.user_id) as any;
+      const ranking = (rankingRows ?? []).find((row) => row.user_id === p.user_id);
       const courseBonus = Number(ranking?.course_bonus ?? 0);
       if (courseBonus > 0) {
         achievementItems.push({ id: "course-bonus", title: "Bônus por curso concluído", subtitle: "Conclusão de curso", points: courseBonus });
@@ -336,18 +354,18 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         makeCategory("extras", "Atividades e desafios", "#475569", [...extraItems, ...challengeItems]),
       ].filter((category) => category.count > 0);
 
-      const lessonProgressMap = new Map((lessonProgress ?? []).map((item: any) => [item.lesson_id, item]));
-      const responsesByLesson = new Map<string, any[]>();
-      (lessonResponses ?? []).forEach((answer: any) => {
+      const lessonProgressMap = indexBy(lessonProgress ?? [], "lesson_id");
+      const responsesByLesson = new Map<string, NonNullable<typeof lessonResponses>>();
+      (lessonResponses ?? []).forEach((answer) => {
         const current = responsesByLesson.get(answer.lesson_id) ?? [];
         current.push(answer);
         responsesByLesson.set(answer.lesson_id, current);
       });
       const lessonGroups: LessonAnswerGroup[] = [...responsesByLesson.entries()].map(([lessonId, answers]) => {
-        const lesson = lessonMap.get(lessonId) as any;
-        const course = lesson ? courseMap.get(lesson.course_id) as any : null;
-        const content = lessonContentMap.get(lessonId) as any;
-        const progress = lessonProgressMap.get(lessonId) as any;
+        const lesson = lessonMap.get(lessonId);
+        const course = lesson ? courseMap.get(lesson.course_id) : null;
+        const content = lessonContentMap.get(lessonId);
+        const progress = lessonProgressMap.get(lessonId);
         return {
           lessonId,
           courseTitle: course?.title ?? "Curso",
@@ -361,17 +379,17 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         };
       }).sort((a, b) => a.courseTitle.localeCompare(b.courseTitle, "pt-BR") || a.lessonOrder - b.lessonOrder);
 
-      const devotionalProgressMap = new Map((devotionalProgress ?? []).map((item: any) => [item.devotional_id, item]));
-      const responsesByDevotional = new Map<string, any[]>();
-      (devotionalResponses ?? []).forEach((answer: any) => {
+      const devotionalProgressMap = indexBy(devotionalProgress ?? [], "devotional_id");
+      const responsesByDevotional = new Map<string, NonNullable<typeof devotionalResponses>>();
+      (devotionalResponses ?? []).forEach((answer) => {
         const current = responsesByDevotional.get(answer.devotional_id) ?? [];
         current.push(answer);
         responsesByDevotional.set(answer.devotional_id, current);
       });
       const devotionalGroups: DevotionalAnswerGroup[] = [...responsesByDevotional.entries()].map(([devotionalId, answers]) => {
-        const devotional = devotionalMap.get(devotionalId) as any;
-        const lesson = devotional?.lesson_id ? lessonMap.get(devotional.lesson_id) as any : null;
-        const progress = devotionalProgressMap.get(devotionalId) as any;
+        const devotional = devotionalMap.get(devotionalId);
+        const lesson = devotional?.lesson_id ? lessonMap.get(devotional.lesson_id) : null;
+        const progress = devotionalProgressMap.get(devotionalId);
         const completedDate = progress?.completed_at ? new Date(progress.completed_at) : null;
         const weekend = completedDate ? [0, 6].includes(completedDate.getDay()) : false;
         return {
@@ -392,6 +410,8 @@ export default function PastoralReportPDF({ participant: p }: Props) {
       }).sort((a, b) => a.lessonOrder - b.lessonOrder || a.dayNumber - b.dayNumber);
 
       setReport({
+        targetUserId: p.user_id,
+        viewerUserId: user.id,
         totalPoints: Number(ranking?.faith_points ?? categories.reduce((sum, category) => sum + category.points, 0)),
         // A janela do Ranking mostra todos os itens detalhados, inclusive conquistas,
         // bônus e conclusão de curso. A RPC não inclui todos eles no completed_count.
@@ -400,6 +420,9 @@ export default function PastoralReportPDF({ participant: p }: Props) {
         lessonGroups,
         devotionalGroups,
       });
+    } catch {
+      setReport(null);
+      setLoadError("Não foi possível carregar o relatório. Tente novamente.");
     } finally {
       setLoadingData(false);
     }
@@ -500,8 +523,9 @@ export default function PastoralReportPDF({ participant: p }: Props) {
       doc.rect(0, 0, width, 39, "F");
       text(reportMode === "complete" ? "RELATÓRIO COMPLETO" : "RELATÓRIO BÁSICO", margin, 15, 17, true, "#FFFFFF");
       text(p.full_name, margin, 25, 11, true, "#DBEAFE");
-      text(`${p.community} · ${p.area} · Gerado em ${new Date().toLocaleDateString("pt-BR")}`, margin, 33, 8.5, false, "#BFDBFE");
+      text(`${p.community} · Área atual: ${p.area} · Gerado em ${new Date().toLocaleDateString("pt-BR")}`, margin, 33, 8.5, false, "#BFDBFE");
       y = 48;
+      wrapped("Este histórico pertence ao aluno e pode incluir atividades de turmas anteriores.", margin, contentWidth, 8);
 
       section("DADOS GERAIS");
       const cardGap = 4;
@@ -551,7 +575,7 @@ export default function PastoralReportPDF({ participant: p }: Props) {
 
         section("RESPOSTAS DAS LIÇÕES", "#2563EB");
         if (report.lessonGroups.length === 0) {
-          text("Nenhuma resposta de lição registrada.", margin + 3, y, 9, false, "#94A3B8");
+          text(canReadAnswers ? "Nenhuma resposta de lição disponível." : "Respostas pessoais disponíveis somente ao aluno.", margin + 3, y, 9, false, "#94A3B8");
           y += 8;
         }
         let currentCourse = "";
@@ -569,7 +593,7 @@ export default function PastoralReportPDF({ participant: p }: Props) {
 
         section("RESPOSTAS DOS DEVOCIONAIS", "#7C3AED");
         if (report.devotionalGroups.length === 0) {
-          text("Nenhuma resposta de devocional registrada.", margin + 3, y, 9, false, "#94A3B8");
+          text(canReadAnswers ? "Nenhuma resposta de devocional disponível." : "Respostas pessoais disponíveis somente ao aluno.", margin + 3, y, 9, false, "#94A3B8");
           y += 8;
         }
         let currentLesson = "";
@@ -606,17 +630,18 @@ export default function PastoralReportPDF({ participant: p }: Props) {
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+    <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
       <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-4 py-3">
         <FileText className="h-4 w-4 text-primary" />
         <p className="font-montserrat text-sm font-bold text-foreground">Relatório por categorias</p>
       </div>
       <div className="space-y-4 p-4">
+        {loadError && <p role="alert" className="text-sm text-destructive">{loadError}</p>}
         {!report ? (
           <button
             onClick={loadData}
             disabled={loadingData}
-            className="w-full rounded-xl bg-muted py-2.5 font-inter text-sm font-medium text-foreground transition-colors hover:bg-muted/70 disabled:opacity-60"
+            className="w-full rounded-lg bg-muted py-2.5 font-inter text-sm font-medium text-foreground transition-colors hover:bg-muted/70 disabled:opacity-60"
           >
             {loadingData ? "Carregando dados..." : "Carregar dados do relatório"}
           </button>
@@ -626,7 +651,7 @@ export default function PastoralReportPDF({ participant: p }: Props) {
               <button
                 type="button"
                 onClick={() => setReportMode("summary")}
-                className={`rounded-xl border-2 p-3 text-left ${reportMode === "summary" ? "border-primary bg-primary/5" : "border-border"}`}
+                className={`rounded-lg border-2 p-3 text-left ${reportMode === "summary" ? "border-primary bg-primary/5" : "border-border"}`}
               >
                 <span className="block font-inter text-sm font-semibold text-foreground">Relatório básico</span>
                 <span className="mt-1 block font-inter text-[11px] text-muted-foreground">Dados gerais e resumo por categoria</span>
@@ -634,14 +659,14 @@ export default function PastoralReportPDF({ participant: p }: Props) {
               <button
                 type="button"
                 onClick={() => setReportMode("complete")}
-                className={`rounded-xl border-2 p-3 text-left ${reportMode === "complete" ? "border-primary bg-primary/5" : "border-border"}`}
+                className={`rounded-lg border-2 p-3 text-left ${reportMode === "complete" ? "border-primary bg-primary/5" : "border-border"}`}
               >
                 <span className="block font-inter text-sm font-semibold text-foreground">Relatório completo</span>
-                <span className="mt-1 block font-inter text-[11px] text-muted-foreground">Categorias, detalhes e todas as respostas</span>
+                <span className="mt-1 block font-inter text-[11px] text-muted-foreground">Categorias e detalhes{canReadAnswers ? " e respostas disponíveis" : " das atividades"}</span>
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/30 p-3 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/30 p-3 sm:grid-cols-3">
               {report.categories.map((category) => (
                 <div key={category.key} className="rounded-lg bg-background p-2">
                   <p className="truncate font-inter text-[11px] text-muted-foreground">{category.label}</p>
@@ -651,15 +676,15 @@ export default function PastoralReportPDF({ participant: p }: Props) {
             </div>
 
             {reportMode === "complete" && (
-              <p className="rounded-xl bg-primary/5 p-3 font-inter text-xs text-muted-foreground">
-                O PDF completo incluirá {report.lessonGroups.reduce((sum, group) => sum + group.answers.length, 0)} resposta(s) de lições e {report.devotionalGroups.reduce((sum, group) => sum + group.answers.length, 0)} resposta(s) de devocionais, agrupadas por curso e lição.
+              <p className="rounded-lg bg-primary/5 p-3 font-inter text-xs text-muted-foreground">
+                {canReadAnswers ? `O PDF incluirá ${report.lessonGroups.reduce((sum, group) => sum + group.answers.length, 0)} resposta(s) de lições e ${report.devotionalGroups.reduce((sum, group) => sum + group.answers.length, 0)} resposta(s) de devocionais disponíveis.` : "O relatório apresenta as conclusões. As respostas pessoais estão disponíveis somente ao aluno."}
               </p>
             )}
 
             <button
               onClick={generatePDF}
               disabled={generating}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 font-inter text-sm font-medium text-primary-foreground disabled:opacity-70"
+              className="flex w-full items-center justify-center gap-2 rounded-lg py-3.5 font-inter text-sm font-medium text-primary-foreground disabled:opacity-70"
               style={{ background: "var(--gradient-hero)" }}
             >
               <Download className="h-4 w-4" />

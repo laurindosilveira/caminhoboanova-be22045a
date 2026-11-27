@@ -180,15 +180,9 @@ export default function ExportData() {
   }
 
   async function fetchAllData() {
-    const sections = await Promise.all(MIGRATION_TABLES.map(async (table) => {
-      const { data, error } = await (supabase.from as any)(table).select("*");
-      if (error) {
-        return `-- ${table}: ignorado na exportacao (${error.message})\n\n`;
-      }
-      return buildInserts(table, (data ?? []) as Record<string, unknown>[]);
-    }));
-
-    return sections.join("");
+    // Browser requests obey RLS and may silently omit protected rows. They
+    // cannot produce a complete database backup, even for system admins.
+    throw new Error("Exportação administrativa de dados indisponível. Use um backup completo do banco pelo Supabase.");
   }
 
   async function fetchPersonalData(userId: string) {
@@ -537,17 +531,17 @@ export default function ExportData() {
               <Button onClick={() => handleAdminExport("schema")} disabled={loading} className="w-full" size="lg" variant="outline">
                 Exportar Schema (Estrutura)
               </Button>
-              <Button onClick={() => handleAdminExport("data")} disabled={loading} className="w-full" size="lg" variant="outline">
+              <Button onClick={() => handleAdminExport("data")} disabled className="w-full" size="lg" variant="outline">
                 Exportar Dados (Registros)
               </Button>
-              <Button onClick={() => handleAdminExport("all")} disabled={loading} className="w-full" size="lg">
+              <Button onClick={() => handleAdminExport("all")} disabled className="w-full" size="lg">
                 Exportar Tudo (Schema + Dados)
               </Button>
-              <Button onClick={handleMigrationPackage} disabled={loading} className="w-full" size="lg" variant="secondary">
+              <Button onClick={handleMigrationPackage} disabled className="w-full" size="lg" variant="secondary">
                 Preparar migracao completa
               </Button>
               <p className="text-xs text-muted-foreground text-center">
-                Gera SQL + manifesto. Auth, senhas, arquivos Storage e secrets exigem etapas administrativas.
+                A exportação de dados pelo aplicativo está indisponível: as permissões podem ocultar registros. Para backup e recuperação, use as ferramentas administrativas do Supabase.
               </p>
             </CardContent>
           </Card>

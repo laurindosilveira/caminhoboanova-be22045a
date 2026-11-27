@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   Music, 
@@ -57,11 +57,7 @@ export default function WorshipTab() {
     is_active: true
   });
 
-  useEffect(() => {
-    fetchSongs();
-  }, []);
-
-  async function fetchSongs() {
+  const fetchSongs = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("worship_songs")
@@ -74,7 +70,11 @@ export default function WorshipTab() {
       setSongs((data || []) as WorshipSong[]);
     }
     setLoading(false);
-  }
+  }, [toast]);
+
+  useEffect(() => {
+    void fetchSongs();
+  }, [fetchSongs]);
 
   function validateUrl(url: string, platform: string): string | null {
     if (!url.trim()) return "O link não pode estar vazio";
@@ -226,7 +226,7 @@ export default function WorshipTab() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
             <Music className="w-5 h-5 text-primary" />
           </div>
           <div>
@@ -237,13 +237,13 @@ export default function WorshipTab() {
         <Button onClick={() => {
           if (showForm) resetForm();
           else setShowForm(true);
-        }} className="rounded-xl gap-2">
+        }} className="rounded-lg gap-2">
           {showForm ? "Cancelar" : <><Plus className="w-4 h-4" /> Cadastrar Música</>}
         </Button>
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
+        <form onSubmit={handleSubmit} className="bg-card border border-border rounded-lg p-5 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-muted-foreground ml-1">Título da Música</label>
@@ -276,7 +276,7 @@ export default function WorshipTab() {
               <label className="text-xs font-bold text-muted-foreground ml-1">Plataforma</label>
               <Select 
                 value={form.platform}
-                onValueChange={(val: any) => setForm({...form, platform: val})}
+                onValueChange={(val: WorshipSong["platform"]) => setForm({...form, platform: val})}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione a plataforma" />
@@ -298,7 +298,7 @@ export default function WorshipTab() {
             </div>
             <div className="space-y-1.5 md:col-span-2">
               <label className="text-xs font-bold text-muted-foreground ml-1">Capa da Música</label>
-              <div className="flex flex-col md:flex-row gap-4 items-start md:items-center bg-muted/20 p-4 rounded-xl border border-border border-dashed">
+              <div className="flex flex-col md:flex-row gap-4 items-start md:items-center bg-muted/20 p-4 rounded-lg border border-border border-dashed">
                 <div className="w-24 h-24 rounded-lg bg-muted flex items-center justify-center overflow-hidden flex-shrink-0 border border-border shadow-inner">
                   {form.thumbnail_url ? (
                     <div className="relative group w-full h-full">
@@ -335,10 +335,10 @@ export default function WorshipTab() {
                       className="hidden" 
                       accept="image/*" 
                     />
-                    <p className="text-[10px] text-muted-foreground mt-1 w-full">Limite de 2MB. Dimensões sugeridas: 500x500px.</p>
+                    <p className="text-xs text-muted-foreground mt-1 w-full">Limite de 2MB. Dimensões sugeridas: 500x500px.</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase">Ou cole o link direto:</p>
+                    <p className="text-xs font-bold text-muted-foreground uppercase">Ou cole o link direto:</p>
                     <Input 
                       value={form.thumbnail_url}
                       onChange={e => setForm({...form, thumbnail_url: e.target.value})}
@@ -350,7 +350,7 @@ export default function WorshipTab() {
               </div>
             </div>
           </div>
-          <Button type="submit" disabled={submitting} className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-bold">
+          <Button type="submit" disabled={submitting} className="w-full h-11 rounded-lg bg-primary text-primary-foreground font-bold">
             {submitting ? "Salvando..." : editingSong ? "Atualizar Música" : "Salvar Música"}
           </Button>
         </form>
@@ -363,14 +363,14 @@ export default function WorshipTab() {
             <p className="text-muted-foreground font-inter text-sm">Carregando catálogo...</p>
           </div>
         ) : songs.length === 0 ? (
-          <div className="bg-muted/20 border-2 border-dashed border-border rounded-3xl py-12 text-center">
+          <div className="bg-muted/20 border-2 border-dashed border-border rounded-lg py-12 text-center">
             <Music className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-muted-foreground font-inter">Nenhuma música cadastrada ainda.</p>
           </div>
         ) : (
           songs.map(song => (
-            <div key={song.id} className={`flex items-center gap-4 bg-card border border-border p-3 rounded-2xl shadow-sm transition-all ${!song.is_active ? 'opacity-60 grayscale' : ''}`}>
-              <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden">
+            <div key={song.id} className={`flex items-center gap-4 bg-card border border-border p-3 rounded-lg shadow-sm transition-all ${!song.is_active ? 'opacity-60 grayscale' : ''}`}>
+              <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden">
                 {song.thumbnail_url ? (
                   <img src={song.thumbnail_url} alt="" className="w-full h-full object-cover" />
                 ) : (
@@ -386,23 +386,23 @@ export default function WorshipTab() {
               <div className="flex items-center gap-1">
                 <button 
                   onClick={() => handleEdit(song)}
-                  className="p-2.5 rounded-xl hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
+                  className="p-2.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
                   title="Editar música"
                 >
                   <Pen className="w-4 h-4" />
                 </button>
-                <a href={song.url} target="_blank" rel="noopener noreferrer" className="p-2.5 rounded-xl hover:bg-muted text-primary transition-colors">
+                <a href={song.url} target="_blank" rel="noopener noreferrer" className="p-2.5 rounded-lg hover:bg-muted text-primary transition-colors">
                   <ExternalLink className="w-4 h-4" />
                 </a>
                 <button 
                   onClick={() => toggleStatus(song)}
-                  className={`p-2.5 rounded-xl transition-colors ${song.is_active ? 'text-brand-green hover:bg-brand-green/10' : 'text-muted-foreground hover:bg-muted'}`}
+                  className={`p-2.5 rounded-lg transition-colors ${song.is_active ? 'text-brand-green hover:bg-brand-green/10' : 'text-muted-foreground hover:bg-muted'}`}
                 >
                   <CheckCircle2 className="w-4 h-4" />
                 </button>
                 <button 
                   onClick={() => handleDelete(song.id)}
-                  className="p-2.5 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                  className="p-2.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>

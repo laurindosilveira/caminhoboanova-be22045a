@@ -5,7 +5,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist"] },
+  { ignores: ["dist", "**/*.timestamp-*.mjs"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -19,7 +19,27 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
+      "react-refresh/only-export-components": ["warn", {
+        allowConstantExport: true,
+        allowExportNames: [
+          "DEFAULT_ACHIEVEMENT_DEFS",
+          "EMOJIS",
+          "METRIC_OPTIONS",
+          "MONTH_NAMES",
+          "MONTH_SHORT",
+          "badgeVariants",
+          "buttonVariants",
+          "computeDevotionalStatuses",
+          "computeHealth",
+          "navigationMenuTriggerStyle",
+          "toast",
+          "toggleVariants",
+          "useAreaSwitch",
+          "useAuth",
+          "useFormField",
+          "useSidebar",
+        ],
+      }],
       "@typescript-eslint/no-unused-vars": "off",
       "@typescript-eslint/no-explicit-any": "warn",
     },

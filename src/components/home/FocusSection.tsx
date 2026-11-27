@@ -159,17 +159,20 @@ export default function FocusSection({ onNavigateToDiscipulado }: FocusSectionPr
 
       const studiedLessons = new Set(lessonResponses?.map(r => r.lesson_id) || []);
 
-      // Jornada mostra somente a lição que está na vez na agenda. Lições antigas
-      // pendentes são tratadas separadamente na aba Caminho.
-      const latestStartedEntry = [...agenda.schedule]
-        .reverse()
-        .find(e => today.getTime() >= new Date(e.eventDate).setHours(0, 0, 0, 0));
-      const scheduledFocusEntry = agenda.currentEntry ?? latestStartedEntry ?? null;
-      const pendingLessonEntry = scheduledFocusEntry && !studiedLessons.has(scheduledFocusEntry.lessonId)
-        ? scheduledFocusEntry
-        : null;
+      const fourteenDaysAgo = new Date(today);
+      fourteenDaysAgo.setDate(today.getDate() - 14);
 
-      if (pendingLessonEntry) {
+      const pendingLessonEntry = agenda.schedule.find(e => {
+        const eventDay = new Date(e.eventDate);
+        eventDay.setHours(0, 0, 0, 0);
+        return !studiedLessons.has(e.lessonId)
+          && today.getTime() >= eventDay.getTime()
+          && eventDay.getTime() >= fourteenDaysAgo.getTime();
+      });
+
+      const showExpiredLessonOnHome = false;
+
+      if (showExpiredLessonOnHome && pendingLessonEntry) {
         setNextActivity({
           type: "lesson",
           title: pendingLessonEntry.lessonTitle,
@@ -184,7 +187,7 @@ export default function FocusSection({ onNavigateToDiscipulado }: FocusSectionPr
     }
 
     checkStatus();
-  }, [agenda.currentEntry, agenda.loading, agenda.schedule, user]);
+  }, [agenda.loading, agenda.schedule, user]);
 
   if (loading) return null;
 

@@ -40,16 +40,16 @@ export default function DevotionalReminder({ onNavigateToDiscipulado }: Props) {
         supabase.from("lessons").select("id, title, order_num, course_id").order("order_num"),
         supabase.from("devotional_content").select("id, lesson_id, day_number"),
         supabase.from("devotional_progress").select("devotional_id").eq("user_id", user.id),
-        userArea ? supabase.from("course_unlocks").select("course_id").eq("area", userArea) : Promise.resolve({ data: [] as any[], error: null }),
+        userArea ? supabase.from("course_unlocks").select("course_id").eq("area", userArea) : Promise.resolve({ data: [] as { course_id: string }[], error: null }),
       ]);
 
       const unlockedCourseIds = new Set((unlocks ?? []).map((unlock) => unlock.course_id));
-      const completedSet = new Set((progress ?? []).map((item: any) => item.devotional_id));
+      const completedSet = new Set((progress ?? []).map((item) => item.devotional_id));
       const totalCompleted = completedSet.size;
-      const accessibleLessons = (lessons ?? []).filter((lesson: any) => unlockedCourseIds.has(lesson.course_id));
+      const accessibleLessons = (lessons ?? []).filter((lesson) => unlockedCourseIds.has(lesson.course_id));
 
       const lessonDevMap: Record<string, { total: number; completed: number }> = {};
-      (devotionals ?? []).forEach((devotional: any) => {
+      (devotionals ?? []).forEach((devotional) => {
         if (!devotional.lesson_id) return;
         if (!lessonDevMap[devotional.lesson_id]) lessonDevMap[devotional.lesson_id] = { total: 0, completed: 0 };
         lessonDevMap[devotional.lesson_id].total++;
@@ -64,10 +64,10 @@ export default function DevotionalReminder({ onNavigateToDiscipulado }: Props) {
         if (today < entry.windowStart) continue;
 
         const lessonDevs = (devotionals ?? [])
-          .filter((devotional: any) => devotional.lesson_id === entry.lessonId)
-          .sort((a: any, b: any) => a.day_number - b.day_number);
+          .filter((devotional) => devotional.lesson_id === entry.lessonId)
+          .sort((a, b) => a.day_number - b.day_number);
         const releasedDays = entry.releasedDayNumbers ? new Set(entry.releasedDayNumbers) : null;
-        const visibleLessonDevs = lessonDevs.filter((devotional: any) => !releasedDays || releasedDays.has(devotional.day_number));
+        const visibleLessonDevs = lessonDevs.filter((devotional) => !releasedDays || releasedDays.has(devotional.day_number));
 
         let hasAvailableToday = false;
         for (const devotional of visibleLessonDevs) {
@@ -95,7 +95,7 @@ export default function DevotionalReminder({ onNavigateToDiscipulado }: Props) {
       }
 
       if (!currentLesson) {
-        for (const lesson of accessibleLessons as any[]) {
+        for (const lesson of accessibleLessons) {
           const info = lessonDevMap[lesson.id];
           if (info && info.completed < info.total) {
             currentLesson = {

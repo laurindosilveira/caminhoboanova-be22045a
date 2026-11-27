@@ -56,7 +56,7 @@ export default function WaitingRoom() {
     
     // Check member limit before approving
     const { data: churchIdData } = await supabase.rpc("get_auth_church_id");
-    const { data: statsArray } = await supabase.rpc("get_church_user_stats", { p_church_id: churchIdData as any });
+    const { data: statsArray } = await supabase.rpc("get_church_user_stats", { p_church_id: churchIdData });
     const stats = statsArray && statsArray[0];
     
     // Re-check: limit already reached? (approved users count is not used for limit, total is)
@@ -105,7 +105,7 @@ export default function WaitingRoom() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-2xl bg-secondary/10 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center">
           <Clock className="w-5 h-5 text-secondary" />
         </div>
         <div>
@@ -117,22 +117,22 @@ export default function WaitingRoom() {
       {/* Search */}
       <div className="relative">
         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Buscar por nome..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 rounded-2xl border-border" />
+        <Input placeholder="Buscar por nome..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 rounded-lg border-border" />
       </div>
 
       {turmas.length === 0 && (
-        <div className="bg-secondary/10 border border-secondary/30 rounded-2xl px-4 py-3">
+        <div className="bg-secondary/10 border border-secondary/30 rounded-lg px-4 py-3">
           <p className="text-secondary font-inter text-xs font-medium">⚠️ Crie pelo menos uma turma antes de atribuir usuários.</p>
         </div>
       )}
 
       {loading ? (
         <div className="space-y-2">
-          {[1, 2, 3].map(i => <div key={i} className="bg-muted rounded-2xl h-20 animate-pulse" />)}
+          {[1, 2, 3].map(i => <div key={i} className="bg-muted rounded-lg h-20 animate-pulse" />)}
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12">
-          <div className="w-14 h-14 mx-auto rounded-2xl bg-muted flex items-center justify-center mb-3">
+          <div className="w-14 h-14 mx-auto rounded-lg bg-muted flex items-center justify-center mb-3">
             <UserPlus className="w-7 h-7 text-muted-foreground" />
           </div>
           <p className="text-muted-foreground font-inter text-sm">
@@ -144,7 +144,7 @@ export default function WaitingRoom() {
           {filtered.map(u => {
             const initials = u.full_name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
             return (
-              <div key={u.user_id} className={`bg-card border border-border rounded-2xl p-4 space-y-3 ${saving === u.user_id ? "opacity-60" : ""}`}>
+              <div key={u.user_id} className={`bg-card border border-border rounded-lg p-4 space-y-3 ${saving === u.user_id ? "opacity-60" : ""}`}>
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0 font-montserrat font-black text-sm text-muted-foreground">
                     {initials}
@@ -157,7 +157,7 @@ export default function WaitingRoom() {
                 <div className="flex flex-wrap gap-1.5">
                   {turmas.length > 0 && turmas.map(t => (
                     <button key={t.id} onClick={() => assignTurma(u.user_id, t.id, u.full_name)} disabled={saving === u.user_id}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-montserrat font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all disabled:opacity-50">
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-montserrat font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all disabled:opacity-50">
                       <GraduationCap className="w-3 h-3" />
                       {t.name}
                     </button>
@@ -165,7 +165,7 @@ export default function WaitingRoom() {
                   <button
                     onClick={() => rejectUser(u.user_id, u.full_name)}
                     disabled={saving === u.user_id}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-montserrat font-bold bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20 transition-all disabled:opacity-50"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-montserrat font-bold bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20 transition-all disabled:opacity-50"
                   >
                     <XCircle className="w-3 h-3" />
                     Rejeitar

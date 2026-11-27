@@ -1,273 +1,165 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, Heart, MessageCircle, RefreshCw, TrendingDown, UserX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertTriangle, Heart, TrendingDown, UserX, ChevronDown, ChevronUp, Clock, Phone } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
-type Alert = {
-  user_id: string;
+type AlertRow = {
+  care_reasons: string[];
+  care_status: string;
+  community: string | null;
   full_name: string;
-  community: string;
-  phone: string;
-  type: "consecutive_absences" | "needs_pastor" | "no_activity" | "priority";
-  detail: string;
-  severity: "high" | "medium" | "low";
+  needs_pastor: boolean;
+  phone: string | null;
+  user_id: string;
 };
 
-function normalizeAttendanceStatus(status: string) {
-  if (status === "falta") return "faltou";
-  if (status === "justificado") return "justificou";
-  return status;
+type Props = {
+  area: string | null;
+  churchId: string | null;
+  turmaId: string | null;
+};
+
+type AlertFilter = "all" | "critical" | "attention" | "pastoral";
+
+function whatsappUrl(phone: string | null) {
+  const digits = phone?.replace(/\D/g, "") ?? "";
+  if (!digits) return null;
+  return `https://wa.me/${digits.startsWith("55") ? digits : `55${digits}`}`;
 }
 
-export default function AdminAlertsTab({ participants }: { participants: any[] }) {
-  const [alerts, setAlerts] = useState<Alert[]>([]);
+export default function AdminAlertsTab({ area, churchId, turmaId }: Props) {
+  const { toast } = useToast();
+  const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedAlert, setExpandedAlert] = useState<string | null>(null);
-  const [filter, setFilter] = useState<string>("all");
+  const [filter, setFilter] = useState<AlertFilter>("all");
+
+  const fetchAlerts = useCallback(async () => {
+    if (!churchId) {
+      setAlerts([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    const args: { p_area?: string; p_church_id?: string; p_turma_id?: string } = {
+      p_church_id: churchId,
+    };
+    if (turmaId) args.p_turma_id = turmaId;
+    if (area && !turmaId) args.p_area = area;
+
+    const { data, error } = await supabase.rpc("get_leader_care_dashboard", args);
+    if (error) {
+      toast({ title: "Nao foi possivel carregar os alertas", description: error.message, variant: "destructive" });
+      setAlerts([]);
+    } else {
+      setAlerts((data ?? []).filter((member) => member.care_status !== "healthy"));
+    }
+    setLoading(false);
+  }, [area, churchId, toast, turmaId]);
 
   useEffect(() => {
-    fetchAlerts();
-  }, [participants]);
+    void fetchAlerts();
+  }, [fetchAlerts]);
 
-  async function fetchAlerts() {
-    setLoading(true);
-    const userIds = participants.map(p => p.user_id);
-    if (userIds.length === 0) { setAlerts([]); setLoading(false); return; }
+  const visibleAlerts = useMemo(() => alerts.filter((alert) => {
+    if (filter === "all") return true;
+    if (filter === "pastoral") return alert.needs_pastor;
+    return alert.care_status === filter;
+  }), [alerts, filter]);
 
-    const [{ data: attData }, { data: plansData }, { data: assessData }, { data: progressData }] = await Promise.all([
-      supabase.from("attendance").select("user_id, status, created_at").in("user_id", userIds).order("created_at", { ascending: false }),
-      supabase.from("discipleship_plans").select("user_id, health_status, is_priority").in("user_id", userIds),
-      supabase.from("spiritual_assessments").select("user_id, needs_pastor, notes, month, year")
-        .in("user_id", userIds).eq("needs_pastor", true),
-      supabase.from("user_progress").select("user_id, completed_at").in("user_id", userIds),
-    ]);
-
-    const alertsList: Alert[] = [];
-
-    // 1. Consecutive absences (3+)
-    const userAttendance: Record<string, string[]> = {};
-    (attData ?? []).forEach(a => {
-      if (!userAttendance[a.user_id]) userAttendance[a.user_id] = [];
-      userAttendance[a.user_id].push(a.status);
-    });
-    Object.entries(userAttendance).forEach(([userId, statuses]) => {
-      let consecutive = 0;
-      for (const s of statuses) {
-        if (normalizeAttendanceStatus(s) === "faltou") consecutive++;
-        else break;
-      }
-      if (consecutive >= 3) {
-        const p = participants.find(pr => pr.user_id === userId);
-        if (p) {
-          alertsList.push({
-            user_id: userId,
-            full_name: p.full_name,
-            community: p.community,
-            phone: p.phone,
-            type: "consecutive_absences",
-            detail: `${consecutive} faltas consecutivas recentes`,
-            severity: consecutive >= 5 ? "high" : "medium",
-          });
-        }
-      }
-    });
-
-    // 2. Needs pastor
-    (assessData ?? []).forEach(a => {
-      const p = participants.find(pr => pr.user_id === a.user_id);
-      if (p) {
-        alertsList.push({
-          user_id: a.user_id,
-          full_name: p.full_name,
-          community: p.community,
-          phone: p.phone,
-          type: "needs_pastor",
-          detail: `Solicitou acompanhamento pastoral${a.notes ? `: "${a.notes.substring(0, 60)}..."` : ""}`,
-          severity: "high",
-        });
-      }
-    });
-
-    // 3. Priority disciples
-    (plansData ?? []).filter(pl => pl.is_priority).forEach(pl => {
-      const p = participants.find(pr => pr.user_id === pl.user_id);
-      if (p && !alertsList.some(a => a.user_id === pl.user_id && a.type === "needs_pastor")) {
-        alertsList.push({
-          user_id: pl.user_id,
-          full_name: p.full_name,
-          community: p.community,
-          phone: p.phone,
-          type: "priority",
-          detail: `Marcado como prioridade pastoral (status: ${pl.health_status})`,
-          severity: "medium",
-        });
-      }
-    });
-
-    // 4. No activity in 30+ days
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const recentProgress: Record<string, Date> = {};
-    (progressData ?? []).forEach(pr => {
-      const d = new Date(pr.completed_at);
-      if (!recentProgress[pr.user_id] || d > recentProgress[pr.user_id]) {
-        recentProgress[pr.user_id] = d;
-      }
-    });
-    participants.forEach(p => {
-      const lastActivity = recentProgress[p.user_id];
-      if (!lastActivity || lastActivity < thirtyDaysAgo) {
-        if (!alertsList.some(a => a.user_id === p.user_id)) {
-          const days = lastActivity
-            ? Math.floor((Date.now() - lastActivity.getTime()) / (1000 * 60 * 60 * 24))
-            : null;
-          alertsList.push({
-            user_id: p.user_id,
-            full_name: p.full_name,
-            community: p.community,
-            phone: p.phone,
-            type: "no_activity",
-            detail: days ? `Sem atividade há ${days} dias` : "Nenhuma atividade registrada",
-            severity: "low",
-          });
-        }
-      }
-    });
-
-    // Sort by severity
-    const severityOrder = { high: 0, medium: 1, low: 2 };
-    alertsList.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
-
-    setAlerts(alertsList);
-    setLoading(false);
-  }
-
-  const ALERT_CONFIG: Record<string, { icon: typeof AlertTriangle; label: string; badgeClass: string }> = {
-    consecutive_absences: { icon: UserX, label: "Faltas Consecutivas", badgeClass: "bg-destructive/10 text-destructive" },
-    needs_pastor: { icon: Heart, label: "Precisa do Pastor", badgeClass: "bg-primary/10 text-primary" },
-    priority: { icon: AlertTriangle, label: "Prioridade Pastoral", badgeClass: "bg-amber-500/10 text-amber-600" },
-    no_activity: { icon: TrendingDown, label: "Sem Atividade", badgeClass: "bg-muted text-muted-foreground" },
-  };
-
-  const SEVERITY_COLORS = {
-    high: "border-l-destructive",
-    medium: "border-l-amber-500",
-    low: "border-l-muted-foreground/30",
-  };
-
-  const filtered = filter === "all" ? alerts : alerts.filter(a => a.type === filter);
-  const highCount = alerts.filter(a => a.severity === "high").length;
-  const medCount = alerts.filter(a => a.severity === "medium").length;
+  const criticalCount = alerts.filter((alert) => alert.care_status === "critical").length;
+  const attentionCount = alerts.filter((alert) => alert.care_status === "attention").length;
+  const pastoralCount = alerts.filter((alert) => alert.needs_pastor).length;
 
   if (loading) {
-    return (
-      <div className="space-y-3">
-        {[1, 2, 3].map(i => <div key={i} className="h-20 rounded-2xl bg-muted animate-pulse" />)}
-      </div>
-    );
+    return <div className="h-72 animate-pulse rounded-lg bg-muted" />;
   }
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-2">
-        <AlertTriangle className="w-5 h-5 text-destructive" />
-        <h2 className="font-montserrat font-black text-foreground text-lg">Central de Alertas</h2>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-montserrat text-xl font-black text-foreground">Central de alertas</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Os mesmos criterios unificados do acompanhamento da turma.</p>
+        </div>
+        <Button variant="outline" size="icon" onClick={() => void fetchAlerts()} title="Atualizar alertas">
+          <RefreshCw className="h-4 w-4" />
+        </Button>
       </div>
 
-      {/* Summary badges */}
-      <div className="flex gap-2 flex-wrap">
-        <span className="px-3 py-1.5 rounded-full text-xs font-inter font-bold bg-destructive/10 text-destructive">
-          🔴 {highCount} urgente{highCount !== 1 ? "s" : ""}
-        </span>
-        <span className="px-3 py-1.5 rounded-full text-xs font-inter font-bold bg-amber-500/10 text-amber-600">
-          🟡 {medCount} atenção
-        </span>
-        <span className="px-3 py-1.5 rounded-full text-xs font-inter font-bold bg-muted text-muted-foreground">
-          Total: {alerts.length} alerta{alerts.length !== 1 ? "s" : ""}
-        </span>
+      <div className="grid grid-cols-3 border-y border-border">
+        <Summary icon={AlertTriangle} label="Criticos" value={criticalCount} iconClass="text-red-600" />
+        <Summary icon={TrendingDown} label="Atencao" value={attentionCount} iconClass="text-amber-600" />
+        <Summary icon={Heart} label="Pastoral" value={pastoralCount} iconClass="text-rose-600" />
       </div>
 
-      {/* Filters */}
-      <div className="scroll-menu gap-1.5 pb-1" aria-label="Filtros de alertas">
-        {[
-          { id: "all", label: "Todos" },
-          { id: "consecutive_absences", label: "Faltas" },
-          { id: "needs_pastor", label: "Pastor" },
-          { id: "priority", label: "Prioridade" },
-          { id: "no_activity", label: "Inativos" },
-        ].map(f => (
+      <div className="flex gap-1 overflow-x-auto border-b border-border pb-3">
+        {([
+          ["all", "Todos"],
+          ["critical", "Criticos"],
+          ["attention", "Atencao"],
+          ["pastoral", "Pedido pastoral"],
+        ] as const).map(([value, label]) => (
           <button
-            key={f.id}
-            onClick={() => setFilter(f.id)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-inter font-medium whitespace-nowrap transition-all ${
-              filter === f.id ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
-            }`}
+            key={value}
+            type="button"
+            onClick={() => setFilter(value)}
+            className={`whitespace-nowrap rounded-md px-3 py-2 text-xs font-semibold ${filter === value ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted"}`}
           >
-            {f.label}
+            {label}
           </button>
         ))}
       </div>
 
-      {/* Alerts list */}
-      {filtered.length === 0 ? (
-        <div className="text-center py-12">
-          <Heart className="w-10 h-10 text-brand-green mx-auto mb-3" />
-          <p className="font-montserrat font-bold text-foreground text-sm">Nenhum alerta encontrado</p>
-          <p className="text-muted-foreground font-inter text-xs mt-1">Todos os discípulos estão bem! 🎉</p>
+      {visibleAlerts.length === 0 ? (
+        <div className="py-14 text-center">
+          <Heart className="mx-auto h-8 w-8 text-emerald-600" />
+          <p className="mt-3 text-sm font-bold text-foreground">Nenhum alerta neste filtro</p>
+          <p className="mt-1 text-xs text-muted-foreground">Nao ha sinais que exijam acao agora.</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {filtered.map((alert, i) => {
-            const config = ALERT_CONFIG[alert.type];
-            const Icon = config.icon;
-            const isExpanded = expandedAlert === `${alert.user_id}-${alert.type}`;
-
+        <div className="divide-y divide-border border-y border-border">
+          {visibleAlerts.map((alert) => {
+            const whatsapp = whatsappUrl(alert.phone);
             return (
-              <div
-                key={`${alert.user_id}-${alert.type}-${i}`}
-                className={`bg-card rounded-xl border border-border border-l-4 ${SEVERITY_COLORS[alert.severity]} shadow-sm overflow-hidden`}
-              >
-                <button
-                  onClick={() => setExpandedAlert(isExpanded ? null : `${alert.user_id}-${alert.type}`)}
-                  className="w-full flex items-center gap-3 p-3 text-left"
-                >
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${config.badgeClass}`}>
-                    <Icon className="w-4 h-4" />
+              <article key={alert.user_id} className="flex items-start gap-3 py-4">
+                <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${alert.care_status === "critical" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"}`}>
+                  {alert.needs_pastor ? <Heart className="h-4 w-4" /> : <UserX className="h-4 w-4" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-sm font-bold text-foreground">{alert.full_name}</h3>
+                    <span className={`rounded-md border px-2 py-0.5 text-xs font-semibold ${alert.care_status === "critical" ? "border-red-200 bg-red-50 text-red-700" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+                      {alert.care_status === "critical" ? "Critico" : "Atencao"}
+                    </span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-montserrat font-bold text-foreground text-xs">{alert.full_name}</p>
-                    <p className="text-muted-foreground font-inter text-[10px] mt-0.5">{alert.detail}</p>
-                  </div>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-inter font-semibold ${config.badgeClass}`}>
-                    {config.label}
-                  </span>
-                  {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
-                </button>
-
-                {isExpanded && (
-                  <div className="px-3 pb-3 pt-0 border-t border-border mt-0 space-y-2">
-                    <div className="flex items-center gap-4 text-xs font-inter text-muted-foreground mt-2">
-                      <span>📍 {alert.community}</span>
-                      {alert.phone && (
-                        <a href={`tel:${alert.phone}`} className="flex items-center gap-1 text-primary hover:underline">
-                          <Phone className="w-3 h-3" /> {alert.phone}
-                        </a>
-                      )}
-                    </div>
-                    <a
-                      href={`https://wa.me/55${alert.phone.replace(/\D/g, "")}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-green/10 text-brand-green text-xs font-inter font-medium hover:bg-brand-green/20 transition-colors"
-                    >
-                      💬 Enviar WhatsApp
+                  <p className="mt-1 text-xs text-muted-foreground">{alert.community || "Sem comunidade"}</p>
+                  <ul className="mt-2 space-y-1">
+                    {alert.care_reasons.slice(0, 3).map((reason) => <li key={reason} className="text-sm text-foreground">{reason}</li>)}
+                  </ul>
+                </div>
+                {whatsapp && (
+                  <Button asChild variant="ghost" size="icon" className="text-emerald-700">
+                    <a href={whatsapp} target="_blank" rel="noreferrer" title="Abrir WhatsApp">
+                      <MessageCircle className="h-4 w-4" />
                     </a>
-                  </div>
+                  </Button>
                 )}
-              </div>
+              </article>
             );
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function Summary({ icon: Icon, iconClass, label, value }: { icon: typeof AlertTriangle; iconClass: string; label: string; value: number }) {
+  return (
+    <div className="flex min-h-20 items-center justify-center gap-2 border-r border-border px-2 py-3 last:border-r-0">
+      <Icon className={`h-4 w-4 ${iconClass}`} />
+      <div><p className="font-montserrat text-lg font-black text-foreground">{value}</p><p className="text-xs text-muted-foreground">{label}</p></div>
     </div>
   );
 }

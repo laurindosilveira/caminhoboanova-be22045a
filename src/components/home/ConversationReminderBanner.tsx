@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Calendar, MessageSquare } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,12 +11,7 @@ export default function ConversationReminderBanner() {
   const { user } = useAuth();
   const [event, setEvent] = useState<{ title: string; event_date: string; description: string | null } | null>(null);
 
-  useEffect(() => {
-    if (!user) return;
-    checkUpcomingConversation();
-  }, [user]);
-
-  async function checkUpcomingConversation() {
+  const checkUpcomingConversation = useCallback(async () => {
     const now = new Date().toISOString();
     const { data } = await supabase
       .from("events")
@@ -26,9 +21,14 @@ export default function ConversationReminderBanner() {
       .order("event_date")
       .limit(10);
 
-    const personal = (data ?? []).filter((item: any) => item.target_user_id === user!.id);
+    const personal = (data ?? []).filter(item => item.target_user_id === user!.id);
     setEvent(personal.length > 0 ? personal[0] : null);
-  }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    checkUpcomingConversation();
+  }, [checkUpcomingConversation, user]);
 
   if (!event) return null;
 
@@ -50,13 +50,13 @@ export default function ConversationReminderBanner() {
             Seu lider agendou uma conversa com voce para <strong className="text-foreground">{dateStr}</strong> as <strong className="text-foreground">{timeStr}</strong>.
           </p>
           {event.description && (
-            <p className="text-muted-foreground font-inter text-[10px] mt-1 italic">
+            <p className="text-muted-foreground font-inter text-xs mt-1 italic">
               {event.description}
             </p>
           )}
           <div className="flex items-center gap-1.5 mt-2 text-secondary">
             <Calendar className="w-3.5 h-3.5" />
-            <span className="text-[10px] font-inter font-bold">Confira na sua agenda</span>
+            <span className="text-xs font-inter font-bold">Confira na sua agenda</span>
           </div>
         </div>
       </div>

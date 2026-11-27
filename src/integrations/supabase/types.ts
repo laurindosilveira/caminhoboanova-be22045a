@@ -715,6 +715,7 @@ export type Database = {
           address: string | null
           city: string | null
           created_at: string
+          group_naming: string
           id: string
           is_active: boolean | null
           logo_url: string | null
@@ -729,6 +730,7 @@ export type Database = {
           address?: string | null
           city?: string | null
           created_at?: string
+          group_naming?: string
           id?: string
           is_active?: boolean | null
           logo_url?: string | null
@@ -743,6 +745,7 @@ export type Database = {
           address?: string | null
           city?: string | null
           created_at?: string
+          group_naming?: string
           id?: string
           is_active?: boolean | null
           logo_url?: string | null
@@ -956,26 +959,35 @@ export type Database = {
       }
       course_unlocks: {
         Row: {
+          access_mode: string
           area: string
           church_id: string | null
           course_id: string
           id: string
+          release_source: string
+          turma_id: string | null
           unlocked_at: string
           unlocked_by: string
         }
         Insert: {
+          access_mode?: string
           area: string
           church_id?: string | null
           course_id: string
           id?: string
+          release_source?: string
+          turma_id?: string | null
           unlocked_at?: string
           unlocked_by: string
         }
         Update: {
+          access_mode?: string
           area?: string
           church_id?: string | null
           course_id?: string
           id?: string
+          release_source?: string
+          turma_id?: string | null
           unlocked_at?: string
           unlocked_by?: string
         }
@@ -992,6 +1004,13 @@ export type Database = {
             columns: ["course_id"]
             isOneToOne: false
             referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "course_unlocks_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
             referencedColumns: ["id"]
           },
         ]
@@ -1875,6 +1894,7 @@ export type Database = {
           pastoral_care_notes: string | null
           questions_notes: string | null
           spiritual_notes: string | null
+          turma_id: string | null
           updated_at: string
         }
         Insert: {
@@ -1889,6 +1909,7 @@ export type Database = {
           pastoral_care_notes?: string | null
           questions_notes?: string | null
           spiritual_notes?: string | null
+          turma_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -1903,6 +1924,7 @@ export type Database = {
           pastoral_care_notes?: string | null
           questions_notes?: string | null
           spiritual_notes?: string | null
+          turma_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -3091,6 +3113,7 @@ export type Database = {
           mother_name: string | null
           mother_phone: string | null
           phone: string
+          requires_password_setup: boolean
           role: Database["public"]["Enums"]["app_role"] | null
           turma_id: string | null
           updated_at: string
@@ -3121,6 +3144,7 @@ export type Database = {
           mother_name?: string | null
           mother_phone?: string | null
           phone: string
+          requires_password_setup?: boolean
           role?: Database["public"]["Enums"]["app_role"] | null
           turma_id?: string | null
           updated_at?: string
@@ -3151,6 +3175,7 @@ export type Database = {
           mother_name?: string | null
           mother_phone?: string | null
           phone?: string
+          requires_password_setup?: boolean
           role?: Database["public"]["Enums"]["app_role"] | null
           turma_id?: string | null
           updated_at?: string
@@ -3991,6 +4016,58 @@ export type Database = {
           },
         ]
       }
+      turma_leaders: {
+        Row: {
+          assigned_by: string | null
+          church_id: string
+          created_at: string
+          is_fallback: boolean
+          turma_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          church_id: string
+          created_at?: string
+          is_fallback?: boolean
+          turma_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assigned_by?: string | null
+          church_id?: string
+          created_at?: string
+          is_fallback?: boolean
+          turma_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turma_leaders_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turma_leaders_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leader_meeting_notes_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       turmas: {
         Row: {
           area: string | null
@@ -4031,6 +4108,63 @@ export type Database = {
             columns: ["church_id"]
             isOneToOne: false
             referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turma_invites: {
+        Row: {
+          church_id: string
+          created_at: string
+          created_by: string
+          expires_at: string
+          id: string
+          is_active: boolean
+          last_used_at: string | null
+          max_uses: number | null
+          token_hash: string
+          turma_id: string
+          use_count: number
+        }
+        Insert: {
+          church_id: string
+          created_at?: string
+          created_by: string
+          expires_at: string
+          id?: string
+          is_active?: boolean
+          last_used_at?: string | null
+          max_uses?: number | null
+          token_hash: string
+          turma_id: string
+          use_count?: number
+        }
+        Update: {
+          church_id?: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string
+          id?: string
+          is_active?: boolean
+          last_used_at?: string | null
+          max_uses?: number | null
+          token_hash?: string
+          turma_id?: string
+          use_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turma_invites_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "churches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turma_invites_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
             referencedColumns: ["id"]
           },
         ]
@@ -4550,7 +4684,39 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      upsert_game_config_item: { Args: { _key: string; _value: number }; Returns: undefined }
       archive_turma_professions: { Args: { p_turma_id: string }; Returns: Json }
+      create_turma_invite: {
+        Args: {
+          p_expires_in_days?: number
+          p_max_uses?: number | null
+          p_turma_id: string
+        }
+        Returns: {
+          expires_at: string
+          invite_id: string
+          invite_token: string
+        }[]
+      }
+      set_turma_leader: {
+        Args: {
+          p_assigned: boolean
+          p_turma_id: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      get_turma_invite_info: {
+        Args: { p_token: string }
+        Returns: {
+          church_id: string
+          church_name: string
+          expires_at: string
+          group_naming: string
+          turma_id: string
+          turma_name: string
+        }[]
+      }
       assert_same_church_reference: {
         Args: {
           allow_global?: boolean
@@ -4590,6 +4756,14 @@ export type Database = {
           p_lesson_id: string
           p_override_release_id?: string
           p_responses: Json
+          p_video_watched?: boolean
+        }
+        Returns: undefined
+      }
+      mark_lesson_media_progress: {
+        Args: {
+          p_audio_listened?: boolean
+          p_lesson_id: string
           p_video_watched?: boolean
         }
         Returns: undefined
@@ -4793,6 +4967,14 @@ export type Database = {
       get_my_area: {
         Args: never
         Returns: Database["public"]["Enums"]["area_name"]
+      }
+      get_my_app_bootstrap: {
+        Args: never
+        Returns: Json
+      }
+      get_my_user_stats_inputs: {
+        Args: { p_church_id?: string }
+        Returns: Json
       }
       get_my_church_id: { Args: never; Returns: string }
       get_my_community: {
@@ -5031,7 +5213,7 @@ export type Database = {
     }
     Enums: {
       app_role: "user" | "admin" | "lider" | "super_admin"
-      area_name: "Área 1" | "Área 2" | "Sem area"
+      area_name: "Área 1" | "Área 2" | "DISCIPULADO JEMIAC" | "Sem area"
       community_name:
         | "Martim Lutero"
         | "Bom Pastor"
@@ -5040,6 +5222,7 @@ export type Database = {
         | "Linha Brasil"
         | "Iriá Pira 1"
         | "Iriá Pira 2"
+        | "JEMIAC"
         | "Aguardando definicao"
     }
     CompositeTypes: {
@@ -5172,7 +5355,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["user", "admin", "lider", "super_admin"],
-      area_name: ["Área 1", "Área 2", "Sem area"],
+      area_name: ["Área 1", "Área 2", "DISCIPULADO JEMIAC", "Sem area"],
       community_name: [
         "Martim Lutero",
         "Bom Pastor",
@@ -5181,6 +5364,7 @@ export const Constants = {
         "Linha Brasil",
         "Iriá Pira 1",
         "Iriá Pira 2",
+        "JEMIAC",
         "Aguardando definicao",
       ],
     },

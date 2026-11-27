@@ -206,7 +206,7 @@ export default function TypingMetricsPanel() {
                   >
                     <Icon className={`w-5 h-5 ${cfg.color}`} />
                     <span className={`font-montserrat font-bold text-xs ${cfg.color}`}>{cfg.label}</span>
-                    <span className="text-[9px] text-muted-foreground font-inter text-center leading-tight">
+                    <span className="text-xs text-muted-foreground font-inter text-center leading-tight">
                       {cfg.description}
                     </span>
                   </button>
@@ -218,7 +218,7 @@ export default function TypingMetricsPanel() {
           <>
             {/* Difficulty badge + timer */}
             <div className="flex items-center justify-between">
-              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-montserrat font-bold ${config?.bgColor} ${config?.color} border`}>
+              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-montserrat font-bold ${config?.bgColor} ${config?.color} border`}>
                 {config?.emoji} {config?.label}
               </span>
               {remainingTime !== null && (
@@ -232,19 +232,19 @@ export default function TypingMetricsPanel() {
             <div className="grid grid-cols-4 gap-2">
               <div className="bg-muted rounded-xl p-2 text-center">
                 <p className={`text-lg font-montserrat font-black ${wpmColor}`}>{wpm}</p>
-                <p className="text-[9px] text-muted-foreground font-inter uppercase">PPM</p>
+                <p className="text-xs text-muted-foreground font-inter uppercase">PPM</p>
               </div>
               <div className="bg-muted rounded-xl p-2 text-center">
                 <p className={`text-lg font-montserrat font-black ${accColor}`}>{accuracy}%</p>
-                <p className="text-[9px] text-muted-foreground font-inter uppercase">Precisão</p>
+                <p className="text-xs text-muted-foreground font-inter uppercase">Precisão</p>
               </div>
               <div className="bg-muted rounded-xl p-2 text-center">
                 <p className="text-lg font-montserrat font-black text-destructive">{errorCount}</p>
-                <p className="text-[9px] text-muted-foreground font-inter uppercase">Erros</p>
+                <p className="text-xs text-muted-foreground font-inter uppercase">Erros</p>
               </div>
               <div className="bg-muted rounded-xl p-2 text-center">
                 <p className="text-lg font-montserrat font-black text-foreground">{elapsedSeconds}s</p>
-                <p className="text-[9px] text-muted-foreground font-inter uppercase">Tempo</p>
+                <p className="text-xs text-muted-foreground font-inter uppercase">Tempo</p>
               </div>
             </div>
 

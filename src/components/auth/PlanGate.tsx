@@ -1,7 +1,6 @@
 import React, { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { getPlanByProductId } from "@/lib/stripePlans";
 import { getFeaturesForPlan, PlanFeatures, isUnlimitedChurch } from "@/lib/planFeatures";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ShieldAlert, Zap } from "lucide-react";
+import { getSubscriptionAccess } from "@/lib/subscriptionAccess";
 
 interface PlanGateProps {
   children: React.ReactNode;
@@ -71,11 +71,9 @@ export function PlanGate({ children, feature }: PlanGateProps) {
   if (isLoading) return null;
 
   const isUnlimited = isUnlimitedChurch(profile?.church_id, user?.email);
-  const isBlocked = subscription?.subscription_status === "blocked" && !isUnlimited;
-  
-  const rawPlanKey = (subscription as any)?.product_id 
-    ? getPlanByProductId((subscription as any).product_id) 
-    : (subscription as any)?.recommended_plan || "comunidade";
+  const isBlocked = !isUnlimited && !getSubscriptionAccess(subscription).allowed;
+
+  const rawPlanKey = subscription?.recommended_plan || "comunidade";
     
   const planKey = isUnlimited ? "Premium" : rawPlanKey;
   

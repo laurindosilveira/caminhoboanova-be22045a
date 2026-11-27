@@ -10,8 +10,6 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 
-import { AREAS, ALL_COMMUNITIES as COMMUNITIES } from "@/config/areas";
-
 type TargetType = "all" | "area" | "community" | "turma";
 type SendMode   = "agora" | "agendar";
 type SubTab     = "enviar" | "automacoes" | "historico";
@@ -23,6 +21,10 @@ type LogEntry = Database["public"]["Tables"]["push_notification_log"]["Row"];
 interface Props {
   turmas?: Array<{ id: string; name: string; area: string | null }>;
   churchId?: string | null;
+  leaderMode?: boolean;
+  managedTurmaId?: string | null;
+  areas?: string[];
+  communities?: string[];
 }
 
 const AUTOMATION_LABELS: Record<string, string> = {
@@ -32,6 +34,9 @@ const AUTOMATION_LABELS: Record<string, string> = {
   event_upcoming:      "Evento em 2 dias",
   event_attendance:    "Confirmar presenca",
   prayer_pairs:        "Dupla de oracao",
+  inactive_user_nudge: "Usuario inativo",
+  push_activation_nudge: "Ativacao de push",
+  birthday_today:      "Aniversario",
 };
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -45,13 +50,21 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 // ─── Root component ────────────────────────────────────────────────────────────
 
-export default function AdminPushTab({ turmas = [], churchId }: Props) {
+export default function AdminPushTab({
+  turmas = [],
+  churchId,
+  leaderMode = false,
+  managedTurmaId = null,
+  areas = [],
+  communities = [],
+}: Props) {
   const [subTab, setSubTab] = useState<SubTab>("enviar");
 
   return (
     <div className="space-y-4">
       {/* Sub-tab navigation */}
-      <div className="flex gap-1 bg-muted rounded-2xl p-1">
+      {!leaderMode && (
+      <div className="flex gap-1 bg-muted rounded-lg p-1">
         {[
           { id: "enviar",     label: "Enviar"     },
           { id: "automacoes", label: "Automações" },
@@ -60,7 +73,7 @@ export default function AdminPushTab({ turmas = [], churchId }: Props) {
           <button
             key={tab.id}
             onClick={() => setSubTab(tab.id as SubTab)}
-            className={`flex-1 py-2 rounded-xl text-xs font-montserrat font-bold transition-all ${
+            className={`flex-1 py-2 rounded-lg text-xs font-montserrat font-bold transition-all ${
               subTab === tab.id
                 ? "bg-card text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
@@ -70,12 +83,22 @@ export default function AdminPushTab({ turmas = [], churchId }: Props) {
           </button>
         ))}
       </div>
+      )}
 
-      {subTab === "enviar"     && <SendSection turmas={turmas} churchId={churchId} />}
-      {subTab === "automacoes" && <AutomationsSection />}
-      {subTab === "historico"  && (
+      {subTab === "enviar" && (
+        <SendSection
+          turmas={turmas}
+          churchId={churchId}
+          leaderMode={leaderMode}
+          managedTurmaId={managedTurmaId}
+          areas={areas}
+          communities={communities}
+        />
+      )}
+      {!leaderMode && subTab === "automacoes" && <AutomationsSection />}
+      {!leaderMode && subTab === "historico"  && (
         <>
-          <EventRemindersTrigger />
+          <EventRemindersTrigger churchId={churchId} />
           <PushLogHistory />
         </>
       )}
@@ -85,13 +108,27 @@ export default function AdminPushTab({ turmas = [], churchId }: Props) {
 
 // ─── Send Section ──────────────────────────────────────────────────────────────
 
-function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: string; area: string | null }>; churchId?: string | null }) {
-  const { isSuper } = useAuth();
+function SendSection({
+  turmas,
+  churchId,
+  leaderMode,
+  managedTurmaId,
+  areas,
+  communities,
+}: {
+  turmas: Array<{ id: string; name: string; area: string | null }>;
+  churchId?: string | null;
+  leaderMode: boolean;
+  managedTurmaId: string | null;
+  areas: string[];
+  communities: string[];
+}) {
+  const { isSuper, role } = useAuth();
   const [mode, setMode]               = useState<SendMode>("agora");
   const [title, setTitle]             = useState("");
   const [body, setBody]               = useState("");
-  const [target, setTarget]           = useState<TargetType>("all");
-  const [targetValue, setTargetValue] = useState("");
+  const [target, setTarget]           = useState<TargetType>(leaderMode ? "turma" : "all");
+  const [targetValue, setTargetValue] = useState(leaderMode ? managedTurmaId ?? "" : "");
   const [scheduledAt, setScheduledAt] = useState("");
   const [sending, setSending]         = useState(false);
   const [result, setResult]           = useState<{ sent: number; failed: number } | null>(null);
@@ -99,11 +136,17 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
   const [scheduledList, setScheduledList]   = useState<ScheduledPush[]>([]);
   const [loadingScheduled, setLoadingScheduled] = useState(false);
 
-  const canSendToAll = isSuper;
+  const canSendToAll = isSuper || role === "admin";
 
   useEffect(() => {
     if (mode === "agendar") loadScheduled();
   }, [mode]);
+
+  useEffect(() => {
+    if (!leaderMode) return;
+    setTarget("turma");
+    setTargetValue(managedTurmaId ?? "");
+  }, [leaderMode, managedTurmaId]);
 
   async function loadScheduled() {
     setLoadingScheduled(true);
@@ -133,7 +176,7 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
 
     if (mode === "agora") {
       try {
-        const { data, error: fnError } = await supabase.functions.invoke("admin-push", {
+        const { data, error: fnError } = await supabase.functions.invoke<{ sent: number; failed: number }>("admin-push", {
           body: { title, body, target, targetValue: target === "all" ? undefined : targetValue, churchId },
         });
         if (fnError) throw fnError;
@@ -192,7 +235,7 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
           <Megaphone className="w-5 h-5 text-primary-foreground" />
         </div>
         <div>
@@ -210,7 +253,7 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
           <button
             key={m.id}
             onClick={() => { setMode(m.id); setError(""); setResult(null); }}
-            className={`flex-1 py-2 rounded-xl text-xs font-inter font-bold border transition-colors ${
+            className={`flex-1 py-2 rounded-lg text-xs font-inter font-bold border transition-colors ${
               mode === m.id
                 ? "border-primary bg-primary/10 text-primary"
                 : "border-border text-muted-foreground hover:border-primary/30"
@@ -227,9 +270,9 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
         <input
           type="text" value={title} onChange={e => setTitle(e.target.value)}
           placeholder="Ex: Encontro cancelado amanha" maxLength={80}
-          className="w-full px-3 py-2.5 rounded-xl border border-border bg-card text-sm font-inter text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full px-3 py-2.5 rounded-lg border border-border bg-card text-sm font-inter text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
-        <p className="text-muted-foreground text-[10px] font-inter mt-1 text-right">{title.length}/80</p>
+        <p className="text-muted-foreground text-xs font-inter mt-1 text-right">{title.length}/80</p>
       </div>
 
       {/* Body */}
@@ -238,9 +281,9 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
         <textarea
           value={body} onChange={e => setBody(e.target.value)}
           placeholder="Escreva a mensagem que sera enviada..." maxLength={200} rows={3}
-          className="w-full px-3 py-2.5 rounded-xl border border-border bg-card text-sm font-inter text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+          className="w-full px-3 py-2.5 rounded-lg border border-border bg-card text-sm font-inter text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
         />
-        <p className="text-muted-foreground text-[10px] font-inter mt-1 text-right">{body.length}/200</p>
+        <p className="text-muted-foreground text-xs font-inter mt-1 text-right">{body.length}/200</p>
       </div>
 
       {/* Schedule datetime */}
@@ -255,9 +298,9 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
             value={scheduledAt}
             onChange={e => setScheduledAt(e.target.value)}
             min={minDatetime}
-            className="w-full px-3 py-2.5 rounded-xl border border-border bg-card text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full px-3 py-2.5 rounded-lg border border-border bg-card text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
-          <p className="text-muted-foreground text-[10px] font-inter mt-1">
+          <p className="text-muted-foreground text-xs font-inter mt-1">
             O envio ocorre no ciclo do cron seguinte (ate 1h de tolerancia).
           </p>
         </div>
@@ -266,11 +309,18 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
       {/* Target selector */}
       <div>
         <label className="block text-xs font-inter font-bold text-foreground mb-1.5">Enviar para</label>
+        {leaderMode && (
+          <div className="mb-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5">
+            <p className="font-inter text-xs text-foreground">
+              Como líder, seus envios são limitados ao grupo selecionado.
+            </p>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2">
           {canSendToAll && (
             <button
               onClick={() => { setTarget("all"); setTargetValue(""); }}
-              className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-inter font-bold transition-colors ${
+              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-inter font-bold transition-colors ${
                 target === "all"
                   ? "border-primary bg-primary/10 text-primary"
                   : "border-border bg-card text-muted-foreground hover:border-primary/30"
@@ -279,9 +329,10 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
               <Users className="w-4 h-4" /> Todos
             </button>
           )}
+          {!leaderMode && (
           <button
             onClick={() => { setTarget("area"); setTargetValue(""); }}
-            className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-inter font-bold transition-colors ${
+            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-inter font-bold transition-colors ${
               target === "area"
                 ? "border-primary bg-primary/10 text-primary"
                 : "border-border bg-card text-muted-foreground hover:border-primary/30"
@@ -289,9 +340,11 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
           >
             <MapPin className="w-4 h-4" /> Por area
           </button>
+          )}
+          {!leaderMode && (
           <button
             onClick={() => { setTarget("community"); setTargetValue(""); }}
-            className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-inter font-bold transition-colors ${
+            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-inter font-bold transition-colors ${
               target === "community"
                 ? "border-primary bg-primary/10 text-primary"
                 : "border-border bg-card text-muted-foreground hover:border-primary/30"
@@ -299,10 +352,11 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
           >
             <Building className="w-4 h-4" /> Comunidade
           </button>
+          )}
           {turmas.length > 0 && (
             <button
               onClick={() => { setTarget("turma"); setTargetValue(""); }}
-              className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-inter font-bold transition-colors ${
+              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-inter font-bold transition-colors ${
                 target === "turma"
                   ? "border-primary bg-primary/10 text-primary"
                   : "border-border bg-card text-muted-foreground hover:border-primary/30"
@@ -317,40 +371,42 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
       {target === "area" && (
         <select
           value={targetValue} onChange={e => setTargetValue(e.target.value)}
-          className="w-full px-3 py-2.5 rounded-xl border border-border bg-card text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full px-3 py-2.5 rounded-lg border border-border bg-card text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
         >
           <option value="">Selecione a area...</option>
-          {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+          {areas.map(a => <option key={a} value={a}>{a}</option>)}
         </select>
       )}
       {target === "community" && (
         <select
           value={targetValue} onChange={e => setTargetValue(e.target.value)}
-          className="w-full px-3 py-2.5 rounded-xl border border-border bg-card text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full px-3 py-2.5 rounded-lg border border-border bg-card text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
         >
           <option value="">Selecione a comunidade...</option>
-          {COMMUNITIES.map(c => <option key={c} value={c}>{c}</option>)}
+          {communities.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
       )}
       {target === "turma" && (
         <select
-          value={targetValue} onChange={e => setTargetValue(e.target.value)}
-          className="w-full px-3 py-2.5 rounded-xl border border-border bg-card text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          value={targetValue}
+          onChange={e => setTargetValue(e.target.value)}
+          disabled={leaderMode}
+          className="w-full px-3 py-2.5 rounded-lg border border-border bg-card text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
         >
-          <option value="">Selecione a turma...</option>
+          {!leaderMode && <option value="">Selecione a turma...</option>}
           {turmas.map(t => <option key={t.id} value={t.id}>{t.name}{t.area ? ` (${t.area})` : ""}</option>)}
         </select>
       )}
 
       {error && (
-        <div className="flex items-center gap-2 p-3 rounded-xl bg-destructive/10 border border-destructive/20">
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
           <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
           <p className="text-destructive text-xs font-inter">{error}</p>
         </div>
       )}
 
       {result && mode === "agora" && (
-        <div className="flex items-center gap-2 p-3 rounded-xl bg-brand-green/10 border border-brand-green/20">
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-brand-green/10 border border-brand-green/20">
           <CheckCircle className="w-4 h-4 text-brand-green flex-shrink-0" />
           <p className="text-brand-green text-xs font-inter font-bold">
             {result.sent > 0
@@ -363,7 +419,7 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
       <button
         onClick={handleSend}
         disabled={sending || !title.trim() || !body.trim()}
-        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-inter font-bold text-sm text-primary-foreground transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-lg font-inter font-bold text-sm text-primary-foreground transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         style={{ background: "var(--gradient-hero)" }}
       >
         {sending ? (
@@ -378,7 +434,7 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
         )}
       </button>
 
-      <p className="text-muted-foreground text-[10px] font-inter text-center">
+      <p className="text-muted-foreground text-xs font-inter text-center">
         Apenas usuarios com notificacoes de mensagens ativas receberao o aviso.
       </p>
 
@@ -387,7 +443,7 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
         <div className="pt-3 border-t border-border space-y-3">
           <div className="flex items-center justify-between">
             <p className="font-montserrat font-bold text-foreground text-sm">Agendadas pendentes</p>
-            <button onClick={loadScheduled} className="text-[10px] font-inter text-primary hover:underline">
+            <button onClick={loadScheduled} className="text-xs font-inter text-primary hover:underline">
               Atualizar
             </button>
           </div>
@@ -402,7 +458,7 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
           ) : (
             <div className="space-y-2">
               {scheduledList.map(s => (
-                <div key={s.id} className="p-3 rounded-xl border border-border bg-card space-y-1">
+                <div key={s.id} className="p-3 rounded-lg border border-border bg-card space-y-1">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-inter font-bold text-foreground text-xs truncate flex-1">{s.title}</p>
                     <button
@@ -413,13 +469,13 @@ function SendSection({ turmas, churchId }: { turmas: Array<{ id: string; name: s
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <p className="text-[10px] font-inter text-muted-foreground truncate">{s.body}</p>
+                  <p className="text-xs font-inter text-muted-foreground truncate">{s.body}</p>
                   <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-inter text-primary flex items-center gap-1">
+                    <span className="text-xs font-inter text-primary flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       {format(new Date(s.scheduled_at), "d/MM/yyyy 'as' HH:mm", { locale: ptBR })}
                     </span>
-                    <span className="text-[10px] font-inter text-muted-foreground">Destino: {targetLabel(s)}</span>
+                    <span className="text-xs font-inter text-muted-foreground">Destino: {targetLabel(s)}</span>
                   </div>
                 </div>
               ))}
@@ -500,7 +556,7 @@ function AutomationsSection() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center">
           <Bell className="w-5 h-5 text-secondary" />
         </div>
         <div>
@@ -511,7 +567,7 @@ function AutomationsSection() {
 
       {loading ? (
         <div className="space-y-2">
-          {[1, 2, 3].map(i => <div key={i} className="h-24 bg-muted rounded-2xl animate-pulse" />)}
+          {[1, 2, 3].map(i => <div key={i} className="h-24 bg-muted rounded-lg animate-pulse" />)}
         </div>
       ) : configs.length === 0 ? (
         <div className="text-center py-10">
@@ -532,7 +588,7 @@ function AutomationsSection() {
             return (
               <div
                 key={cfg.key}
-                className={`rounded-2xl border overflow-hidden transition-all ${
+                className={`rounded-lg border overflow-hidden transition-all ${
                   cfg.enabled ? "border-border" : "border-border/40 opacity-60"
                 }`}
               >
@@ -542,7 +598,7 @@ function AutomationsSection() {
                     <div className="flex-1 min-w-0">
                       <p className="font-inter font-bold text-foreground text-sm">{label}</p>
                       {cfg.description && (
-                        <p className="text-muted-foreground text-[10px] font-inter mt-0.5 leading-relaxed">
+                        <p className="text-muted-foreground text-xs font-inter mt-0.5 leading-relaxed">
                           {cfg.description}
                         </p>
                       )}
@@ -578,7 +634,7 @@ function AutomationsSection() {
                   {isEditing ? (
                     <div className="space-y-2 pt-1">
                       <div>
-                        <label className="text-[10px] font-inter font-semibold text-muted-foreground">Titulo</label>
+                        <label className="text-xs font-inter font-semibold text-muted-foreground">Titulo</label>
                         <input
                           value={editTitle}
                           onChange={e => setEditTitle(e.target.value)}
@@ -587,7 +643,7 @@ function AutomationsSection() {
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-inter font-semibold text-muted-foreground">
+                        <label className="text-xs font-inter font-semibold text-muted-foreground">
                           Mensagem
                           {cfg.key === "devotional_reminder" && (
                             <span className="text-primary ml-1">(use {"{N}"} para mostrar a contagem pendente)</span>
@@ -600,7 +656,7 @@ function AutomationsSection() {
                           rows={2}
                           className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-border bg-background text-sm font-inter text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
                         />
-                        <p className="text-[10px] font-inter text-muted-foreground text-right">
+                        <p className="text-xs font-inter text-muted-foreground text-right">
                           {editBody.length}/200
                         </p>
                       </div>
@@ -622,9 +678,9 @@ function AutomationsSection() {
                     </div>
                   ) : (
                     /* Preview current title/body */
-                    <div className="bg-muted/30 rounded-xl px-3 py-2 space-y-0.5">
-                      <p className="text-[10px] font-inter text-foreground font-semibold">{cfg.title}</p>
-                      <p className="text-[10px] font-inter text-muted-foreground leading-relaxed">{cfg.body}</p>
+                    <div className="bg-muted/30 rounded-lg px-3 py-2 space-y-0.5">
+                      <p className="text-xs font-inter text-foreground font-semibold">{cfg.title}</p>
+                      <p className="text-xs font-inter text-muted-foreground leading-relaxed">{cfg.body}</p>
                     </div>
                   )}
                 </div>
@@ -639,7 +695,7 @@ function AutomationsSection() {
 
 // ─── Event Reminders Trigger ───────────────────────────────────────────────────
 
-function EventRemindersTrigger() {
+function EventRemindersTrigger({ churchId }: { churchId?: string | null }) {
   const [sending, setSending] = useState(false);
   const [result,  setResult]  = useState<{ sent: number; failed: number; upcomingEvents: number; pastEvents: number } | null>(null);
   const [error,   setError]   = useState("");
@@ -647,7 +703,12 @@ function EventRemindersTrigger() {
   async function handleTrigger() {
     setSending(true); setError(""); setResult(null);
     try {
-      const { data, error: fnError } = await supabase.functions.invoke("event-reminders", { body: {} });
+      const { data, error: fnError } = await supabase.functions.invoke<{
+        sent: number;
+        failed: number;
+        upcomingEvents: number;
+        pastEvents: number;
+      }>("event-reminders", { body: { churchId } });
       if (fnError) throw fnError;
       setResult(data);
     } catch (err: unknown) {
@@ -660,29 +721,29 @@ function EventRemindersTrigger() {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center">
           <CalendarClock className="w-5 h-5 text-secondary" />
         </div>
         <div>
           <h3 className="font-montserrat font-bold text-foreground text-sm">Lembretes de Eventos</h3>
-          <p className="text-muted-foreground font-inter text-[10px]">Dispara automatico as 8h - Eventos +2 dias e -1 dia</p>
+          <p className="text-muted-foreground font-inter text-xs">Dispara automatico as 8h - Eventos +2 dias e -1 dia</p>
         </div>
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 p-3 rounded-xl bg-destructive/10 border border-destructive/20">
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
           <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
           <p className="text-destructive text-xs font-inter">{error}</p>
         </div>
       )}
 
       {result && (
-        <div className="p-3 rounded-xl bg-brand-green/10 border border-brand-green/20 space-y-1">
+        <div className="p-3 rounded-lg bg-brand-green/10 border border-brand-green/20 space-y-1">
           <p className="text-brand-green text-xs font-inter font-bold flex items-center gap-1.5">
             <CheckCircle className="w-3.5 h-3.5" />
             {result.sent > 0 ? `${result.sent} notificacao(oes) enviada(s)` : "Nenhuma notificacao para enviar"}
           </p>
-          <p className="text-muted-foreground text-[10px] font-inter">
+          <p className="text-muted-foreground text-xs font-inter">
             Eventos em 2 dias: {result.upcomingEvents} - Eventos de ontem: {result.pastEvents}
             {result.failed > 0 && ` - ${result.failed} falha(s)`}
           </p>
@@ -692,7 +753,7 @@ function EventRemindersTrigger() {
       <button
         onClick={handleTrigger}
         disabled={sending}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-secondary/30 bg-secondary/5 text-secondary hover:bg-secondary/10 transition-colors font-inter font-bold text-sm disabled:opacity-50"
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-secondary/30 bg-secondary/5 text-secondary hover:bg-secondary/10 transition-colors font-inter font-bold text-sm disabled:opacity-50"
       >
         {sending ? (
           <>
@@ -738,6 +799,11 @@ function PushLogHistory() {
     prayer_pairs:         { label: "Dupla de oracao",    emoji: "O" },
     automation_run:       { label: "Rotina automatica",  emoji: "R" },
     birthday:             { label: "Aniversario",        emoji: "N" },
+    inactive_user_nudge:  { label: "Usuario inativo",    emoji: "I" },
+    push_activation_nudge:{ label: "Ativacao de push",   emoji: "P" },
+    push_test:            { label: "Teste push",         emoji: "T" },
+    chat_reply:           { label: "Resposta no chat",   emoji: "C" },
+    prayer_confirm:       { label: "Oracao confirmada",  emoji: "O" },
     devotional_reminder:  { label: "Devocional",         emoji: "D" },
     streak_risk:          { label: "Sequencia em risco", emoji: "S" },
     pastor_message:       { label: "Mensagem do pastor", emoji: "M" },
@@ -759,12 +825,12 @@ function PushLogHistory() {
   return (
     <div className="mt-4 pt-4 border-t border-border space-y-3">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
+        <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
           <History className="w-5 h-5 text-muted-foreground" />
         </div>
         <div>
           <h3 className="font-montserrat font-bold text-foreground text-sm">Historico de disparos</h3>
-          <p className="text-muted-foreground font-inter text-[10px]">Ultimos 20 envios registrados</p>
+          <p className="text-muted-foreground font-inter text-xs">Ultimos 20 envios registrados</p>
         </div>
       </div>
 
@@ -781,23 +847,23 @@ function PushLogHistory() {
           {logs.map((log) => {
             const typeInfo = typeLabels[log.type] || { label: log.type, emoji: "P" };
             return (
-              <div key={log.id} className="p-3 rounded-xl border border-border bg-card space-y-1">
+              <div key={log.id} className="p-3 rounded-lg border border-border bg-card space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-inter font-bold text-foreground">
                     {typeInfo.emoji} {typeInfo.label}
                   </span>
-                  <span className="text-[10px] font-inter text-muted-foreground flex items-center gap-1">
+                  <span className="text-xs font-inter text-muted-foreground flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     {formatDate(log.created_at)}
                   </span>
                 </div>
                 <p className="text-xs font-inter text-foreground font-medium truncate">{log.title}</p>
-                <p className="text-[10px] font-inter text-muted-foreground truncate">{log.body}</p>
+                <p className="text-xs font-inter text-muted-foreground truncate">{log.body}</p>
                 <div className="flex items-center gap-3 pt-1">
-                  <span className="text-[10px] font-inter text-muted-foreground">Destino: {targetLabel(log)}</span>
-                  <span className="text-[10px] font-inter text-brand-green font-bold">OK {log.sent_count}</span>
+                  <span className="text-xs font-inter text-muted-foreground">Destino: {targetLabel(log)}</span>
+                  <span className="text-xs font-inter text-brand-green font-bold">OK {log.sent_count}</span>
                   {log.failed_count > 0 && (
-                    <span className="text-[10px] font-inter text-destructive font-bold">Falhas {log.failed_count}</span>
+                    <span className="text-xs font-inter text-destructive font-bold">Falhas {log.failed_count}</span>
                   )}
                 </div>
               </div>

@@ -52,7 +52,7 @@ export default function AdminGlobalDashboard() {
             <Church className="w-5 h-5 text-primary" />
             <div>
               <p className="text-2xl font-black">{stats.churches}</p>
-              <p className="text-[10px] text-muted-foreground uppercase">Igrejas</p>
+              <p className="text-xs text-muted-foreground uppercase">Igrejas</p>
             </div>
           </CardContent>
         </Card>
@@ -61,7 +61,7 @@ export default function AdminGlobalDashboard() {
             <Users className="w-5 h-5 text-brand-green" />
             <div>
               <p className="text-2xl font-black">{stats.members}</p>
-              <p className="text-[10px] text-muted-foreground uppercase">Membros</p>
+              <p className="text-xs text-muted-foreground uppercase">Membros</p>
             </div>
           </CardContent>
         </Card>
@@ -70,7 +70,7 @@ export default function AdminGlobalDashboard() {
             <CreditCard className="w-5 h-5 text-yellow-500" />
             <div>
               <p className="text-2xl font-black">{stats.activeSubs}</p>
-              <p className="text-[10px] text-muted-foreground uppercase">Assinaturas</p>
+              <p className="text-xs text-muted-foreground uppercase">Assinaturas</p>
             </div>
           </CardContent>
         </Card>
@@ -79,7 +79,7 @@ export default function AdminGlobalDashboard() {
             <TrendingUp className="w-5 h-5 text-blue-500" />
             <div>
               <p className="text-2xl font-black">R$ {stats.revenue}</p>
-              <p className="text-[10px] text-muted-foreground uppercase">Receita Est.</p>
+              <p className="text-xs text-muted-foreground uppercase">Receita Est.</p>
             </div>
           </CardContent>
         </Card>

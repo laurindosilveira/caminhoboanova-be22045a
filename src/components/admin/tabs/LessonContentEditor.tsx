@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ChevronLeft, Save, Plus, Trash2, BookOpen, Heart,
@@ -53,18 +53,14 @@ type Props = {
 };
 
 export default function LessonContentEditor({ lesson, onBack, churchId }: Props) {
-  const defaults = getDefaultContent(lesson.order_num);
+  const defaults = useMemo(() => getDefaultContent(lesson.order_num), [lesson.order_num]);
   const [content, setContent] = useState<LessonContent>(defaults);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isPublished, setIsPublished] = useState(false);
 
-  useEffect(() => {
-    loadContent();
-  }, [lesson.id, churchId]);
-
-  async function loadContent() {
+  const loadContent = useCallback(async () => {
     setLoading(true);
     let contentQuery = supabase
       .from("lesson_content")
@@ -92,11 +88,15 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
         prayer_prompt: data.prayer_prompt || defaults.prayer_prompt,
         video_link: data.video_link ?? "",
         audio_link: data.audio_link ?? "",
-        pdf_link: (data as any).pdf_link ?? "",
+        pdf_link: data.pdf_link ?? "",
       });
     }
     setLoading(false);
-  }
+  }, [churchId, defaults, lesson.id]);
+
+  useEffect(() => {
+    loadContent();
+  }, [loadContent]);
 
   async function handleSave() {
     setSaving(true);
@@ -169,7 +169,7 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
         onChange={e => onChange(e.target.value)}
         rows={rows}
         placeholder={placeholder}
-        className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+        className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
       />
     </div>
   );
@@ -177,7 +177,7 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
+        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
           <BookOpen className="w-5 h-5 text-primary" />
         </div>
         <p className="text-muted-foreground font-inter text-sm">Carregando conteúdo...</p>
@@ -195,13 +195,13 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
         </button>
       </div>
 
-      <div className="rounded-2xl p-4" style={{ background: "var(--gradient-hero)" }}>
+      <div className="rounded-lg p-4" style={{ background: "var(--gradient-hero)" }}>
         <div className="flex items-center justify-between mb-1">
           <p className="text-primary-foreground/60 font-inter text-xs">Editando conteúdo · Lição {lesson.order_num}</p>
           {isPublished ? (
-            <span className="px-2 py-0.5 rounded-full bg-white/20 text-primary-foreground text-[10px] font-inter font-bold">✅ Publicado</span>
+            <span className="px-2 py-0.5 rounded-full bg-white/20 text-primary-foreground text-xs font-inter font-bold">✅ Publicado</span>
           ) : (
-            <span className="px-2 py-0.5 rounded-full bg-white/10 text-primary-foreground/60 text-[10px] font-inter font-bold">📝 Rascunho</span>
+            <span className="px-2 py-0.5 rounded-full bg-white/10 text-primary-foreground/60 text-xs font-inter font-bold">📝 Rascunho</span>
           )}
         </div>
         <h2 className="font-montserrat font-black text-primary-foreground text-lg leading-tight">{lesson.title}</h2>
@@ -209,14 +209,14 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
           <p className="text-primary-foreground/70 font-inter text-xs mt-1">{lesson.objective}</p>
         )}
         {!isPublished && (
-          <p className="text-primary-foreground/50 font-inter text-[10px] mt-2 italic">
+          <p className="text-primary-foreground/50 font-inter text-xs mt-2 italic">
             ⚠️ Este conteúdo usa valores padrão. Edite e salve para publicar.
           </p>
         )}
       </div>
 
       {/* 1. Saudação */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
           <Heart className="w-4 h-4 text-primary" />
           <p className="font-montserrat font-bold text-foreground text-sm">👋 Saudação do Líder</p>
@@ -233,7 +233,7 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
       </div>
 
       {/* 2. Quebra-gelo */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
           <MessageCircle className="w-4 h-4 text-secondary" />
           <p className="font-montserrat font-bold text-foreground text-sm">🔗 Quebra-gelo</p>
@@ -250,7 +250,7 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
       </div>
 
       {/* 3. Vídeo e Áudio */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
           <Play className="w-4 h-4 text-primary" />
           <p className="font-montserrat font-bold text-foreground text-sm">🎥 Episódio / Mídia</p>
@@ -266,7 +266,7 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
               value={content.video_link}
               onChange={e => setContent(p => ({ ...p, video_link: e.target.value }))}
               placeholder="https://youtube.com/..."
-              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
           <div>
@@ -279,7 +279,7 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
               value={content.audio_link}
               onChange={e => setContent(p => ({ ...p, audio_link: e.target.value }))}
               placeholder="https://..."
-              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
           <div>
@@ -292,14 +292,14 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
               value={content.pdf_link}
               onChange={e => setContent(p => ({ ...p, pdf_link: e.target.value }))}
               placeholder="https://drive.google.com/..."
-              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
         </div>
       </div>
 
       {/* 4. Resumo */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
           <BookOpen className="w-4 h-4 text-secondary" />
           <p className="font-montserrat font-bold text-foreground text-sm">📝 Resumo do Conteúdo</p>
@@ -316,7 +316,7 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
       </div>
 
       {/* 5. Textos Bíblicos */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
           <span className="text-sm">✝️</span>
           <p className="font-montserrat font-bold text-foreground text-sm">📖 Textos Bíblicos</p>
@@ -329,10 +329,10 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
                 value={text}
                 onChange={e => updateBibleText(i, e.target.value)}
                 placeholder="Ex: João 3:16"
-                className="flex-1 px-3 py-2 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
               {content.bible_texts.length > 1 && (
-                <button onClick={() => removeBibleText(i)} className="p-2 text-destructive hover:bg-destructive/10 rounded-xl transition-colors">
+                <button onClick={() => removeBibleText(i)} className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors">
                   <Trash2 className="w-4 h-4" />
                 </button>
               )}
@@ -349,7 +349,7 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
       </div>
 
       {/* 6. Perguntas */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
           <Pen className="w-4 h-4 text-primary" />
           <p className="font-montserrat font-bold text-foreground text-sm">💬 Perguntas para Diálogo</p>
@@ -358,7 +358,7 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
           {content.questions.map((q, i) => (
             <div key={i}>
               <div className="flex items-center gap-2 mb-1.5">
-                <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center font-montserrat font-bold text-primary text-[10px] flex-shrink-0">{i + 1}</span>
+                <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center font-montserrat font-bold text-primary text-xs flex-shrink-0">{i + 1}</span>
                 <p className="font-inter text-xs font-semibold text-muted-foreground">Pergunta {i + 1}</p>
                 {content.questions.length > 1 && (
                   <button onClick={() => removeQuestion(i)} className="ml-auto p-1 text-destructive hover:bg-destructive/10 rounded-lg transition-colors">
@@ -371,7 +371,7 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
                 onChange={e => updateQuestion(i, e.target.value)}
                 rows={2}
                 placeholder={`Pergunta reflexiva ${i + 1}...`}
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground font-inter text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
               />
             </div>
           ))}
@@ -386,7 +386,7 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
       </div>
 
       {/* 7. Prática */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
           <Target className="w-4 h-4 text-secondary" />
           <p className="font-montserrat font-bold text-foreground text-sm">🧭 Prática da Semana</p>
@@ -403,7 +403,7 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
       </div>
 
       {/* 8. Oração */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
           <Heart className="w-4 h-4 text-primary" />
           <p className="font-montserrat font-bold text-foreground text-sm">🙏 Oração Final</p>
@@ -423,7 +423,7 @@ export default function LessonContentEditor({ lesson, onBack, churchId }: Props)
       <button
         onClick={handleSave}
         disabled={saving}
-        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-inter text-sm font-medium text-primary-foreground disabled:opacity-70 transition-opacity"
+        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-lg font-inter text-sm font-medium text-primary-foreground disabled:opacity-70 transition-opacity"
         style={{ background: "var(--gradient-hero)" }}
       >
         <Save className="w-4 h-4" />

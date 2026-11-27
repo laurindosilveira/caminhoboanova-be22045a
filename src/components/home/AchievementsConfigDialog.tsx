@@ -67,7 +67,7 @@ export default function AchievementsConfigDialog({ onSaved }: Props) {
   async function loadDefs() {
     setLoading(true);
     const { data, error } = await supabase
-      .from("achievement_definitions" as any)
+      .from("achievement_definitions")
       .select("*")
       .order("sort_order");
 
@@ -77,7 +77,7 @@ export default function AchievementsConfigDialog({ onSaved }: Props) {
       // Table exists but is empty — seed with defaults so the user can edit them
       const seedRows = DEFAULT_ACHIEVEMENT_DEFS.map(({ id: _id, ...rest }) => rest);
       const { data: seeded } = await supabase
-        .from("achievement_definitions" as any)
+        .from("achievement_definitions")
         .insert(seedRows)
         .select("*");
       setDefs((seeded as unknown as AchievementDef[]) ?? DEFAULT_ACHIEVEMENT_DEFS);
@@ -99,7 +99,7 @@ export default function AchievementsConfigDialog({ onSaved }: Props) {
     setSaving("new");
     const maxOrder = defs.length > 0 ? Math.max(...defs.map(d => d.sort_order)) : 0;
     const { error } = await supabase
-      .from("achievement_definitions" as any)
+      .from("achievement_definitions")
       .insert({ ...newForm, key: keyClean, sort_order: maxOrder + 1 });
 
     if (error) {
@@ -117,7 +117,7 @@ export default function AchievementsConfigDialog({ onSaved }: Props) {
   async function handleSaveEdit(id: string) {
     setSaving(id);
     const { error } = await supabase
-      .from("achievement_definitions" as any)
+      .from("achievement_definitions")
       .update({ ...editForm, updated_at: new Date().toISOString() })
       .eq("id", id);
 
@@ -137,7 +137,7 @@ export default function AchievementsConfigDialog({ onSaved }: Props) {
     if (!confirm(`Remover conquista "${def.title}"?\n\nIsso não apagará conquistas já desbloqueadas pelos participantes.`)) return;
     setDeleting(def.id);
     const { error } = await supabase
-      .from("achievement_definitions" as any)
+      .from("achievement_definitions")
       .delete()
       .eq("id", def.id);
 
@@ -220,7 +220,7 @@ export default function AchievementsConfigDialog({ onSaved }: Props) {
                       />
                       <div className="flex gap-2">
                         <div className="flex-1">
-                          <p className="text-[10px] font-inter text-muted-foreground mb-1">Métrica</p>
+                          <p className="text-xs font-inter text-muted-foreground mb-1">Métrica</p>
                           <select
                             value={editForm.metric ?? "completed_count"}
                             onChange={e => setEditForm(p => ({ ...p, metric: e.target.value }))}
@@ -230,7 +230,7 @@ export default function AchievementsConfigDialog({ onSaved }: Props) {
                           </select>
                         </div>
                         <div className="w-20">
-                          <p className="text-[10px] font-inter text-muted-foreground mb-1">Meta</p>
+                          <p className="text-xs font-inter text-muted-foreground mb-1">Meta</p>
                           <input
                             type="number" min={1} max={99999}
                             value={editForm.target ?? 1}
@@ -239,7 +239,7 @@ export default function AchievementsConfigDialog({ onSaved }: Props) {
                           />
                         </div>
                         <div className="w-20">
-                          <p className="text-[10px] font-inter text-muted-foreground mb-1">Bônus pts</p>
+                          <p className="text-xs font-inter text-muted-foreground mb-1">Bônus pts</p>
                           <input
                             type="number" min={0} max={9999}
                             value={editForm.bonus_points ?? 10}
@@ -293,16 +293,16 @@ export default function AchievementsConfigDialog({ onSaved }: Props) {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <p className="font-inter font-semibold text-foreground text-sm">{def.title}</p>
-                          {def.is_secret && <span className="text-[9px] font-inter bg-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-full">secreta</span>}
-                          {!def.is_active && <span className="text-[9px] font-inter bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">inativa</span>}
+                          {def.is_secret && <span className="text-xs font-inter bg-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-full">secreta</span>}
+                          {!def.is_active && <span className="text-xs font-inter bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">inativa</span>}
                         </div>
-                        <p className="text-muted-foreground text-[10px] font-inter">
+                        <p className="text-muted-foreground text-xs font-inter">
                           {METRIC_OPTIONS.find(o => o.value === def.metric)?.label ?? def.metric} ≥ {def.target} · +{def.bonus_points} pts
                         </p>
                       </div>
                       <button
                         onClick={() => startEdit(def)}
-                        className="px-2.5 py-1 rounded-lg bg-muted/60 hover:bg-muted text-foreground font-inter text-[10px] font-semibold transition-colors"
+                        className="px-2.5 py-1 rounded-lg bg-muted/60 hover:bg-muted text-foreground font-inter text-xs font-semibold transition-colors"
                       >
                         Editar
                       </button>
@@ -353,7 +353,7 @@ export default function AchievementsConfigDialog({ onSaved }: Props) {
             />
             <div className="flex gap-2">
               <div className="flex-1">
-                <p className="text-[10px] font-inter text-muted-foreground mb-1">Métrica</p>
+                <p className="text-xs font-inter text-muted-foreground mb-1">Métrica</p>
                 <select
                   value={newForm.metric}
                   onChange={e => setNewForm(p => ({ ...p, metric: e.target.value }))}
@@ -363,7 +363,7 @@ export default function AchievementsConfigDialog({ onSaved }: Props) {
                 </select>
               </div>
               <div className="w-20">
-                <p className="text-[10px] font-inter text-muted-foreground mb-1">Meta</p>
+                <p className="text-xs font-inter text-muted-foreground mb-1">Meta</p>
                 <input
                   type="number" min={1} max={99999}
                   value={newForm.target}
@@ -372,7 +372,7 @@ export default function AchievementsConfigDialog({ onSaved }: Props) {
                 />
               </div>
               <div className="w-20">
-                <p className="text-[10px] font-inter text-muted-foreground mb-1">Bônus pts</p>
+                <p className="text-xs font-inter text-muted-foreground mb-1">Bônus pts</p>
                 <input
                   type="number" min={0} max={9999}
                   value={newForm.bonus_points}
@@ -421,7 +421,7 @@ export default function AchievementsConfigDialog({ onSaved }: Props) {
         )}
 
         <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-          <p className="text-amber-700 dark:text-amber-400 font-inter text-[10px] leading-relaxed">
+          <p className="text-amber-700 dark:text-amber-400 font-inter text-xs leading-relaxed">
             ⚠️ Remover uma conquista não apaga o histórico de desbloqueios dos participantes — apenas a remove da tela de conquistas.
           </p>
         </div>

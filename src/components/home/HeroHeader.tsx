@@ -1,5 +1,4 @@
 import { Flame, Star, Heart, LogOut, ArrowLeftRight } from "lucide-react";
-import { AREAS, formatGrowthGroupName } from "@/config/areas";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
 import { toast } from "sonner";
@@ -15,10 +14,15 @@ interface HeroHeaderProps {
 }
 
 export default function HeroHeader({ streakDays, streakFrozen, streakAtRisk, faithPoints, faithLevel, faithEnergy }: HeroHeaderProps) {
-  const { profile, role, signOut } = useAuth();
-  const { effectiveArea, setEffectiveArea, isOverriding } = useAreaSwitch();
-  const firstName = profile?.full_name?.split(" ")[0] ?? "Bem-vindo";
-  const isAdmin = role === "admin";
+  const { profile, signOut } = useAuth();
+  const {
+    effectiveTurmaId,
+    effectiveTurma,
+    availableTurmas,
+    setEffectiveTurma,
+    canSwitchTurma,
+    isOverriding,
+  } = useAreaSwitch();
 
   return (
     <div style={{ background: "var(--gradient-hero)" }}>
@@ -37,24 +41,28 @@ export default function HeroHeader({ streakDays, streakFrozen, streakAtRisk, fai
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Area switcher for admins */}
-            {isAdmin && (
+            {/* Group switcher for admins and leaders assigned to multiple groups */}
+            {canSwitchTurma && (
               <div className="relative">
-                <label htmlFor="area-switcher" className="sr-only">Selecionar Grupo de Crescimento</label>
+                <label htmlFor="group-switcher" className="sr-only">Selecionar grupo</label>
                 <select
-                  id="area-switcher"
-                  value={effectiveArea}
+                  id="group-switcher"
+                  value={effectiveTurmaId ?? ""}
                   onChange={async (e) => {
                     try {
-                      await setEffectiveArea(e.target.value);
+                      await setEffectiveTurma(e.target.value);
                     } catch {
-                      toast.error("Não foi possível trocar o Grupo de Crescimento agora.");
+                      toast.error("Não foi possível trocar de grupo agora.");
                     }
                   }}
-                  aria-label="Selecionar Grupo de Crescimento para visualização"
+                  aria-label="Selecionar grupo de visualização"
                   className="appearance-none bg-white/15 backdrop-blur border border-white/30 text-primary-foreground rounded-full pl-3 pr-7 py-1.5 text-xs font-inter font-semibold focus:outline-none focus:ring-2 focus:ring-white/40 cursor-pointer"
                 >
-                  {AREAS.map(a => <option key={a} value={a} className="text-foreground">{formatGrowthGroupName(a)}</option>)}
+                  {availableTurmas.map((turma) => (
+                    <option key={turma.id} value={turma.id} className="text-foreground">
+                      {turma.name}
+                    </option>
+                  ))}
                 </select>
                 <ArrowLeftRight className="w-3 h-3 text-primary-foreground/70 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
               </div>
@@ -69,12 +77,12 @@ export default function HeroHeader({ streakDays, streakFrozen, streakAtRisk, fai
           </div>
         </div>
 
-        {/* Area override indicator */}
+        {/* Group override indicator */}
         {isOverriding && (
           <div className="mb-3 bg-white/15 backdrop-blur rounded-xl px-3 py-2 flex items-center gap-2" role="status" aria-live="polite">
             <ArrowLeftRight className="w-3.5 h-3.5 text-secondary" aria-hidden="true" />
             <span className="text-primary-foreground/90 text-xs font-inter">
-              Visualizando como <strong>{formatGrowthGroupName(effectiveArea)}</strong>
+              Visualizando o grupo <strong>{effectiveTurma?.name}</strong>
             </span>
           </div>
         )}
@@ -111,8 +119,8 @@ export default function HeroHeader({ streakDays, streakFrozen, streakAtRisk, fai
         {/* Spiritual energy — simple progress bar */}
         <div className="mt-3 bg-white/10 rounded-2xl p-3" role="meter" aria-label="Energia espiritual" aria-valuenow={faithEnergy} aria-valuemin={0} aria-valuemax={5}>
           <div className="flex items-center justify-between mb-1.5 px-0.5">
-            <span className="text-primary-foreground/80 text-[10px] uppercase font-inter font-bold tracking-wider">Energia Espiritual</span>
-            <span className="text-primary-foreground/90 text-[10px] font-bold font-mono">{faithEnergy}/5</span>
+            <span className="text-primary-foreground/80 text-xs uppercase font-inter font-bold tracking-wider">Energia Espiritual</span>
+            <span className="text-primary-foreground/90 text-xs font-bold font-mono">{faithEnergy}/5</span>
           </div>
           <div className="flex gap-1.5 h-1.5" aria-hidden="true">
             {Array.from({ length: 5 }).map((_, i) => (

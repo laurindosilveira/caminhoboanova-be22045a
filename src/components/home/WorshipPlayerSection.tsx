@@ -95,7 +95,7 @@ export default function WorshipPlayerSection() {
       </div>
 
       <div className="p-4 rounded-2xl bg-secondary/10 border border-secondary/20">
-        <p className="text-[10px] text-muted-foreground font-inter leading-relaxed italic text-center">
+        <p className="text-xs text-muted-foreground font-inter leading-relaxed italic text-center">
           "Cantem ao Senhor um novo cântico; cantem ao Senhor, todos os confins da terra." <br/>
           — Salmos 96:1
         </p>

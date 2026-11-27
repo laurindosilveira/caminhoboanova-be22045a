@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Globe, Lock, Unlock, ChevronDown, ChevronUp, Building2, RefreshCw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -25,33 +25,33 @@ export default function GlobalCourseReleasesPanel() {
   const [togglingKey, setTogglingKey] = useState<string | null>(null);
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchAll();
-  }, []);
-
-  async function fetchAll() {
+  const fetchAll = useCallback(async () => {
     setLoading(true);
     const [{ data: coursesData }, { data: churchesData }, { data: releasesData }] = await Promise.all([
       supabase.from("courses").select("id, title, order_num").is("church_id", null).order("order_num"),
       supabase.from("churches").select("id, name, city").eq("is_active", true).order("name"),
-      supabase.from("global_course_releases" as any).select("course_id, church_id"),
+      supabase.from("global_course_releases").select("course_id, church_id"),
     ]);
 
     setCourses((coursesData ?? []) as GlobalCourse[]);
     setChurches((churchesData ?? []) as Church[]);
 
     const map: ReleaseMap = {};
-    (releasesData ?? []).forEach((r: any) => {
+    (releasesData ?? []).forEach((r) => {
       if (!map[r.course_id]) map[r.course_id] = new Set();
       map[r.course_id].add(r.church_id);
     });
     setReleaseMap(map);
     setLoading(false);
 
-    if (coursesData && coursesData.length > 0 && !expandedCourse) {
-      setExpandedCourse((coursesData[0] as any).id);
+    if (coursesData && coursesData.length > 0) {
+      setExpandedCourse((current) => current ?? coursesData[0].id);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    void fetchAll();
+  }, [fetchAll]);
 
   async function toggleRelease(courseId: string, churchId: string) {
     const key = `${courseId}:${churchId}`;
@@ -60,7 +60,7 @@ export default function GlobalCourseReleasesPanel() {
     const isReleased = releaseMap[courseId]?.has(churchId) ?? false;
 
     if (isReleased) {
-      const { error } = await (supabase.from("global_course_releases" as any) as any)
+      const { error } = await supabase.from("global_course_releases")
         .delete()
         .eq("course_id", courseId)
         .eq("church_id", churchId);
@@ -81,7 +81,7 @@ export default function GlobalCourseReleasesPanel() {
       toast({ title: "Acesso bloqueado", description: "Igreja não verá mais este curso." });
     } else {
       const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await (supabase.from("global_course_releases" as any) as any)
+      const { error } = await supabase.from("global_course_releases")
         .insert({ course_id: courseId, church_id: churchId, released_by: user?.id });
 
       if (error) {
@@ -109,7 +109,7 @@ export default function GlobalCourseReleasesPanel() {
     if (unreleased.length === 0) return;
 
     const rows = unreleased.map(c => ({ course_id: courseId, church_id: c.id, released_by: user?.id }));
-    const { error } = await (supabase.from("global_course_releases" as any) as any).insert(rows);
+    const { error } = await supabase.from("global_course_releases").insert(rows);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
       return;
@@ -128,7 +128,7 @@ export default function GlobalCourseReleasesPanel() {
   if (loading) {
     return (
       <div className="space-y-3">
-        {[1, 2, 3].map(i => <div key={i} className="h-16 bg-muted rounded-2xl animate-pulse" />)}
+        {[1, 2, 3].map(i => <div key={i} className="h-16 bg-muted rounded-lg animate-pulse" />)}
       </div>
     );
   }
@@ -154,14 +154,14 @@ export default function GlobalCourseReleasesPanel() {
         </div>
         <button
           onClick={fetchAll}
-          className="p-2 rounded-xl bg-muted hover:bg-muted/80 transition-colors"
+          className="p-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
           title="Atualizar"
         >
           <RefreshCw className="w-4 h-4 text-muted-foreground" />
         </button>
       </div>
 
-      <div className="bg-secondary/5 border border-secondary/20 rounded-xl p-3 text-xs text-secondary font-inter">
+      <div className="bg-secondary/5 border border-secondary/20 rounded-lg p-3 text-xs text-secondary font-inter">
         <strong>Como funciona:</strong> Libere um curso para uma igreja aqui. O admin da igreja ainda precisará ativá-lo para sua turma no painel deles.
       </div>
 
@@ -171,12 +171,12 @@ export default function GlobalCourseReleasesPanel() {
         const isOpen = expandedCourse === course.id;
 
         return (
-          <div key={course.id} className="bg-card border border-border rounded-2xl overflow-hidden">
+          <div key={course.id} className="bg-card border border-border rounded-lg overflow-hidden">
             <button
               onClick={() => setExpandedCourse(isOpen ? null : course.id)}
               className="w-full flex items-center gap-3 p-4 text-left hover:bg-muted/30 transition-colors"
             >
-              <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center flex-shrink-0">
                 <Globe className="w-5 h-5 text-secondary" />
               </div>
               <div className="flex-1 min-w-0">
@@ -199,7 +199,7 @@ export default function GlobalCourseReleasesPanel() {
                 {releasedCount < churches.length && (
                   <button
                     onClick={() => releaseToAll(course.id)}
-                    className="w-full py-2 rounded-xl border border-brand-green/40 bg-brand-green/5 text-brand-green font-inter text-xs font-semibold hover:bg-brand-green/10 transition-colors"
+                    className="w-full py-2 rounded-lg border border-brand-green/40 bg-brand-green/5 text-brand-green font-inter text-xs font-semibold hover:bg-brand-green/10 transition-colors"
                   >
                     Liberar para todas as igrejas
                   </button>
@@ -218,7 +218,7 @@ export default function GlobalCourseReleasesPanel() {
                     return (
                       <div
                         key={church.id}
-                        className={`flex items-center justify-between gap-3 p-3 rounded-xl border transition-colors ${
+                        className={`flex items-center justify-between gap-3 p-3 rounded-lg border transition-colors ${
                           isReleased ? "border-brand-green/30 bg-brand-green/5" : "border-border bg-muted/20"
                         }`}
                       >
@@ -234,7 +234,7 @@ export default function GlobalCourseReleasesPanel() {
                           <div className="min-w-0">
                             <p className="font-inter text-sm font-medium text-foreground truncate">{church.name}</p>
                             {church.city && (
-                              <p className="font-inter text-[10px] text-muted-foreground">{church.city}</p>
+                              <p className="font-inter text-xs text-muted-foreground">{church.city}</p>
                             )}
                           </div>
                         </div>

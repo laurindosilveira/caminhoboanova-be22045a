@@ -41,7 +41,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function AnnouncementsSection() {
-  const { profile, role } = useAuth();
+  const { profile, role, user } = useAuth();
   const { effectiveArea } = useAreaSwitch();
   const canDelete = role === "admin" || role === "lider";
   const [messages, setMessages] = useState<Message[]>([]);
@@ -57,7 +57,6 @@ export default function AnnouncementsSection() {
     if (!profile || !currentArea) return;
     async function fetchMessages() {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
       const [{ data }, { data: reactionsData }] = await Promise.all([
         supabase
           .from("messages")
@@ -90,7 +89,7 @@ export default function AnnouncementsSection() {
       }
 
       const rMap: ReactionMap = {};
-      (reactionsData ?? []).forEach((r: any) => {
+      (reactionsData ?? []).forEach(r => {
         if (!rMap[r.message_id]) rMap[r.message_id] = {};
         if (!rMap[r.message_id][r.emoji]) rMap[r.message_id][r.emoji] = { count: 0, hasReacted: false, userIds: [] };
         rMap[r.message_id][r.emoji].count++;
@@ -100,11 +99,10 @@ export default function AnnouncementsSection() {
       setReactions(rMap);
       setLoading(false);
     }
-    fetchMessages();
-  }, [profile, currentArea]);
+    void fetchMessages();
+  }, [currentArea, profile, user]);
 
   async function toggleReaction(messageId: string, emoji: string) {
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const current = reactions[messageId]?.[emoji];
     if (current?.hasReacted) {
@@ -165,7 +163,7 @@ export default function AnnouncementsSection() {
     <div className="px-5 mb-5">
       <div className="flex items-center gap-2 mb-2 px-1">
         <MessageCircle className="w-3.5 h-3.5 text-muted-foreground" />
-        <span className="font-montserrat font-bold text-muted-foreground text-[10px] uppercase tracking-wider">Avisos Recentes</span>
+        <span className="font-montserrat font-bold text-muted-foreground text-xs uppercase tracking-wider">Avisos Recentes</span>
       </div>
       <div className="space-y-3">
         {messages.map((msg) => (
@@ -178,7 +176,7 @@ export default function AnnouncementsSection() {
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <p className="text-muted-foreground text-xs font-inter">{timeAgo(msg.created_at)}</p>
                     {msg.turma_id && turmaNames[msg.turma_id] && (
-                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-primary/10 text-primary rounded-full text-[9px] font-inter font-semibold leading-none">
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-primary/10 text-primary rounded-full text-xs font-inter font-semibold leading-none">
                         🎓 {turmaNames[msg.turma_id]}
                       </span>
                     )}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAreaSwitch } from "@/contexts/AreaSwitchContext";
@@ -27,7 +27,7 @@ export default function PrayerDiary() {
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchEntries = async () => {
+  const fetchEntries = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     const { data, error } = await supabase
@@ -40,11 +40,11 @@ export default function PrayerDiary() {
       setEntries(data || []);
     }
     setLoading(false);
-  };
+  }, [user]);
 
   useEffect(() => {
     fetchEntries();
-  }, [user]);
+  }, [fetchEntries]);
 
   return (
     <div className="space-y-4">
@@ -81,13 +81,13 @@ export default function PrayerDiary() {
                   </div>
                   <div>
                     <h4 className="font-montserrat font-bold text-xs text-foreground">{entry.title}</h4>
-                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
                       {new Date(entry.created_at).toLocaleDateString('pt-BR')}
                     </p>
                   </div>
                 </div>
-                <div className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold">
+                <div className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-bold">
                   TESTEMUNHO
                 </div>
               </div>
@@ -103,7 +103,7 @@ export default function PrayerDiary() {
                 </div>
 
                 {entry.answered_at && (
-                  <div className="flex items-center gap-2 text-[10px] font-inter text-brand-green bg-brand-green/5 px-2 py-1 rounded-lg w-fit">
+                  <div className="flex items-center gap-2 text-xs font-inter text-brand-green bg-brand-green/5 px-2 py-1 rounded-lg w-fit">
                     <CheckCircle2 className="w-3 h-3" />
                     Respondido em {new Date(entry.answered_at).toLocaleDateString('pt-BR')}
                   </div>

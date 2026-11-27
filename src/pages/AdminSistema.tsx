@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Church,
   Clock,
+  Database,
   DatabaseBackup,
   GraduationCap,
   Megaphone,
@@ -37,9 +38,9 @@ import { toast } from "@/hooks/use-toast";
 import GlobalCourseReleasesPanel from "@/components/admin/tabs/GlobalCourseReleasesPanel";
 import GlobalTrackReleasesPanel from "@/components/admin/tabs/GlobalTrackReleasesPanel";
 import CourseSalesAdminPanel from "@/components/admin/tabs/CourseSalesAdminPanel";
-import type { Database } from "@/integrations/supabase/types";
+import type { Database as DatabaseSchema } from "@/integrations/supabase/types";
 
-type Tables = Database["public"]["Tables"];
+type Tables = DatabaseSchema["public"]["Tables"];
 type ChurchSubscription = Tables["church_subscriptions"]["Row"];
 type WebhookLog = Tables["stripe_webhook_logs"]["Row"] & {
   church_subscriptions: Pick<ChurchSubscription, "church_name"> | null;
@@ -178,12 +179,12 @@ export default function AdminSistema() {
   }
 
   async function fetchErrorLogs() {
-    const { data } = await supabase
-      .from("frontend_error_logs")
-      .select("*, churches(name)")
-      .order("created_at", { ascending: false })
-      .limit(50);
-    setErrorLogs(data || []);
+    const [{ data }, { data: churchNames }] = await Promise.all([
+      supabase.from("frontend_error_logs").select("*").order("created_at", { ascending: false }).limit(50),
+      supabase.from("churches").select("id, name"),
+    ]);
+    const names = new Map((churchNames ?? []).map((church) => [church.id, church.name]));
+    setErrorLogs((data ?? []).map((entry) => ({ ...entry, churches: entry.church_id && names.has(entry.church_id) ? { name: names.get(entry.church_id)! } : null })));
   }
 
   async function fetchPlanHistory() {
