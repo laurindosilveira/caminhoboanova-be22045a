@@ -16,6 +16,7 @@ import { getPasswordRecoveryRedirect } from "@/lib/passwordRecoveryRedirect";
 const Index = lazy(() => import("./pages/Index"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
+const CompleteProfile = lazy(() => import("./pages/CompleteProfile"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
@@ -42,9 +43,9 @@ const queryClient = new QueryClient({
 });
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading, signOut } = useAuth();
+  const { user, profile, profileLoaded, needsProfileCompletion, loading, signOut } = useAuth();
 
-  if (loading) {
+  if (loading || (user && !profileLoaded)) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--gradient-hero)" }}>
         <div className="text-center">
@@ -58,6 +59,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) return <Navigate to="/login" replace />;
+  if (needsProfileCompletion) {
+    return <Navigate to="/completar-cadastro" replace />;
+  }
   if (profile?.enrollment_status === "rejected") {
     return (
       <div className="min-h-screen flex items-center justify-center px-6 bg-background">
@@ -167,6 +171,7 @@ const AppRoutes = () => (
       {/* Public auth routes */}
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/cadastro" element={<PublicRoute><Register /></PublicRoute>} />
+      <Route path="/completar-cadastro" element={<CompleteProfile />} />
       <Route path="/recuperar-senha" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
       <Route path="/verificar-email" element={<VerifyEmail />} />
       <Route path="/redefinir-senha" element={<ResetPassword />} />

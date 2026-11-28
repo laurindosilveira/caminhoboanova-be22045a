@@ -1,4 +1,4 @@
-project_id = "hmmbspebnqkueqwcqinr"
+project_id = "ktvdjrabetukptqduier"
 
 [auth.passkey]
 enabled = true
@@ -6,7 +6,7 @@ enabled = true
 [auth.webauthn]
 rp_display_name = "Caminho"
 rp_id = "caminhoboanova.com.br"
-rp_origins = ["https://caminhoboanova.com.br", "https://www.caminhoboanova.com.br", "http://localhost:5173"]
+rp_origins = ["https://caminhoboanova.com.br", "https://www.caminhoboanova.com.br"]
 
 [functions.weekly-progress-email]
 verify_jwt = false

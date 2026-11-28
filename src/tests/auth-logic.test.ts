@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { supabase } from '@/integrations/supabase/client';
+import { getGoogleAuthErrorMessage, getGoogleOAuthRedirectUrl, signInWithGoogle } from '@/lib/googleAuth';
 
 // Mocking Supabase
 vi.mock('@/integrations/supabase/client', () => ({
@@ -7,6 +8,7 @@ vi.mock('@/integrations/supabase/client', () => ({
     auth: {
       signInWithPasskey: vi.fn(),
       signInWithPassword: vi.fn(),
+      signInWithOAuth: vi.fn().mockResolvedValue({ data: { provider: 'google', url: 'https://accounts.google.com' }, error: null }),
     },
     rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
     from: vi.fn().mockReturnValue({
@@ -55,5 +57,30 @@ describe('Routing Fallback', () => {
     const user = { id: '123' };
     const target = !user ? '/portal' : '/home';
     expect(target).toBe('/home');
+  });
+});
+
+describe('Google OAuth Helper', () => {
+  it('builds /home redirect url without duplicate slashes', () => {
+    expect(getGoogleOAuthRedirectUrl('https://caminhoboanova.com.br/')).toBe('https://caminhoboanova.com.br/home');
+    expect(getGoogleOAuthRedirectUrl('https://caminhoboanova.com.br')).toBe('https://caminhoboanova.com.br/home');
+  });
+
+  it('calls native Supabase signInWithOAuth for google', async () => {
+    await signInWithGoogle();
+    expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith({
+      provider: 'google',
+      options: {
+        redirectTo: expect.stringMatching(/\/home$/),
+        queryParams: {
+          prompt: 'select_account',
+        },
+      },
+    });
+  });
+
+  it('translates disabled provider error cleanly', () => {
+    expect(getGoogleAuthErrorMessage({ message: 'Unsupported provider: provider is not enabled' }))
+      .toContain('ainda não foi ativado');
   });
 });

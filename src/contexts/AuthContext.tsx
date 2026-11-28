@@ -29,6 +29,8 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
+  profileLoaded: boolean;
+  needsProfileCompletion: boolean;
   role: "user" | "admin" | "lider" | null;
   adminArea: string | null;
   isSuper: boolean;
@@ -41,6 +43,8 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
   profile: null,
+  profileLoaded: false,
+  needsProfileCompletion: false,
   role: null,
   adminArea: null,
   isSuper: false,
@@ -53,6 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [needsProfileCompletion, setNeedsProfileCompletion] = useState(false);
   const [role, setRole] = useState<"user" | "admin" | "lider" | null>(null);
   const [adminArea, setAdminArea] = useState<string | null>(null);
   const [isSuper, setIsSuper] = useState(false);
@@ -96,6 +102,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (isAdmin) setRole("admin");
     else if (isLider) setRole("lider");
     else setRole("user");
+    setNeedsProfileCompletion(!profileRes.error && !profileData && !isAdmin && !isLider && isSuperRes.data !== true);
+    setProfileLoaded(true);
   }
 
   useEffect(() => {
@@ -129,6 +137,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (!currentSession?.user) {
           setProfile(null);
+          setProfileLoaded(false);
+          setNeedsProfileCompletion(false);
           setRole(null);
           setAdminArea(null);
           setLoading(false);
@@ -153,6 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (!initialFetchDone || event === "SIGNED_IN" || event === "MFA_CHALLENGE_VERIFIED") {
           initialFetchDone = true;
+          setProfileLoaded(false);
           setTimeout(() => {
             fetchProfileAndRole(currentSession.user.id).finally(() => setLoading(false));
           }, 0);
@@ -196,6 +207,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signOut() {
     await supabase.auth.signOut();
     setProfile(null);
+    setProfileLoaded(false);
+    setNeedsProfileCompletion(false);
     setRole(null);
     setAdminArea(null);
     setIsSuper(false);
@@ -209,7 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, role, adminArea, isSuper, loading, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, session, profile, profileLoaded, needsProfileCompletion, role, adminArea, isSuper, loading, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
